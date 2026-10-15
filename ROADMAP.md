@@ -62,6 +62,33 @@ One file per game, `blacksite.profile.ts`, chosen at `design-game` and overridab
 
 These numbers are starting points for the capture docs, not decisions.
 
+## Dimensions: 3D, 2.5D and 2D
+
+Any game you can prompt should have a starting point, so Blacksite grows two more scaffold profiles beside the 3D ones (`fpp`, `tpp`, `mp`). Both stay on the same stack (R3F, Three, Koota, XState, Effect, Relay) and the same performance targets; they are camera and render presets, not separate engines.
+
+| Profile | Look | Camera | Physics | Status |
+|---|---|---|---|---|
+| **`2.5d`** (diorama) | Pixel-art billboard sprites standing in a lit 3D world, HD-2D style: tilt-shift depth of field, bloom, warm/teal grade, time of day | Narrow-FOV perspective (~28°), high pitch, far back, limited yaw | Rapier 3D, or grid + height lookup for tile games | Planned |
+| **`2d`** | Sprites, tilemaps and parallax layers; optional pixel-perfect mode | Orthographic | `@dimforge/rapier2d` | Planned |
+
+**Why not a separate 2D renderer.** 2D stays on Three with an orthographic camera rather than PixiJS: one renderer, one reconciler, one post stack, one editor, and sprites can still take lights, normal maps and shadows. PixiJS only wins for very large unlit sprite counts; that case gets a sprite batcher instead.
+
+**2.5D capabilities** (reference: [Lumina](https://gitlab.com/stubborn-hug/lumina), studied in [`docs/capture/diorama-2.5d.md`](docs/capture/diorama-2.5d.md); it has no licence, so we take ideas only and write our own implementation):
+
+1. **Diorama post stack**: half-res tilt-shift DOF that follows a focus target, bloom above HDR 1.0 so only emissives glow, one tone map, a grade pass (white balance, teal shadows/warm highlights, vignette, grain, dither). Most of the look lives here.
+2. **Diorama camera preset** with look-ahead, focus bounds and limited yaw.
+3. **Billboard sprite material**: shared camera-yaw uniform, bent normal plus wrap diffuse so flat sprites light like volumes, alpha-test with depth write, dithered fades instead of blending.
+4. **Sprite shadows**: sun-facing shadow proxy per sprite, self-shadow skip, instanced blob shadows.
+5. **One texel density** (pixels per unit) enforced by the import pipeline, nearest filtering, world-space UVs.
+6. **Time-of-day keyframes** driving sun, ambient, fog colour and exposure; emissive masks ramped at night.
+7. **Light pool**: a fixed light count (no shader recompiles) with scored selection and cross-fades on large levels.
+8. **Tile + height level format** and an editor whose 3D preview uses the runtime builders.
+9. **X-ray silhouette** for characters behind roofs and walls.
+
+**2D capabilities:** sprite batcher (instanced atlas), tilemap chunking, Y-sort and explicit layers, parallax layers, a pixel-perfect mode (low-res target, integer upscale, camera and sprite snapping), Rapier 2D bodies and character controller. The 2.5D post stack and light pool apply as options.
+
+Both run the find → capture → prototype → default pipeline, each with a chamber, as a separate track after Phase 1, alongside Phases 2–4. The diorama shader-warmup and constant-program discipline (compile every variant at load, keep the program count fixed) is useful to every profile and goes into backlog item 6.
+
 ## Capability backlog
 
 Ranked roughly by leverage. "Have" means Blacksite or ALS Web already has a version.
@@ -157,6 +184,8 @@ Each phase ends with one of these holding the desktop (120 fps) and mobile (60 f
 | **Air strike city** | air profile, macro destruction across a city block grid | 120 fps |
 | **Battalion** | top-down, 500 units, VAT crowds, batched AI | 120 fps |
 | **Crowd plaza** | third person, 300 characters with animation LOD | 120 fps |
+| **Diorama village** | `2.5d`: sprite characters in a lit 3D village, full diorama post stack, time of day, 12-light pool | 120 fps |
+| **Pixel platformer** | `2d`: pixel-perfect mode, parallax, tilemap chunks, Rapier 2D, 2,000 sprites | 120 fps |
 
 ## Phases
 
@@ -165,6 +194,7 @@ Each phase ends with one of these holding the desktop (120 fps) and mobile (60 f
 - **Phase 2, open world.** Cell streaming, HLOD, foliage and impostors, terrain, occlusion, texture streaming. Exit: RPG valley at 120 fps.
 - **Phase 3, destruction tiers and VFX.** Micro/meso/macro tiers, destruction LOD, GPU particles. Exit: Close quarters and Air strike city at 120 fps.
 - **Phase 4, scale of characters.** Animation LOD, VAT crowds, AI LOD, interest management. Exit: Battalion and Crowd plaza at 120 fps.
+- **Track 2.5D/2D (after Phase 1, parallel to Phases 2–4).** `2.5d` and `2d` scaffold profiles, diorama post stack, billboard sprite material and shadows, sprite batcher, pixel-perfect mode, Rapier 2D. Exit: Diorama village and Pixel platformer at 120 fps.
 - **Phase 5, fidelity dials.** Lighting quality, GI, material quality. Visual work on top of a fixed performance floor.
 - **Phase 6, Rust path.** Rust core (sim, physics, destruction, AI) compiled to WASM and driven from R3F first; later a Rust/wgpu renderer targeting WebGPU, likely becoming the default. To keep that door open now: sim stays headless, data-oriented and deterministic in Koota; render reads projections only; no gameplay logic in React components.
 
