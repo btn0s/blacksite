@@ -18,7 +18,11 @@ const Pawn = trait({ owner: '', x: 0, y: 0, z: 0 })
 const Intent = trait({ forward: 0, right: 0, jump: false })
 
 function Arms({ visible }: { visible: boolean }) {
-  const { camera } = useThree()
+  const { camera, scene } = useThree()
+  useEffect(() => {
+    scene.add(camera)
+    return () => { scene.remove(camera) }
+  }, [camera, scene])
   if (!visible) return null
   return createPortal(<group position={[0.27, -0.29, -0.48]} rotation={[0, -0.13, 0]}>
     <mesh position={[-0.2, -0.1, 0.06]} rotation-z={-0.38}><capsuleGeometry args={[0.055, 0.31, 4, 8]} /><meshStandardMaterial color="#b99a79" /></mesh>

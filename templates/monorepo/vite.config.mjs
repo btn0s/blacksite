@@ -5,12 +5,14 @@ import path from 'node:path'
 import { readFileSync } from 'node:fs'
 
 const dependencies = JSON.parse(readFileSync(path.resolve('package.json'), 'utf8')).dependencies
+const allowedHosts = ['.getbb.app', '.ts.net', ...(process.env.VITE_ALLOWED_HOSTS ?? '').split(',').map(host => host.trim()).filter(Boolean)]
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   publicDir: dependencies['als-ue5-r3f'] ? path.resolve('vendor/blacksite/vendor/als-web/public') : false,
   server: {
     host: '0.0.0.0',
+    allowedHosts,
     port: Number(process.env.VITE_PORT ?? 5173),
     proxy: dependencies['@blacksite/relay'] ? {
       '/relay': {
