@@ -1,0 +1,15 @@
+{
+  "name": "@blacksite/ai-planning",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./watch-sector": "./src/watch-sector.ts"
+  },
+  "dependencies": {
+    "@blacksite/ai-nav": "workspace:*",
+    "@blacksite/ai-schema": "workspace:*"
+  },
+  "license": "FSL-1.1-ALv2"
+}

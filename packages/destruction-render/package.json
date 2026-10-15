@@ -1,0 +1,21 @@
+{
+  "name": "@blacksite/destruction-render",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./edges": "./src/edges.ts",
+    "./secondary": "./src/secondary.ts",
+    "./connections": "./src/connections.ts",
+    "./surfaces": "./src/surfaces.ts",
+    "./renderer": "./src/renderer.ts",
+    "./gpu-pool": "./src/gpu-pool.ts",
+    "./effects": "./src/effects.ts"
+  },
+  "dependencies": {
+    "@blacksite/destruction-domain": "workspace:*",
+    "three": "^0.185.1"
+  },
+  "license": "FSL-1.1-ALv2"
+}

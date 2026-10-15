@@ -1,0 +1,3 @@
+# Cascade
+
+Purpose: destruction simulation, graph, authoring, physics, presentation, effects, and network primitives. Import the facade from `@blacksite/cascade`; `/session`, `/render-profile`, `/large-structure-demo`, and `/worker-demo` are focused exports. Add its transitive `destruction-*` workspace closure, construct authored structures and a session, and adapt emitted state to game presentation and authority. Keep structure IDs and simulation time stable across replication; the game owns interaction and rendering integration. Blacksite's patched Rapier tarballs support Cascade development, while games use stock Rapier. See `docs/cascade.md` and `src/session.ts`.

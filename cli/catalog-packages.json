@@ -1,0 +1,150 @@
+[
+  {
+    "id": "ai-belief",
+    "name": "@blacksite/ai-belief"
+  },
+  {
+    "id": "ai-execution",
+    "name": "@blacksite/ai-execution"
+  },
+  {
+    "id": "ai-motor",
+    "name": "@blacksite/ai-motor"
+  },
+  {
+    "id": "ai-nav",
+    "name": "@blacksite/ai-nav"
+  },
+  {
+    "id": "ai-planning",
+    "name": "@blacksite/ai-planning"
+  },
+  {
+    "id": "ai-policy",
+    "name": "@blacksite/ai-policy"
+  },
+  {
+    "id": "ai-runtime",
+    "name": "@blacksite/ai-runtime"
+  },
+  {
+    "id": "ai-scenarios",
+    "name": "@blacksite/ai-scenarios"
+  },
+  {
+    "id": "ai-schema",
+    "name": "@blacksite/ai-schema"
+  },
+  {
+    "id": "ai-services",
+    "name": "@blacksite/ai-services"
+  },
+  {
+    "id": "ai-squad",
+    "name": "@blacksite/ai-squad"
+  },
+  {
+    "id": "ai-tactics",
+    "name": "@blacksite/ai-tactics"
+  },
+  {
+    "id": "ai-telemetry",
+    "name": "@blacksite/ai-telemetry"
+  },
+  {
+    "id": "ai-tools",
+    "name": "@blacksite/ai-tools"
+  },
+  {
+    "id": "ai-worker",
+    "name": "@blacksite/ai-worker"
+  },
+  {
+    "id": "armory",
+    "name": "@blacksite/armory"
+  },
+  {
+    "id": "client-r3f",
+    "name": "@blacksite/client-r3f"
+  },
+  {
+    "id": "destruction-authoring",
+    "name": "@blacksite/destruction-authoring"
+  },
+  {
+    "id": "destruction-domain",
+    "name": "@blacksite/destruction-domain"
+  },
+  {
+    "id": "destruction-ecs",
+    "name": "@blacksite/destruction-ecs"
+  },
+  {
+    "id": "destruction-effects",
+    "name": "@blacksite/destruction-effects"
+  },
+  {
+    "id": "destruction-graph",
+    "name": "@blacksite/destruction-graph"
+  },
+  {
+    "id": "destruction-machines",
+    "name": "@blacksite/destruction-machines"
+  },
+  {
+    "id": "destruction-network",
+    "name": "@blacksite/destruction-network"
+  },
+  {
+    "id": "destruction-physics",
+    "name": "@blacksite/destruction-physics"
+  },
+  {
+    "id": "destruction-render",
+    "name": "@blacksite/destruction-render"
+  },
+  {
+    "id": "destruction-server",
+    "name": "@blacksite/destruction-server"
+  },
+  {
+    "id": "destruction-testkit",
+    "name": "@blacksite/destruction-testkit"
+  },
+  {
+    "id": "input",
+    "name": "@blacksite/input"
+  },
+  {
+    "id": "subject",
+    "name": "@blacksite/subject"
+  },
+  {
+    "id": "cascade",
+    "name": "@blacksite/cascade"
+  },
+  {
+    "id": "server",
+    "name": "@blacksite/server"
+  },
+  {
+    "id": "sim-core",
+    "name": "@blacksite/sim-core"
+  },
+  {
+    "id": "training",
+    "name": "@blacksite/training"
+  },
+  {
+    "id": "ui",
+    "name": "@blacksite/ui"
+  },
+  {
+    "id": "warden",
+    "name": "@blacksite/warden"
+  },
+  {
+    "id": "warden-react",
+    "name": "@blacksite/warden-react"
+  }
+]

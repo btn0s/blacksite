@@ -1,0 +1,4 @@
+interface:
+  display_name: "Optimize Game"
+  short_description: "Optimize Game in Blacksite"
+  default_prompt: "Use $optimize-game for this Blacksite task."

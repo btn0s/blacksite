@@ -1,0 +1,8 @@
+{
+  "name": "blacksite",
+  "version": "0.1.0",
+  "description": "Scaffold and build playable browser games on the Blacksite engine.",
+  "author": {
+    "name": "btn0s"
+  }
+}

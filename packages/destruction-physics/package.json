@@ -1,0 +1,29 @@
+{
+  "name": "@blacksite/destruction-physics",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./subgraph": "./src/subgraph.ts",
+    "./bearing-secondary": "./src/bearing-secondary.ts",
+    "./scheduling": "./src/scheduling.ts",
+    "./contact-snapshot": "./src/contact-snapshot.ts",
+    "./joints": "./src/joints.ts",
+    "./player": "./src/player.ts",
+    "./engine": "./src/engine.ts",
+    "./destruction.worker": "./src/destruction.worker.ts",
+    "./budget": "./src/budget.ts",
+    "./bearing": "./src/bearing.ts",
+    "./fracture": "./src/fracture.ts"
+  },
+  "dependencies": {
+    "@blacksite/destruction-domain": "workspace:*",
+    "@blacksite/destruction-graph": "workspace:*"
+  },
+  "peerDependencies": {
+    "@dimforge/rapier3d-compat": ">=0.19.2-rupture.4 <0.22",
+    "@dimforge/rapier3d-simd-compat": ">=0.19.2-rupture.4 <0.22"
+  },
+  "license": "FSL-1.1-ALv2"
+}

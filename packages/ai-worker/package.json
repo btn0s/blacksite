@@ -1,0 +1,17 @@
+{
+  "name": "@blacksite/ai-worker",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./validation": "./src/validation.ts",
+    "./worker": "./src/worker.ts"
+  },
+  "dependencies": {
+    "@blacksite/ai-schema": "workspace:*",
+    "@blacksite/ai-services": "workspace:*",
+    "effect": "^3.19.0"
+  },
+  "license": "FSL-1.1-ALv2"
+}

@@ -1,0 +1,3 @@
+# Warden
+
+Purpose: tactical AI facade over the `ai-*` and `sim-core` packages. `@blacksite/warden` re-exports `TacticalRuntime`, `ObservationGenerator`, planning, navigation, squad, authority, replay, and scenario entry points. Add its transitive Blacksite package closure to a game workspace, and feed observations and commands through the runtime's tick contract. Keep agent knowledge tied to observations and radio evidence, not world omniscience; preserve deterministic replay and authority boundaries. This facade does not render NPCs. See `docs/warden.md` and `src/index.ts` for the concrete exports.

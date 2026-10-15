@@ -1,0 +1,14 @@
+{
+  "name": "blacksite-marketplace",
+  "description": "Blacksite engine game development plugin",
+  "owner": {
+    "name": "btn0s"
+  },
+  "plugins": [
+    {
+      "name": "blacksite",
+      "source": "./",
+      "description": "Build browser games with Blacksite"
+    }
+  ]
+}

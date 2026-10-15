@@ -1,0 +1,91 @@
+diff --git a/src.ts/geometry/narrow_phase.ts b/src.ts/geometry/narrow_phase.ts
+index 97837ba..7803de1 100644
+--- a/src.ts/geometry/narrow_phase.ts
++++ b/src.ts/geometry/narrow_phase.ts
+@@ -37,6 +37,27 @@ export class NarrowPhase {
+         return this.raw.reset_contact_warmstart(collider);
+     }
+ 
++    /** Total numSolverContacts() across this pair, without temporary wrappers. */
++    public contactPairSolverContactCount(collider1: ColliderHandle, collider2: ColliderHandle): number {
++        return this.raw.contact_pair_solver_contact_count(collider1, collider2);
++    }
++
++    // #if DIM3
++    /**
++     * Owned packed snapshot in exactly contactPair callback order. Empty means no
++     * pair. Header: [flipped (0/1), manifoldCount]. Each manifold begins with
++     * [normalX, normalY, normalZ, numContacts, numSolverContacts], followed by
++     * numContacts records [impulse, local1X, local1Y, local1Z, local2X, local2Y,
++     * local2Z, dist] (stride 8), then numSolverContacts world points [x, y, z]
++     * (stride 3). As with contactPair, flipped describes native ordering; normal
++     * and local points are NOT swapped or negated. The array owns its values and
++     * remains valid after the next step. Reading it never mutates solver state.
++     */
++    public contactPairSnapshot(collider1: ColliderHandle, collider2: ColliderHandle): Float32Array {
++        return this.raw.contact_pair_snapshot(collider1, collider2);
++    }
++    // #endif
++
+     /**
+      * Enumerates all the colliders potentially in contact with the given collider.
+      *
+diff --git a/src/geometry/narrow_phase.rs b/src/geometry/narrow_phase.rs
+index 8be9a8d..4dc1f1a 100644
+--- a/src/geometry/narrow_phase.rs
++++ b/src/geometry/narrow_phase.rs
+@@ -41,6 +41,54 @@ impl RawNarrowPhase {
+             .map(|p| RawContactPair(p as *const ContactPair))
+     }
+ 
++    /// Sum of solver rows in the pair without allocating pair/manifold wrappers.
++    pub fn contact_pair_solver_contact_count(
++        &self,
++        handle1: FlatHandle,
++        handle2: FlatHandle,
++    ) -> usize {
++        self.0
++            .contact_pair(utils::collider_handle(handle1), utils::collider_handle(handle2))
++            .map(|pair| pair.manifolds.iter().map(|m| m.data.solver_contacts.len()).sum())
++            .unwrap_or(0)
++    }
++
++    /// Owned read-only snapshot of native manifold/contact order, with no solver mutation.
++    /// Empty means no pair. Otherwise: [flipped, manifold_count], followed by each
++    /// [normal.xyz, contact_count, solver_contact_count], then contact records
++    /// [impulse, local_p1.xyz, local_p2.xyz, dist], then solver point.xyz records.
++    #[cfg(feature = "dim3")]
++    pub fn contact_pair_snapshot(&self, handle1: FlatHandle, handle2: FlatHandle) -> Vec<f32> {
++        let handle1 = utils::collider_handle(handle1);
++        let handle2 = utils::collider_handle(handle2);
++        let Some(pair) = self.0.contact_pair(handle1, handle2) else {
++            return Vec::new();
++        };
++        let length = 2 + pair.manifolds.iter().map(|m|
++            5 + m.points.len() * 8 + m.data.solver_contacts.len() * 3
++        ).sum::<usize>();
++        let mut packed = Vec::with_capacity(length);
++        packed.extend_from_slice(&[
++            if pair.collider1 != handle1 { 1.0 } else { 0.0 },
++            pair.manifolds.len() as f32,
++        ]);
++        for manifold in &pair.manifolds {
++            packed.extend_from_slice(manifold.data.normal.as_slice());
++            packed.push(manifold.points.len() as f32);
++            packed.push(manifold.data.solver_contacts.len() as f32);
++            for contact in &manifold.points {
++                packed.push(contact.data.impulse);
++                packed.extend_from_slice(contact.local_p1.coords.as_slice());
++                packed.extend_from_slice(contact.local_p2.coords.as_slice());
++                packed.push(contact.dist);
++            }
++            for contact in &manifold.data.solver_contacts {
++                packed.extend_from_slice(contact.point.coords.as_slice());
++            }
++        }
++        packed
++    }
++
+     pub fn intersection_pairs_with(&self, handle1: FlatHandle, f: js_sys::Function) {
+         let this = JsValue::null();
+         let handle1 = utils::collider_handle(handle1);

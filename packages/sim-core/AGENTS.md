@@ -1,0 +1,3 @@
+# Sim Core
+
+Purpose: deterministic Koota-backed tactical simulation and observation generation for Warden. Public entry points are `@blacksite/sim-core`, `/math`, and `/observations`; use `AuthoritativeSimulation`, `neutralCommand`, `normalizeCommand`, and `ObservationGenerator` from the root. A game supplies a map and runtime config, steps with tick-stamped commands, and consumes events, checksum, and observations. Keep simulation time and command ordering explicit; invalid commands normalize to neutral inputs. This package depends on `ai-schema` and Koota and does not render. See `src/index.ts`.

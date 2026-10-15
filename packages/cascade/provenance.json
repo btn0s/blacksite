@@ -1,0 +1,69 @@
+{
+  "sourceThread": "thr_nkwphruqwg",
+  "sourceCommit": "d9474009be41d7fc0e52b2c6db841c1ccad57691",
+  "includesWorkingTreeChanges": true,
+  "files": {
+    "packages/destruction-authoring/src/cli.ts": "6ee34b29ef29109f2646c83b42e016d6be2cf3ff8fec606c6575ec9e53dec558",
+    "packages/destruction-authoring/src/index.ts": "c0ea4163bf668fee74c028ae3271527a42982d042f45636cc6eb0b1efc3d4b6a",
+    "packages/destruction-domain/src/index.ts": "86b235c4bb19f63b1a7377b91288cf4a5a59685680b6e637618b01338b003dfe",
+    "packages/destruction-ecs/src/index.ts": "9a5e853037ee67b69799ec503b2c2c7469ab371f5f129452559b7f24db38adc7",
+    "packages/destruction-effects/src/index.ts": "cebe6c608a3a08aaee4fced24cbe0d251c3840f70127dfc69bf1721bc02ad793",
+    "packages/destruction-graph/src/cut-loads.ts": "868b41e0c5ecd0dc76b605d94a6327f55b1546184ae559bc84f28c62f29d69c9",
+    "packages/destruction-graph/src/equilibrium.ts": "c56245a4c5f30b51aa1b296882213e6c98d7cb2189cde891599ff2658577c87a",
+    "packages/destruction-graph/src/index.ts": "39eff1facd2ae9f7992ac6c37603d50e8183b0640c494ce879c3273c12ccbe3c",
+    "packages/destruction-graph/src/loads.ts": "fbe921cf4cbbc1ad990a0de4c5599fb4486a1d41afd3e411c416021b01e58943",
+    "packages/destruction-graph/src/stress.ts": "96616bdbc8dd385daf05cb3381f747eb5af7477afa4fd16f83738c1d8862a3ba",
+    "packages/destruction-machines/src/index.ts": "fc1facbeef9d4e0917c5b5ef52b1c3743e69bd946c91e4ee446dc94f882a397f",
+    "packages/destruction-network/src/index.ts": "e53b8937651c9809381d1798010623a5cf7b7c0ca647c5beff22cb9c58e3b92a",
+    "packages/destruction-physics/src/destruction.worker.ts": "ccb94db527e342b714a8f14d5b12f8b126bd8d28920e52200b75b941c9751e4b",
+    "packages/destruction-physics/src/fracture.ts": "db1c1b7cb32ef34a627dc57531bcab6c7687ecbbcb3177e898306f5ac044020d",
+    "packages/destruction-physics/src/index.ts": "a58f89f78ef4f70721bbecdc8653bbb9de29cb198769eb04d0ccd317999775ad",
+    "packages/destruction-physics/src/player.ts": "35d32299ef164b06d66e89245437dff96ff357d5b7fdc914c445d7e92dd60200",
+    "packages/destruction-physics/src/scheduling.ts": "a8495e39f44930b5439b1f069052d745dc1defc8684757b90a7227bd08a72420",
+    "packages/destruction-render/src/index.ts": "76835b7253db6b73efac30dbd1d4ec517dca0bc62ad7e600bfdb2b53a83b0942",
+    "packages/destruction-render/src/secondary.ts": "cdad33f43dc7fb293e927658d1837b2168e24c8caec5523e16328ab2f87ed0c0",
+    "packages/destruction-render/src/surfaces.ts": "ca46babc3687aa6a488f9542027cfe3c126af8788881a497c060371115d9a55f",
+    "packages/destruction-testkit/src/complex.ts": "df969d6159b213a53d24131c6bd54aa289b9efe631dd19d5b5f61cf29b5add61",
+    "packages/destruction-testkit/src/index.ts": "7c035d9508b03ce4400da9cc8866b83322dc2e252c87f368becdee98a8445c26",
+    "packages/destruction-testkit/src/organic.ts": "12746820c6cff161fa7d6fb3c06ce3244a150e9e3fd3a7983f359c95d4519cea",
+    "packages/destruction-testkit/src/replay.ts": "6585e29ffef118cc35afa2ef73fc873d1605ca108fc44053a1bcdd35b69e3067"
+  },
+  "adaptations": [
+    "Portable barrel, module-worker session and batched primary/secondary renderer extracted from the lab application.",
+    "Shared host Rapier ownership, localized native energy/momentum impacts and version-specific contact-force handling.",
+    "Budgeted box authoring, optional initially unsupported manifests, locale-independent ordering and strict indexed access.",
+    "Browser registry dependency closure; source comments removed to satisfy consuming engine rules."
+  ],
+  "consolidations": [
+    {
+      "sourceThread": "thr_nkwphruqwg",
+      "sourceCommit": "82efec89da35df6b019966c9ea560d3dc53ceec7",
+      "includesWorkingTreeChanges": true,
+      "snapshot": "engine-snapshot-5",
+      "files": {
+        "packages/destruction-authoring/src/index.ts": "170500478cc8509b76f88b876a929ba31be751978cfb11040df015e4a742cf12",
+        "packages/destruction-domain/src/index.ts": "73411b6f96d7fd4bcd204313e16e28d8beebd5b8e73287afae298f03e3f8eaa1",
+        "packages/destruction-graph/src/index.ts": "eabda27bbf00c8067870f1f0115db4009f3c4f31f6e44116d823d1fcdc251836",
+        "packages/destruction-network/src/index.ts": "cf6b09ca9b58d376b2c44d8b64439001209d6eeadb96119e33af90b551a7ef0f",
+        "packages/destruction-physics/src/index.ts": "bd6172940a5c89230e3b67b49052431d333c0a30f9c52b90442a03b457cd86ab",
+        "tests/job-map.test.ts": "770fb02725cb58bb6f147032365e7b916ec95ad330eb6b38ae8bef0cebb242f4",
+        "tests/physics.test.ts": "be64b852d259e2258af6764e88bacf29ad08023c401029e494b91b389f9749a8"
+      },
+      "ported": [
+        "Damage-only contact cascades with whole-body reduced mass and bounded multiple impacts.",
+        "Contact-localized landing shocks, standing/lone-primary rubble crushing and placed-charge pulverisation.",
+        "Small-island and secondary rubble damping; childless primary retirement in v4 snapshot codecs."
+      ],
+      "adaptations": [
+        "Preserve v4 rootId lineage and live-only descendant fracture; retire crushed roots through live structural removal and remove attached children while retaining loose descendants.",
+        "Share a sixteen-retirement per-tick budget for contact and charge crushing; defer remaining eligible targets. Limit landing contact samples to 128 per island and report degradation through capacityEvents.",
+        "Preserve angular damping 3 for chips below 0.01 cubic metres; use 2.5 for larger secondary pieces and islands with at most four primary members.",
+        "Version standalone replay as rigid-bond-impact-hierarchy-2; retained physics operation schema."
+      ],
+      "excluded": [
+        "All CASCADE-specific LevelBox render material names; no authoring validator changes.",
+        "Consumer sledge radius and the superseded whole-island shock implementation."
+      ]
+    }
+  ]
+}

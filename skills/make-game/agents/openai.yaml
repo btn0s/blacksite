@@ -1,0 +1,4 @@
+interface:
+  display_name: "Make Game"
+  short_description: "Make Game in Blacksite"
+  default_prompt: "Use $make-game for this Blacksite task."

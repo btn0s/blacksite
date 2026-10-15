@@ -1,0 +1,17 @@
+{
+  "name": "@blacksite/ai-nav",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tactical-map": "./src/tactical-map.ts",
+    "./navigation": "./src/navigation.ts",
+    "./crowd": "./src/crowd.ts"
+  },
+  "dependencies": {
+    "@blacksite/ai-schema": "workspace:*",
+    "navcat": "^0.4.1"
+  },
+  "license": "FSL-1.1-ALv2"
+}

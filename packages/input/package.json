@@ -1,0 +1,24 @@
+{
+  "name": "@blacksite/input",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./actions": "./src/actions.ts",
+    "./evaluate": "./src/evaluate.ts",
+    "./devices": "./src/devices.ts",
+    "./react": "./src/provider.tsx",
+    "./navigation": "./src/useConsoleNavigation.ts",
+    "./glyphs": "./src/glyphs.tsx",
+    "./touch": "./src/touch.tsx",
+    "./observations": "./src/observations.ts",
+    "./settings": "./src/settings.ts",
+    "./aim-assist": "./src/aimAssist.ts"
+  },
+  "peerDependencies": {
+    "effect": "^3.19.0",
+    "react": "^19.2.0"
+  },
+  "license": "FSL-1.1-ALv2"
+}

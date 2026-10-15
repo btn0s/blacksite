@@ -1,0 +1,46 @@
+--- a/src/geometry/narrow_phase.rs
++++ b/src/geometry/narrow_phase.rs
+@@ -110,6 +110,43 @@
+     /// The contact graph containing all contact pairs and their contact information.
+     pub fn contact_graph(&self) -> &InteractionGraph<ColliderHandle, ContactPair> {
+         &self.contact_graph
++    }
++
++    /// Clears only cached solver impulses for contacts involving `collider`.
++    ///
++    /// Use between physics steps after changing a rigid body's motion type or mass.
++    /// Contact geometry, persistence state, and the last completed-step impulse
++    /// totals are preserved. Returns the number of geometric contacts reset.
++    pub fn reset_contact_warmstart(&mut self, collider: ColliderHandle) -> usize {
++        let Some(id) = self.graph_indices.get(collider.0).map(|id| id.contact_graph_index) else {
++            return 0;
++        };
++        if !InteractionGraph::<(), ()>::is_graph_index_valid(id) {
++            return 0;
++        }
++
++        let mut reset = 0;
++        for (_, _, _, pair) in self.contact_graph.interactions_with_mut(id) {
++            for manifold in &mut pair.manifolds {
++                for point in &mut manifold.points {
++                    point.data.warmstart_impulse = 0.0;
++                    point.data.warmstart_tangent_impulse = na::zero();
++                    #[cfg(feature = "dim3")]
++                    {
++                        point.data.warmstart_twist_impulse = 0.0;
++                    }
++                    reset += 1;
++                }
++                // Solver contacts can survive when the manifold does not need
++                // regeneration. Clear their copies without changing `is_new`.
++                for contact in &mut manifold.data.solver_contacts {
++                    contact.warmstart_impulse = 0.0;
++                    contact.warmstart_tangent_impulse = na::zero();
++                    contact.warmstart_twist_impulse = 0.0;
++                }
++            }
++        }
++        reset
+     }
+ 
+     /// The intersection graph containing all intersection pairs and their intersection information.

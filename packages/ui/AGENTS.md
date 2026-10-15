@@ -1,0 +1,3 @@
+# UI
+
+Purpose: reusable React controls, console components, game frame, hooks, and styles. Use `@blacksite/ui` or focused `/components/*`, `/console/*`, `/game-frame`, and CSS exports. Import `@blacksite/ui/globals.css` and `@blacksite/ui/console.css` when their styles are needed. The game owns screen flow and maps input actions to navigation; UI components do not own gameplay state. React/React DOM are peers and Base UI, Tailwind, and other UI packages are declared dependencies. See `README.md` and `src/index.ts`.

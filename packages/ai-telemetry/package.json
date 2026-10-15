@@ -1,0 +1,13 @@
+{
+  "name": "@blacksite/ai-telemetry",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@blacksite/ai-schema": "workspace:*"
+  },
+  "license": "FSL-1.1-ALv2"
+}

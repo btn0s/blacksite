@@ -1,0 +1,72 @@
+# Blacksite Engine
+
+**A browser game engine for making high-quality, high-performance desktop and mobile games with agents.**
+
+Browser games often start without the defaults that larger engines provide: performance budgets, loading stages, character control, combat, AI, and destruction. Blacksite packages these systems with a CLI and agent skills that turn a game idea into small playable prototypes, combine proven mechanics, and keep the result within a budget. Desktop 120 fps and sustained mobile 60 fps are targets; the automatic scaling work that supports them is on the roadmap.
+
+## Quickstart
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/btn0s/blacksite/main/install.sh | sh
+```
+
+The installer clones this repository into `~/.blacksite`, installs its workspace dependencies, and links `blacksite` on your PATH. Ask your agent to start Blacksite or invoke `/blacksite:start`. It opens with **“What would you like to do?”** You can also invoke `/blacksite:make-game <idea>`. On Windows, run [install.ps1](install.ps1) in PowerShell. An agent can follow [AGENTS.md](AGENTS.md). Owned assets are optional: connect them later in your own terminal with `blacksite assets login fab|itch|all`, then `blacksite assets sync`.
+
+## What's in the box
+
+| System or platform piece | Purpose | Status |
+| --- | --- | --- |
+| ALS Web / TPP | Animated third-person character and camera | Usable |
+| Subject FPP / Armory | Arms-only first-person input and deterministic weapons | Usable |
+| Warden | Squad AI and tactical simulation | Experimental |
+| Cascade | Structural destruction and effects | Experimental |
+| Input / UI | Device input and a stock neutral game frame | Usable |
+| CLI / skills | Scaffold, prototypes, budgets, assets, agent phases | Usable |
+| Asset pipeline | Owned Fab metadata, fetch, export, meshopt/KTX2 install | Experimental |
+| Relay (`@blacksite/relay`) | Replication, prediction, and transport adapters | Planned |
+| Scale profiles / significance | Automatic quality and update-rate defaults | Planned |
+
+## How it works
+
+```mermaid
+flowchart LR
+  A[start] --> B[make-game]
+  B --> C[design-game]
+  C --> D[setup-project]
+  D --> E[build-prototype]
+  E --> F[combine-prototypes]
+  F --> G[optimize-game]
+  G -. only on request .-> H[ship-game]
+```
+
+Each phase writes its handoff to the game project and runs a checkable gate. The generated Vite shell includes R3F, Rapier, Koota, XState, Effect, a menu, pause and settings screens, GameFrame, and a developer prototype menu. `blacksite scaffold --profile blank|tpp|fpp --name "My Game" --dir /absolute/path --json --gate` keeps the NDJSON contract. `blacksite prototype new <name> [--with als-tpp|fpp|warden|cascade]`, `list`, and `promote` manage modes under `src/prototypes/` and `src/game/`. `blacksite --help` shows the complete command tree.
+
+## Player templates
+
+| Profile | Use when | Current state |
+| --- | --- | --- |
+| `fpp` | Single-player first person; arms-only `@blacksite/subject-fpp` + Armory, without ALS | Usable |
+| `tpp` | Single-player third person; ALS body and camera | Usable |
+| `fpp-mp` | Multiplayer FPP/TPP; local arms, remote ALS bodies, Colyseus | Unavailable until the real networked piece exists |
+
+Multiplayer TPP also needs the networked player piece. The CLI reports `fpp-mp` as unavailable. [Game architecture](skills/game-architecture/SKILL.md) explains the ownership model and transport choices.
+
+## Using it without agents
+
+Add this repository as one recursive Git submodule, list the package paths your game needs in `pnpm-workspace.yaml`, and depend on them with `workspace:*`. [Submodule migration](docs/migration-blacksite.md) has the package mapping. The CLI is optional for games that consume the engine directly.
+
+## Roadmap
+
+Performance measurement and desktop/mobile quality tiers come first. Shared scale profiles, significance, workers, and networking follow. World streaming and LOD, destruction tiers, animation/AI scale, and fidelity controls build on that floor. A headless Rust/WASM sim and later wgpu renderer remain a long-term path. See [ROADMAP.md](ROADMAP.md) for status, proof scenes, and phase exits.
+
+## Repository layout
+
+`packages/` holds engine systems; `cli/` one-off Node tools; `skills/` agent phases and references; `templates/game-shell/` the generated game; `docs/` integration details; `evals/` agent scenarios.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for workspace layout and gates.
+
+## License
+
+Blacksite uses the [Functional Source License 1.1 with Apache-2.0 future license](LICENSE.md). You may use, modify, and ship games with it, including closed-source commercial games. You may not offer Blacksite or a substitute as a competing product. Each release converts to Apache-2.0 two years after that release is made available.

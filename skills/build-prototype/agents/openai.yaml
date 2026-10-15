@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Prototype"
+  short_description: "Build Prototype in Blacksite"
+  default_prompt: "Use $build-prototype for this Blacksite task."

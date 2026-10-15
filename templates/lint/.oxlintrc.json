@@ -1,0 +1,15 @@
+{
+  "plugins": ["react", "typescript", "oxc"],
+  "jsPlugins": ["./lint/game.mjs"],
+  "ignorePatterns": ["vendor/**", "dist/**", "node_modules/**"],
+  "rules": {
+    "game/no-comments": "error",
+    "game/no-tests": "error",
+    "react/rules-of-hooks": "error",
+    "react/immutability": "off",
+    "react/refs": "off",
+    "react/use-memo": "off",
+    "react/preserve-manual-memoization": "off",
+    "react/purity": "off"
+  }
+}

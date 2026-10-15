@@ -1,0 +1,5 @@
+packages:
+  - 'vendor/blacksite/vendor/als-web'
+allowBuilds:
+  esbuild: true
+minimumReleaseAge: 0

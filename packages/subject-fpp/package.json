@@ -1,0 +1,16 @@
+{
+  "name": "@blacksite/subject-fpp",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/StandaloneSubject.tsx",
+    "./intent": "./src/intent.ts"
+  },
+  "dependencies": {
+    "@react-three/fiber": "^9.8.2",
+    "react": "^19.3.1",
+    "three": "^0.186.1"
+  },
+  "license": "FSL-1.1-ALv2"
+}

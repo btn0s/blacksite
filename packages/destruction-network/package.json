@@ -1,0 +1,14 @@
+{
+  "name": "@blacksite/destruction-network",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@blacksite/destruction-domain": "workspace:*",
+    "@blacksite/destruction-graph": "workspace:*"
+  },
+  "license": "FSL-1.1-ALv2"
+}

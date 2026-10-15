@@ -1,0 +1,16 @@
+{
+  "name": "@blacksite/ai-services",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./model-registry": "./src/model-registry.ts"
+  },
+  "dependencies": {
+    "@blacksite/ai-runtime": "workspace:*",
+    "@blacksite/ai-schema": "workspace:*",
+    "effect": "^3.19.0"
+  },
+  "license": "FSL-1.1-ALv2"
+}

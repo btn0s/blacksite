@@ -1,0 +1,8 @@
+services:
+  game:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "2567:2567"
+    environment:
+      NODE_ENV: production

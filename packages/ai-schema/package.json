@@ -1,0 +1,12 @@
+{
+  "name": "@blacksite/ai-schema",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./world": "./src/world.ts"
+  },
+  "dependencies": {},
+  "license": "FSL-1.1-ALv2"
+}

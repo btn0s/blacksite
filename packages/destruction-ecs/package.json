@@ -1,0 +1,14 @@
+{
+  "name": "@blacksite/destruction-ecs",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@blacksite/destruction-domain": "workspace:*",
+    "koota": "^0.6.0"
+  },
+  "license": "FSL-1.1-ALv2"
+}

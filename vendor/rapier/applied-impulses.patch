@@ -1,0 +1,280 @@
+diff --git a/.gitignore b/.gitignore
+index b6a5a6f..6a644ba 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -18,4 +18,6 @@ builds/*
+ !builds/prepare_builds
+ 
+ # compat generated builds
+-rapier-compat/builds/
+\ No newline at end of file
++rapier-compat/builds/
++# Pinned crate extracted and patched by Rupture vendor build.mjs.
++/vendor/rapier3d/
+diff --git a/Cargo.toml b/Cargo.toml
+index 6691d26..c575047 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -1,5 +1,6 @@
+ [workspace]
+ members = ["builds/*"]
++exclude = ["vendor/rapier3d"]
+ resolver = "2"
+ 
+ [profile.release]
+@@ -9,6 +10,7 @@ codegen-units = 1
+ strip = true # Workaround for https://github.com/bevyengine/bevy/issues/16030 (the bug only happens in 2D)
+ 
+ [patch.crates-io]
++rapier3d = { path = "vendor/rapier3d" }
+ #rapier2d = { path = "../rapier/crates/rapier2d" }
+ #rapier3d = { path = "../rapier/crates/rapier3d" }
+ #parry2d = { path = "../parry/crates/parry2d" }
+diff --git a/patches/contact-warmstart.patch b/patches/contact-warmstart.patch
+new file mode 100644
+index 0000000..0482d22
+--- /dev/null
++++ b/patches/contact-warmstart.patch
+@@ -0,0 +1,46 @@
++--- a/src/geometry/narrow_phase.rs
+++++ b/src/geometry/narrow_phase.rs
++@@ -110,6 +110,43 @@
++     /// The contact graph containing all contact pairs and their contact information.
++     pub fn contact_graph(&self) -> &InteractionGraph<ColliderHandle, ContactPair> {
++         &self.contact_graph
+++    }
+++
+++    /// Clears only cached solver impulses for contacts involving `collider`.
+++    ///
+++    /// Use between physics steps after changing a rigid body's motion type or mass.
+++    /// Contact geometry, persistence state, and the last completed-step impulse
+++    /// totals are preserved. Returns the number of geometric contacts reset.
+++    pub fn reset_contact_warmstart(&mut self, collider: ColliderHandle) -> usize {
+++        let Some(id) = self.graph_indices.get(collider.0).map(|id| id.contact_graph_index) else {
+++            return 0;
+++        };
+++        if !InteractionGraph::<(), ()>::is_graph_index_valid(id) {
+++            return 0;
+++        }
+++
+++        let mut reset = 0;
+++        for (_, _, _, pair) in self.contact_graph.interactions_with_mut(id) {
+++            for manifold in &mut pair.manifolds {
+++                for point in &mut manifold.points {
+++                    point.data.warmstart_impulse = 0.0;
+++                    point.data.warmstart_tangent_impulse = na::zero();
+++                    #[cfg(feature = "dim3")]
+++                    {
+++                        point.data.warmstart_twist_impulse = 0.0;
+++                    }
+++                    reset += 1;
+++                }
+++                // Solver contacts can survive when the manifold does not need
+++                // regeneration. Clear their copies without changing `is_new`.
+++                for contact in &mut manifold.data.solver_contacts {
+++                    contact.warmstart_impulse = 0.0;
+++                    contact.warmstart_tangent_impulse = na::zero();
+++                    contact.warmstart_twist_impulse = 0.0;
+++                }
+++            }
+++        }
+++        reset
++     }
++ 
++     /// The intersection graph containing all intersection pairs and their intersection information.
+diff --git a/src.ts/dynamics/impulse_joint.ts b/src.ts/dynamics/impulse_joint.ts
+index 0c637dd..47ec3c5 100644
+--- a/src.ts/dynamics/impulse_joint.ts
++++ b/src.ts/dynamics/impulse_joint.ts
+@@ -71,6 +71,31 @@ export enum JointAxesMask {
+ }
+ 
+ export class ImpulseJoint {
++    /** Locked-axis impulses from Rapier's most recent solver writeback. */
++    public impulses(): Float32Array {
++        return this.rawSet.jointImpulses(this.handle);
++    }
++
++    /** Motor/spring impulses from Rapier's most recent solver writeback. */
++    public motorImpulses(): Float32Array {
++        return this.rawSet.jointMotorImpulses(this.handle);
++    }
++
++    /** Limit impulses from Rapier's most recent solver writeback. */
++    public limitImpulses(): Float32Array {
++        return this.rawSet.jointLimitImpulses(this.handle);
++    }
++
++    /**
++     * Actual signed solver impulses for active uncoupled joint-frame axes:
++     * linear X/Y/Z followed by angular X/Y/Z in 3D. Includes motor and limit
++     * writeback as well as locked-axis reactions. This does not estimate force
++     * from position error. Coupled rope/spring axes retain Rapier's packed form.
++     */
++    public appliedImpulses(): Float32Array {
++        return this.rawSet.jointAppliedImpulses(this.handle);
++    }
++
+     protected rawSet: RawImpulseJointSet; // The ImpulseJoint won't need to free this.
+     protected bodySet: RigidBodySet; // The ImpulseJoint won’t need to free this.
+     handle: ImpulseJointHandle;
+@@ -166,6 +191,32 @@ export class ImpulseJoint {
+ 
+     // #endif
+ 
++    // #if DIM3
++    /** Sets the angular part of the joint frame local to body one. */
++    public setFrameX1(rotation: Rotation): void {
++        const rawRotation = RotationOps.intoRaw(rotation);
++        this.rawSet.jointSetFrameX1(this.handle, rawRotation);
++        rawRotation.free();
++    }
++
++    /** Sets the angular part of the joint frame local to body two. */
++    public setFrameX2(rotation: Rotation): void {
++        const rawRotation = RotationOps.intoRaw(rotation);
++        this.rawSet.jointSetFrameX2(this.handle, rawRotation);
++        rawRotation.free();
++    }
++
++    /**
++     * Current angular solver Jacobian, as a column-major 3x3 world-space matrix.
++     * Multiply locked-axis and limit angular impulses by this matrix to obtain
++     * their angular impulse on body one. Motor angular impulses use frameX1's
++     * world rotation instead. Account for off-center linear reactions separately.
++     */
++    public angularJacobian(): Float32Array {
++        return this.rawSet.jointAngularJacobian(this.handle, this.bodySet.raw);
++    }
++    // #endif
++
+     /**
+      * The position of the first anchor of this joint.
+      *
+diff --git a/src.ts/geometry/narrow_phase.ts b/src.ts/geometry/narrow_phase.ts
+index af04a22..97837ba 100644
+--- a/src.ts/geometry/narrow_phase.ts
++++ b/src.ts/geometry/narrow_phase.ts
+@@ -27,6 +27,16 @@ export class NarrowPhase {
+         this.tempManifold = new TempContactManifold(null);
+     }
+ 
++    /**
++     * Clears cached solver impulses for contacts involving this collider after
++     * a motion-type or mass change. Preserves contact geometry and the last
++     * completed-step impulse totals. Call between steps, outside contact callbacks.
++     * Returns the number of geometric contacts reset.
++     */
++    public resetContactWarmstart(collider: ColliderHandle): number {
++        return this.raw.reset_contact_warmstart(collider);
++    }
++
+     /**
+      * Enumerates all the colliders potentially in contact with the given collider.
+      *
+diff --git a/src/dynamics/impulse_joint.rs b/src/dynamics/impulse_joint.rs
+index bfbdf12..f9ed88e 100644
+--- a/src/dynamics/impulse_joint.rs
++++ b/src/dynamics/impulse_joint.rs
+@@ -1,4 +1,4 @@
+-use crate::dynamics::{RawImpulseJointSet, RawJointAxis, RawJointType, RawMotorModel};
++use crate::dynamics::{RawImpulseJointSet, RawJointAxis, RawJointType, RawMotorModel, RawRigidBodySet};
+ use crate::math::{RawRotation, RawVector};
+ use crate::utils::{self, FlatHandle};
+ use rapier::dynamics::JointAxis;
+@@ -31,6 +31,29 @@ impl RawImpulseJointSet {
+         self.map(handle, |j| j.data.local_frame2.rotation.into())
+     }
+ 
++    /// Sets the angular part of the joint's first local frame.
++    pub fn jointSetFrameX1(&mut self, handle: FlatHandle, rotation: &RawRotation) {
++        self.map_mut(handle, |j| j.data.local_frame1.rotation = rotation.0);
++    }
++
++    /// Sets the angular part of the joint's second local frame.
++    pub fn jointSetFrameX2(&mut self, handle: FlatHandle, rotation: &RawRotation) {
++        self.map_mut(handle, |j| j.data.local_frame2.rotation = rotation.0);
++    }
++
++    /// Column-major angular constraint Jacobian for the current world joint frames.
++    /// Uses exactly the quaternion differential used by Rapier's joint solver.
++    #[cfg(feature = "dim3")]
++    pub fn jointAngularJacobian(&self, handle: FlatHandle, bodies: &RawRigidBodySet) -> Vec<f32> {
++        use rapier::utils::SimdQuat;
++        self.map(handle, |j| {
++            let frame1 = bodies.0[j.body1].position().rotation * j.data.local_frame1.rotation;
++            let frame2 = bodies.0[j.body2].position().rotation * j.data.local_frame2.rotation;
++            let basis = frame1.diff_conj1_2(&frame2).transpose() * 1.0f32.copysign(frame1.dot(&frame2));
++            basis.as_slice().to_vec()
++        })
++    }
++
+     /// The position of the first anchor of this joint.
+     ///
+     /// The first anchor gives the position of the points application point on the
+diff --git a/src/dynamics/impulse_joint_set.rs b/src/dynamics/impulse_joint_set.rs
+index b7ba1bf..06e3f59 100644
+--- a/src/dynamics/impulse_joint_set.rs
++++ b/src/dynamics/impulse_joint_set.rs
+@@ -31,6 +31,45 @@ impl RawImpulseJointSet {
+ 
+ #[wasm_bindgen]
+ impl RawImpulseJointSet {
++    /// Locked-axis impulses from Rapier's most recent solver writeback.
++    pub fn jointImpulses(&self, handle: FlatHandle) -> Vec<f32> {
++        self.map(handle, |joint| joint.impulses.as_slice().to_vec())
++    }
++
++    /// Motor/spring impulses from Rapier's most recent solver writeback.
++    pub fn jointMotorImpulses(&self, handle: FlatHandle) -> Vec<f32> {
++        self.map(handle, |joint| joint.data.motors.iter().map(|motor| motor.impulse).collect())
++    }
++
++    /// Limit impulses from Rapier's most recent solver writeback.
++    pub fn jointLimitImpulses(&self, handle: FlatHandle) -> Vec<f32> {
++        self.map(handle, |joint| joint.data.limits.iter().map(|limit| limit.impulse).collect())
++    }
++
++    /// Signed impulse of each uncoupled joint-frame axis, including its active
++    /// locked, motor and limit constraints. Disabled channels are excluded so
++    /// stale writeback values cannot contribute after reconfiguring a joint.
++    pub fn jointAppliedImpulses(&self, handle: FlatHandle) -> Vec<f32> {
++        self.map(handle, |joint| {
++            (0..joint.impulses.len())
++                .map(|axis| {
++                    let bit = 1 << axis;
++                    if joint.data.locked_axes.bits() & bit != 0 {
++                        joint.impulses[axis]
++                    } else {
++                        let motor = if joint.data.motor_axes.bits() & bit != 0 {
++                            joint.data.motors[axis].impulse
++                        } else { 0.0 };
++                        let limit = if joint.data.limit_axes.bits() & bit != 0 {
++                            joint.data.limits[axis].impulse
++                        } else { 0.0 };
++                        motor + limit
++                    }
++                })
++                .collect()
++        })
++    }
++
+     #[wasm_bindgen(constructor)]
+     pub fn new() -> Self {
+         RawImpulseJointSet(ImpulseJointSet::new())
+diff --git a/src/geometry/narrow_phase.rs b/src/geometry/narrow_phase.rs
+index be3fee2..8be9a8d 100644
+--- a/src/geometry/narrow_phase.rs
++++ b/src/geometry/narrow_phase.rs
+@@ -14,6 +14,11 @@ impl RawNarrowPhase {
+         RawNarrowPhase(NarrowPhase::new())
+     }
+ 
++    /// Reset warmstart caches without removing persistent contact geometry.
++    pub fn reset_contact_warmstart(&mut self, handle: FlatHandle) -> usize {
++        self.0.reset_contact_warmstart(utils::collider_handle(handle))
++    }
++
+     pub fn contact_pairs_with(&self, handle1: FlatHandle, f: js_sys::Function) {
+         let this = JsValue::null();
+         let handle1 = utils::collider_handle(handle1);

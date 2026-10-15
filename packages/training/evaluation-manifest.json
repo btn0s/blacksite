@@ -1,0 +1,11 @@
+{
+  "version": "evaluation-1",
+  "status": "not-validated",
+  "targetCohort": null,
+  "humanDataset": null,
+  "blindedConditions": ["opponent", "teammate", "replay"],
+  "requiredPreregistration": ["powerAnalysis", "equivalenceMargins", "exclusionRules", "multipleComparisonCorrection", "maps", "skillCohort", "sampleSize"],
+  "baselines": ["symbolic", "existing-production", "hybrid-without-learned", "full-hybrid"],
+  "blockingEvidence": ["consented-human-traces", "trained-and-signed-models", "target-hardware-p99", "blinded-human-study", "distributional-equivalence"],
+  "canClaimHumanIndistinguishability": false
+}

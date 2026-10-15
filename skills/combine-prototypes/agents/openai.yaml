@@ -1,0 +1,4 @@
+interface:
+  display_name: "Combine Prototypes"
+  short_description: "Combine Prototypes in Blacksite"
+  default_prompt: "Use $combine-prototypes for this Blacksite task."

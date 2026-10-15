@@ -1,0 +1,3 @@
+# Armory
+
+Purpose: deterministic weapon rules independent of rendering and transport. Import `createWeaponRuntime`, `ALS_WEAPONS`, and types from `@blacksite/armory`; focused subpaths are `/runtime`, `/presets`, `/types`, and `/math`. A game constructs a runtime with owner, seed, and definitions, then calls `step` at a fixed tick with aim/muzzle/input and a collision-query adapter. Consume emitted events for VFX and audio; validate authoritative damage in the game server. Keep ticks monotonic and collision queries deterministic for replay. `src/runtime.ts` defines the event and snapshot contract.

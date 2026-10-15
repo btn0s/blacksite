@@ -1,0 +1,29 @@
+{
+  "name": "@blacksite/cascade",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./render-profile": "./src/render-profile.ts",
+    "./large-structure-demo": "./src/large-structure-demo.ts",
+    "./session": "./src/session.ts",
+    "./worker-demo": "./src/worker-demo.ts"
+  },
+  "dependencies": {
+    "@blacksite/destruction-authoring": "workspace:*",
+    "@blacksite/destruction-domain": "workspace:*",
+    "@blacksite/destruction-ecs": "workspace:*",
+    "@blacksite/destruction-effects": "workspace:*",
+    "@blacksite/destruction-graph": "workspace:*",
+    "@blacksite/destruction-machines": "workspace:*",
+    "@blacksite/destruction-network": "workspace:*",
+    "@blacksite/destruction-physics": "workspace:*",
+    "@blacksite/destruction-render": "workspace:*",
+    "@blacksite/destruction-testkit": "workspace:*",
+    "effect": "^3.19.0",
+    "three": "^0.185.1",
+    "xstate": "^5.23.0"
+  },
+  "license": "FSL-1.1-ALv2"
+}

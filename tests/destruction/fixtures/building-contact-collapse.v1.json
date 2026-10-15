@@ -1,0 +1,368 @@
+{
+  "version": 1,
+  "simulationVersion": "rigid-bond-equilibrium-1",
+  "assetHash": "cascade-v1-2257fd29",
+  "scenario": "building",
+  "endTick": 2486,
+  "commands": [
+    {
+      "type": "placeExplosive",
+      "id": 1,
+      "tick": 959,
+      "source": 1,
+      "position": [
+        -4.59,
+        0.44,
+        1.73
+      ],
+      "direction": [
+        0,
+        0,
+        0.9999999999999999
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 411
+    },
+    {
+      "type": "placeExplosive",
+      "id": 2,
+      "tick": 1003,
+      "source": 1,
+      "position": [
+        -4.67,
+        1.45,
+        4.73
+      ],
+      "direction": [
+        0,
+        0,
+        0.9999999999999999
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 418
+    },
+    {
+      "type": "placeExplosive",
+      "id": 3,
+      "tick": 1029,
+      "source": 1,
+      "position": [
+        -4.38,
+        1.43,
+        4.73
+      ],
+      "direction": [
+        0,
+        0,
+        0.9999999999999999
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 418
+    },
+    {
+      "type": "placeExplosive",
+      "id": 4,
+      "tick": 1049,
+      "source": 1,
+      "position": [
+        -3.52,
+        1.31,
+        4.61
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 487
+    },
+    {
+      "type": "placeExplosive",
+      "id": 5,
+      "tick": 1077,
+      "source": 1,
+      "position": [
+        -3.52,
+        1.31,
+        4.61
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 487
+    },
+    {
+      "type": "placeExplosive",
+      "id": 6,
+      "tick": 1084,
+      "source": 1,
+      "position": [
+        -3.52,
+        1.31,
+        4.61
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 487
+    },
+    {
+      "type": "placeExplosive",
+      "id": 7,
+      "tick": 1090,
+      "source": 1,
+      "position": [
+        -3.52,
+        1.31,
+        4.61
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 487
+    },
+    {
+      "type": "placeExplosive",
+      "id": 8,
+      "tick": 1097,
+      "source": 1,
+      "position": [
+        -3.52,
+        1.31,
+        4.61
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 487
+    },
+    {
+      "type": "placeExplosive",
+      "id": 9,
+      "tick": 1107,
+      "source": 1,
+      "position": [
+        -3.52,
+        1.31,
+        4.61
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 487
+    },
+    {
+      "type": "placeExplosive",
+      "id": 10,
+      "tick": 1112,
+      "source": 1,
+      "position": [
+        -3.52,
+        1.31,
+        4.61
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 487
+    },
+    {
+      "type": "detonate",
+      "id": 11,
+      "tick": 1131,
+      "source": 1,
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "radius": 1,
+      "strength": 1
+    },
+    {
+      "type": "placeExplosive",
+      "id": 12,
+      "tick": 1844,
+      "source": 1,
+      "position": [
+        -0.21,
+        3.28,
+        -1.88
+      ],
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 144
+    },
+    {
+      "type": "placeExplosive",
+      "id": 13,
+      "tick": 1856,
+      "source": 1,
+      "position": [
+        -0.21,
+        3.28,
+        -1.88
+      ],
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 144
+    },
+    {
+      "type": "placeExplosive",
+      "id": 14,
+      "tick": 1867,
+      "source": 1,
+      "position": [
+        -0.21,
+        3.28,
+        -1.88
+      ],
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 144
+    },
+    {
+      "type": "placeExplosive",
+      "id": 15,
+      "tick": 1876,
+      "source": 1,
+      "position": [
+        -0.21,
+        3.28,
+        -1.88
+      ],
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 144
+    },
+    {
+      "type": "placeExplosive",
+      "id": 16,
+      "tick": 1888,
+      "source": 1,
+      "position": [
+        -0.21,
+        3.28,
+        -1.88
+      ],
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 144
+    },
+    {
+      "type": "placeExplosive",
+      "id": 17,
+      "tick": 1899,
+      "source": 1,
+      "position": [
+        -0.21,
+        3.28,
+        -1.88
+      ],
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 144
+    },
+    {
+      "type": "placeExplosive",
+      "id": 18,
+      "tick": 1910,
+      "source": 1,
+      "position": [
+        -0.21,
+        3.28,
+        -1.88
+      ],
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "radius": 4,
+      "strength": 5,
+      "fragmentId": 144
+    },
+    {
+      "type": "detonate",
+      "id": 19,
+      "tick": 1923,
+      "source": 1,
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "radius": 1,
+      "strength": 1
+    }
+  ]
+}

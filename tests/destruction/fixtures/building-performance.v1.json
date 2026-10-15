@@ -1,0 +1,405 @@
+{
+  "version": 1,
+  "simulationVersion": "rigid-bond-equilibrium-1",
+  "assetHash": "cascade-v1-2257fd29",
+  "scenario": "building",
+  "endTick": 2603,
+  "commands": [
+    {
+      "type": "pointImpact",
+      "id": 1,
+      "tick": 172,
+      "source": 1,
+      "position": [
+        4.49,
+        4.7,
+        4.73
+      ],
+      "direction": [
+        -0.7586096000790672,
+        0.004089925442425213,
+        -0.6515326140553159
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 2,
+      "tick": 644,
+      "source": 1,
+      "position": [
+        4.73,
+        2,
+        -4.5
+      ],
+      "direction": [
+        -0.5807656431610575,
+        -0.08583441695632955,
+        -0.8095330262500043
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 3,
+      "tick": 871,
+      "source": 1,
+      "position": [
+        -4.01,
+        3.17,
+        4.97
+      ],
+      "direction": [
+        -0.8669062551415538,
+        -0.04718477310347577,
+        -0.4962329513279229
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 4,
+      "tick": 1115,
+      "source": 1,
+      "position": [
+        -4.61,
+        3.9,
+        -3.5
+      ],
+      "direction": [
+        0.7738535976894332,
+        -0.02478888099981511,
+        -0.6328792307556774
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 5,
+      "tick": 1390,
+      "source": 1,
+      "position": [
+        1.58,
+        4.33,
+        1.27
+      ],
+      "direction": [
+        0.7178191894855133,
+        -0.008476264476146918,
+        0.6961779687313374
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 6,
+      "tick": 1506,
+      "source": 1,
+      "position": [
+        -1.95,
+        3.2,
+        -2
+      ],
+      "direction": [
+        0.7139777503731027,
+        -0.05139591788394675,
+        0.698279479576072
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 7,
+      "tick": 1753,
+      "source": 1,
+      "position": [
+        0.36,
+        4.77,
+        -3.26
+      ],
+      "direction": [
+        0.7747347974368927,
+        0.006158731185745397,
+        0.6322563275053864
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 8,
+      "tick": 1802,
+      "source": 1,
+      "position": [
+        -3.59,
+        4.72,
+        2.23
+      ],
+      "direction": [
+        0.6083265513335433,
+        0.004050626821410269,
+        0.7936765080087678
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 9,
+      "tick": 1844,
+      "source": 1,
+      "position": [
+        -0.04,
+        4.37,
+        0.72
+      ],
+      "direction": [
+        0.7008456585948966,
+        -0.0074278052456337494,
+        0.7132742744119676
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 10,
+      "tick": 1884,
+      "source": 1,
+      "position": [
+        1.17,
+        4.36,
+        1.96
+      ],
+      "direction": [
+        0.7008456585948966,
+        -0.0074278052456337494,
+        0.7132742744119676
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 11,
+      "tick": 1900,
+      "source": 1,
+      "position": [
+        2.91,
+        4.34,
+        3.72
+      ],
+      "direction": [
+        0.7008456585948966,
+        -0.0074278052456337494,
+        0.7132742744119676
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 12,
+      "tick": 1918,
+      "source": 1,
+      "position": [
+        2.91,
+        4.34,
+        3.72
+      ],
+      "direction": [
+        0.7008456585948966,
+        -0.0074278052456337494,
+        0.7132742744119676
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 13,
+      "tick": 1933,
+      "source": 1,
+      "position": [
+        2.91,
+        4.34,
+        3.72
+      ],
+      "direction": [
+        0.7008456585948966,
+        -0.0074278052456337494,
+        0.7132742744119676
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 14,
+      "tick": 1945,
+      "source": 1,
+      "position": [
+        2.91,
+        4.34,
+        3.72
+      ],
+      "direction": [
+        0.7008456585948966,
+        -0.0074278052456337494,
+        0.7132742744119676
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 15,
+      "tick": 1972,
+      "source": 1,
+      "position": [
+        4.49,
+        4,
+        3.26
+      ],
+      "direction": [
+        0.7293094241932918,
+        -0.016851833992857765,
+        0.6839764465783353
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 16,
+      "tick": 2032,
+      "source": 1,
+      "position": [
+        5.94,
+        4.27,
+        0.09
+      ],
+      "direction": [
+        0.7914787660482153,
+        -0.009456699694213117,
+        0.6111235012055157
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 17,
+      "tick": 2101,
+      "source": 1,
+      "position": [
+        6.2,
+        4.27,
+        0.89
+      ],
+      "direction": [
+        0.7831887330364924,
+        -0.009471031448414581,
+        0.6217119172156803
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 18,
+      "tick": 2111,
+      "source": 1,
+      "position": [
+        6.24,
+        4.27,
+        0.92
+      ],
+      "direction": [
+        0.7831887330364924,
+        -0.009471031448414581,
+        0.6217119172156803
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 19,
+      "tick": 2121,
+      "source": 1,
+      "position": [
+        6.51,
+        4.26,
+        1.13
+      ],
+      "direction": [
+        0.7831887330364924,
+        -0.009471031448414581,
+        0.6217119172156803
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 20,
+      "tick": 2131,
+      "source": 1,
+      "position": [
+        7.67,
+        4.25,
+        2.06
+      ],
+      "direction": [
+        0.7831887330364924,
+        -0.009471031448414581,
+        0.6217119172156803
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 21,
+      "tick": 2179,
+      "source": 1,
+      "position": [
+        0.79,
+        4.09,
+        6.16
+      ],
+      "direction": [
+        0.6324848564762792,
+        -0.014672836679866652,
+        0.7744337377671162
+      ],
+      "radius": 4,
+      "strength": 5
+    },
+    {
+      "type": "pointImpact",
+      "id": 22,
+      "tick": 2454,
+      "source": 1,
+      "position": [
+        5.02,
+        2.57,
+        -3.41
+      ],
+      "direction": [
+        -0.10492727641344252,
+        -0.4241405390785114,
+        -0.8994971204926931
+      ],
+      "radius": 4,
+      "strength": 5
+    }
+  ]
+}

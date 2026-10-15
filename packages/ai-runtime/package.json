@@ -1,0 +1,25 @@
+{
+  "name": "@blacksite/ai-runtime",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./evidence": "./src/evidence.ts",
+    "./authority": "./src/authority.ts"
+  },
+  "dependencies": {
+    "@blacksite/ai-belief": "workspace:*",
+    "@blacksite/ai-execution": "workspace:*",
+    "@blacksite/ai-motor": "workspace:*",
+    "@blacksite/ai-nav": "workspace:*",
+    "@blacksite/ai-planning": "workspace:*",
+    "@blacksite/ai-scenarios": "workspace:*",
+    "@blacksite/ai-schema": "workspace:*",
+    "@blacksite/ai-squad": "workspace:*",
+    "@blacksite/ai-tactics": "workspace:*",
+    "@blacksite/ai-telemetry": "workspace:*",
+    "@blacksite/sim-core": "workspace:*"
+  },
+  "license": "FSL-1.1-ALv2"
+}

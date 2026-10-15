@@ -1,0 +1,3 @@
+# Input
+
+Purpose: device observations, action evaluation, React provider, console navigation, glyphs, touch, settings, and aim assist. `@blacksite/input` exports the public surface; focused subpaths include `/actions`, `/evaluate`, `/devices`, `/react`, `/navigation`, and `/aim-assist`. A game defines action bindings and scopes the provider to its active session, then reads action state instead of raw DOM events in gameplay. Clear held inputs on blur, disconnect, pointer-lock loss, and possession changes; keep edge actions from repeating. Effect and React are peer dependencies. See `README.md` for integration.

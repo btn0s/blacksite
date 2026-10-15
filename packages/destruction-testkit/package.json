@@ -1,0 +1,17 @@
+{
+  "name": "@blacksite/destruction-testkit",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./complex": "./src/complex.ts",
+    "./organic": "./src/organic.ts",
+    "./scale-frame": "./src/scale-frame.ts",
+    "./replay": "./src/replay.ts"
+  },
+  "dependencies": {
+    "@blacksite/destruction-domain": "workspace:*"
+  },
+  "license": "FSL-1.1-ALv2"
+}

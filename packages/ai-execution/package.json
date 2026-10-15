@@ -1,0 +1,17 @@
+{
+  "name": "@blacksite/ai-execution",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@blacksite/ai-nav": "workspace:*",
+    "@blacksite/ai-planning": "workspace:*",
+    "@blacksite/ai-schema": "workspace:*",
+    "@blacksite/ai-tactics": "workspace:*",
+    "xstate": "^5.23.0"
+  },
+  "license": "FSL-1.1-ALv2"
+}

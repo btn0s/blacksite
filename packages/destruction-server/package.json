@@ -1,0 +1,17 @@
+{
+  "name": "@blacksite/destruction-server",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@blacksite/destruction-domain": "workspace:*",
+    "@blacksite/destruction-network": "workspace:*",
+    "@blacksite/destruction-physics": "workspace:*",
+    "@blacksite/destruction-testkit": "workspace:*",
+    "ws": "^8.18.3"
+  },
+  "license": "FSL-1.1-ALv2"
+}

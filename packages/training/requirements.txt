@@ -1,0 +1,3 @@
+# Offline environment only; record the exact resolved torch version with artifacts.
+torch>=2.6,<3
+# Optional for train.py --onnx: onnx>=1.17,<2

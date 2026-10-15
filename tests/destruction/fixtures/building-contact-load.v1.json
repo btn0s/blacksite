@@ -1,0 +1,689 @@
+{
+  "version": 1,
+  "simulationVersion": "rigid-bond-equilibrium-1",
+  "assetHash": "cascade-v1-2257fd29",
+  "scenario": "building",
+  "endTick": 2542,
+  "commands": [
+    {
+      "type": "placeExplosive",
+      "id": 1,
+      "tick": 86,
+      "source": 1,
+      "position": [
+        4.99,
+        3.24,
+        4.81
+      ],
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 200
+    },
+    {
+      "type": "detonate",
+      "id": 2,
+      "tick": 151,
+      "source": 1,
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "radius": 1,
+      "strength": 1
+    },
+    {
+      "type": "placeExplosive",
+      "id": 3,
+      "tick": 363,
+      "source": 1,
+      "position": [
+        4.03,
+        3.14,
+        3.99
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 199
+    },
+    {
+      "type": "placeExplosive",
+      "id": 4,
+      "tick": 375,
+      "source": 1,
+      "position": [
+        4.03,
+        3.14,
+        3.99
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 199
+    },
+    {
+      "type": "placeExplosive",
+      "id": 5,
+      "tick": 385,
+      "source": 1,
+      "position": [
+        4.03,
+        3.14,
+        3.99
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 199
+    },
+    {
+      "type": "placeExplosive",
+      "id": 6,
+      "tick": 395,
+      "source": 1,
+      "position": [
+        4.03,
+        3.14,
+        3.99
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 199
+    },
+    {
+      "type": "placeExplosive",
+      "id": 7,
+      "tick": 404,
+      "source": 1,
+      "position": [
+        4.03,
+        3.14,
+        3.99
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 199
+    },
+    {
+      "type": "placeExplosive",
+      "id": 8,
+      "tick": 415,
+      "source": 1,
+      "position": [
+        4.03,
+        3.14,
+        3.99
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 199
+    },
+    {
+      "type": "placeExplosive",
+      "id": 9,
+      "tick": 424,
+      "source": 1,
+      "position": [
+        4.03,
+        3.14,
+        3.99
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 199
+    },
+    {
+      "type": "placeExplosive",
+      "id": 10,
+      "tick": 434,
+      "source": 1,
+      "position": [
+        4.03,
+        3.14,
+        3.99
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 199
+    },
+    {
+      "type": "detonate",
+      "id": 11,
+      "tick": 467,
+      "source": 1,
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "radius": 1,
+      "strength": 1
+    },
+    {
+      "type": "placeExplosive",
+      "id": 12,
+      "tick": 596,
+      "source": 1,
+      "position": [
+        1.73,
+        1.18,
+        1.59
+      ],
+      "direction": [
+        0.9999999999999999,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 452
+    },
+    {
+      "type": "placeExplosive",
+      "id": 13,
+      "tick": 605,
+      "source": 1,
+      "position": [
+        1.73,
+        1.18,
+        1.59
+      ],
+      "direction": [
+        0.9999999999999999,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 452
+    },
+    {
+      "type": "placeExplosive",
+      "id": 14,
+      "tick": 614,
+      "source": 1,
+      "position": [
+        1.73,
+        1.18,
+        1.59
+      ],
+      "direction": [
+        0.9999999999999999,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 452
+    },
+    {
+      "type": "placeExplosive",
+      "id": 15,
+      "tick": 663,
+      "source": 1,
+      "position": [
+        1.69,
+        1.36,
+        4.73
+      ],
+      "direction": [
+        0,
+        0,
+        0.9999999999999999
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 457
+    },
+    {
+      "type": "placeExplosive",
+      "id": 16,
+      "tick": 672,
+      "source": 1,
+      "position": [
+        1.69,
+        1.36,
+        4.73
+      ],
+      "direction": [
+        0,
+        0,
+        0.9999999999999999
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 457
+    },
+    {
+      "type": "placeExplosive",
+      "id": 17,
+      "tick": 758,
+      "source": 1,
+      "position": [
+        4.73,
+        1.61,
+        1.5
+      ],
+      "direction": [
+        0.9999999999999999,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 473
+    },
+    {
+      "type": "placeExplosive",
+      "id": 18,
+      "tick": 765,
+      "source": 1,
+      "position": [
+        4.73,
+        1.61,
+        1.5
+      ],
+      "direction": [
+        0.9999999999999999,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 473
+    },
+    {
+      "type": "placeExplosive",
+      "id": 19,
+      "tick": 816,
+      "source": 1,
+      "position": [
+        4.73,
+        1.43,
+        -1.35
+      ],
+      "direction": [
+        0.9999999999999999,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 468
+    },
+    {
+      "type": "placeExplosive",
+      "id": 20,
+      "tick": 824,
+      "source": 1,
+      "position": [
+        4.73,
+        1.43,
+        -1.35
+      ],
+      "direction": [
+        0.9999999999999999,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 468
+    },
+    {
+      "type": "placeExplosive",
+      "id": 21,
+      "tick": 882,
+      "source": 1,
+      "position": [
+        4.66,
+        1.37,
+        -4.27
+      ],
+      "direction": [
+        0,
+        0.43729281322436364,
+        0.8993191844402754
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 462
+    },
+    {
+      "type": "placeExplosive",
+      "id": 22,
+      "tick": 890,
+      "source": 1,
+      "position": [
+        4.66,
+        1.37,
+        -4.27
+      ],
+      "direction": [
+        0,
+        0.43729281322436364,
+        0.8993191844402754
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 462
+    },
+    {
+      "type": "detonate",
+      "id": 23,
+      "tick": 945,
+      "source": 1,
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "radius": 1,
+      "strength": 1
+    },
+    {
+      "type": "placeExplosive",
+      "id": 24,
+      "tick": 1130,
+      "source": 1,
+      "position": [
+        -1.27,
+        1.51,
+        -1.32
+      ],
+      "direction": [
+        0.9999999999999999,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 428
+    },
+    {
+      "type": "placeExplosive",
+      "id": 25,
+      "tick": 1172,
+      "source": 1,
+      "position": [
+        1.69,
+        1.71,
+        -1.27
+      ],
+      "direction": [
+        0,
+        0,
+        0.9999999999999999
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 448
+    },
+    {
+      "type": "placeExplosive",
+      "id": 26,
+      "tick": 1196,
+      "source": 1,
+      "position": [
+        -2.84,
+        1.18,
+        -4.39
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 502
+    },
+    {
+      "type": "placeExplosive",
+      "id": 27,
+      "tick": 1225,
+      "source": 1,
+      "position": [
+        -1.27,
+        1.54,
+        -1.36
+      ],
+      "direction": [
+        0.9999999999999999,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 428
+    },
+    {
+      "type": "placeExplosive",
+      "id": 28,
+      "tick": 1262,
+      "source": 1,
+      "position": [
+        -4.39,
+        1.41,
+        -3.11
+      ],
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 489
+    },
+    {
+      "type": "placeExplosive",
+      "id": 29,
+      "tick": 1289,
+      "source": 1,
+      "position": [
+        -4.39,
+        1.46,
+        -2.33
+      ],
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 506
+    },
+    {
+      "type": "placeExplosive",
+      "id": 30,
+      "tick": 1327,
+      "source": 1,
+      "position": [
+        -4.27,
+        1.31,
+        -1.42
+      ],
+      "direction": [
+        0.9999999999999999,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 407
+    },
+    {
+      "type": "placeExplosive",
+      "id": 31,
+      "tick": 1356,
+      "source": 1,
+      "position": [
+        -1.27,
+        1.75,
+        1.72
+      ],
+      "direction": [
+        0.9999999999999999,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 433
+    },
+    {
+      "type": "placeExplosive",
+      "id": 32,
+      "tick": 1384,
+      "source": 1,
+      "position": [
+        -4.39,
+        1.41,
+        0.19
+      ],
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 540
+    },
+    {
+      "type": "placeExplosive",
+      "id": 33,
+      "tick": 1413,
+      "source": 1,
+      "position": [
+        -4.27,
+        1.51,
+        1.43
+      ],
+      "direction": [
+        0.9999999999999999,
+        0,
+        0
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 413
+    },
+    {
+      "type": "placeExplosive",
+      "id": 34,
+      "tick": 1493,
+      "source": 1,
+      "position": [
+        0.64,
+        1.51,
+        -4.39
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 539
+    },
+    {
+      "type": "placeExplosive",
+      "id": 35,
+      "tick": 1520,
+      "source": 1,
+      "position": [
+        0.1,
+        1.47,
+        -4.39
+      ],
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "radius": 1.8,
+      "strength": 2.4,
+      "fragmentId": 539
+    },
+    {
+      "type": "detonate",
+      "id": 36,
+      "tick": 1563,
+      "source": 1,
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "radius": 1,
+      "strength": 1
+    }
+  ]
+}

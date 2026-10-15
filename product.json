@@ -1,0 +1,6 @@
+{
+  "name": "Blacksite Engine",
+  "cli": "blacksite",
+  "plugin": "blacksite",
+  "marketplace": "blacksite-marketplace"
+}

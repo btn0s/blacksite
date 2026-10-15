@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@blacksite/ui/components/*": ["src/components/*"],
+      "@blacksite/ui/hooks/*": ["src/hooks/*"],
+      "@blacksite/ui/lib/*": ["src/lib/*"]
+    }
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "replace-with-game-name",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-13",
+  "assets": { "directory": "./dist", "binding": "ASSETS" }
+}

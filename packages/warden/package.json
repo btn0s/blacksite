@@ -1,0 +1,27 @@
+{
+  "name": "@blacksite/warden",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@blacksite/ai-belief": "workspace:*",
+    "@blacksite/ai-execution": "workspace:*",
+    "@blacksite/ai-motor": "workspace:*",
+    "@blacksite/ai-nav": "workspace:*",
+    "@blacksite/ai-planning": "workspace:*",
+    "@blacksite/ai-policy": "workspace:*",
+    "@blacksite/ai-runtime": "workspace:*",
+    "@blacksite/ai-scenarios": "workspace:*",
+    "@blacksite/ai-schema": "workspace:*",
+    "@blacksite/ai-services": "workspace:*",
+    "@blacksite/ai-squad": "workspace:*",
+    "@blacksite/ai-tactics": "workspace:*",
+    "@blacksite/ai-tools": "workspace:*",
+    "@blacksite/ai-worker": "workspace:*",
+    "@blacksite/sim-core": "workspace:*"
+  },
+  "license": "FSL-1.1-ALv2"
+}
