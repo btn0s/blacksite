@@ -12,9 +12,9 @@ Generated from `blacksite catalog --json` on release.
 
 | Profile | Use when |
 | --- | --- |
-| fpp | Game shell with an arms-only first person prototype |
+| fpp | Game shell with rigged, animated first person arms |
 | tpp | Game shell with an ALS controller prototype |
-| mp | Networked FPP arms and ALS bodies with switchable camera |
+| mp | Networked rigged FPP arms and ALS bodies with switchable camera |
 | blank | Game shell with an empty R3F scene |
 
 ## Prototype kits

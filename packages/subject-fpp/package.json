@@ -5,12 +5,14 @@
   "type": "module",
   "exports": {
     ".": "./src/StandaloneSubject.tsx",
-    "./intent": "./src/intent.ts"
+    "./intent": "./src/intent.ts",
+    "./arms": "./src/ArmsViewmodel.tsx"
   },
   "dependencies": {
     "@react-three/fiber": "^9.8.2",
     "react": "^19.3.1",
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "als-ue5-r3f": "workspace:*"
   },
   "license": "FSL-1.1-ALv2"
 }

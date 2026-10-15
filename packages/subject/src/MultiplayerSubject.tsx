@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useMemo, useState } from 'react'
-import { Canvas, createPortal, useFrame, useThree } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { Physics, CuboidCollider, RigidBody } from '@react-three/rapier'
 import { Character } from 'als-ue5-r3f/app/Character'
 import { AlsCamera } from 'als-ue5-r3f/app/AlsCamera'
@@ -7,31 +7,25 @@ import { AlsRemoteActor } from 'als-ue5-r3f/app/AlsRemoteActor'
 import { AlsSnapshotBuffer } from 'als-ue5-r3f/als/AlsSnapshotBuffer'
 import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { AlsFootstepAudioRuntime } from 'als-ue5-r3f/engine/alsAudioBridge'
+import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
+import { ArmsViewmodel, createArmsState } from '@blacksite/subject-fpp/arms'
+import { ALS_WEAPONS, createWeaponRuntime } from '@blacksite/armory'
 import { createWorld, trait } from 'koota'
 import { Subject, createSubject } from './index'
 import type { PawnState, Connection } from '@blacksite/relay'
 import { createReplica, createLoopbackRoom } from '@blacksite/relay'
-import type { CameraMode } from './controller'
+import { createSubjectInputSource, type CameraMode } from './controller'
 
 const Controller = trait({ pawn: '' })
 const Pawn = trait({ owner: '', x: 0, y: 0, z: 0 })
 const Intent = trait({ forward: 0, right: 0, jump: false })
 
-function Arms({ visible }: { visible: boolean }) {
-  const { camera, scene } = useThree()
-  useEffect(() => {
-    scene.add(camera)
-    return () => { scene.remove(camera) }
-  }, [camera, scene])
-  if (!visible) return null
-  return createPortal(<group position={[0.27, -0.29, -0.48]} rotation={[0, -0.13, 0]}>
-    <mesh position={[-0.2, -0.1, 0.06]} rotation-z={-0.38}><capsuleGeometry args={[0.055, 0.31, 4, 8]} /><meshStandardMaterial color="#b99a79" /></mesh>
-    <mesh position={[0.12, -0.12, 0.03]} rotation-z={0.28}><capsuleGeometry args={[0.055, 0.29, 4, 8]} /><meshStandardMaterial color="#b99a79" /></mesh>
-    <mesh position={[0, 0, -0.17]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.045, 0.06, 0.64, 10]} /><meshStandardMaterial color="#586871" metalness={0.6} roughness={0.4} /></mesh>
-  </group>, camera)
-}
+const noHits = { castRay: () => null, sweepSphere: () => null }
+type AnimationClock = { readonly elapsedSeconds: number; readonly updates: number }
+type ClockSample = { seconds: number; updates: number; wallSeconds: number; rate: number }
+type Diagnostics = { clocks: Record<string, ClockSample>; arms: Record<string, unknown>; speed: number; gait: string }
 
-function RemotePawn({ state }: { state: PawnState }) {
+function RemotePawn({ state, onClock }: { state: PawnState; onClock: (id: string, clock: AnimationClock) => void }) {
   const buffer = useMemo(() => new AlsSnapshotBuffer({ interpolationDelayMs: 100 }), [])
   useEffect(() => { buffer.push({
     t: state.t, pos: [state.position.x, state.position.y + 0.9, state.position.z],
@@ -39,13 +33,33 @@ function RemotePawn({ state }: { state: PawnState }) {
     actorYaw: state.yaw, viewYaw: state.yaw, viewPitch: state.pitch,
     gait: Math.hypot(state.velocity.x, state.velocity.z) > 4 ? 'sprinting' : 'running',
     stance: 'standing', rotationMode: 'viewDirection', locomotionMode: 'grounded',
-    action: 'none', actionSeq: 0, overlay: 'rifle', aiming: false, seq: state.seq,
+    action: 'none', actionSeq: 0, overlay: state.weapon === 'pistol' ? 'pistol' : 'rifle', aiming: state.aiming ?? false, seq: state.seq,
   }) }, [buffer, state])
-  return <Suspense fallback={null}><AlsRemoteActor snapshots={buffer} now={Date.now} /></Suspense>
+  return <Suspense fallback={null}><AlsRemoteActor snapshots={buffer} now={Date.now} onAnimationClock={clock => onClock(`remote:${state.id}`, clock)} /></Suspense>
 }
 
-function NetworkScene({ connection, offline, cameraMode, onStatus }: { connection: Connection; offline: boolean; cameraMode: CameraMode; onStatus: (status: { room: string; players: number; hits: number; view: string }) => void }) {
+function NetworkScene({ connection, offline, cameraMode, onStatus, onDiagnostics }: { connection: Connection; offline: boolean; cameraMode: CameraMode; onStatus: (status: { room: string; players: number; hits: number; view: string }) => void; onDiagnostics?: (value: Diagnostics) => void }) {
   const subject = useMemo(() => createSubject({ cameraMode }), [cameraMode])
+  const inputSource = useMemo(() => createSubjectInputSource(subject), [subject])
+  const controlRotationSource = useMemo(() => () => ({ yaw: subject.player.command.yaw, pitch: subject.player.command.pitch }), [subject])
+  const arms = useMemo(createArmsState, [])
+  const weapon = useMemo(() => createWeaponRuntime({ ownerId: connection.id, seed: 1, definitions: ALS_WEAPONS.slice(0, 2) }), [connection.id])
+  const weaponStep = useMemo(() => ({ accumulated: 0, reloadSequence: 0, shotSequence: 0, weaponSequence: 0 }), [])
+  const telemetry = useMemo(() => {
+    const origins = new Map<string, { clock: AnimationClock; seconds: number; updates: number; wall: number }>()
+    const clocks: Record<string, ClockSample> = {}
+    return { clocks, record(id: string, clock: AnimationClock) {
+      const now = performance.now()
+      let origin = origins.get(id)
+      if (!origin || origin.clock !== clock || clock.elapsedSeconds < origin.seconds) {
+        origin = { clock, seconds: clock.elapsedSeconds, updates: clock.updates, wall: now }
+        origins.set(id, origin)
+      }
+      const seconds = clock.elapsedSeconds - origin.seconds
+      const wallSeconds = (now - origin.wall) / 1000
+      clocks[id] = { seconds, updates: clock.updates - origin.updates, wallSeconds, rate: wallSeconds > 0 ? seconds / wallSeconds : 1 }
+    } }
+  }, [])
   const replica = useMemo(() => createReplica(connection, state => {
     const local = subject.frame.position
     if (local.distanceToSquared(state.position) > 4) subject.respawn([state.position.x, state.position.y, state.position.z], state.yaw)
@@ -63,32 +77,65 @@ function NetworkScene({ connection, offline, cameraMode, onStatus }: { connectio
   useEffect(() => onStatus({ room: status, players: players.length, hits, view }), [onStatus, status, players.length, hits, view])
   useEffect(() => {
     const update = () => setPlayers([...replica.states.values()])
+    const applySpawn = (own: PawnState | undefined) => {
+      if (!own || own.position.x === subject.player.spawn[0] && own.position.y === subject.player.spawn[1] && own.position.z === subject.player.spawn[2]) return
+      const next = [own.position.x, own.position.y, own.position.z] as const
+      subject.respawn(next, own.yaw)
+      setSpawn(next)
+    }
     const unsubscribe = replica.onMessage(message => {
-      if (message.type === 'welcome') {
-        const own = message.states.find(state => state.id === connection.id)
-        if (own && (own.position.x !== subject.player.spawn[0] || own.position.y !== subject.player.spawn[1] || own.position.z !== subject.player.spawn[2])) {
-          const next = [own.position.x, own.position.y, own.position.z] as const
-          subject.respawn(next, own.yaw)
-          setSpawn(next)
-        }
-      }
+      if (message.type === 'welcome') applySpawn(message.states.find(state => state.id === connection.id))
       update()
       if (message.type === 'hit' && message.shooter === connection.id) setHits(value => value + 1)
       if (message.type === 'rejected') setStatus(message.reason)
     })
+    applySpawn(replica.states.get(connection.id))
     update()
     return () => { unsubscribe(); replica.close(); controller.destroy(); pawn.destroy(); world.reset() }
   }, [replica, connection.id, controller, pawn, world, subject])
   useEffect(() => subject.subscribe(() => setView(subject.view)), [subject])
+  useEffect(() => () => weapon.dispose(), [weapon])
   useEffect(() => {
-    const onDown = (event: MouseEvent) => {
-      if (event.button !== 0 || document.pointerLockElement === null) return
-      const direction = subject.frame.aimDirection
-      replica.send({ type: 'fire', seq: Math.floor(performance.now() * 1000), direction: { x: direction.x, y: direction.y, z: direction.z } })
+    if (!onDiagnostics) return
+    const timer = setInterval(() => onDiagnostics({ clocks: { ...telemetry.clocks }, arms: { ...arms.debug }, speed: Math.hypot(subject.frame.velocity.x, subject.frame.velocity.z), gait: subject.player.pose.current.character?.gait ?? 'loading' }), 250)
+    return () => clearInterval(timer)
+  }, [onDiagnostics, telemetry, arms, subject])
+  useFrame((_, dt) => {
+    if (!subject.frame.ready) return
+    const clock = subject.player.pose.current.animationClock
+    if (clock) telemetry.record('local', clock)
+    const frame = subject.frame
+    const selectedWeapon = subject.weapon === 'pistol' ? 'pistol' : 'rifle'
+    weaponStep.accumulated += dt
+    while (weaponStep.accumulated >= weapon.fixedDeltaSeconds) {
+      weaponStep.accumulated -= weapon.fixedDeltaSeconds
+      const events = weapon.step({
+        tick: weapon.snapshot().nextTick,
+        trigger: subject.enabled && subject.frame.locked && subject.input.fire,
+        reload: subject.input.reloadSequence !== weaponStep.reloadSequence,
+        selectWeaponId: selectedWeapon,
+        aim: { origin: frame.aimOrigin, direction: frame.aimDirection },
+        muzzle: frame.muzzlePosition,
+      }, noHits)
+      weaponStep.reloadSequence = subject.input.reloadSequence
+      for (const event of events) {
+        if (event.type === 'shot') {
+          arms.fireSequence++
+          subject.addRecoil(event.recoil.pitch * 180 / Math.PI, event.recoil.yaw * 180 / Math.PI)
+          replica.send({ type: 'fire', seq: ++weaponStep.shotSequence, direction: { ...event.direction } })
+        }
+        if (event.type === 'reload-started') {
+          arms.reloadSequence++
+          replica.send({ type: 'weapon', seq: ++weaponStep.weaponSequence, weapon: selectedWeapon, reload: true })
+        }
+        if (event.type === 'switch-started') replica.send({ type: 'weapon', seq: ++weaponStep.weaponSequence, weapon: selectedWeapon, reload: false })
+      }
     }
-    window.addEventListener('mousedown', onDown)
-    return () => window.removeEventListener('mousedown', onDown)
-  }, [replica, subject])
+    arms.weapon = selectedWeapon
+    arms.aiming = frame.aiming
+    arms.speed = Math.hypot(frame.velocity.x, frame.velocity.z)
+    arms.sprinting = frame.sprinting
+  }, -0.01)
   const next = useMemo(() => ({ seq: 0, last: 0 }), [])
   useFrame(() => {
     if (!subject.frame.ready || performance.now() - next.last < 50) return
@@ -98,23 +145,20 @@ function NetworkScene({ connection, offline, cameraMode, onStatus }: { connectio
     const velocity = { x: frame.velocity.x, y: frame.velocity.y, z: frame.velocity.z }
     pawn.set(Pawn, { owner: connection.id, ...position })
     const command = subject.player.command
-    const intent = { forward: command.forward, right: command.right, jump: false, yaw: command.yaw, pitch: command.pitch }
+    const intent = { forward: command.forward, right: command.right, jump: false, yaw: command.yaw, pitch: command.pitch, aiming: command.aim }
     pawn.set(Intent, { forward: intent.forward, right: intent.right, jump: intent.jump })
     if (controller.get(Controller)?.pawn !== connection.id) return
     replica.send({ type: 'move', seq: ++next.seq, position, velocity, intent })
   })
   return <>
     <ambientLight intensity={1.5} /><directionalLight position={[5, 12, 4]} intensity={2.5} />
-    <Physics gravity={[0, -9.8, 0]} timeStep={1 / 60}>
-      <group visible={view === 'third-person'}><Character key={spawn.join(':')} initialPosition={spawn} poseSample={subject.player.pose} worldTime={worldTime} footstepSoundSink={audio} onSizeChange={() => {}} onOverlayModeBridgeChange={() => {}} inputEnabled={false} inputSource={() => {
-        const command = subject.player.command
-        return { movementDirection: { x: command.forward, z: command.right }, desiredSpeed: command.sprint ? 600 : 300, viewYawAngle: command.yaw, viewPitchAngle: command.pitch, aiming: command.aim, overlayMode: command.overlay }
-      }} /></group>
-      <AlsCamera poseSample={subject.player.pose} worldTime={worldTime} footstepAudioRuntime={audio} toggleViewModeKey={null} />
+    <Physics gravity={[0, -9.8, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
+      <group visible={view === 'third-person'}><Character showDebugControls={false} key={spawn.join(':')} initialPosition={spawn} poseSample={subject.player.pose} worldTime={worldTime} footstepSoundSink={audio} onSizeChange={() => {}} onOverlayModeBridgeChange={() => {}} inputEnabled={false} inputSource={inputSource} /></group>
+      <AlsCamera poseSample={subject.player.pose} worldTime={worldTime} footstepAudioRuntime={audio} toggleViewModeKey={null} controlRotationSource={controlRotationSource} />
       <RigidBody type="fixed" colliders={false}><CuboidCollider args={[30, 0.1, 30]} position={[0, -0.1, 0]} /></RigidBody>
-      {players.filter(player => player.id !== connection.id).map(player => <RemotePawn key={player.id} state={player} />)}
+      {players.filter(player => player.id !== connection.id).map(player => <RemotePawn key={player.id} state={player} onClock={telemetry.record} />)}
     </Physics>
-    <Subject controller={subject} /><Arms visible={view === 'first-person'} />
+    <Subject controller={subject} /><Suspense fallback={null}><ArmsViewmodel state={arms} visible={view === 'first-person'} /></Suspense>
     <mesh rotation-x={-Math.PI / 2} position-y={-0.01}><planeGeometry args={[60, 60]} /><meshStandardMaterial color="#293743" /></mesh>
     <gridHelper args={[60, 30, '#506d77', '#394c58']} />
   </>
@@ -122,7 +166,9 @@ function NetworkScene({ connection, offline, cameraMode, onStatus }: { connectio
 
 export function MultiplayerSubject({ connection, offline = false, cameraMode = 'switchable' }: { connection: Connection; offline?: boolean; cameraMode?: CameraMode }) {
   const [status, setStatus] = useState({ room: offline ? 'Offline room' : 'Online room', players: 0, hits: 0, view: 'first-person' })
-  return <><Canvas camera={{ position: [0, 1.63, 0], fov: 75 }}><NetworkScene connection={connection} offline={offline} cameraMode={cameraMode} onStatus={setStatus} /></Canvas><div className="hud"><strong>{status.room} · {status.view}</strong><span>Players: {status.players} · Hits: {status.hits}</span><span>Click scene · WASD move · {cameraMode === 'switchable' ? 'V switch view · ' : ''}Click fire</span></div><div className="reticle">+</div></>
+  const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null)
+  const debug = new URLSearchParams(window.location.search).has('debug')
+  return <><Canvas camera={{ position: [0, 1.63, 0], fov: 75 }}><NetworkScene connection={connection} offline={offline} cameraMode={cameraMode} onStatus={setStatus} onDiagnostics={debug ? setDiagnostics : undefined} /></Canvas><div className="hud"><strong>{status.room} · {status.view}</strong><span>Players: {status.players} · Hits: {status.hits}</span><span>Click scene · WASD move · {cameraMode === 'switchable' ? 'V switch view · ' : ''}1 rifle · 2 pistol · RMB aim · LMB fire · R reload</span></div><div className="reticle">+</div>{debug && <pre data-mp-debug style={{ position: 'absolute', bottom: 12, left: 12, margin: 0, padding: 10, fontSize: 10, color: '#fff', background: '#000b', pointerEvents: 'none' }}>{JSON.stringify(diagnostics, null, 2)}</pre>}</>
 }
 
 export function LoopbackSplitView({ cameraMode = 'switchable' }: { cameraMode?: CameraMode }) {

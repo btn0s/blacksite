@@ -6,6 +6,7 @@
 - [Maintenance](maintenance.md): dependency and engine release gates.
 - [Cascade](cascade.md): destruction system and integration.
 - [Warden](warden.md): squad AI, inspector, and commands.
+- [First-person arms](arms.md): shared rigged viewmodel, MIT defaults, and local owned-pack manifest slots.
 
 ## Archive
 

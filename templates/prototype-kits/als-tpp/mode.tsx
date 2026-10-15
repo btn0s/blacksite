@@ -5,6 +5,7 @@ import { Character } from 'als-ue5-r3f/app/Character'
 import { AlsCamera } from 'als-ue5-r3f/app/AlsCamera'
 import { createCharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
 import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
+import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { AlsFootstepAudioRuntime } from '../../../vendor/blacksite/vendor/als-web/src/engine/alsAudioBridge'
 
 function Scene() {
@@ -14,7 +15,7 @@ function Scene() {
   return <>
     <ambientLight intensity={1.5} />
     <directionalLight position={[5, 12, 4]} intensity={2.5} castShadow />
-    <Physics gravity={[0, -9.8, 0]} timeStep={1 / 60}>
+    <Physics gravity={[0, -9.8, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <Character onSizeChange={() => {}} poseSample={pose} worldTime={time} onOverlayModeBridgeChange={() => {}} footstepSoundSink={audio} />
       <AlsCamera poseSample={pose} worldTime={time} footstepAudioRuntime={audio} />
       <RigidBody type="fixed" colliders={false}><CuboidCollider args={[30, 0.1, 30]} position={[0, -0.1, 0]} /></RigidBody>

@@ -3,13 +3,14 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 import { readFileSync } from 'node:fs'
+import { blacksiteAssets } from './vendor/blacksite/cli/serve-assets.mjs'
 
 const dependencies = JSON.parse(readFileSync(path.resolve('package.json'), 'utf8')).dependencies
 const allowedHosts = ['.getbb.app', '.ts.net', ...(process.env.VITE_ALLOWED_HOSTS ?? '').split(',').map(host => host.trim()).filter(Boolean)]
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  publicDir: dependencies['als-ue5-r3f'] ? path.resolve('vendor/blacksite/vendor/als-web/public') : false,
+  plugins: [react(), tailwindcss(), ...(dependencies['als-ue5-r3f'] ? [blacksiteAssets()] : [])],
+  resolve: { dedupe: ['react', 'react-dom', 'three', '@react-three/fiber', '@dimforge/rapier3d-compat'] },
   server: {
     host: '0.0.0.0',
     allowedHosts,

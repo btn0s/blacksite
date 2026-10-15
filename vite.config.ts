@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import tsconfigPaths from 'vite-tsconfig-paths';
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
+  resolve: { dedupe: ['react', 'react-dom', 'three', '@react-three/fiber', '@dimforge/rapier3d-compat'] },
   server: { host: '0.0.0.0', allowedHosts: true },
   worker: { plugins: () => [tsconfigPaths()], format: 'es' },
   // Pre-bundle both Rapier flavours: discovering one mid-session re-optimizes and reloads, which kills a Worker mid-fetch.

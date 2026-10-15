@@ -5,5 +5,11 @@ allowBuilds:
   esbuild: true
   msgpackr-extract: false
 autoInstallPeers: false
+overrides:
+  react: '^19.3.1'
+  react-dom: '^19.3.1'
+  three: '^0.186.1'
+  '@types/three': '^0.186.0'
+  '@react-three/fiber': '^9.8.2'
 minimumReleaseAgeExclude:
   - '@react-three/fiber@9.8.2'

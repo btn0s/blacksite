@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { runPrototype } from './prototype.mjs'
+import { initializeSubmodule } from './scaffold-git.mjs'
 
 const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const templateDirectory = path.join(rootDirectory, 'templates')
@@ -16,9 +17,9 @@ const systems = {
   cascade: { name: 'Cascade', description: 'Destruction simulation and effects', dependencies: [] },
 }
 const profiles = {
-  fpp: { name: 'First person', description: 'Game shell with an arms-only first person prototype', included: ['subject', 'armory'], optional: Object.keys(systems), unavailable: [] },
+  fpp: { name: 'First person', description: 'Game shell with rigged, animated first person arms', included: ['subject', 'armory'], optional: Object.keys(systems), unavailable: [] },
   tpp: { name: 'Third person', description: 'Game shell with an ALS controller prototype', included: [], optional: Object.keys(systems), unavailable: [] },
-  mp: { name: 'Multiplayer first and third person', description: 'Networked FPP arms and ALS bodies with switchable camera', included: ['subject', 'armory', 'relay', 'protocol'], optional: Object.keys(systems), unavailable: [] },
+  mp: { name: 'Multiplayer first and third person', description: 'Networked rigged FPP arms and ALS bodies with switchable camera', included: ['subject', 'armory', 'relay', 'protocol'], optional: Object.keys(systems), unavailable: [] },
   blank: { name: 'Blank', description: 'Game shell with an empty R3F scene', included: [], optional: Object.keys(systems), unavailable: [] },
 }
 function parse(argv) {
@@ -50,21 +51,6 @@ async function npmRange(name) {
   const version = run('npm', ['view', name, 'version'], process.cwd()).split('\n').at(-1)
   if (!/^\d+\.\d+\.\d+/.test(version)) throw new Error(`No published version for ${name}`)
   return `^${version}`
-}
-async function submodule(root, url, target, ref) {
-  const full = path.join(root, target)
-  const modules = existsSync(path.join(root, '.gitmodules')) ? await readFile(path.join(root, '.gitmodules'), 'utf8') : ''
-  if (!modules.includes(`path = ${target}`)) {
-    if (existsSync(full)) throw new Error(`${target} exists but is not a registered Git submodule`)
-    run('git', ['-c', 'protocol.file.allow=always', 'submodule', 'add', url, target], root)
-  }
-  run('git', ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '--recursive', '--', target], root)
-  if (!existsSync(path.join(full, '.git'))) throw new Error(`${target} could not be initialized`)
-  if (ref) {
-    run('git', ['fetch', 'origin', ref], full)
-    run('git', ['checkout', '--detach', 'FETCH_HEAD'], full)
-    run('git', ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '--recursive'], full)
-  }
 }
 async function packageClosure(blacksite, requested) {
   const names = new Map()
@@ -140,10 +126,10 @@ async function main() {
   emit(options.json, 'directory', 'done', 'Initialized Git repository')
   emit(options.json, 'submodules', 'start', 'Adding Blacksite with nested ALS')
   const localRef = options['blacksite-ref']?.startsWith('file://') ? options['blacksite-ref'] : null
-  await submodule(root, localRef || blacksiteUrl, 'vendor/blacksite', localRef ? null : options['blacksite-ref'])
+  await initializeSubmodule(root, localRef || blacksiteUrl, 'vendor/blacksite', localRef ? null : options['blacksite-ref'])
   emit(options.json, 'submodules', 'done', 'Recursive Blacksite submodule initialized')
   const packageIds = [...requested].map(id => id === 'subject' && profile === 'fpp' ? 'subject-fpp' : id)
-  const needsAls = profile === 'tpp' || packageIds.includes('subject')
+  const needsAls = profile === 'tpp' || packageIds.includes('subject') || packageIds.includes('subject-fpp')
   const closure = await packageClosure(path.join(root, 'vendor/blacksite'), ['ui', ...packageIds])
   const workspace = ['packages:', ...closure.map(item => `  - '${item}'`), ...(needsAls ? ["  - 'vendor/blacksite/vendor/als-web'"] : []), 'allowBuilds:', '  esbuild: true', ...(profile === 'mp' ? ['  msgpackr-extract: false'] : []), 'minimumReleaseAge: 0', ''].join('\n')
   await writeFile(path.join(root, 'pnpm-workspace.yaml'), workspace)
@@ -157,7 +143,7 @@ async function main() {
   for (const name of devNames) devDependencies[name] = await npmRange(name)
   const manifest = { name: slug(options.name), private: true, type: 'module', scripts: { dev: profile === 'mp' ? 'concurrently -k "tsx server/index.ts" "vite"' : 'vite', lint: profile === 'mp' ? 'oxlint src scripts server' : 'oxlint src scripts', typecheck: 'tsc --noEmit', build: 'vite build', 'budget-check': 'node scripts/budget-check.mjs', check: 'pnpm lint && pnpm typecheck && pnpm build && pnpm budget-check' }, dependencies, devDependencies }
   await writeFile(path.join(root, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
-  await writeFile(path.join(root, 'pnpm-workspace.yaml'), `${workspace}overrides:\n  three: '${dependencies.three}'\n  '@types/three': '${devDependencies['@types/three']}'\n`)
+  await writeFile(path.join(root, 'pnpm-workspace.yaml'), `${workspace}overrides:\n  react: '${dependencies.react}'\n  react-dom: '${dependencies['react-dom']}'\n  three: '${dependencies.three}'\n  '@react-three/fiber': '${dependencies['@react-three/fiber']}'\n  '@types/three': '${devDependencies['@types/three']}'\n`)
   const source = path.join(templateDirectory, 'game-shell')
   await cp(source, root, { recursive: true, force: true })
   if (profile !== 'blank') await runPrototype(['new', profile === 'tpp' ? 'controller-tpp' : profile === 'mp' ? 'controller-mp' : 'controller-fpp', '--with', profile === 'tpp' ? 'als-tpp' : profile === 'mp' ? 'mp' : 'fpp', '--project', root, '--quiet'])
@@ -165,8 +151,8 @@ async function main() {
     await mkdir(path.join(root, 'server'), { recursive: true })
     await cp(path.join(templateDirectory, 'multiplayer-server', 'index.ts'), path.join(root, 'server', 'index.ts'))
     await cp(path.join(templateDirectory, 'multiplayer-server', 'README.md'), path.join(root, 'server', 'README.md'))
-    await cp(path.join(root, 'src', 'prototypes', 'controller-mp', 'mode.tsx'), path.join(root, 'src', 'game', 'mode.tsx'))
   }
+  if (profile === 'mp' || profile === 'fpp') await cp(path.join(root, 'src', 'prototypes', `controller-${profile}`, 'mode.tsx'), path.join(root, 'src', 'game', 'mode.tsx'))
   await mkdir(path.join(root, 'lint'), { recursive: true })
   await cp(path.join(templateDirectory, 'lint', 'game.mjs'), path.join(root, 'lint', 'game.mjs'), { recursive: true, force: true })
   await cp(path.join(templateDirectory, 'lint', '.oxlintrc.json'), path.join(root, '.oxlintrc.json'), { force: true })
@@ -174,7 +160,7 @@ async function main() {
   if (profile !== 'tpp') {
     const tsconfigFile = path.join(root, 'tsconfig.json')
     const tsconfig = await json(tsconfigFile)
-    tsconfig.include = profile === 'mp' ? ['src', 'server', 'vendor/blacksite/vendor/als-web/src/app/globals.d.ts'] : ['src']
+    tsconfig.include = ['src', ...(profile === 'mp' ? ['server'] : []), ...(needsAls ? ['vendor/blacksite/vendor/als-web/src/app/globals.d.ts'] : [])]
     await writeFile(tsconfigFile, `${JSON.stringify(tsconfig, null, 2)}\n`)
   }
   await cp(path.join(templateDirectory, 'monorepo', 'vite.config.mjs'), path.join(root, 'vite.config.mjs'), { force: true })
