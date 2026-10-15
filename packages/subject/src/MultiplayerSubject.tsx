@@ -15,6 +15,7 @@ import { Subject, createSubject } from './index'
 import type { PawnState, Connection } from '@blacksite/relay'
 import { createReplica, createLoopbackRoom } from '@blacksite/relay'
 import { createSubjectInputSource, type CameraMode } from './controller'
+import { useSubjectSpawn } from './spawn'
 
 const Controller = trait({ pawn: '' })
 const Pawn = trait({ owner: '', x: 0, y: 0, z: 0 })
@@ -23,7 +24,17 @@ const Intent = trait({ forward: 0, right: 0, jump: false })
 const noHits = { castRay: () => null, sweepSphere: () => null }
 type AnimationClock = { readonly elapsedSeconds: number; readonly updates: number }
 type ClockSample = { seconds: number; updates: number; wallSeconds: number; rate: number }
-type Diagnostics = { clocks: Record<string, ClockSample>; arms: Record<string, unknown>; speed: number; gait: string }
+type Diagnostics = {
+  clocks: Record<string, ClockSample>
+  arms: Record<string, unknown>
+  speed: number
+  gait: string
+  locked: boolean
+  keys: string[]
+  command: Record<string, unknown>
+  position: number[]
+  locomotionMode: string | null
+}
 
 function RemotePawn({ state, onClock }: { state: PawnState; onClock: (id: string, clock: AnimationClock) => void }) {
   const buffer = useMemo(() => new AlsSnapshotBuffer({ interpolationDelayMs: 100 }), [])
@@ -70,7 +81,7 @@ function NetworkScene({ connection, offline, cameraMode, onStatus, onDiagnostics
   const worldTime = useMemo(createWorldTimeState, [])
   const audio = useMemo(() => new AlsFootstepAudioRuntime({ AutoInstallUserGestureUnlock: true }), [])
   const [players, setPlayers] = useState<PawnState[]>([])
-  const [spawn, setSpawn] = useState<readonly [number, number, number]>([0, 0, 0])
+  const spawn = useSubjectSpawn(subject.player)
   const [hits, setHits] = useState(0)
   const [view, setView] = useState<'first-person' | 'third-person'>('first-person')
   const [status, setStatus] = useState(offline ? 'Offline room' : 'Online room')
@@ -81,7 +92,6 @@ function NetworkScene({ connection, offline, cameraMode, onStatus, onDiagnostics
       if (!own || own.position.x === subject.player.spawn[0] && own.position.y === subject.player.spawn[1] && own.position.z === subject.player.spawn[2]) return
       const next = [own.position.x, own.position.y, own.position.z] as const
       subject.respawn(next, own.yaw)
-      setSpawn(next)
     }
     const unsubscribe = replica.onMessage(message => {
       if (message.type === 'welcome') applySpawn(message.states.find(state => state.id === connection.id))
@@ -97,7 +107,17 @@ function NetworkScene({ connection, offline, cameraMode, onStatus, onDiagnostics
   useEffect(() => () => weapon.dispose(), [weapon])
   useEffect(() => {
     if (!onDiagnostics) return
-    const timer = setInterval(() => onDiagnostics({ clocks: { ...telemetry.clocks }, arms: { ...arms.debug }, speed: Math.hypot(subject.frame.velocity.x, subject.frame.velocity.z), gait: subject.player.pose.current.character?.gait ?? 'loading' }), 250)
+    const timer = setInterval(() => onDiagnostics({
+      clocks: { ...telemetry.clocks },
+      arms: { ...arms.debug },
+      speed: Math.hypot(subject.frame.velocity.x, subject.frame.velocity.z),
+      gait: subject.player.pose.current.character?.gait ?? 'loading',
+      locked: subject.frame.locked,
+      keys: [...subject.keys],
+      command: { ...subject.player.command },
+      position: subject.frame.position.toArray(),
+      locomotionMode: subject.player.pose.current.character?.locomotionMode ?? null,
+    }), 250)
     return () => clearInterval(timer)
   }, [onDiagnostics, telemetry, arms, subject])
   useFrame((_, dt) => {
@@ -153,7 +173,7 @@ function NetworkScene({ connection, offline, cameraMode, onStatus, onDiagnostics
   return <>
     <ambientLight intensity={1.5} /><directionalLight position={[5, 12, 4]} intensity={2.5} />
     <Physics gravity={[0, -9.8, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
-      <group visible={view === 'third-person'}><Character showDebugControls={false} key={spawn.join(':')} initialPosition={spawn} poseSample={subject.player.pose} worldTime={worldTime} footstepSoundSink={audio} onSizeChange={() => {}} onOverlayModeBridgeChange={() => {}} inputEnabled={false} inputSource={inputSource} /></group>
+      <group visible={view === 'third-person'}><Character showDebugControls={false} key={spawn.revision} initialPosition={spawn.position} poseSample={subject.player.pose} worldTime={worldTime} footstepSoundSink={audio} onSizeChange={() => {}} onOverlayModeBridgeChange={() => {}} inputEnabled={false} inputSource={inputSource} /></group>
       <AlsCamera poseSample={subject.player.pose} worldTime={worldTime} footstepAudioRuntime={audio} toggleViewModeKey={null} controlRotationSource={controlRotationSource} />
       <RigidBody type="fixed" colliders={false}><CuboidCollider args={[30, 0.1, 30]} position={[0, -0.1, 0]} /></RigidBody>
       {players.filter(player => player.id !== connection.id).map(player => <RemotePawn key={player.id} state={player} onClock={telemetry.record} />)}

@@ -21,6 +21,7 @@ export interface ArmsWeaponManifest {
   presentation?: {
     position?: [number, number, number]
     aimOffset?: [number, number, number]
+    sight?: [number, number, number]
   }
 }
 
@@ -36,7 +37,7 @@ export function validateArmsManifest(value: unknown): ArmsManifest {
   const manifest = value as ArmsManifest
   if (manifest.fov !== undefined && (!Number.isFinite(manifest.fov) || manifest.fov <= 0 || manifest.fov >= 180)) throw new Error('Arms FOV must be between 0 and 180 degrees')
   for (const weapon of Object.values(manifest.weapons ?? {})) {
-    for (const tuple of [weapon.attachment?.position, weapon.attachment?.rotation, weapon.presentation?.position, weapon.presentation?.aimOffset]) {
+    for (const tuple of [weapon.attachment?.position, weapon.attachment?.rotation, weapon.presentation?.position, weapon.presentation?.aimOffset, weapon.presentation?.sight]) {
       if (tuple && (tuple.length !== 3 || !tuple.every(Number.isFinite))) throw new Error('Arms attachment requires three finite coordinates')
     }
     if (weapon.attachment?.scale !== undefined && !(weapon.attachment.scale > 0)) throw new Error('Arms attachment scale must be positive')

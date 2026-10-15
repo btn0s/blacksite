@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { Bone, Group, PerspectiveCamera, SkinnedMesh, Vector3 } from 'three'
 import { createArmsState } from './state'
-import { createArmsRuntime, measureArmsAttachment } from './runtime'
+import { createArmsRuntime, DEFAULT_ARMS_PRESENTATION, measureArmsAttachment } from './runtime'
 import { createArmsMesh } from './geometry'
 import { validateArmsManifest, validateArmsSkeleton, type ArmsAssets } from './manifest'
 import { createArmsActionClips, armsActionClipName } from './clips'
@@ -129,6 +129,33 @@ describe('rigged arms', () => {
       const preset = ALS_WEAPONS.find(definition => definition.id === weapon)!
       expect(clips.find(clip => clip.name === armsActionClipName(weapon, 'reload'))!.duration).toBe(preset.reloadSeconds)
       expect(clips.find(clip => clip.name === armsActionClipName(weapon, 'equip'))!.duration).toBe(preset.equipSeconds)
+    }
+  })
+
+  it('aligns physical weapon sights with the reticle and keeps stock geometry ahead of the near plane', async () => {
+    const source = await assets()
+    const camera = new PerspectiveCamera(70, 16 / 9, 0.005, 10)
+    for (const weapon of ['rifle', 'pistol'] as const) {
+      const state = createArmsState()
+      state.weapon = weapon
+      state.aiming = true
+      const runtime = createArmsRuntime(source, state)
+      for (let frame = 0; frame < 180; frame++) runtime.update(1 / 60)
+      runtime.root.updateMatrixWorld(true)
+      const object = runtime.root.getObjectByName(`BlacksiteArmsWeapon_${weapon}`)!
+      const sight = new Vector3().fromArray(DEFAULT_ARMS_PRESENTATION[weapon].sight).applyMatrix4(object.matrixWorld).project(camera)
+      expect(Math.abs(sight.x), `${weapon} sight horizontal`).toBeLessThan(0.015)
+      expect(Math.abs(sight.y), `${weapon} sight vertical`).toBeLessThan(0.015)
+      object.traverse(child => {
+        if (!(child instanceof SkinnedMesh)) return
+        const position = child.geometry.getAttribute('position')
+        const point = new Vector3()
+        for (let index = 0; index < position.count; index++) {
+          child.getVertexPosition(index, point).applyMatrix4(child.matrixWorld)
+          expect(point.z, `${weapon} near-plane clearance`).toBeLessThan(-camera.near)
+        }
+      })
+      runtime.dispose()
     }
   })
 })

@@ -37,7 +37,8 @@ export function createMatch({ now = Date.now }: { now?: () => number } = {}) {
   const broadcast = (message: ServerMessage) => { for (const send of peers.values()) send(message) }
   function join(id: string, send: Send) {
     if (peers.has(id)) throw new Error('Duplicate player')
-    const index = peers.size
+    let index = 0
+    while ([...states.values()].some(state => Math.hypot(state.position.x - index * 3, state.position.z) < 3)) index++
     const state: PawnState = { id, owner: id, authority: 'owner', seq: 0, t: clock(), position: { x: index * 3, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0, health: 100, weapon: 'rifle', aiming: false }
     send({ type: 'welcome', id, states: [...states.values(), state] })
     peers.set(id, send)

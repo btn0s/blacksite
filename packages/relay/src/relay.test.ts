@@ -142,3 +142,22 @@ test('weapon and aiming protocol fields reject malformed messages', () => {
     { type: 'move', seq: 1, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, intent: { forward: 0, right: 0, jump: false, yaw: 0, pitch: 0, aiming: 1 } },
   ]) expect(isClientMessage(message)).toBe(false)
 })
+
+test('new peers take an available spawn after departures and avoid occupied moved positions', () => {
+  let time = 0
+  const match = createMatch({ now: () => time })
+  match.join('a', () => {})
+  match.join('b', () => {})
+  expect(match.states.get('a')!.position.x).toBe(0)
+  expect(match.states.get('b')!.position.x).toBe(3)
+  match.leave('a')
+  match.join('c', () => {})
+  expect(match.states.get('c')!.position.x).toBe(0)
+  match.leave('c')
+  time = 200
+  match.receive('b', { type: 'move', seq: 1, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, intent: { forward: 0, right: 0, jump: false, yaw: 0, pitch: 0 } })
+  expect(match.states.get('b')!.position.x).toBe(0)
+  match.join('d', () => {})
+  expect(match.states.get('d')!.position.x).toBe(3)
+  match.leave('b'); match.leave('d')
+})

@@ -45,7 +45,19 @@ Each generated game has `public/assets/arms.json`, initially `{ "version": 1 }`.
 
 Names above illustrate the slot mapping; use the exact animation names in the converted GLB. Both weapon entries support `poses`, `aim`, `aimCrouch`, `aimReference`, `idle`, `idleReference`, `runArms`, `sprintArms`, `sprintImpulseArms`, `fire`, `reload`, and `equip` clip slots. `characterUrl` replaces the skinned character mesh. Bone names, hierarchy, reference pose, animation targets and ALS metadata must match SK_Als. Attachment positions are metres, rotations are Euler radians, and scale is uniform.
 
-Each weapon may also set `presentation.position` and `presentation.aimOffset`, both three-element camera-local metre coordinates, to frame its clips without code changes. The viewmodel keeps all 68 physical bones while rendering only forearms and hands. Its default pose bank uses the native raised aiming posture for first-person visibility; aiming then blends that posture and moves the weapon toward the sights. The native third-person relaxed pose remains available to full-body characters.
+Each weapon may set `presentation.position` to frame its clips in camera-local metres. Set `presentation.sight` to the rear sight's center in the weapon asset's scene-local coordinates, before its attachment transform. At aim, the viewmodel evaluates the current skinned pose, transforms that physical sight point and centers it on the reticle in the same frame. `presentation.aimOffset` is an additional camera-local trim after that centering; its Z coordinate controls stock clearance. These values are three-element metre coordinates. Owned meshes need their own measured sight point even when their animation skeleton matches SK_Als.
+
+The default ALS rifle calibration is:
+
+```json
+{
+  "position": [0.05, -1.47, -0.05],
+  "sight": [0, 0.15937, 0.03789],
+  "aimOffset": [0, 0, -0.08]
+}
+```
+
+The viewmodel keeps all 68 physical bones while rendering only forearms and hands. Its default pose bank uses the native raised aiming posture for first-person visibility; aiming blends that posture and aligns the physical sights. The native third-person relaxed pose remains available to full-body characters.
 
 ## Owned-pack upgrade
 

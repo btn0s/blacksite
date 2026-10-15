@@ -4,7 +4,7 @@ import { ALS_VIRTUAL_BONES } from 'als-ue5-r3f/als/Utility/AlsVirtualBones'
 import { createRigDefinition } from 'als-ue5-r3f/engine/rig'
 import { applyPose, createPoseApplicator } from 'als-ue5-r3f/engine/applyPose'
 import { createVirtualBonePoseScratch, refreshVirtualBonePose } from 'als-ue5-r3f/engine/virtualBones'
-import { Group, Matrix4 } from 'three'
+import { Group, Matrix4, Vector3 } from 'three'
 import { clone } from 'three/addons/utils/SkeletonUtils.js'
 import { createArmsActionClips, createFirstPersonPoseBanks, armsActionClipName } from './clips'
 import { createArmsMesh } from './geometry'
@@ -12,10 +12,10 @@ import type { ArmsAssets } from './manifest'
 import type { ArmsAction, ArmsState, ArmsWeapon } from './state'
 
 const weaponModes = { rifle: 'BlacksiteArmsRifle', pistol: 'BlacksiteArmsPistol' } as const
-const presentation = {
-  rifle: { position: [0.05, -1.47, -0.05], aimOffset: [-0.16, 0.1, -0.08] },
-  pistol: { position: [0.12, -1.62, 0], aimOffset: [-0.14, 0.1, 0] },
-} satisfies Record<ArmsWeapon, { position: [number, number, number]; aimOffset: [number, number, number] }>
+export const DEFAULT_ARMS_PRESENTATION = {
+  rifle: { position: [0.05, -1.47, -0.05], aimOffset: [0, 0, -0.08], sight: [0, 0.15937, 0.03789] },
+  pistol: { position: [0.12, -1.62, 0], aimOffset: [0, 0, 0], sight: [0, 0.0798, 0.00189] },
+} satisfies Record<ArmsWeapon, { position: [number, number, number]; aimOffset: [number, number, number]; sight: [number, number, number] }>
 
 export function createArmsRuntime(assets: ArmsAssets, state: ArmsState) {
   const mesh = createArmsMesh(assets.character.scene)
@@ -45,11 +45,12 @@ export function createArmsRuntime(assets: ArmsAssets, state: ArmsState) {
   root.name = 'BlacksiteArmsCameraAttachment'
   const body = new Group()
   body.rotation.y = Math.PI
-  body.position.fromArray(presentation[state.weapon].position)
+  body.position.fromArray(DEFAULT_ARMS_PRESENTATION[state.weapon].position)
   body.add(mesh.scene)
   root.add(body)
   const weapons = (['rifle', 'pistol'] as const).map(weapon => {
     const object = clone(assets.weapons[weapon])
+    object.name = `BlacksiteArmsWeapon_${weapon}`
     const attachment = assets.manifest.weapons?.[weapon]?.attachment
     const bone = mesh.scene.getObjectByName(attachment?.bone ?? 'VB hand_r_to_ik_hand_gun')
     if (!bone) throw new Error(`Arms weapon attachment bone missing: ${attachment?.bone}`)
@@ -69,6 +70,8 @@ export function createArmsRuntime(assets: ArmsAssets, state: ArmsState) {
   let previousRotations: Float32Array | null = null
   let aimAmount = 0
   let movementAmount = 0
+  const inverseRoot = new Matrix4()
+  const sight = new Vector3()
   const input = {
     relevant: true, deltaTime: 0, rotationMode: 'ViewDirection' as 'Aiming' | 'ViewDirection',
     locomotionMode: 'Grounded' as const, gait: 'Walking' as 'Walking' | 'Running' | 'Sprinting',
@@ -132,10 +135,15 @@ export function createArmsRuntime(assets: ArmsAssets, state: ArmsState) {
       movementAmount += ((input.moving ? 1 : 0) - movementAmount) * (1 - Math.exp(-12 * delta))
       const bob = Math.sin(phase * Math.PI * 2) * movementAmount * (state.sprinting ? 0.012 : 0.006) * (1 - aimAmount * 0.8)
       const framing = assets.manifest.weapons?.[state.weapon]?.presentation
-      body.position.fromArray(framing?.position ?? presentation[state.weapon].position)
-      const aimOffset = framing?.aimOffset ?? presentation[state.weapon].aimOffset
-      root.position.set(aimAmount * aimOffset[0], bob + aimAmount * aimOffset[1], aimAmount * aimOffset[2])
+      body.position.fromArray(framing?.position ?? DEFAULT_ARMS_PRESENTATION[state.weapon].position)
+      const aimOffset = framing?.aimOffset ?? DEFAULT_ARMS_PRESENTATION[state.weapon].aimOffset
       root.rotation.z = Math.cos(phase * Math.PI * 2) * movementAmount * 0.006 * (1 - aimAmount)
+      root.updateWorldMatrix(true, true)
+      inverseRoot.copy(root.matrixWorld).invert()
+      const weaponObject = weapons.find(entry => entry.weapon === state.weapon)!.object
+      sight.fromArray(framing?.sight ?? DEFAULT_ARMS_PRESENTATION[state.weapon].sight)
+        .applyMatrix4(weaponObject.matrixWorld).applyMatrix4(inverseRoot).applyQuaternion(root.quaternion)
+      root.position.set(aimAmount * (aimOffset[0] - sight.x), bob + aimAmount * (aimOffset[1] - sight.y), aimAmount * aimOffset[2])
       root.updateMatrix()
       state.debug.animationSeconds = clock
       state.debug.frames++
