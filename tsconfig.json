@@ -7,5 +7,5 @@
     "types": ["vite/client", "node"],
     "baseUrl": ".", "paths": { "@blacksite/*": ["packages/*/src/index.ts"] }
   },
-  "include": ["packages", "scripts", "tests", "vite.config.ts", "vendor/als-web/src/app/globals.d.ts"]
+  "include": ["packages", "scripts", "tests", "site", "vendor/als-web/src/app/globals.d.ts"]
 }

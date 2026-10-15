@@ -18,6 +18,7 @@ scene.fog = new THREE.Fog("#171e23", 105, 260);
 const camera = new THREE.PerspectiveCamera(43, innerWidth / innerHeight, 0.1, 500);
 camera.position.set(57, 38, 62);
 const gl = new THREE.WebGLRenderer({ antialias: true });
+(window as Window & { __blacksitePerf?: (renderer: THREE.WebGLRenderer) => void }).__blacksitePerf?.(gl);
 gl.setSize(innerWidth, innerHeight);
 gl.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 gl.shadowMap.enabled = true;
@@ -776,7 +777,9 @@ stats.style.whiteSpace = 'pre-line';
 stats.title = 'Rolling p95 over two seconds. Frame measures rAF cadence; CPU measures this render callback; sync measures interpolation/updates. GPU is sampled asynchronously when supported. 120 Hz budget: 8.33 ms.';
 let last = performance.now();
 let fpsAt = performance.now(), fpsFrames = 0, fps = 0, renderMs = 0;
+let disposed = false;
 function animate(now: number) {
+  if (disposed) return;
   requestAnimationFrame(animate);
   const cpuStart = performance.now();
   const frameMs = now - last;
@@ -835,6 +838,7 @@ ${(frame.ordnance ?? []).length} placed charges`;
   const gpuSample = ready && beginGpuSample(now);
   const submitStart = performance.now();
   gl.render(scene, camera);
+  (window as Window & { __blacksiteBodies?: (count: number) => void }).__blacksiteBodies?.(frame?.stats.activeBodies ?? 0);
   const submitMs = performance.now() - submitStart;
   if (gpuSample) endGpuSample();
   if (ready) {
@@ -866,6 +870,7 @@ ${(frame.ordnance ?? []).length} placed charges`;
 requestAnimationFrame(animate);
 reset().catch(fail);
 window.addEventListener("beforeunload", () => {
+  disposed = true;
   longTasks?.disconnect();
   sim?.dispose();
   view?.dispose();

@@ -59,6 +59,7 @@ const cascade = new DestructionRenderer(manifest);
 scene.add(cascade.group);
 
 const renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+(window as Window & { __blacksitePerf?: (renderer: WebGLRenderer) => void }).__blacksitePerf?.(renderer);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
 const camera = new PerspectiveCamera(50, 1, 0.1, 1000);
@@ -152,6 +153,7 @@ renderer.setAnimationLoop(() => {
     session.previous ? session.interpolationAlpha() : 1,
   );
   renderer.render(scene, camera);
+  (window as Window & { __blacksiteBodies?: (count: number) => void }).__blacksiteBodies?.(session.frame?.stats.activeBodies ?? 0);
   // Main-thread cost per frame: renderer update + draw, plus snapshot apply since the last frame.
   const cost = performance.now() - began + session.takeApplyMs();
   frames++;

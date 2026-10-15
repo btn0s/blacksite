@@ -1,11 +1,11 @@
 import { Component, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree, type RootState } from '@react-three/fiber';
 import { BufferGeometry, CanvasTexture, DoubleSide, Float32BufferAttribute, Group, Line, LineBasicMaterial, OrthographicCamera, SRGBColorSpace, Vector3 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { AgentView, BeliefTrack, RenderSnapshot, TacticalMap, Vec3 } from '../../ai-schema/src';
 
 export type KnowledgeView = 'truth' | 'private' | 'squad';
-type SceneProps = { map: TacticalMap; snapshot: RenderSnapshot; selected: AgentView; onSelect: (id: string) => void; knowledge: KnowledgeView; paths: boolean; cameraMode: 'isometric' | 'top'; };
+type SceneProps = { map: TacticalMap; snapshot: RenderSnapshot; selected: AgentView; onSelect: (id: string) => void; knowledge: KnowledgeView; paths: boolean; cameraMode: 'isometric' | 'top'; onCreated?: (state: RootState) => void };
 const ALPHA = '#cced91';
 const BRAVO = '#ee9972';
 
@@ -124,12 +124,12 @@ function Belief({ track }: { track: BeliefTrack }) {
   </group>;
 }
 
-export function Scene({ map, snapshot, selected, onSelect, knowledge, paths, cameraMode }: SceneProps) {
+export function Scene({ map, snapshot, selected, onSelect, knowledge, paths, cameraMode, onCreated }: SceneProps) {
   const tracks = knowledge === 'squad' ? snapshot.sharedBeliefs[selected.team] : selected.beliefs;
   const enemies = tracks.filter(track => track.classification !== 'friendly' && track.confidence > .06);
   const agents = knowledge === 'truth' ? snapshot.agents : snapshot.agents.filter(agent => agent.team === selected.team);
   const recentShots = snapshot.events.filter(event => event.type === 'shot' && snapshot.tick - event.tick < 4 && event.position && event.endPosition && (knowledge === 'truth' || event.agentId === selected.id));
-  return <SceneBoundary><Canvas orthographic shadows camera={{ position: [40, 60, 50], zoom: 11, near: .1, far: 400 }} dpr={[1, 1.7]} gl={{ antialias: true, alpha: true }} fallback={<div className="scene-error">WebGL is required for the tactical map.</div>}>
+  return <SceneBoundary><Canvas onCreated={onCreated} orthographic shadows camera={{ position: [40, 60, 50], zoom: 11, near: .1, far: 400 }} dpr={[1, 1.7]} gl={{ antialias: true, alpha: true }} fallback={<div className="scene-error">WebGL is required for the tactical map.</div>}>
     <CameraRig map={map} mode={cameraMode} />
     <ambientLight intensity={1.25} />
     <directionalLight position={[-15, 40, -10]} intensity={2.5} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-45} shadow-camera-right={45} shadow-camera-top={45} shadow-camera-bottom={-45} shadow-normalBias={.05} />

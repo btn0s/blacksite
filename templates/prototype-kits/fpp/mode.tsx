@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
-import { Canvas, createPortal, useFrame, useThree } from '@react-three/fiber'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { Canvas, createPortal, useFrame, useThree, type RootState } from '@react-three/fiber'
 import { Physics, RigidBody } from '@react-three/rapier'
 import { createWorld, trait } from 'koota'
 import { Vector3 } from 'three'
@@ -20,7 +20,7 @@ function Arms() {
   </group>, camera)
 }
 
-function Scene({ onShot }: { onShot: () => void }) {
+function Scene({ onShot, physicsProbe }: { onShot: () => void; physicsProbe?: ReactNode }) {
   const world = useMemo(createWorld, [])
   const pawn = useMemo(() => world.spawn(Position, Intent), [world])
   const weapon = useMemo(() => createWeaponRuntime({ ownerId: 'local', seed: 1, definitions: ALS_WEAPONS }), [])
@@ -47,10 +47,10 @@ function Scene({ onShot }: { onShot: () => void }) {
       for (const event of events) if (event.type === 'shot') onShot()
     }
   })
-  return <><ambientLight intensity={1.3} /><directionalLight position={[4, 8, 2]} intensity={2} /><Physics><RigidBody type="fixed"><mesh position={[0, -0.15, 0]}><boxGeometry args={[30, 0.3, 30]} /><meshStandardMaterial color="#293743" /></mesh></RigidBody></Physics><gridHelper args={[30, 30, '#506d77', '#394c58']} /><Arms /><StandaloneSubject onIntent={writeIntent} onFire={(pressed, nextAim) => { firing.current = pressed; aim.current = nextAim }} onReload={() => { reload.current = true }} /></>
+  return <><ambientLight intensity={1.3} /><directionalLight position={[4, 8, 2]} intensity={2} /><Physics><RigidBody type="fixed"><mesh position={[0, -0.15, 0]}><boxGeometry args={[30, 0.3, 30]} /><meshStandardMaterial color="#293743" /></mesh></RigidBody>{physicsProbe}</Physics><gridHelper args={[30, 30, '#506d77', '#394c58']} /><Arms /><StandaloneSubject onIntent={writeIntent} onFire={(pressed, nextAim) => { firing.current = pressed; aim.current = nextAim }} onReload={() => { reload.current = true }} /></>
 }
 
-export default function Mode() {
+export default function Mode({ onCreated, physicsProbe }: { onCreated?: (state: RootState) => void; physicsProbe?: ReactNode } = {}) {
   const [shots, setShots] = useState(0)
-  return <><Canvas camera={{ position: [0, 1.63, 0], fov: 75 }}><Scene onShot={() => setShots(value => value + 1)} /></Canvas><div className="hud"><strong>First person · arms only</strong><span>Click scene · WASD move · Mouse look · R reload · Left click fire</span><span>Shots: {shots}</span></div><div className="reticle">+</div></>
+  return <><Canvas onCreated={onCreated} camera={{ position: [0, 1.63, 0], fov: 75 }}><Scene physicsProbe={physicsProbe} onShot={() => setShots(value => value + 1)} /></Canvas><div className="hud"><strong>First person · arms only</strong><span>Click scene · WASD move · Mouse look · R reload · Left click fire</span><span>Shots: {shots}</span></div><div className="reticle">+</div></>
 }

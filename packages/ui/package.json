@@ -9,13 +9,15 @@
     "./console.css": "./src/styles/console.css",
     "./console/*": "./src/console/*.tsx",
     "./game-frame": "./src/game-frame/game-frame.tsx",
+    "./perf-overlay": "./src/perf-overlay.tsx",
     "./components/*": "./src/components/*.tsx",
     "./hooks/*": "./src/hooks/*.ts",
     "./lib/*": "./src/lib/*.ts"
   },
   "peerDependencies": {
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "three": "^0.185.1"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
