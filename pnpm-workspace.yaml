@@ -3,6 +3,7 @@ packages:
   - "vendor/als-web"
 allowBuilds:
   esbuild: true
+  msgpackr-extract: false
 autoInstallPeers: false
 minimumReleaseAgeExclude:
   - '@react-three/fiber@9.8.2'

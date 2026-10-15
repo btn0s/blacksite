@@ -12,9 +12,9 @@ Generated from `blacksite catalog --json` on release.
 
 | Profile | Use when |
 | --- | --- |
-| tpp | Game shell with an ALS controller prototype |
 | fpp | Game shell with an arms-only first person prototype |
-| fpp-mp | Networked FPP arms and ALS remote bodies (unavailable) |
+| tpp | Game shell with an ALS controller prototype |
+| mp | Networked FPP arms and ALS bodies with switchable camera |
 | blank | Game shell with an empty R3F scene |
 
 ## Prototype kits
@@ -27,7 +27,7 @@ Generated from `blacksite catalog --json` on release.
 | armory | Armory dependency scaffold | experimental |
 | warden | Squad AI dependency scaffold | experimental |
 | cascade | Destruction dependency scaffold | experimental |
-| fpp-mp | Planned networked FPP and TPP player; unavailable | unavailable |
+| mp | Networked FPP arms and ALS third-person bodies | usable |
 
 ## Systems
 
@@ -72,6 +72,8 @@ Generated from `blacksite catalog --json` on release.
 | @blacksite/destruction-server | destruction server |
 | @blacksite/destruction-testkit | destruction testkit |
 | @blacksite/input | input |
+| @blacksite/protocol | Shared room messages |
+| @blacksite/relay | Colyseus and loopback replication |
 | @blacksite/server | server |
 | @blacksite/sim-core | sim core |
 | @blacksite/subject | ALS player control |

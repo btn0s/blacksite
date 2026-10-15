@@ -16,9 +16,9 @@ const systems = {
   cascade: { name: 'Cascade', description: 'Destruction simulation and effects', dependencies: [] },
 }
 const profiles = {
-  tpp: { name: 'Third person', description: 'Game shell with an ALS controller prototype', included: [], optional: Object.keys(systems), unavailable: [] },
   fpp: { name: 'First person', description: 'Game shell with an arms-only first person prototype', included: ['subject', 'armory'], optional: Object.keys(systems), unavailable: [] },
-  'fpp-mp': { name: 'Multiplayer first and third person', description: 'Networked FPP arms and ALS remote bodies', included: ['subject', 'armory'], optional: [], unavailable: ['networked player piece pending'] },
+  tpp: { name: 'Third person', description: 'Game shell with an ALS controller prototype', included: [], optional: Object.keys(systems), unavailable: [] },
+  mp: { name: 'Multiplayer first and third person', description: 'Networked FPP arms and ALS bodies with switchable camera', included: ['subject', 'armory', 'relay', 'protocol'], optional: Object.keys(systems), unavailable: [] },
   blank: { name: 'Blank', description: 'Game shell with an empty R3F scene', included: [], optional: Object.keys(systems), unavailable: [] },
 }
 function parse(argv) {
@@ -97,15 +97,14 @@ async function main() {
       systems: Object.entries(systems).map(([id, system]) => ({ id, ...system, profiles: Object.fromEntries(Object.entries(profiles).map(([profile, data]) => [profile, data.included.includes(id) ? 'included' : data.unavailable.includes(id) ? 'unavailable' : 'optional'])) })),
       packages: packageRows.filter(Boolean),
       templates: [{ id: 'game-shell', path: 'templates/game-shell' }],
-      kits: ['tpp', 'fpp', 'subject', 'armory', 'warden', 'cascade', 'fpp-mp'].map(id => ({ id, command: `blacksite prototype new <name> --with ${id}`, status: id === 'fpp-mp' ? 'unavailable' : ['subject', 'armory', 'warden', 'cascade'].includes(id) ? 'experimental' : 'usable', ...(id === 'fpp-mp' ? { reason: 'Colyseus room, shared protocol, loopback, and remote ALS body are pending' } : {}) })),
+      kits: ['tpp', 'fpp', 'subject', 'armory', 'warden', 'cascade', 'mp'].map(id => ({ id, command: `blacksite prototype new <name> --with ${id}`, status: ['subject', 'armory', 'warden', 'cascade'].includes(id) ? 'experimental' : 'usable' })),
       tools: ['install', 'doctor', 'catalog', 'scaffold', 'new', 'budget', 'assets', 'prototype', 'architecture', 'update'],
     }
     process.stdout.write(`${JSON.stringify(catalog)}\n`)
     return
   }
   const profile = options.profile
-  if (!profiles[profile]) throw new Error('Choose --profile tpp|fpp|blank|fpp-mp')
-  if (profile === 'fpp-mp') throw new Error('fpp-mp is unavailable: Colyseus room, shared protocol, loopback, and remote ALS body are not implemented yet')
+  if (!profiles[profile]) throw new Error('Choose --profile tpp|fpp|blank|mp')
   if (!options.name || !options.name.trim()) throw new Error('--name is required')
   if (!options.dir || !path.isAbsolute(options.dir)) throw new Error('--dir must be absolute')
   const requested = new Set(profiles[profile].included)
@@ -146,22 +145,28 @@ async function main() {
   const packageIds = [...requested].map(id => id === 'subject' && profile === 'fpp' ? 'subject-fpp' : id)
   const needsAls = profile === 'tpp' || packageIds.includes('subject')
   const closure = await packageClosure(path.join(root, 'vendor/blacksite'), ['ui', ...packageIds])
-  const workspace = ['packages:', ...closure.map(item => `  - '${item}'`), ...(needsAls ? ["  - 'vendor/blacksite/vendor/als-web'"] : []), 'allowBuilds:', '  esbuild: true', 'minimumReleaseAge: 0', ''].join('\n')
+  const workspace = ['packages:', ...closure.map(item => `  - '${item}'`), ...(needsAls ? ["  - 'vendor/blacksite/vendor/als-web'"] : []), 'allowBuilds:', '  esbuild: true', ...(profile === 'mp' ? ['  msgpackr-extract: false'] : []), 'minimumReleaseAge: 0', ''].join('\n')
   await writeFile(path.join(root, 'pnpm-workspace.yaml'), workspace)
   const dependencyNames = ['react', 'react-dom', 'three', '@react-three/fiber', '@react-three/rapier', 'effect', 'koota', 'xstate']
-  const devNames = ['typescript', 'vite', '@vitejs/plugin-react', '@tailwindcss/vite', 'oxlint', '@types/react', '@types/react-dom', '@types/three']
+  const devNames = ['typescript', 'vite', '@vitejs/plugin-react', '@tailwindcss/vite', 'oxlint', '@types/react', '@types/react-dom', '@types/three', ...(profile === 'mp' ? ['tsx', 'concurrently', '@types/node'] : [])]
   const dependencies = { '@blacksite/ui': 'workspace:*' }
   if (needsAls) dependencies['als-ue5-r3f'] = 'workspace:*'
   for (const id of packageIds) dependencies[`@blacksite/${id}`] = 'workspace:*'
   for (const name of dependencyNames) dependencies[name] = await npmRange(name)
   const devDependencies = {}
   for (const name of devNames) devDependencies[name] = await npmRange(name)
-  const manifest = { name: slug(options.name), private: true, type: 'module', scripts: { dev: 'vite', lint: 'oxlint src scripts', typecheck: 'tsc --noEmit', build: 'vite build', 'budget-check': 'node scripts/budget-check.mjs', check: 'pnpm lint && pnpm typecheck && pnpm build && pnpm budget-check' }, dependencies, devDependencies }
+  const manifest = { name: slug(options.name), private: true, type: 'module', scripts: { dev: profile === 'mp' ? 'concurrently -k "tsx server/index.ts" "vite"' : 'vite', lint: profile === 'mp' ? 'oxlint src scripts server' : 'oxlint src scripts', typecheck: 'tsc --noEmit', build: 'vite build', 'budget-check': 'node scripts/budget-check.mjs', check: 'pnpm lint && pnpm typecheck && pnpm build && pnpm budget-check' }, dependencies, devDependencies }
   await writeFile(path.join(root, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   await writeFile(path.join(root, 'pnpm-workspace.yaml'), `${workspace}overrides:\n  three: '${dependencies.three}'\n  '@types/three': '${devDependencies['@types/three']}'\n`)
   const source = path.join(templateDirectory, 'game-shell')
   await cp(source, root, { recursive: true, force: true })
-  if (profile !== 'blank') await runPrototype(['new', profile === 'tpp' ? 'controller-tpp' : 'controller-fpp', '--with', profile === 'tpp' ? 'als-tpp' : 'fpp', '--project', root, '--quiet'])
+  if (profile !== 'blank') await runPrototype(['new', profile === 'tpp' ? 'controller-tpp' : profile === 'mp' ? 'controller-mp' : 'controller-fpp', '--with', profile === 'tpp' ? 'als-tpp' : profile === 'mp' ? 'mp' : 'fpp', '--project', root, '--quiet'])
+  if (profile === 'mp') {
+    await mkdir(path.join(root, 'server'), { recursive: true })
+    await cp(path.join(templateDirectory, 'multiplayer-server', 'index.ts'), path.join(root, 'server', 'index.ts'))
+    await cp(path.join(templateDirectory, 'multiplayer-server', 'README.md'), path.join(root, 'server', 'README.md'))
+    await cp(path.join(root, 'src', 'prototypes', 'controller-mp', 'mode.tsx'), path.join(root, 'src', 'game', 'mode.tsx'))
+  }
   await mkdir(path.join(root, 'lint'), { recursive: true })
   await cp(path.join(templateDirectory, 'lint', 'game.mjs'), path.join(root, 'lint', 'game.mjs'), { recursive: true, force: true })
   await cp(path.join(templateDirectory, 'lint', '.oxlintrc.json'), path.join(root, '.oxlintrc.json'), { force: true })
@@ -169,7 +174,7 @@ async function main() {
   if (profile !== 'tpp') {
     const tsconfigFile = path.join(root, 'tsconfig.json')
     const tsconfig = await json(tsconfigFile)
-    tsconfig.include = ['src']
+    tsconfig.include = profile === 'mp' ? ['src', 'server', 'vendor/blacksite/vendor/als-web/src/app/globals.d.ts'] : ['src']
     await writeFile(tsconfigFile, `${JSON.stringify(tsconfig, null, 2)}\n`)
   }
   await cp(path.join(templateDirectory, 'monorepo', 'vite.config.mjs'), path.join(root, 'vite.config.mjs'), { force: true })

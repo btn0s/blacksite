@@ -10,9 +10,10 @@ const option = (args, name) => { const index = args.indexOf(name); return index 
 const slug = value => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 const directory = args => path.resolve(option(args, '--project') || process.cwd())
 const safe = name => /^[a-z][a-z0-9-]{0,63}$/.test(name)
-const kits = ['als-tpp', 'tpp', 'fpp', 'subject', 'armory', 'warden', 'cascade', 'fpp-mp', 'fpp-tpp-mp']
-async function ensureKitPackages(project, kit) {
-  const requested = kit === 'fpp' ? ['subject-fpp', 'armory'] : ['als-tpp', 'tpp'].includes(kit) ? [] : kit ? [kit] : []
+const kits = ['als-tpp', 'tpp', 'fpp', 'subject', 'armory', 'warden', 'cascade', 'mp']
+async function ensureKitPackages(project, kit, prototypeName) {
+  const multiplayer = ['mp'].includes(kit)
+  const requested = kit === 'fpp' ? ['subject-fpp', 'armory'] : ['mp'].includes(kit) ? ['subject', 'armory', 'relay', 'protocol'] : ['als-tpp', 'tpp'].includes(kit) ? [] : kit ? [kit] : []
   if ((!requested.length && !['als-tpp', 'tpp'].includes(kit)) || !existsSync(path.join(project, '.stack-complete'))) return
   const manifestFile = path.join(project, 'package.json')
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8'))
@@ -20,8 +21,9 @@ async function ensureKitPackages(project, kit) {
   let workspace = await readFile(workspaceFile, 'utf8')
   const packagesRoot = path.join(project, 'vendor', 'blacksite', 'packages')
   let changed = false
-  if (['als-tpp', 'tpp', 'subject'].includes(kit) && !manifest.dependencies['als-ue5-r3f']) { manifest.dependencies['als-ue5-r3f'] = 'workspace:*'; changed = true }
-  if (['als-tpp', 'tpp', 'subject'].includes(kit) && !workspace.includes("  - 'vendor/blacksite/vendor/als-web'")) { workspace = workspace.replace('allowBuilds:', "  - 'vendor/blacksite/vendor/als-web'\nallowBuilds:"); changed = true }
+  if (['als-tpp', 'tpp', 'subject', 'mp'].includes(kit) && !manifest.dependencies['als-ue5-r3f']) { manifest.dependencies['als-ue5-r3f'] = 'workspace:*'; changed = true }
+  if (['als-tpp', 'tpp', 'subject', 'mp'].includes(kit) && !workspace.includes("  - 'vendor/blacksite/vendor/als-web'")) { workspace = workspace.replace('allowBuilds:', "  - 'vendor/blacksite/vendor/als-web'\nallowBuilds:"); changed = true }
+  if (multiplayer && !workspace.includes('msgpackr-extract: false')) { workspace = workspace.replace('  esbuild: true', '  esbuild: true\n  msgpackr-extract: false'); changed = true }
   const seen = new Set()
   async function add(folder) {
     if (seen.has(folder)) return
@@ -35,6 +37,27 @@ async function ensureKitPackages(project, kit) {
     for (const dependency of Object.keys({ ...pkg.dependencies, ...pkg.peerDependencies })) if (dependency.startsWith('@blacksite/')) await add(dependency.slice('@blacksite/'.length))
   }
   for (const folder of requested) await add(folder)
+  if (multiplayer) {
+    for (const name of ['tsx', 'concurrently', '@types/node']) if (!manifest.devDependencies[name]) {
+      const result = spawnSync('npm', ['view', name, 'version'], { cwd: project, encoding: 'utf8' })
+      if (result.error || result.status !== 0 || !/^\d+\.\d+\.\d+/.test(result.stdout.trim())) throw new Error(`Could not resolve latest ${name}`)
+      manifest.devDependencies[name] = `^${result.stdout.trim().split('\n').at(-1)}`
+      changed = true
+    }
+    manifest.scripts.dev = 'concurrently -k "tsx server/index.ts" "vite"'
+    manifest.scripts.lint = 'oxlint src scripts server'
+    const serverDir = path.join(project, 'server')
+    await mkdir(serverDir, { recursive: true })
+    if (!existsSync(path.join(serverDir, 'index.ts'))) await cp(path.join(rootDirectory, 'templates', 'multiplayer-server', 'index.ts'), path.join(serverDir, 'index.ts'))
+    if (!existsSync(path.join(serverDir, 'README.md'))) await cp(path.join(rootDirectory, 'templates', 'multiplayer-server', 'README.md'), path.join(serverDir, 'README.md'))
+    const configFile = path.join(project, 'tsconfig.json')
+    const config = JSON.parse(await readFile(configFile, 'utf8'))
+    config.include = [...new Set([...(config.include || ['src']), 'server', 'vendor/blacksite/vendor/als-web/src/app/globals.d.ts'])]
+    await writeFile(configFile, `${JSON.stringify(config, null, 2)}\n`)
+    const modeFile = path.join(project, 'src', 'game', 'mode.tsx')
+    if (!existsSync(modeFile)) { await mkdir(path.dirname(modeFile), { recursive: true }); await cp(path.join(project, 'src', 'prototypes', prototypeName, 'mode.tsx'), modeFile) }
+    changed = true
+  }
   if (!changed) return
   await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`)
   await writeFile(workspaceFile, workspace)
@@ -47,7 +70,6 @@ async function create(args) {
   if (!safe(name)) throw new Error('Use prototype new <name> [--with tpp|fpp|subject|armory|warden|cascade]')
   const kit = option(args, '--with')
   if (kit && !kits.includes(kit)) throw new Error(`Unknown kit: ${kit}`)
-  if (kit === 'fpp-mp' || kit === 'fpp-tpp-mp') throw new Error(`${kit} is unavailable: networked player and loopback session are not implemented yet`)
   const project = directory(args)
   if (!existsSync(path.join(project, '.stack.json'))) throw new Error('Run inside a Blacksite scaffold or use --project')
   const root = path.join(project, 'src', 'prototypes', name)
@@ -56,12 +78,12 @@ async function create(args) {
   await mkdir(path.join(project, 'docs', 'prototypes'), { recursive: true })
   const code = `import { useEffect, useState } from 'react'\nimport { createWorld, trait } from 'koota'\n\nconst Progress = trait({ count: 0 })\nconst world = createWorld()\nconst entity = world.spawn(Progress)\n\nexport default function Prototype() {\n  const [count, setCount] = useState(0)\n  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (event.code === 'Space') advance() }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey) }, [])\n  const advance = () => { const next = entity.get(Progress)!.count + 1; entity.set(Progress, { count: next }); setCount(next) }\n  return <main className="panel"><h1>${name}</h1><p>${kit || 'blank'} prototype · Progress {count}</p><button onClick={advance}>Try mechanic</button></main>\n}\n`
   await writeFile(path.join(root, 'mode.tsx'), code)
-  if (['als-tpp', 'tpp', 'fpp'].includes(kit)) await cp(path.join(rootDirectory, 'templates', 'prototype-kits', kit === 'tpp' ? 'als-tpp' : kit, 'mode.tsx'), path.join(root, 'mode.tsx'))
-  const inputs = ['als-tpp', 'tpp'].includes(kit) ? 'WASD, mouse, sprint, jump' : kit === 'fpp' ? 'WASD, mouse, view, weapon, reload, fire' : 'keyboard Space or Try mechanic button'
-  const outputs = ['als-tpp', 'tpp'].includes(kit) ? 'ALS pose and camera' : kit === 'fpp' ? 'camera pose, weapon events, recoil, shot count' : 'progress count'
-  const traits = ['als-tpp', 'tpp', 'fpp'].includes(kit) ? 'Pawn, PawnIntent from the shared session; add prototype traits here' : 'Progress'
+  if (['als-tpp', 'tpp', 'fpp', 'mp'].includes(kit)) await cp(path.join(rootDirectory, 'templates', 'prototype-kits', kit === 'tpp' ? 'als-tpp' : kit, 'mode.tsx'), path.join(root, 'mode.tsx'))
+  const inputs = ['mp'].includes(kit) ? 'WASD, mouse, V view toggle, fire, online/offline room selection' : ['als-tpp', 'tpp'].includes(kit) ? 'WASD, mouse, sprint, jump' : kit === 'fpp' ? 'WASD, mouse, view, weapon, reload, fire' : 'keyboard Space or Try mechanic button'
+  const outputs = ['mp'].includes(kit) ? 'local FPP arms or ALS TPP body, interpolated remote ALS bodies, validated hits' : ['als-tpp', 'tpp'].includes(kit) ? 'ALS pose and camera' : kit === 'fpp' ? 'camera pose, weapon events, recoil, shot count' : 'progress count'
+  const traits = ['als-tpp', 'tpp', 'fpp', 'mp'].includes(kit) ? 'Controller, Pawn, PawnIntent; add prototype traits here' : 'Progress'
   await writeFile(path.join(project, 'docs', 'prototypes', `${name}.md`), `# ${name}\n\nKit: ${kit || 'blank'}\n\n## Question\n\nWhat must this prototype prove?\n\n## Contract\n\n- Inputs: ${inputs}\n- Outputs: ${outputs}\n- Koota traits: ${traits}\n- Machine events: define any discrete transitions here\n- Effect services: list resource and I/O interfaces here\n- State ownership: Koota gameplay world\n\n## What was learned\n\nRecord player evidence before promoting.\n`)
-  await ensureKitPackages(project, kit)
+  await ensureKitPackages(project, kit, name)
   if (!args.includes('--quiet')) process.stdout.write(`${root}\n`)
 }
 async function list(args) {

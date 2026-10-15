@@ -34,7 +34,7 @@ The CLI uses `packages/ui/components.json` and writes to `packages/ui/src/compon
 
 ## GameFrame
 
-`GameFrame` fills its parent and centers a fixed-aspect stage. The default ratio is `"16/9"` and default fit is `"contain"`, leaving plain bars where needed. `fit="cover"` fills the parent and crops the stage. Set `--game-frame-bar` on the parent to choose the bar color; it defaults to black. `GameFrame.SafeArea` places HUD content inside the larger of CSS `env(safe-area-inset-*)` and last-light's `--bleed-t/r/b/l` offsets on each side.
+`GameFrame` fills its parent and centers a fixed-aspect stage. The default ratio is `"16/9"` and default fit is `"contain"`, leaving plain bars where needed. `fit="cover"` fills the parent and crops the stage. Set `--game-frame-bar` on the parent to choose the bar color; it defaults to black. `GameFrame.SafeArea` places HUD content inside the larger of CSS `env(safe-area-inset-*)` and the host-provided `--bleed-t/r/b/l` offsets on each side.
 
 ```tsx
 import { Canvas } from "@react-three/fiber"
