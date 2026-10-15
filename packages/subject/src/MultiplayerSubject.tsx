@@ -16,6 +16,7 @@ import type { PawnState, Connection } from '@blacksite/relay'
 import { createReplica, createLoopbackRoom } from '@blacksite/relay'
 import { createSubjectInputSource, type CameraMode } from './controller'
 import { useSubjectSpawn } from './spawn'
+import { createMultiplayerSession } from './multiplayer-session'
 
 const Controller = trait({ pawn: '' })
 const Pawn = trait({ owner: '', x: 0, y: 0, z: 0 })
@@ -34,6 +35,11 @@ type Diagnostics = {
   command: Record<string, unknown>
   position: number[]
   locomotionMode: string | null
+  spawn: number[]
+  spawnRevision: number
+  rigidBodyPosition: { x: number; y: number; z: number } | null
+  replicaPosition: { x: number; y: number; z: number } | null
+  initialServerSpawn: { x: number; y: number; z: number } | null
 }
 
 function RemotePawn({ state, onClock }: { state: PawnState; onClock: (id: string, clock: AnimationClock) => void }) {
@@ -49,8 +55,17 @@ function RemotePawn({ state, onClock }: { state: PawnState; onClock: (id: string
   return <Suspense fallback={null}><AlsRemoteActor snapshots={buffer} now={Date.now} onAnimationClock={clock => onClock(`remote:${state.id}`, clock)} /></Suspense>
 }
 
-function NetworkScene({ connection, offline, cameraMode, onStatus, onDiagnostics }: { connection: Connection; offline: boolean; cameraMode: CameraMode; onStatus: (status: { room: string; players: number; hits: number; view: string }) => void; onDiagnostics?: (value: Diagnostics) => void }) {
-  const subject = useMemo(() => createSubject({ cameraMode }), [cameraMode])
+type NetworkSceneProps = { connection: Connection; offline: boolean; cameraMode: CameraMode; onStatus: (status: { room: string; players: number; hits: number; view: string }) => void; onDiagnostics?: (value: Diagnostics) => void }
+
+function NetworkScene(props: NetworkSceneProps) {
+  const subject = useMemo(() => createSubject({ cameraMode: props.cameraMode }), [props.cameraMode])
+  const session = useMemo(() => createMultiplayerSession(props.connection, subject), [props.connection, subject])
+  const [mounted, setMounted] = useState<{ session: typeof session; replica: ReturnType<typeof createReplica> } | null>(null)
+  useEffect(() => session.connect(replica => setMounted({ session, replica })), [session])
+  return mounted?.session === session ? <Suspense fallback={null}><ReplicatedScene {...props} subject={subject} replica={mounted.replica} /></Suspense> : null
+}
+
+function ReplicatedScene({ connection, offline, onStatus, onDiagnostics, subject, replica }: NetworkSceneProps & { subject: ReturnType<typeof createSubject>; replica: ReturnType<typeof createReplica> }) {
   const inputSource = useMemo(() => createSubjectInputSource(subject), [subject])
   const controlRotationSource = useMemo(() => () => ({ yaw: subject.player.command.yaw, pitch: subject.player.command.pitch }), [subject])
   const arms = useMemo(createArmsState, [])
@@ -59,7 +74,7 @@ function NetworkScene({ connection, offline, cameraMode, onStatus, onDiagnostics
   const telemetry = useMemo(() => {
     const origins = new Map<string, { clock: AnimationClock; seconds: number; updates: number; wall: number }>()
     const clocks: Record<string, ClockSample> = {}
-    return { clocks, record(id: string, clock: AnimationClock) {
+    return { clocks, initialServerSpawn: null as { x: number; y: number; z: number } | null, record(id: string, clock: AnimationClock) {
       const now = performance.now()
       let origin = origins.get(id)
       if (!origin || origin.clock !== clock || clock.elapsedSeconds < origin.seconds) {
@@ -71,10 +86,6 @@ function NetworkScene({ connection, offline, cameraMode, onStatus, onDiagnostics
       clocks[id] = { seconds, updates: clock.updates - origin.updates, wallSeconds, rate: wallSeconds > 0 ? seconds / wallSeconds : 1 }
     } }
   }, [])
-  const replica = useMemo(() => createReplica(connection, state => {
-    const local = subject.frame.position
-    if (local.distanceToSquared(state.position) > 4) subject.respawn([state.position.x, state.position.y, state.position.z], state.yaw)
-  }), [connection, subject])
   const world = useMemo(createWorld, [])
   const controller = useMemo(() => world.spawn(Controller({ pawn: connection.id })), [world, connection.id])
   const pawn = useMemo(() => world.spawn(Pawn({ owner: connection.id }), Intent), [world, connection.id])
@@ -89,6 +100,7 @@ function NetworkScene({ connection, offline, cameraMode, onStatus, onDiagnostics
   useEffect(() => {
     const update = () => setPlayers([...replica.states.values()])
     const applySpawn = (own: PawnState | undefined) => {
+      if (own) telemetry.initialServerSpawn ??= { ...own.position }
       if (!own || own.position.x === subject.player.spawn[0] && own.position.y === subject.player.spawn[1] && own.position.z === subject.player.spawn[2]) return
       const next = [own.position.x, own.position.y, own.position.z] as const
       subject.respawn(next, own.yaw)
@@ -101,8 +113,8 @@ function NetworkScene({ connection, offline, cameraMode, onStatus, onDiagnostics
     })
     applySpawn(replica.states.get(connection.id))
     update()
-    return () => { unsubscribe(); replica.close(); controller.destroy(); pawn.destroy(); world.reset() }
-  }, [replica, connection.id, controller, pawn, world, subject])
+    return () => { unsubscribe(); controller.destroy(); pawn.destroy(); world.reset() }
+  }, [replica, connection.id, controller, pawn, world, subject, telemetry])
   useEffect(() => subject.subscribe(() => setView(subject.view)), [subject])
   useEffect(() => () => weapon.dispose(), [weapon])
   useEffect(() => {
@@ -117,9 +129,14 @@ function NetworkScene({ connection, offline, cameraMode, onStatus, onDiagnostics
       command: { ...subject.player.command },
       position: subject.frame.position.toArray(),
       locomotionMode: subject.player.pose.current.character?.locomotionMode ?? null,
+      spawn: [...subject.player.spawn],
+      spawnRevision: subject.player.getRevision(),
+      rigidBodyPosition: subject.player.pose.current.ownerRigidBody?.isValid() ? { ...subject.player.pose.current.ownerRigidBody.translation() } : null,
+      replicaPosition: replica.states.get(connection.id)?.position ?? null,
+      initialServerSpawn: telemetry.initialServerSpawn,
     }), 250)
     return () => clearInterval(timer)
-  }, [onDiagnostics, telemetry, arms, subject])
+  }, [onDiagnostics, telemetry, arms, subject, replica, connection.id])
   useFrame((_, dt) => {
     if (!subject.frame.ready) return
     const clock = subject.player.pose.current.animationClock
@@ -172,12 +189,12 @@ function NetworkScene({ connection, offline, cameraMode, onStatus, onDiagnostics
   })
   return <>
     <ambientLight intensity={1.5} /><directionalLight position={[5, 12, 4]} intensity={2.5} />
-    <Physics gravity={[0, -9.8, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
+    <Suspense fallback={null}><Physics gravity={[0, -9.8, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <group visible={view === 'third-person'}><Character showDebugControls={false} key={spawn.revision} initialPosition={spawn.position} poseSample={subject.player.pose} worldTime={worldTime} footstepSoundSink={audio} onSizeChange={() => {}} onOverlayModeBridgeChange={() => {}} inputEnabled={false} inputSource={inputSource} /></group>
       <AlsCamera poseSample={subject.player.pose} worldTime={worldTime} footstepAudioRuntime={audio} toggleViewModeKey={null} controlRotationSource={controlRotationSource} />
       <RigidBody type="fixed" colliders={false}><CuboidCollider args={[30, 0.1, 30]} position={[0, -0.1, 0]} /></RigidBody>
       {players.filter(player => player.id !== connection.id).map(player => <RemotePawn key={player.id} state={player} onClock={telemetry.record} />)}
-    </Physics>
+    </Physics></Suspense>
     <Subject controller={subject} /><Suspense fallback={null}><ArmsViewmodel state={arms} visible={view === 'first-person'} /></Suspense>
     <mesh rotation-x={-Math.PI / 2} position-y={-0.01}><planeGeometry args={[60, 60]} /><meshStandardMaterial color="#293743" /></mesh>
     <gridHelper args={[60, 30, '#506d77', '#394c58']} />
@@ -188,7 +205,7 @@ export function MultiplayerSubject({ connection, offline = false, cameraMode = '
   const [status, setStatus] = useState({ room: offline ? 'Offline room' : 'Online room', players: 0, hits: 0, view: 'first-person' })
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null)
   const debug = new URLSearchParams(window.location.search).has('debug')
-  return <><Canvas camera={{ position: [0, 1.63, 0], fov: 75 }}><NetworkScene connection={connection} offline={offline} cameraMode={cameraMode} onStatus={setStatus} onDiagnostics={debug ? setDiagnostics : undefined} /></Canvas><div className="hud"><strong>{status.room} · {status.view}</strong><span>Players: {status.players} · Hits: {status.hits}</span><span>Click scene · WASD move · {cameraMode === 'switchable' ? 'V switch view · ' : ''}1 rifle · 2 pistol · RMB aim · LMB fire · R reload</span></div><div className="reticle">+</div>{debug && <pre data-mp-debug style={{ position: 'absolute', bottom: 12, left: 12, margin: 0, padding: 10, fontSize: 10, color: '#fff', background: '#000b', pointerEvents: 'none' }}>{JSON.stringify(diagnostics, null, 2)}</pre>}</>
+  return <><Canvas camera={{ position: [0, 1.63, 0], fov: 75 }}><NetworkScene connection={connection} offline={offline} cameraMode={cameraMode} onStatus={setStatus} onDiagnostics={debug ? setDiagnostics : undefined} /></Canvas><div className="hud"><strong>{status.room} · {status.view}</strong><span>Players: {status.players} · Hits: {status.hits}</span><span>Click scene · WASD move · {cameraMode === 'switchable' ? 'V switch view · ' : ''}1 rifle · 2 pistol · RMB aim · LMB fire · R reload</span></div><div className="reticle">+</div>{debug && <pre data-mp-debug style={{ position: 'absolute', bottom: 12, left: 12, margin: 0, padding: 10, fontSize: 10, maxHeight: '65%', overflow: 'auto', color: '#fff', background: '#000b', pointerEvents: 'none' }}>{JSON.stringify(diagnostics, null, 2)}</pre>}</>
 }
 
 export function LoopbackSplitView({ cameraMode = 'switchable' }: { cameraMode?: CameraMode }) {

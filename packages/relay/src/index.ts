@@ -136,11 +136,11 @@ export function createLoopbackRoom(match = createMatch()): Transport {
     const id = `offline-${++nextId}`
     const listeners = new Set<(message: ServerMessage) => void>()
     const pending: ServerMessage[] = []
-    match.join(id, message => { pending.push(message); queueMicrotask(() => { for (const listener of listeners) listener(message) }) })
+    match.join(id, message => { if (!listeners.size) pending.push(message); queueMicrotask(() => { for (const listener of listeners) listener(message) }) })
     connections++
     timer ??= setInterval(match.advance, 1000 / 60)
     let closed = false
-    return { id, send: message => match.receive(id, message), onMessage(listener) { listeners.add(listener); for (const message of pending) listener(message); pending.length = 0; return () => { listeners.delete(listener) } }, close() {
+    return { id, send: message => match.receive(id, message), onMessage(listener) { listeners.add(listener); for (const message of pending) listener(message); pending.length = 0; match.sync(id); return () => { listeners.delete(listener) } }, close() {
       if (closed) return
       closed = true
       match.leave(id)
@@ -158,8 +158,9 @@ export function interpolate(a: PawnState, b: PawnState, time: number): PawnState
   return { ...b, position: { x: blend(a.position.x, b.position.x), y: blend(a.position.y, b.position.y), z: blend(a.position.z, b.position.z) }, velocity: { x: blend(a.velocity.x, b.velocity.x), y: blend(a.velocity.y, b.velocity.y), z: blend(a.velocity.z, b.velocity.z) }, yaw: blend(a.yaw, b.yaw), pitch: blend(a.pitch, b.pitch) }
 }
 
-export function createReplica(connection: Connection, reconcile?: (authoritative: PawnState, pending: ClientMessage[]) => void) {
+export function createReplica(connection: Connection, reconcile?: (authoritative: PawnState, pending: ClientMessage[]) => void, { closeConnection = true }: { closeConnection?: boolean } = {}) {
   const world = createWorld()
+  let closed = false
   const entities = new Map<string, ReturnType<typeof world.spawn>>()
   const states = new Map<string, PawnState>()
   const history = new Map<string, [PawnState, PawnState]>()
@@ -196,5 +197,5 @@ export function createReplica(connection: Connection, reconcile?: (authoritative
       if (previous) { states.set(connection.id, { ...previous, position: message.position, velocity: message.velocity, seq: message.seq }); entities.get(connection.id)?.set(ReplicatedPosition, { ...message.position, seq: message.seq }) }
     }
     connection.send(message)
-  }, sample(id: string, time: number) { const pair = history.get(id); return pair ? interpolate(pair[0], pair[1], time) : states.get(id) }, onMessage(listener: (message: ServerMessage) => void) { listeners.add(listener); return () => { listeners.delete(listener) } }, close() { unsubscribe(); connection.close(); world.reset() } }
+  }, sample(id: string, time: number) { const pair = history.get(id); return pair ? interpolate(pair[0], pair[1], time) : states.get(id) }, onMessage(listener: (message: ServerMessage) => void) { listeners.add(listener); return () => { listeners.delete(listener) } }, close() { if (closed) return; closed = true; unsubscribe(); if (closeConnection) connection.close(); world.destroy() } }
 }

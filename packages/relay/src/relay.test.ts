@@ -161,3 +161,21 @@ test('new peers take an available spawn after departures and avoid occupied move
   expect(match.states.get('d')!.position.x).toBe(3)
   match.leave('b'); match.leave('d')
 })
+
+test('detaching and reattaching a replica requests a fresh snapshot without closing its transport', async () => {
+  const port = await freePort()
+  servers.push(await startMatchServer(port))
+  for (const transport of [createLoopbackRoom(), createColyseusTransport(`http://127.0.0.1:${port}`)]) {
+    const first = await transport.connect()
+    const connection = await transport.connect()
+    let replica = createReplica(connection, undefined, { closeConnection: false })
+    try {
+      if (!replica.states.has(connection.id)) await wait(replica, message => message.type === 'welcome')
+      expect(replica.states.get(connection.id)!.position.x).toBe(3)
+      replica.close()
+      replica = createReplica(connection, undefined, { closeConnection: false })
+      if (!replica.states.has(connection.id)) await wait(replica, message => message.type === 'welcome')
+      expect(replica.states.get(connection.id)!.position.x).toBe(3)
+    } finally { replica.close(); connection.close(); first.close() }
+  }
+})
