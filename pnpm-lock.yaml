@@ -11,6 +11,12 @@ importers:
       '@blacksite/armory':
         specifier: workspace:*
         version: link:packages/armory
+      '@blacksite/relay':
+        specifier: workspace:*
+        version: link:packages/relay
+      '@blacksite/subject':
+        specifier: workspace:*
+        version: link:packages/subject
       '@blacksite/subject-fpp':
         specifier: workspace:*
         version: link:packages/subject-fpp

@@ -10,6 +10,7 @@ export const docs: Doc[] = [
   { slug: 'warden', title: 'Warden', load: () => import('../../docs/warden.md') },
   { slug: 'maintenance', title: 'Maintenance', load: () => import('../../docs/maintenance.md') },
   { slug: 'migration', title: 'Migration', load: () => import('../../docs/migration-blacksite.md') },
+  { slug: 'diorama-capture', title: 'Diorama 2.5D capture', load: () => import('../../docs/capture/diorama-2.5d.md') },
   { slug: 'ui', title: 'UI package', load: () => import('../../packages/ui/README.md') },
   { slug: 'input', title: 'Input package', load: () => import('../../packages/input/README.md') },
 ]

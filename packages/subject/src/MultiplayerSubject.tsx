@@ -1,5 +1,5 @@
-import { Suspense, useEffect, useMemo, useState } from 'react'
-import { Canvas, createPortal, useFrame, useThree } from '@react-three/fiber'
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Canvas, createPortal, useFrame, useThree, type RootState } from '@react-three/fiber'
 import { Physics, CuboidCollider, RigidBody } from '@react-three/rapier'
 import { Character } from 'als-ue5-r3f/app/Character'
 import { AlsCamera } from 'als-ue5-r3f/app/AlsCamera'
@@ -16,6 +16,8 @@ import type { CameraMode } from './controller'
 const Controller = trait({ pawn: '' })
 const Pawn = trait({ owner: '', x: 0, y: 0, z: 0 })
 const Intent = trait({ forward: 0, right: 0, jump: false })
+const DEFAULT_SPAWN = [0, 0, 0] as const
+const LOOPBACK_SPAWNS = [[0, 0, 0], [3, 0, 0]] as const
 
 function Arms({ visible }: { visible: boolean }) {
   const { camera } = useThree()
@@ -35,13 +37,13 @@ function RemotePawn({ state }: { state: PawnState }) {
     actorYaw: state.yaw, viewYaw: state.yaw, viewPitch: state.pitch,
     gait: Math.hypot(state.velocity.x, state.velocity.z) > 4 ? 'sprinting' : 'running',
     stance: 'standing', rotationMode: 'viewDirection', locomotionMode: 'grounded',
-    action: 'none', actionSeq: 0, overlay: 'rifle', aiming: false, seq: state.seq,
+    action: 'none', actionSeq: 0, overlay: 'default', aiming: false, seq: state.seq,
   }) }, [buffer, state])
   return <Suspense fallback={null}><AlsRemoteActor snapshots={buffer} now={Date.now} /></Suspense>
 }
 
-function NetworkScene({ connection, offline, cameraMode, onStatus }: { connection: Connection; offline: boolean; cameraMode: CameraMode; onStatus: (status: { room: string; players: number; hits: number; view: string }) => void }) {
-  const subject = useMemo(() => createSubject({ cameraMode }), [cameraMode])
+function NetworkScene({ connection, offline, cameraMode, onStatus, physicsProbe, initialSpawn }: { connection: Connection; offline: boolean; cameraMode: CameraMode; onStatus: (status: { room: string; players: number; hits: number; view: string }) => void; physicsProbe?: ReactNode; initialSpawn: readonly [number, number, number] }) {
+  const subject = useMemo(() => createSubject({ cameraMode, spawn: initialSpawn }), [cameraMode, initialSpawn])
   const replica = useMemo(() => createReplica(connection, state => {
     const local = subject.frame.position
     if (local.distanceToSquared(state.position) > 4) subject.respawn([state.position.x, state.position.y, state.position.z], state.yaw)
@@ -52,13 +54,19 @@ function NetworkScene({ connection, offline, cameraMode, onStatus }: { connectio
   const worldTime = useMemo(createWorldTimeState, [])
   const audio = useMemo(() => new AlsFootstepAudioRuntime({ AutoInstallUserGestureUnlock: true }), [])
   const [players, setPlayers] = useState<PawnState[]>([])
-  const [spawn, setSpawn] = useState<readonly [number, number, number]>([0, 0, 0])
+  const [spawn, setSpawn] = useState<readonly [number, number, number]>(initialSpawn)
   const [hits, setHits] = useState(0)
   const [view, setView] = useState<'first-person' | 'third-person'>('first-person')
   const [status, setStatus] = useState(offline ? 'Offline room' : 'Online room')
   useEffect(() => onStatus({ room: status, players: players.length, hits, view }), [onStatus, status, players.length, hits, view])
   useEffect(() => {
     const update = () => setPlayers([...replica.states.values()])
+    const initial = replica.states.get(connection.id)
+    if (initial) {
+      const next = [initial.position.x, initial.position.y, initial.position.z] as const
+      subject.respawn(next, initial.yaw)
+      setSpawn(next)
+    }
     const unsubscribe = replica.onMessage(message => {
       if (message.type === 'welcome') {
         const own = message.states.find(state => state.id === connection.id)
@@ -91,7 +99,7 @@ function NetworkScene({ connection, offline, cameraMode, onStatus }: { connectio
     next.last = performance.now()
     const frame = subject.frame
     const position = { x: frame.position.x, y: frame.position.y, z: frame.position.z }
-    const velocity = { x: frame.velocity.x, y: frame.velocity.y, z: frame.velocity.z }
+    const velocity = { x: frame.velocity.x / 100, y: frame.velocity.y / 100, z: frame.velocity.z / 100 }
     pawn.set(Pawn, { owner: connection.id, ...position })
     const command = subject.player.command
     const intent = { forward: command.forward, right: command.right, jump: false, yaw: command.yaw, pitch: command.pitch }
@@ -106,22 +114,24 @@ function NetworkScene({ connection, offline, cameraMode, onStatus }: { connectio
         const command = subject.player.command
         return { movementDirection: { x: command.forward, z: command.right }, desiredSpeed: command.sprint ? 600 : 300, viewYawAngle: command.yaw, viewPitchAngle: command.pitch, aiming: command.aim, overlayMode: command.overlay }
       }} /></group>
-      <AlsCamera poseSample={subject.player.pose} worldTime={worldTime} footstepAudioRuntime={audio} toggleViewModeKey={null} />
+      {view === 'third-person' && <AlsCamera poseSample={subject.player.pose} worldTime={worldTime} footstepAudioRuntime={audio} toggleViewModeKey={null} />}
       <RigidBody type="fixed" colliders={false}><CuboidCollider args={[30, 0.1, 30]} position={[0, -0.1, 0]} /></RigidBody>
+      {physicsProbe}
       {players.filter(player => player.id !== connection.id).map(player => <RemotePawn key={player.id} state={player} />)}
+      <Subject controller={subject} />
     </Physics>
-    <Subject controller={subject} /><Arms visible={view === 'first-person'} />
+    <Arms visible={view === 'first-person'} />
     <mesh rotation-x={-Math.PI / 2} position-y={-0.01}><planeGeometry args={[60, 60]} /><meshStandardMaterial color="#293743" /></mesh>
     <gridHelper args={[60, 30, '#506d77', '#394c58']} />
   </>
 }
 
-export function MultiplayerSubject({ connection, offline = false, cameraMode = 'switchable' }: { connection: Connection; offline?: boolean; cameraMode?: CameraMode }) {
+export function MultiplayerSubject({ connection, offline = false, cameraMode = 'switchable', onCreated, physicsProbe, initialSpawn = DEFAULT_SPAWN }: { connection: Connection; offline?: boolean; cameraMode?: CameraMode; onCreated?: (state: RootState) => void; physicsProbe?: ReactNode; initialSpawn?: readonly [number, number, number] }) {
   const [status, setStatus] = useState({ room: offline ? 'Offline room' : 'Online room', players: 0, hits: 0, view: 'first-person' })
-  return <><Canvas camera={{ position: [0, 1.63, 0], fov: 75 }}><NetworkScene connection={connection} offline={offline} cameraMode={cameraMode} onStatus={setStatus} /></Canvas><div className="hud"><strong>{status.room} · {status.view}</strong><span>Players: {status.players} · Hits: {status.hits}</span><span>Click scene · WASD move · {cameraMode === 'switchable' ? 'V switch view · ' : ''}Click fire</span></div><div className="reticle">+</div></>
+  return <><Canvas onCreated={onCreated} camera={{ position: [0, 1.63, 0], fov: 75 }}><NetworkScene connection={connection} offline={offline} cameraMode={cameraMode} onStatus={setStatus} physicsProbe={physicsProbe} initialSpawn={initialSpawn} /></Canvas><div className="hud"><strong>{status.room} · {status.view}</strong><span>Players: {status.players} · Hits: {status.hits}</span><span>Click scene · WASD move · {cameraMode === 'switchable' ? 'V switch view · ' : ''}Click fire</span></div><div className="reticle">+</div></>
 }
 
-export function LoopbackSplitView({ cameraMode = 'switchable' }: { cameraMode?: CameraMode }) {
+export function LoopbackSplitView({ cameraMode = 'switchable', onCreated, physicsProbe }: { cameraMode?: CameraMode; onCreated?: (state: RootState) => void; physicsProbe?: ReactNode }) {
   const [peers, setPeers] = useState<Connection[]>([])
   useEffect(() => {
     const room = createLoopbackRoom()
@@ -134,5 +144,5 @@ export function LoopbackSplitView({ cameraMode = 'switchable' }: { cameraMode?: 
     })
     return () => { active = false; joined.forEach(connection => connection.close()) }
   }, [])
-  return <div style={{ display: 'flex', width: '100%', height: '100%' }}>{peers.map(peer => <div key={peer.id} style={{ position: 'relative', width: '50%', height: '100%' }}><MultiplayerSubject connection={peer} offline cameraMode={cameraMode} /></div>)}</div>
+  return <div style={{ display: 'flex', width: '100%', height: '100%' }}>{peers.map((peer, index) => <div key={peer.id} style={{ position: 'relative', width: '50%', height: '100%' }}><MultiplayerSubject connection={peer} offline cameraMode={cameraMode} onCreated={onCreated} physicsProbe={physicsProbe} initialSpawn={LOOPBACK_SPAWNS[index] ?? DEFAULT_SPAWN} /></div>)}</div>
 }

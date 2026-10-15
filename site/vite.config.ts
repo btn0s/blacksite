@@ -10,7 +10,13 @@ export default defineConfig({
   root: resolve(import.meta.dirname),
   base,
   publicDir: resolve(import.meta.dirname, '../vendor/als-web/public'),
-  resolve: { dedupe: ['react', 'react-dom', 'three', '@react-three/fiber'] },
+  resolve: {
+    alias: {
+      '@react-three/fiber': resolve(import.meta.dirname, '../node_modules/@react-three/fiber'),
+      '@react-three/rapier': resolve(import.meta.dirname, '../node_modules/@react-three/rapier'),
+    },
+    dedupe: ['react', 'react-dom', 'three', '@react-three/fiber', '@react-three/rapier'],
+  },
   plugins: [
     mdx(),
     react(),
@@ -38,6 +44,7 @@ export default defineConfig({
       warden: resolve(import.meta.dirname, 'frames/warden.html'),
       fpp: resolve(import.meta.dirname, 'frames/fpp.html'),
       tpp: resolve(import.meta.dirname, 'frames/tpp.html'),
+      mp: resolve(import.meta.dirname, 'frames/mp.html'),
     } },
   },
 })

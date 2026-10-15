@@ -30,6 +30,8 @@
   },
   "dependencies": {
     "@blacksite/armory": "workspace:*",
+    "@blacksite/relay": "workspace:*",
+    "@blacksite/subject": "workspace:*",
     "@blacksite/subject-fpp": "workspace:*",
     "@blacksite/ui": "workspace:*",
     "@dimforge/rapier3d-compat": "file:vendor/rapier/rapier3d-compat-0.19.2-rupture.4.tgz",

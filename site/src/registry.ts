@@ -17,7 +17,7 @@ export const demos: Demo[] = [
   { id: 'warden', title: 'Warden Tactical AI Lab', description: 'Inspect deterministic squad decisions and tactical simulation.', loader: frame, static: true, frame: 'warden', doc: 'warden' },
   { id: 'fpp', title: 'First-person player', description: 'Play the arms-only Subject FPP and Armory prototype.', loader: frame, static: true, frame: 'fpp', doc: 'readme' },
   { id: 'tpp', title: 'Third-person player', description: 'Play the ALS body and camera prototype.', loader: frame, static: true, frame: 'tpp', doc: 'readme' },
-  { id: 'mp', title: 'Multiplayer loopback', description: 'Two-player split view for the incoming Relay loopback transport.', loader: () => import('./MpPlaceholder'), static: true, doc: 'roadmap' },
+  { id: 'mp', title: 'Multiplayer loopback', description: 'Two players in one local Relay room with switchable first- and third-person cameras.', loader: frame, static: true, frame: 'mp', doc: 'readme' },
 ]
 
 export const demoById = (id: string) => demos.find(demo => demo.id === id)
