@@ -8,6 +8,7 @@
     "./render-profile": "./src/render-profile.ts",
     "./large-structure-demo": "./src/large-structure-demo.ts",
     "./session": "./src/session.ts",
+    "./walk-client": "./src/walk-client.ts",
     "./worker-demo": "./src/worker-demo.ts"
   },
   "dependencies": {

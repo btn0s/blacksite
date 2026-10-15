@@ -1,5 +1,11 @@
 # Cascade
 
+## Walk mode
+
+The large structure demo has a Walk mode toggle (`Tab`). In walk mode, use WASD to move, Shift to sprint, C or Ctrl to crouch, Space to jump, R to respawn, and 1–4 or the mouse wheel to select explosive, cannonball, sledge, or cutter. Click to use the selected tool. The sledge lands 300 ms into a 680 ms swing; holding the button chains swings. Hold right mouse to look when pointer lock is unavailable. `Tab` returns to orbit view.
+
+Games can import `CascadeWalkClient`, `walkInput`, `StrikeClock`, and `WALK_TOOLS` from `@blacksite/cascade/walk-client`. Pass an adapter for the `CascadeSession` methods `setPlayerEnabled`, `playerInput`, `playerAction`, and `respawnPlayer`; construct the controller with a canvas and call `dispose()` on teardown. Render each frame's `player.eye` with the controller's `yaw` and `pitch`. The worker owns player collision, movement, target queries, and tool action acceptance; the client owns input and presentation.
+
 CASCADE's structural destruction engine, ported from the destruction physics lab into a source-exported Blacksite package. It includes the original bond graph, force/moment equilibrium and stress solvers, convex Voronoi fracture authoring, detached Rapier islands, bounded secondary fracture, ordnance, Three.js rendering, Koota presentation data, XState lifecycle, Effect worker supervision, snapshot codecs and standalone replay.
 
 Consume Blacksite as one recursive Git submodule. List `vendor/blacksite/packages/cascade` in the game's pnpm workspace and declare `@blacksite/cascade: workspace:*`. Import the source export from `@blacksite/cascade`. Games use stock Rapier; Blacksite's patched Rapier tarballs are retained for Cascade development and tests.

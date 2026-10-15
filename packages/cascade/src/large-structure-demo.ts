@@ -5,18 +5,54 @@
  */
 import * as THREE from 'three';
 import { RenderProfile } from './render-profile';
+import { CascadeWalkClient, WALK_TOOLS } from './walk-client';
 const renderProfile = new RenderProfile();
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createDestructibleBoxes } from '../../destruction-authoring/src/boxes';
 import { DestructionRenderer } from '../../destruction-render/src/renderer';
 import { FragmentState, MAX_EXPLOSIVES, FIXED_DT, FIXED_DT_30HZ } from '../../destruction-domain/src/index';
-import type { BondDef, DestructibleManifest, DestructionCommand, ReplayLog, SecondaryFragmentDef, SimulationFrame, Vec3, WorkerRequest, WorkerResponse } from '../../destruction-domain/src/index';
+import type { BondDef, DestructibleManifest, DestructionCommand, PlayerInput, PlayerTool, ReplayLog, SecondaryFragmentDef, SimulationFrame, Vec3, WorkerRequest, WorkerResponse } from '../../destruction-domain/src/index';
 import { SCALE_FRAMES, scaleFrameBoxes } from '../../destruction-testkit/src/scale-frame';
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#171e23");
 scene.fog = new THREE.Fog("#171e23", 105, 260);
 const camera = new THREE.PerspectiveCamera(43, innerWidth / innerHeight, 0.1, 500);
 camera.position.set(57, 38, 62);
+scene.add(camera);
+const toolMaterial = new THREE.MeshBasicMaterial({ color: '#8d9694', depthTest: false });
+const gripMaterial = new THREE.MeshBasicMaterial({ color: '#303b3c', depthTest: false });
+const accentMaterial = new THREE.MeshBasicMaterial({ color: '#dda665', depthTest: false });
+const toolGeometries: THREE.BufferGeometry[] = [];
+const toolModels = WALK_TOOLS.map((tool) => {
+  const group = new THREE.Group();
+  group.position.set(0.72, -0.18, -0.95);
+  const part = (geometry: THREE.BufferGeometry, material: THREE.Material, x = 0, y = 0, z = 0) => {
+    toolGeometries.push(geometry);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, y, z);
+    mesh.renderOrder = 100;
+    group.add(mesh);
+    return mesh;
+  };
+  if (tool.id === 'explosive') {
+    part(new THREE.BoxGeometry(0.17, 0.25, 0.11), gripMaterial);
+    part(new THREE.BoxGeometry(0.19, 0.045, 0.12), accentMaterial, 0, 0.05);
+    part(new THREE.BoxGeometry(0.08, 0.045, 0.02), toolMaterial, 0, 0.135, 0.055);
+  } else if (tool.id === 'cannonball') {
+    part(new THREE.SphereGeometry(0.17, 16, 12), toolMaterial);
+    part(new THREE.BoxGeometry(0.09, 0.18, 0.11), gripMaterial, 0, -0.2);
+  } else if (tool.id === 'hammer') {
+    part(new THREE.CylinderGeometry(0.027, 0.032, 0.56, 8), gripMaterial);
+    part(new THREE.BoxGeometry(0.32, 0.11, 0.13), toolMaterial, 0, 0.25);
+  } else {
+    part(new THREE.BoxGeometry(0.22, 0.14, 0.13), gripMaterial);
+    part(new THREE.BoxGeometry(0.26, 0.025, 0.05), toolMaterial, 0, 0.12, -0.02);
+    part(new THREE.BoxGeometry(0.05, 0.04, 0.135), accentMaterial, 0, 0.05);
+  }
+  group.visible = false;
+  camera.add(group);
+  return group;
+});
 const gl = new THREE.WebGLRenderer({ antialias: true });
 (window as Window & { __blacksitePerf?: (renderer: THREE.WebGLRenderer) => void }).__blacksitePerf?.(gl);
 gl.setSize(innerWidth, innerHeight);
@@ -119,6 +155,7 @@ class PhysicsClient {
   snapshotHz = 0;
   onFrame: ((frame: SimulationFrame) => void) | undefined;
   onError: ((message: string) => void) | undefined;
+  onAction: ((accepted: boolean, message?: string) => void) | undefined;
   private worker: Worker;
   private readonly pieces = new Map<number, SecondaryFragmentDef>();
   private readonly livePieceIds = new Set<number>();
@@ -146,6 +183,8 @@ class PhysicsClient {
           return;
         }
         if (message.type === 'replayExport') { const done = client.exports.get(message.requestId); client.exports.delete(message.requestId); done?.(message.log); return; }
+        if (message.type === 'commandAccepted') { client.onAction?.(true); return; }
+        if (message.type === 'actionResult') { client.onAction?.(false, message.message); return; }
         if (message.type !== 'frame') return;
         const messageStart = performance.now();
         // Each received snapshot contributes once, independent of render FPS.
@@ -231,6 +270,11 @@ class PhysicsClient {
   enqueue(command: DestructionCommand) { renderProfile.event(performance.now(), 'command', { command }); this.post({ type: 'command', command }); }
   setPaused(paused: boolean) { this.post({ type: 'pause', paused }); }
   setPlayerEnabled(enabled: boolean) { this.post({ type: 'player', enabled }); }
+  playerInput(input: PlayerInput) { this.post({ type: 'playerInput', input }); }
+  playerAction(action: PlayerTool, direction: Vec3, radius: number, strength: number) {
+    this.post({ type: 'playerAction', action, direction, radius: action === 'cannonball' ? 0.32 : radius, strength, id: commandId++ });
+  }
+  respawnPlayer() { this.post({ type: 'playerRespawn' }); }
   exportReplay(): Promise<ReplayLog> {
     const requestId = this.requestId++;
     return new Promise(resolve => { this.exports.set(requestId, resolve); this.post({ type: 'exportReplay', requestId }); });
@@ -242,6 +286,28 @@ let view: DestructionRenderer | undefined;
 let frame: SimulationFrame | undefined;
 let paused = false;
 let ready = false;
+const walk = new CascadeWalkClient(gl.domElement, {
+  setPlayerEnabled: enabled => sim?.setPlayerEnabled(enabled),
+  playerInput: input => { if (ready && !paused) sim?.playerInput(input); },
+  playerAction: (tool, direction, radius, strength) => { if (ready && !paused) sim?.playerAction(tool, direction, radius, strength); },
+  respawnPlayer: () => sim?.respawnPlayer(),
+}, () => {
+  if (walk.active) {
+    setMissileMode(false);
+    reticle.visible = beam.visible = false;
+  }
+  controls.enabled = !walk.active;
+  camera.fov = walk.active ? 74 : 43;
+  camera.updateProjectionMatrix();
+  button('walk').textContent = walk.active ? 'Orbit view (Tab)' : 'Walk mode (Tab)';
+  $('walkHud').hidden = !walk.active;
+  $('walkTool').textContent = `${walk.toolIndex + 1} / ${walk.tool.label}`;
+  $('hint').textContent = walk.active
+    ? 'WASD move · Shift sprint · C crouch · Space jump · 1–4 or wheel tools · Click use · R respawn · Tab orbit · Right drag to look if mouse lock fails'
+    : 'Drag to orbit · Scroll to zoom · Click concrete to place a charge · M toggles airstrike mode · Tab to walk';
+});
+button('walk').onclick = () => walk.setActive(!walk.active);
+let cameraKick = 0;
 let commandId = 1;
 let wave = 0;
 let sequence = false;
@@ -554,13 +620,13 @@ function aimReticle(clientX: number, clientY: number) {
   beam.position.copy(hit.point);
   beam.visible = true;
 }
-gl.domElement.addEventListener("pointermove", (event) => aimReticle(event.clientX, event.clientY));
+gl.domElement.addEventListener("pointermove", (event) => { if (!walk.active) aimReticle(event.clientX, event.clientY); });
 gl.domElement.addEventListener("pointerleave", () => {
   reticle.visible = beam.visible = false;
 });
 button("missile").onclick = () => setMissileMode(!missileMode);
 window.addEventListener("keydown", (e) => {
-  if (e.key === "m" || e.key === "M") setMissileMode(!missileMode);
+  if (!walk.active && (e.key === "m" || e.key === "M")) setMissileMode(!missileMode);
 });
 function fail(error: unknown) {
   ready = false;
@@ -581,17 +647,23 @@ async function reset() {
   }
   markers.clear();
   const { manifest } = createDestructibleBoxes(scaleFrameBoxes(SCALE_FRAMES.find(f => f.name === 'large')!), { id: 'large', cellSize: 1, maxFragments: 10_000 });
+  manifest.level = { boxes: [], camera: { position: [57, 38, 62], target: [0, 11, 0] }, spawn: { position: [0, 0.05, 16], yaw: 0 } };
   fitSunShadow(manifest);
   mass = manifest.fragments.reduce((sum, f) => sum + f.mass, 0);
   renderProfile.reset(performance.now());
   sim = await PhysicsClient.create(manifest, PHYSICS_HZ);
-  sim.setPlayerEnabled(false);
+  sim.setPlayerEnabled(walk.active);
   frame = sim.frame;
   sim.onFrame = (next) => {
     frame = next;
     onPhysicsFrame();
   };
   sim.onError = (message) => reportStepCrash(new Error(message));
+  sim.onAction = (accepted, message) => {
+    if (accepted && walk.active) cameraKick = Math.min(0.05, cameraKick + 0.027);
+    if (message && walk.active) $('walkNotice').textContent = message;
+    if (accepted) $('walkNotice').textContent = '';
+  };
   crashed = false;
   view = new DestructionRenderer(manifest, { profile: true, materialFor: (_fragment, surface) => surface === "exterior" ? exterior : interior });
   scene.add(view.group);
@@ -602,7 +674,7 @@ async function reset() {
   commandId = 1;
   paused = false;
   button("pause").textContent = "Pause";
-  for (const id of ["collapse", "detonate", "pause", "reset", "missile", "rate", "export"]) button(id).disabled = false;
+  for (const id of ["collapse", "detonate", "pause", "reset", "missile", "rate", "export", "walk"]) button(id).disabled = false;
   loading.hidden = true;
   frameTimes.clear(); syncTimes.clear(); cpuTimes.clear(); gpuTimes.clear();
   // Drain any prior scene's GPU queries without attributing them to this capture.
@@ -646,9 +718,11 @@ button("pause").onclick = () => {
 button("reset").onclick = () => reset().catch(fail);
 let down = [0, 0];
 gl.domElement.addEventListener("pointerdown", (event) => {
+  if (walk.active) return;
   down = [event.clientX, event.clientY];
 });
 gl.domElement.addEventListener("pointerup", (event) => {
+  if (walk.active) return;
   if (!ready || !frame || !view || Math.hypot(event.clientX - down[0], event.clientY - down[1]) > 5 || event.button !== 0) return;
   if (missileMode) {
     ray.setFromCamera(new THREE.Vector2(event.clientX / innerWidth * 2 - 1, 1 - event.clientY / innerHeight * 2), camera);
@@ -820,7 +894,8 @@ ${sim.simulationHz} Hz physics (target ${PHYSICS_HZ}) · ${sim.snapshotHz} Hz sn
 ${(frame.stats.physicsMs ?? 0).toFixed(1)} ms step · rung ${frame.stats.budgetRung ?? 0} · ${frame.stats.droppedFrames} dropped
 ${(fraction * 100).toFixed(1)}% detached mass
 ${frame.stats.activeBodies} moving bodies
-${(frame.ordnance ?? []).length} placed charges`;
+${(frame.ordnance ?? []).length} placed charges${walk.active ? `
+Player ${frame.player?.grounded ? 'grounded' : 'airborne'} · ${frame.player ? Math.hypot(frame.player.velocity[0], frame.player.velocity[2]).toFixed(1) : '0.0'} m/s · ${walk.tool.label}` : ''}`;
     markers.clear();
     for (const item of frame.ordnance ?? []) {
       if (item.type !== "explosive") continue;
@@ -831,7 +906,13 @@ ${(frame.ordnance ?? []).length} placed charges`;
   }
   const hudMs = performance.now() - hudStart;
   const controlsStart = performance.now();
-  controls.update();
+  if (walk.active && frame?.player) {
+    camera.position.fromArray(frame.player.eye);
+    camera.rotation.set(walk.pitch, walk.yaw, 0, 'YXZ');
+    camera.translateZ(cameraKick);
+    cameraKick *= Math.exp(-dt * 24);
+  } else controls.update();
+  for (let i = 0; i < toolModels.length; i++) toolModels[i]!.visible = walk.active && i === walk.toolIndex;
   updateShadows();
   const controlsMs = performance.now() - controlsStart;
   const shadowsUpdated = gl.shadowMap.needsUpdate;
@@ -863,6 +944,7 @@ ${(frame.ordnance ?? []).length} placed charges`;
       programs: gl.info.programs?.length ?? 0,
       width: gl.domElement.width, height: gl.domElement.height,
       cameraPosition: camera.position.toArray(), cameraTarget: controls.target.toArray(),
+      playerGrounded: frame?.player?.grounded, playerSpeed: frame?.player ? Math.hypot(frame.player.velocity[0], frame.player.velocity[2]) : 0, playerTool: walk.tool.id,
     });
     renderProfile.record('telemetryMs', performance.now() - telemetryStart);
   }
@@ -873,8 +955,11 @@ window.addEventListener("beforeunload", () => {
   disposed = true;
   longTasks?.disconnect();
   sim?.dispose();
+  walk.dispose();
   view?.dispose();
   controls.dispose();
+  for (const geometry of toolGeometries) geometry.dispose();
+  toolMaterial.dispose(); gripMaterial.dispose(); accentMaterial.dispose();
   for (const sample of gpuQueries) gpuContext.deleteQuery(sample.query);
   gl.dispose();
   exterior.dispose();
