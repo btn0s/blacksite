@@ -9,5 +9,16 @@ const dependencies = JSON.parse(readFileSync(path.resolve('package.json'), 'utf8
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   publicDir: dependencies['als-ue5-r3f'] ? path.resolve('vendor/blacksite/vendor/als-web/public') : false,
-  server: { host: '0.0.0.0', port: 5173 },
+  server: {
+    host: '0.0.0.0',
+    port: Number(process.env.VITE_PORT ?? 5173),
+    proxy: dependencies['@blacksite/relay'] ? {
+      '/relay': {
+        target: 'http://127.0.0.1:2567',
+        changeOrigin: true,
+        ws: true,
+        rewrite: requestPath => requestPath.replace(/^\/relay(?=\/|$)/, ''),
+      },
+    } : undefined,
+  },
 })

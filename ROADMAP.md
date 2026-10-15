@@ -119,7 +119,7 @@ Ranked roughly by leverage. "Have" means Blacksite or ALS Web already has a vers
 ### D. Characters and animation
 18. **Animation LOD (URO)**: update rate and graph complexity by significance; ALS graph (have) gains LOD tiers. **Status: experimental.**
 19. **Crowds**: vertex animation textures for hundreds of instanced characters, promoted to full ALS near the camera. **Status: planned.**
-20. **IK and retargeting**: foot/hand IK, weapon grip (last-light has a version), compiled retarget for non-ALS rigs. **Status: planned.**
+20. **IK and retargeting**: foot/hand IK, weapon grip, compiled retarget for non-ALS rigs. **Status: planned.**
 
 ### E. Effects, lighting, audio
 21. **GPU particles** (Niagara-lite) on WebGPU compute, pooled, with LOD and budgets. **Status: planned.**
@@ -139,7 +139,7 @@ Ranked roughly by leverage. "Have" means Blacksite or ALS Web already has a vers
 
 | System | Scope | Status |
 | --- | --- | --- |
-| Relay (`@blacksite/relay`) | Replication, prediction, and transport adapters | Planned; no package yet |
+| Relay (`@blacksite/relay`) | Replication, prediction, and transport adapters | v0 ships Colyseus and loopback; scaling work remains |
 | Sector | World streaming, HLOD, and terrain | Planned; no package yet |
 | Scanner | Significance and LOD management | Planned; no package yet |
 | Flare | GPU VFX | Planned; no package yet |
@@ -169,9 +169,9 @@ Ranked roughly by leverage. "Have" means Blacksite or ALS Web already has a vers
 - Switch to **WebRTC** when latency between a few peers matters more than authority (co-op, fighting games), or for voice.
 - Use **lockstep over any transport** for RTS-scale unit counts (send inputs, not state); needs the deterministic sim.
 - **Roll your own** WebSocket server when you need a custom tick, sharding or MMO-style interest management Colyseus cannot express.
-- The planned adapter seam will make future transport changes local to the network layer. Relay does not ship yet.
+- Relay v0 now ships the Colyseus and loopback adapters with full snapshots, owner movement, server Armory hits, interpolation, and a reconciliation hook. The other adapters, interest management, network significance, delta encoding, and lag compensation remain planned.
 
-Roadmap placement: Relay with the Colyseus and loopback adapters is a **Phase 1** foundation item (capture → prototype → default like everything else; chamber: 16-player FPP+TPP arena at 120 fps client-side with prediction). Other adapters follow in Phase 4 with interest management.
+Roadmap placement: Relay v0 with Colyseus and loopback is a **Phase 1** foundation item now available in the `mp` profile. The 16-player FPP+TPP arena at 120 fps and network scaling remain unproven. Other adapters follow in Phase 4 with interest management.
 
 ## Proof scenes (`chambers/`)
 

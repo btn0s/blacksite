@@ -39,7 +39,7 @@ flowchart LR
   G -. only on request .-> H[ship-game]
 ```
 
-Each phase writes its handoff to the game project and runs a checkable gate. The generated Vite shell includes R3F, Rapier, Koota, XState, Effect, a menu, pause and settings screens, GameFrame, and a developer prototype menu. `blacksite scaffold --profile blank|tpp|fpp --name "My Game" --dir /absolute/path --json --gate` keeps the NDJSON contract. `blacksite prototype new <name> [--with als-tpp|fpp|warden|cascade]`, `list`, and `promote` manage modes under `src/prototypes/` and `src/game/`. `blacksite --help` shows the complete command tree.
+Each phase writes its handoff to the game project and runs a checkable gate. The generated Vite shell includes R3F, Rapier, Koota, XState, Effect, a menu, pause and settings screens, GameFrame, and a developer prototype menu. `blacksite scaffold --profile blank|tpp|fpp|mp --name "My Game" --dir /absolute/path --json --gate` keeps the NDJSON contract. `blacksite prototype new <name> [--with als-tpp|fpp|warden|cascade]`, `list`, and `promote` manage modes under `src/prototypes/` and `src/game/`. `blacksite --help` shows the complete command tree.
 
 ## Player templates
 
@@ -47,9 +47,10 @@ Each phase writes its handoff to the game project and runs a checkable gate. The
 | --- | --- | --- |
 | `fpp` | Single-player first person; arms-only `@blacksite/subject-fpp` + Armory, without ALS | Usable |
 | `tpp` | Single-player third person; ALS body and camera | Usable |
-| `fpp-mp` | Multiplayer FPP/TPP; local arms, remote ALS bodies, Colyseus | Unavailable until the real networked piece exists |
+| `mp` | Multiplayer FPP/TPP; local arms, remote ALS bodies, Colyseus and offline loopback | Usable v0 |
+| `blank` | Empty game shell for a custom player | Usable |
 
-Multiplayer TPP also needs the networked player piece. The CLI reports `fpp-mp` as unavailable. [Game architecture](skills/game-architecture/SKILL.md) explains the ownership model and transport choices.
+The CLI scaffolds `mp` with a local Colyseus room under `pnpm dev`; Play joins through the same-origin `/relay` path and Offline uses loopback. Open a second tab to join the online room. The local camera starts in FPP and V switches to TPP; set `cameraMode="fpp"` or `cameraMode="tpp"` on `MultiplayerSubject` to lock a game's camera. Remote players always use ALS bodies, and camera choice stays local. `VITE_RELAY_URL` overrides the room endpoint for another deployment topology. [Game architecture](skills/game-architecture/SKILL.md) explains the ownership model and transport choices. For a static two-player demo, mount `LoopbackSplitView` from `@blacksite/subject`; it creates two connections through `createLoopbackRoom()` from `@blacksite/relay` and renders both canvases. Relay v0 has full snapshots, owner movement, and Armory-validated hits; see [Relay limits](packages/relay/AGENTS.md).
 
 ## Using it without agents
 

@@ -2,5 +2,11 @@
   "name": "Blacksite Engine",
   "cli": "blacksite",
   "plugin": "blacksite",
-  "marketplace": "blacksite-marketplace"
+  "marketplace": "blacksite-marketplace",
+  "profiles": [
+    "fpp",
+    "tpp",
+    "mp",
+    "blank"
+  ]
 }

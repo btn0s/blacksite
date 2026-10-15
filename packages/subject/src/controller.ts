@@ -1,11 +1,16 @@
 import { Quaternion, Vector3 } from 'three'
 import { createAlsPlayer } from 'als-ue5-r3f/app/AlsPlayer'
 import type { AlsPlayer } from 'als-ue5-r3f/app/AlsPlayer'
+import { createGameplayContext } from '@blacksite/input/actions'
 
 export type FpsView = 'first-person' | 'third-person'
+export type CameraMode = 'switchable' | 'fpp' | 'tpp'
+export const MP_CAMERA_INPUT = createGameplayContext([{ action: 'toggleView', control: { device: 'keyboard', key: 'KeyV' }, trigger: 'pressed' }], 'mp-camera')
+const toggleViewCode = MP_CAMERA_INPUT.bindings[0]!.control
 export type FpsWeapon = 'rifle' | 'pistol' | 'bow'
 export interface SubjectOptions {
   initialView?: FpsView
+  cameraMode?: CameraMode
   initialWeapon?: FpsWeapon
   /** World feet position, in metres. */
   spawn?: readonly [number, number, number]
@@ -85,6 +90,8 @@ const overlays = { rifle: 'Rifle', pistol: 'PistolTwoHanded', bow: 'Bow' } as co
 export const FPS_WEAPONS = ['rifle', 'pistol', 'bow'] as const
 
 export function createSubject(options: SubjectOptions = {}): SubjectState {
+  const cameraMode = options.cameraMode ?? 'switchable'
+  const initialView = cameraMode === 'tpp' ? 'third-person' : cameraMode === 'fpp' ? 'first-person' : options.initialView ?? 'first-person'
   const player = createAlsPlayer({ spawn: options.spawn })
   const listeners = new Set<() => void>()
   let requestLock: (() => Promise<void>) | null = null
@@ -92,21 +99,22 @@ export function createSubject(options: SubjectOptions = {}): SubjectState {
   const state: SubjectState = {
     player,
     options: {
-      initialView: options.initialView ?? 'first-person', initialWeapon: options.initialWeapon ?? 'rifle',
+      initialView, cameraMode, initialWeapon: options.initialWeapon ?? 'rifle',
       yaw: finite(options.yaw, 0), pitch: clamp(finite(options.pitch, 0), -85, 85),
       sensitivity: clamp(finite(options.sensitivity, 0.0022), 0.0001, 0.02),
       fov: clamp(finite(options.fov, 75), 35, 110), aimFov: clamp(finite(options.aimFov, 58), 25, 100),
     },
     input: { fire: false, aim: false, reloadSequence: 0, weaponSequence: 0 },
-    keys: new Set(), view: options.initialView ?? 'first-person', weapon: options.initialWeapon ?? 'rifle', enabled: true,
+    keys: new Set(), view: initialView, weapon: options.initialWeapon ?? 'rifle', enabled: true,
     frame: {
-      ready: false, locked: false, view: options.initialView ?? 'first-person', aiming: false,
+      ready: false, locked: false, view: initialView, aiming: false,
       grounded: false, crouching: false, sprinting: false, action: null,
       position: new Vector3(), velocity: new Vector3(), eye: new Vector3(),
       aimOrigin: new Vector3(), aimDirection: new Vector3(1, 0, 0),
       muzzlePosition: new Vector3(), cameraQuaternion: new Quaternion(), ownerColliderHandles: new Set(),
     },
     setView(view) {
+      if (cameraMode === 'fpp' && view !== 'first-person' || cameraMode === 'tpp' && view !== 'third-person') return
       state.view = view
       player.command.view = view === 'first-person' ? 'FirstPerson' : 'ThirdPerson'
       player.command.bodyVisible = view !== 'first-person'
@@ -184,7 +192,7 @@ export function keySubject(controller: SubjectState, code: string, pressed: bool
   if (repeat || controller.keys.has(code)) return true
   controller.keys.add(code)
   if (code === 'Space') controller.player.command.jumpSequence++
-  else if (code === 'KeyV') controller.setView(controller.view === 'first-person' ? 'third-person' : 'first-person')
+  else if (toggleViewCode.device === 'keyboard' && code === toggleViewCode.key && controller.options.cameraMode === 'switchable') controller.setView(controller.view === 'first-person' ? 'third-person' : 'first-person')
   else if (code === 'KeyR') controller.input.reloadSequence++
   else if (code.startsWith('Digit')) controller.setWeapon(FPS_WEAPONS[Number(code.slice(-1)) - 1]!)
   return true

@@ -82,7 +82,7 @@ function doctor() {
   process.stdout.write(`${JSON.stringify(checks, null, flag('--json') ? 0 : 2)}\n`)
 }
 async function main() {
-  if (command === 'help' || command === '--help' || flag('--help')) { process.stdout.write(`${product.cli}\n  install [--agent claude|codex|cursor|auto] [--global|--project] [--yes|--uninstall]\n  doctor\n  catalog [--json]\n  scaffold --profile tpp|fpp|blank|fpp-mp --name <name> --dir <absolute-dir> [--json] [--gate]\n  new <scaffold options> [--assets id,...]\n  budget\n  prototype new <name> [--with tpp|fpp|subject|armory|warden|cascade|fpp-mp]\n  prototype list|promote\n  architecture\n  update\n  assets login <fab|itch|all>\n  assets logout <fab|itch|all>\n  assets status\n  assets sync [--source fab|itch|all]\n  assets list|search|suggest|pick|add|formats\n`); return }
+  if (command === 'help' || command === '--help' || flag('--help')) { process.stdout.write(`${product.cli}\n  install [--agent claude|codex|cursor|auto] [--global|--project] [--yes|--uninstall]\n  doctor\n  catalog [--json]\n  scaffold --profile tpp|fpp|blank|mp --name <name> --dir <absolute-dir> [--json] [--gate]\n  new <scaffold options> [--assets id,...]\n  budget\n  prototype new <name> [--with tpp|fpp|subject|armory|warden|cascade|mp]\n  prototype list|promote\n  architecture\n  update\n  assets login <fab|itch|all>\n  assets logout <fab|itch|all>\n  assets status\n  assets sync [--source fab|itch|all]\n  assets list|search|suggest|pick|add|formats\n`); return }
   if (command === 'install') return install()
   if (command === 'doctor') return doctor()
   if (command === 'catalog' || command === 'scaffold') return run(nodeBin, [path.join(root, 'cli', 'scaffold.mjs'), ...(command === 'catalog' ? ['catalog', ...argv] : argv)])

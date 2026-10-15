@@ -13,7 +13,8 @@
 | `@blacksite/operator-fpp`, `packages/operator-fpp` | `@blacksite/subject-fpp`, `packages/subject-fpp` | Arms-only FPP exports `StandaloneSubject` and keeps the intent contract. |
 | `@blacksite/arsenal`, `packages/arsenal` | `@blacksite/armory`, `packages/armory` | Weapon runtime and presets retain their focused subpaths. |
 | `@blacksite/rupture`, `packages/rupture` | `@blacksite/cascade`, `packages/cascade` | Destruction facade renamed; descriptive `destruction-*` internals keep their names and boundaries. |
-| `blacksite prototype new --with rupture` | `blacksite prototype new --with cascade` | System kit follows the new public name. `fpp`, `tpp`, and `fpp-mp` profile names stay stable. |
+| `blacksite prototype new --with rupture` | `blacksite prototype new --with cascade` | System kit follows the new public name. |
+| Multiplayer unavailable in catalog | `blacksite scaffold --profile mp` | New scaffolds include `@blacksite/relay`, `@blacksite/protocol`, a Colyseus server, and offline loopback. Existing game shells can add the profile with `blacksite prototype new <name> --with mp`. |
 | `labs/<name>/` | `chambers/<name>/` | Playable lab and benchmark scenes share one destination. |
 
 The pnpm workspace/submodule consumption model remains stable. Existing consumers must update package names and imports when they advance their Blacksite submodule. Generated games keep their own existing layouts; only new scaffold output uses the game shell. See `README.md` for the current commands.
