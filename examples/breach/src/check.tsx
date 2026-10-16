@@ -14,7 +14,7 @@ export type Controls = {
   drive(next: Driver | null): void
   place(position: readonly [number, number, number], yaw: number): void
   body: Body
-  override(on: boolean): void
+  override(pose: CameraPose | null): void
   restart(): void
   face(target: V3): void
   targets(): Target[]
@@ -41,7 +41,7 @@ export function CheckProbe({ driver, audio, ready }: { driver: Controls; audio: 
   const state = useRef({ warming: false, warmed: false, frames: 0 })
   const check = useMemo(() => exposeCheck({
     bookmarks,
-    camera(next) { override.current = next; driver.override(next !== null) },
+    camera(next) { override.current = next; driver.override(next) },
     player() {
       const body = driver.body
       return { position: [body.position.x, body.position.y, body.position.z], velocity: [body.velocity.x, body.velocity.y, body.velocity.z], grounded: body.grounded }

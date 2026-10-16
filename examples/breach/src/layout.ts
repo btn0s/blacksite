@@ -667,7 +667,7 @@ export const BOOKMARKS = [
   { name: 'lobby', position: [3.6, 1.63, 9.2] as Vec3, target: [-2, 1.2, 3] as Vec3, note: 'Pillars, the overturned desk, the bulb and the roof-hole shaft' },
   { name: 'corridor', position: [0, 1.63, 1.4] as Vec3, target: [0, 1.5, -6] as Vec3, note: 'The tight corridor and the store-room opening' },
   { name: 'hall', position: [0, 1.63, -5.8] as Vec3, target: [-1, 1.5, -15] as Vec3, note: 'Lathes, shafts, the burning barrel and the fluorescent tube' },
-  { name: 'hall-north', position: [5.4, 1.63, -16.2] as Vec3, target: [-4, 1.4, -7] as Vec3, note: 'The longest sightline, back across the hall' },
+  { name: 'hall-north', position: [4.4, 1.63, -16.4] as Vec3, target: [-4, 1.4, -7] as Vec3, note: 'The longest sightline, back across the hall' },
   { name: 'office', position: [-1, 1.63, -18] as Vec3, target: [-5, 1.2, -23] as Vec3, note: 'Desks, cabinets, the red lamp' },
   { name: 'exfil', position: [-0.6, 1.63, -21.2] as Vec3, target: [9, 1.4, -22] as Vec3, note: 'The breach out to the APC' },
 ]

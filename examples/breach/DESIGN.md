@@ -150,7 +150,7 @@ Warden intents, each barked 0.8 s before it happens with a subtitle: advance, fl
 | `lobby` | 3.6, 1.63, 9.2 | -2, 1.2, 3 | Pillars, the overturned desk, the bulb and the roof-hole shaft |
 | `corridor` | 0, 1.63, 1.4 | 0, 1.5, -6 | The tight corridor and the store-room opening |
 | `hall` | 0, 1.63, -5.8 | -1, 1.5, -15 | Lathes, shafts, the burning barrel and the fluorescent tube |
-| `hall-north` | 5.4, 1.63, -16.2 | -4, 1.4, -7 | The longest sightline, back across the hall |
+| `hall-north` | 4.4, 1.63, -16.4 | -4, 1.4, -7 | The longest sightline, back across the hall |
 | `office` | -1, 1.63, -18 | -5, 1.2, -23 | Desks, cabinets, the red lamp |
 | `exfil` | -0.6, 1.63, -21.2 | 9, 1.4, -22 | The breach out to the APC |
 

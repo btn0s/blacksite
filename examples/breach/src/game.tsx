@@ -5,6 +5,7 @@ import { CuboidCollider, Physics, RigidBody } from '@react-three/rapier'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import type { AlsRagdollHandle } from 'als-ue5-r3f/app/AlsRemoteActor'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
+import type { CameraPose } from '@blacksite/check'
 import { Look } from '@blacksite/look/r3f'
 import { autoQuality, type Atmosphere, type QualityTier } from '@blacksite/look'
 import { ZONE } from '@blacksite/look/presets'
@@ -111,6 +112,7 @@ function Scene({ tier, onArms, onFirstFrame }: { tier: QualityTier; onArms: () =
   const [roster, setRoster] = useState<string[]>([])
   const [frozen, setFrozen] = useState<ReadonlySet<string>>(() => new Set())
   const override = useRef(false)
+  const pose = useRef<CameraPose | null>(null)
   const [posed, setPosed] = useState(false)
   const [live, setLive] = useState(false)
   const lights = useMemo(() => {
@@ -440,9 +442,10 @@ function Scene({ tier, onArms, onFirstFrame }: { tier: QualityTier; onArms: () =
     state.room = room.id
     audio.setListener({ x: scratch.eye.x, y: scratch.eye.y, z: scratch.eye.z, yaw: view.yaw }, room.id)
     audio.update(step)
+    const seen = pose.current ? roomAt(pose.current.position[0], pose.current.position[2]) : room
     scratch.visible.clear()
-    scratch.visible.add(room.id)
-    for (const id of room.sees) scratch.visible.add(id)
+    scratch.visible.add(seen.id)
+    for (const id of seen.sees) scratch.visible.add(id)
     level.update(state.clock, step, scratch.visible)
     effects.update(step, position => audio.casing(position.distanceTo(camera.position), footingAt(position.x, position.z)))
     chips.update(step)
@@ -536,7 +539,7 @@ function Scene({ tier, onArms, onFirstFrame }: { tier: QualityTier; onArms: () =
     drive(next: Driver | null) { game.current.drive = next },
     place(position: readonly [number, number, number], yaw: number) { placeBody(body, position); view.yaw = yaw; view.pitch = 0; view.reset = true; syncPlayer() },
     body,
-    override(on: boolean) { override.current = on; setPosed(on); if (!on) { camera.clearViewOffset(); camera.updateProjectionMatrix() } },
+    override(next: CameraPose | null) { const on = next !== null; pose.current = next; override.current = on; setPosed(on); if (!on) { camera.clearViewOffset(); camera.updateProjectionMatrix() } },
     restart,
     face(target: V3) { const dx = target.x - body.position.x, dz = target.z - body.position.z; view.yaw = Math.atan2(-dx, -dz); view.pitch = Math.atan2(target.y - scratch.eye.y, Math.hypot(dx, dz)); view.reset = true },
     targets: () => scratch.targets,
