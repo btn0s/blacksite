@@ -32,6 +32,7 @@
   "dependencies": {
     "@blacksite/armory": "workspace:*",
     "@blacksite/cascade": "workspace:*",
+    "@blacksite/check": "workspace:*",
     "@blacksite/input": "workspace:*",
     "@blacksite/look": "workspace:*",
     "@blacksite/relay": "workspace:*",

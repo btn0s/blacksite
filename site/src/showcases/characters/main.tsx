@@ -16,6 +16,7 @@ import { createAtmosphere, internalPixelRatio, texturesReady } from '@blacksite/
 import { Hints, Loading, Prompt, Screen, TitleCard, TouchPad, useTouch } from '@blacksite/ui/hud'
 import { buildCheckpoint } from './checkpoint'
 import { outfit, showHead } from './outfit'
+import { CheckProbe } from './check'
 
 const level = buildCheckpoint()
 
@@ -65,6 +66,7 @@ function Scene({ onFirstPerson }: { onFirstPerson: (value: boolean) => void }) {
       <AlsCamera poseSample={pose} worldTime={time} footstepAudioRuntime={audio} toggleViewModeKey="KeyV" />
       <Level />
     </Physics>
+    <CheckProbe pose={pose} />
   </>
 }
 

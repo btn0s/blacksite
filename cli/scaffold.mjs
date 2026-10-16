@@ -84,7 +84,7 @@ async function main() {
       packages: packageRows.filter(Boolean),
       templates: [{ id: 'game-shell', path: 'templates/game-shell' }],
       kits: ['tpp', 'fpp', 'subject', 'armory', 'warden', 'cascade', 'mp'].map(id => ({ id, command: `blacksite prototype new <name> --with ${id}`, status: ['subject', 'armory', 'warden', 'cascade'].includes(id) ? 'experimental' : 'usable' })),
-      tools: ['install', 'doctor', 'catalog', 'scaffold', 'new', 'budget', 'assets', 'prototype', 'architecture', 'update'],
+      tools: ['install', 'doctor', 'catalog', 'scaffold', 'new', 'budget', 'check', 'assets', 'prototype', 'architecture', 'update'],
     }
     process.stdout.write(`${JSON.stringify(catalog)}\n`)
     return
