@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { CuboidCollider, CylinderCollider, RigidBody } from '@react-three/rapier'
@@ -79,41 +79,55 @@ export function Practicals({ route }: { route: Route }) {
 }
 
 export function Markers({ route, race }: { route: Route; race: { current: Race } }) {
-  const markers = useMemo(() => route.gates.map(gate => {
-    const group = new THREE.Group()
-    const baseY = gate.at[1] - gate.half[1]
-    const pole = new THREE.CylinderGeometry(0.035, 0.035, 2.6, 6)
-    const material = new THREE.MeshStandardMaterial({ color: '#2b2a24', roughness: 0.6, metalness: 0.4 })
-    const stripe = new THREE.MeshBasicMaterial({ color: '#ffb347', toneMapped: false, transparent: true, opacity: 1 })
-    const c = Math.cos(gate.yaw)
-    const s = Math.sin(gate.yaw)
-    for (const side of [-1, 1]) {
-      const lz = side * (gate.half[2] + 0.05)
-      const x = gate.at[0] + lz * s
-      const z = gate.at[2] + lz * c
-      const mesh = new THREE.Mesh(pole, material)
-      mesh.position.set(x, baseY + 1.3, z)
-      group.add(mesh)
-      const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.42, 0.09), stripe)
-      lamp.position.set(x, baseY + 2.45, z)
-      group.add(lamp)
-    }
-    const tape = new THREE.Mesh(new THREE.PlaneGeometry(gate.half[2] * 2 + 0.1, 0.08), new THREE.MeshBasicMaterial({ color: '#d8c9a8', transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }))
-    tape.position.set(gate.at[0], baseY + 2.3, gate.at[2])
-    tape.rotation.y = Math.PI / 2 + gate.yaw
-    group.add(tape)
-    return { group, stripe }
-  }), [route])
+  const markers = useMemo(() => {
+    const count = route.gates.length
+    const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.035, 0.035, 2.6, 6), new THREE.MeshStandardMaterial({ color: '#2b2a24', roughness: 0.6, metalness: 0.4 }), count * 2)
+    const lamps = new THREE.InstancedMesh(new THREE.BoxGeometry(0.09, 0.42, 0.09), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), count * 2)
+    const tapes = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 0.08), new THREE.MeshBasicMaterial({ color: '#d8c9a8', transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }), count)
+    const place = new THREE.Object3D()
+    route.gates.forEach((gate, index) => {
+      const baseY = gate.at[1] - gate.half[1]
+      const c = Math.cos(gate.yaw)
+      const s = Math.sin(gate.yaw)
+      ;[-1, 1].forEach((side, k) => {
+        const lz = side * (gate.half[2] + 0.05)
+        const x = gate.at[0] + lz * s
+        const z = gate.at[2] + lz * c
+        place.position.set(x, baseY + 1.3, z)
+        place.rotation.set(0, 0, 0)
+        place.scale.set(1, 1, 1)
+        place.updateMatrix()
+        poles.setMatrixAt(index * 2 + k, place.matrix)
+        place.position.y = baseY + 2.45
+        place.updateMatrix()
+        lamps.setMatrixAt(index * 2 + k, place.matrix)
+      })
+      place.position.set(gate.at[0], baseY + 2.3, gate.at[2])
+      place.rotation.set(0, Math.PI / 2 + gate.yaw, 0)
+      place.scale.set(gate.half[2] * 2 + 0.1, 1, 1)
+      place.updateMatrix()
+      tapes.setMatrixAt(index, place.matrix)
+    })
+    const tint = new THREE.Color()
+    for (let index = 0; index < count * 2; index++) lamps.setColorAt(index, tint.set('#8a7a5a'))
+    for (const mesh of [poles, lamps, tapes]) mesh.frustumCulled = false
+    return { poles, lamps, tapes, tint }
+  }, [route])
+  useEffect(() => () => { for (const mesh of [markers.poles, markers.lamps, markers.tapes]) { mesh.geometry.dispose(); (mesh.material as THREE.Material).dispose(); mesh.dispose() } }, [markers])
   useFrame(({ clock }) => {
     const r = race.current
-    markers.forEach(({ stripe }, index) => {
+    const { lamps, tint } = markers
+    const pulse = 0.65 + 0.35 * Math.sin(clock.elapsedTime * 5)
+    route.gates.forEach((_, index) => {
       const next = r.state === 'ready' ? index === 0 : index === r.next
       const passed = r.state !== 'ready' && index < r.next
-      const pulse = 0.65 + 0.35 * Math.sin(clock.elapsedTime * 5)
-      if (next) stripe.color.set('#ffb347').multiplyScalar(2.4 * pulse)
-      else if (passed) stripe.color.set('#6f8f6a').multiplyScalar(0.8)
-      else stripe.color.set('#8a7a5a').multiplyScalar(0.7)
+      if (next) tint.set('#ffb347').multiplyScalar(2.4 * pulse)
+      else if (passed) tint.set('#6f8f6a').multiplyScalar(0.8)
+      else tint.set('#8a7a5a').multiplyScalar(0.7)
+      lamps.setColorAt(index * 2, tint)
+      lamps.setColorAt(index * 2 + 1, tint)
     })
+    lamps.instanceColor!.needsUpdate = true
   })
-  return <>{markers.map(({ group }, index) => <primitive key={index} object={group} />)}</>
+  return <><primitive object={markers.poles} /><primitive object={markers.lamps} /><primitive object={markers.tapes} /></>
 }
