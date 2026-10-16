@@ -1,5 +1,6 @@
 packages:
   - "packages/*"
+  - "examples/*"
   - "vendor/als-web"
 allowBuilds:
   esbuild: true
