@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { contactShadow, surface, worldBoxGeometry, worldCylinderGeometry, worldPlaneGeometry, type GroundAO, type SurfaceName } from './look'
+import { contactShadow, surface, worldBoxGeometry, worldCylinderGeometry, worldPlaneGeometry, type GroundAO, type SurfaceName } from './surfaces'
 
 export type BoxCollider = { kind: 'box'; half: [number, number, number]; position: [number, number, number]; rotation: [number, number, number] }
 export type CylinderCollider = { kind: 'cylinder'; halfHeight: number; radius: number; position: [number, number, number]; rotation: [number, number, number] }

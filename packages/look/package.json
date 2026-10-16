@@ -11,6 +11,7 @@
     "./sky": "./src/sky.ts",
     "./grade": "./src/grade.ts",
     "./quality": "./src/quality.ts",
+    "./world": "./src/world/index.ts",
     "./luts/*": "./luts/*"
   },
   "scripts": {

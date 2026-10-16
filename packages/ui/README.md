@@ -32,6 +32,14 @@ pnpm --filter @blacksite/ui exec shadcn add <component> --yes --overwrite
 
 The CLI uses `packages/ui/components.json` and writes to `packages/ui/src/components`. Add its export to `src/index.ts`, then run typecheck and the focused UI tests. Keep console-specific behavior in `src/console` and `src/styles/console.css`.
 
+## Game HUD
+
+`@blacksite/ui/hud` is a small in-game HUD for full-screen scenes: `Screen` (grain and vignette around the canvas), `TitleCard`, `Hints`, `Prompt`, `Loading`, `Status`, `Actions`, and `TouchPad` with `useTouch` for a stick, a look area and buttons on phones. Importing it loads Barlow, Barlow Condensed and IBM Plex Mono and a stylesheet that makes `html`, `body` and `#root` a full-screen dark game page, so use it on game pages, not inside a site layout.
+
+```tsx
+import { Hints, Loading, Screen, TitleCard, TouchPad, useTouch } from "@blacksite/ui/hud"
+```
+
 ## GameFrame
 
 `GameFrame` fills its parent and centers a fixed-aspect stage. The default ratio is `"16/9"` and default fit is `"contain"`, leaving plain bars where needed. `fit="cover"` fills the parent and crops the stage. Set `--game-frame-bar` on the parent to choose the bar color; it defaults to black. `GameFrame.SafeArea` places HUD content inside the larger of CSS `env(safe-area-inset-*)` and the host-provided `--bleed-t/r/b/l` offsets on each side.

@@ -1,8 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { LevelBuilder } from '../../look/builder'
-import { groundMaterial, worldBoxGeometry, worldPlaneGeometry, type SurfaceName } from '../../look/look'
-import { apartmentBlock, deadTree, lada, shed, waterTower } from '../../look/props'
+import { LevelBuilder, groundMaterial, worldBoxGeometry, worldPlaneGeometry, apartmentBlock, deadTree, lada, shed, waterTower, type SurfaceName } from '@blacksite/look/world'
 import { staticSolid, type Solid, type Surface } from './hits'
 import { markerTexture, paperTarget, rangeMaterial, type RangeMaterial } from './materials'
 

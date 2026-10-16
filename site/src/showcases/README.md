@@ -43,12 +43,11 @@ Registered showcases replace the old demos listed in `content.ts` for that tool.
 ## Look
 
 - `@blacksite/look` handles fog, sky and post. With React Three Fiber use `<Look atmosphere="zone" quality={autoQuality()} />` from `@blacksite/look/r3f`. With plain three use `createLook(renderer, scene, camera, { atmosphere: 'zone', quality: autoQuality() })`, then call `look.render(dt)` instead of `renderer.render`.
-- `site/src/look/look.ts` has the CC0 surfaces: `surface()`, plus `meterSurface()` for geometry with UVs in metres. It also has the ground material and `internalPixelRatio()`.
-- `site/src/look/builder.ts` and `site/src/look/props.ts` cover level geometry and the ruins props: apartment blocks, Ladas, sheds, trees and the APC.
+- `@blacksite/look/world` has the CC0 surfaces: `surface()`, plus `meterSurface()` for geometry with UVs in metres. It also has the ground material, `internalPixelRatio()`, the `LevelBuilder` for level geometry, and the ruins props: apartment blocks, Ladas, sheds, trees and the APC.
 
 ## HUD and touch
 
-`site/src/look/hud.tsx` provides:
+`@blacksite/ui/hud` provides:
 
 - `Screen`, a wrapper that adds grain and the vignette;
 - `TitleCard`, the small in-canvas tag, for example `Armory · Firing Range`;

@@ -47,6 +47,30 @@ import { Look } from '@blacksite/look/r3f'
 
 `<Look>` creates the stack on mount, follows the canvas size and pixel ratio, and renders with `useFrame` priority 1, so R3F stops its own render. Props mirror the options above plus `aberration`, `overlay` (`{ scene, camera }`, added with `addOverlay` and removed when it changes) and `onReady(look)`.
 
+## World kit
+
+`@blacksite/look/world` is the ruins kit the showcases and examples build from. Its CC0 photographic surfaces (`cast`, `panel`, `slab`, `stained`, `paint`, `brick`, `rust`, `metal`, `corrugated`, `asphalt`, `dirt`, `grass`, `gravel`) ship in `assets/world/` and resolve through bundler `?url` imports, so a game that depends on the package gets hashed copies in its build with no public folder to set up.
+
+```ts
+import { LevelBuilder, groundMaterial, worldPlaneGeometry, apartmentBlock, lada, texturesReady } from '@blacksite/look/world'
+
+const level = new LevelBuilder()
+level.box([4, 3, 0.3], { name: 'panel' }, { at: [0, 1.5, -6] })
+apartmentBlock(level, { at: [-20, 0, -30], floors: 5, bays: 4, seed: 3 })
+lada(level, [3, 0, 2], 1.1)
+scene.add(level.build())
+await texturesReady()
+```
+
+- `surface(name, options)` returns a cached `MeshStandardMaterial` with colour and normal maps and ground-height AO; `meterSurface()` is the same with UVs in metres for geometry you made yourself.
+- `worldBoxGeometry`, `worldPlaneGeometry` and `worldCylinderGeometry` make primitives whose UVs tile at the surface's real size; `contactShadow` is a soft blob for anything resting on the ground.
+- `groundMaterial()` blends dirt, grass and gravel by world-space noise; `puddleMaterial()` is a dark mirror for decals on it.
+- `LevelBuilder` merges every box, cylinder and plane by material into one mesh each, adds contact shadows, and collects box and cylinder colliders for your physics.
+- Props: `apartmentBlock`, `lada`, `shed`, `waterTower`, `apc`, `deadTree`.
+- `createAtmosphere(scene, renderer)` is the plain-three overcast sky, sun and fog the showcases use without the composer; `internalPixelRatio()`, `isTouchDevice()`, `setAnisotropy()`, `preloadSurfaces()` and `texturesReady()` cover loading and resolution.
+
+Credits for the textures are in `assets/world/CREDITS.md`.
+
 ## Atmospheres
 
 An `Atmosphere` is plain data: `exposure`; `fog` as `{ color, near, far }` (`Fog`) or `{ color, density }` (`FogExp2`); `sky` as `{ zenith, horizon, ground, overcast }`; `sun` as `{ color, direction, strength }`; `fill` as `{ sky, ground, strength }`; and `grade` as `{ lut, vignette, split, aberration, grain }`. Colours are linear RGB triples. Set `grade.lut` to a `.cube` URL or `null`.

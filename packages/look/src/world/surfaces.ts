@@ -1,6 +1,5 @@
 import * as THREE from 'three'
-
-const root = `${import.meta.env.BASE_URL}look/`
+import { TEXTURES } from './textures'
 
 export type SurfaceName = 'cast' | 'panel' | 'slab' | 'stained' | 'paint' | 'brick' | 'rust' | 'metal' | 'corrugated' | 'asphalt' | 'dirt' | 'grass' | 'gravel'
 
@@ -37,7 +36,7 @@ function texture(file: string, color: boolean) {
   if (cached) return cached
   let done: (value: unknown) => void = () => {}
   pending.push(new Promise(resolve => { done = resolve }))
-  const loaded = loader.load(`${root}${file}`, done, undefined, done)
+  const loaded = loader.load(TEXTURES[file]!, done, undefined, done)
   loaded.wrapS = loaded.wrapT = THREE.RepeatWrapping
   loaded.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace
   loaded.anisotropy = anisotropy

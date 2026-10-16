@@ -1,8 +1,6 @@
 import * as THREE from 'three'
 import type { Obstacle, Spawn } from '@blacksite/relay'
-import { LevelBuilder, type Collider } from '../../look/builder'
-import { groundMaterial, puddleMaterial, worldPlaneGeometry } from '../../look/look'
-import { apartmentBlock, apc, deadTree, lada, shed, waterTower } from '../../look/props'
+import { LevelBuilder, groundMaterial, puddleMaterial, worldPlaneGeometry, apartmentBlock, apc, deadTree, lada, shed, waterTower, type Collider } from '@blacksite/look/world'
 
 export const HALF = { x: 22, z: 14 }
 
