@@ -40,11 +40,21 @@ export function damagedEdgeGeometry(points: ReadonlyArray<Vec3>, normal: Vec3, s
   return geometry;
 }
 
-interface EdgeFace { key: string; shape: string; bond: BondDef; chunk: number; side: number }
+interface EdgeFace { key: string; shape: number; bond: BondDef; chunk: number; side: number }
 interface EdgeBatch { mesh: PooledBatchedMesh; material: Material; instances: number; vertices: number; capacity: number }
-interface EdgeEntry { shape: string; chunk: number; batch: EdgeBatch; geometry: number; instance: number; vertices: number }
+interface EdgeEntry { shape: number; chunk: number; batch: EdgeBatch; geometry: number; instance: number; vertices: number }
 
 /** Authored box cuts have no mesh face metadata, so exposed connection sections supply the edges. */
+function signature(...parts: Array<number | ReadonlyArray<number> | undefined>): number {
+  let hash = 0, weight = 1;
+  for (const part of parts) {
+    if (part === undefined) { weight = weight * 1.618 + 0.37; continue; }
+    if (typeof part === 'number') { hash += part * weight; weight = weight * 1.618 + 0.37; continue; }
+    for (let i = 0; i < part.length; i++) { hash += part[i]! * weight; weight = weight * 1.618 + 0.37; }
+  }
+  return hash;
+}
+
 export class ExposedFractureEdges {
   readonly group = new Group();
   readonly stats = { edgeFaces: 0, edgeBatches: 0, edgeRebuilds: 0, edgeRebuiltThisUpdate: false,
@@ -56,8 +66,11 @@ export class ExposedFractureEdges {
   private batches: EdgeBatch[] = [];
   private readonly entries = new Map<string, EdgeEntry>();
   private poolRevision = -1;
+  private backlog = false;
+  private grownVertices = 0;
+  private grownInstances = 0;
 
-  constructor(private readonly manifest: DestructibleManifest, private readonly pool: GPUTransformPool, private readonly materialFor: (fragment: FragmentDef) => Material, private readonly profile = false) {
+  constructor(private readonly manifest: DestructibleManifest, private readonly pool: GPUTransformPool, private readonly materialFor: (fragment: FragmentDef) => Material, private readonly profile = false, private readonly facesPerUpdate = Number.POSITIVE_INFINITY) {
     this.group.name = 'cascade-exposed-fracture-edges';
     this.byId = new Map(manifest.fragments.map((fragment, index) => [fragment.id, index]));
   }
@@ -71,7 +84,7 @@ export class ExposedFractureEdges {
   update(frame?: SimulationFrame | null): void {
     this.resetUpdateStats();
     if (!frame) { this.clear(); return; }
-    if (this.lastTick === frame.tick && this.lastBondRevision === (frame.bondRevision ?? 0) && this.poolRevision === this.pool.revision) return;
+    if (!this.backlog && this.lastTick === frame.tick && this.lastBondRevision === (frame.bondRevision ?? 0) && this.poolRevision === this.pool.revision) return;
     this.lastTick = frame.tick; this.lastBondRevision = frame.bondRevision ?? 0;
     let phaseAt = this.profile ? performance.now() : 0;
     const visible = new Map<number, number>();
@@ -97,9 +110,9 @@ export class ExposedFractureEdges {
       // IDs survive geometry changes in runtime sections. Compare the geometry inputs,
       // not object identity (worker snapshots clone bond definitions).
       const section = bond.section;
-      const shape = `${bond.normal}|${bond.area}|${section
-        ? `${section.point}|${section.tangent1}|${section.tangent2}|${section.inertia1}|${section.inertia2}`
-        : `${bond.centroid ?? ''}`}`;
+      const shape = section
+        ? signature(bond.area, bond.normal, section.point, section.tangent1, section.tangent2, section.inertia1, section.inertia2)
+        : signature(bond.area, bond.normal, bond.centroid);
       if (va >= 0) { const key = `${bond.id}:a:${va}`; faces.set(key, { key, shape, bond, chunk: va, side: 1 }); }
       if (vb >= 0) { const key = `${bond.id}:b:${vb}`; faces.set(key, { key, shape, bond, chunk: vb, side: -1 }); }
     }
@@ -116,8 +129,11 @@ export class ExposedFractureEdges {
     }
     if (this.profile) { const now = performance.now(); this.timings.removalMs = now - phaseAt; phaseAt = now; }
     const pending = new Map<Material, Array<{ face: EdgeFace; geometry: BufferGeometry; vertices: number }>>();
+    let budget = this.facesPerUpdate;
+    this.backlog = false;
     for (const face of faces.values()) {
       if (this.entries.has(face.key)) continue;
+      if (budget-- <= 0) { this.backlog = true; break; }
       const fragment = this.manifest.fragments[face.chunk]!;
       const { point, tangent1, tangent2, half1, half2 } = connectionRectangle(face.bond, fragment);
       const points: Vec3[] = [[-1,-1], [1,-1], [1,1], [-1,1]].map(([u, v]) => [
@@ -171,8 +187,10 @@ export class ExposedFractureEdges {
   }
 
   private createBatch(material: Material, instances: number, vertices: number): EdgeBatch {
-    const capacity = Math.max(4096, Math.ceil(vertices * 1.5));
-    const mesh = new PooledBatchedMesh(this.pool, Math.max(32, Math.ceil(instances * 1.5)), capacity, material);
+    const capacity = Math.max(4096, Math.ceil(vertices * 1.5), this.grownVertices * 2);
+    const instanceCapacity = Math.max(32, Math.ceil(instances * 1.5), this.grownInstances * 2);
+    this.grownVertices = capacity; this.grownInstances = instanceCapacity;
+    const mesh = new PooledBatchedMesh(this.pool, instanceCapacity, capacity, material);
     mesh.name = 'cascade-damaged-edges'; mesh.frustumCulled = false; mesh.perObjectFrustumCulled = false; mesh.sortObjects = false;
     mesh.castShadow = false; mesh.receiveShadow = true;
     const batch = { mesh, material, instances: 0, vertices: 0, capacity };
@@ -184,6 +202,7 @@ export class ExposedFractureEdges {
   private clear(): void {
     for (const { mesh } of this.batches) { this.group.remove(mesh); mesh.dispose(); }
     this.batches = []; this.entries.clear();
+    this.backlog = false; this.grownVertices = this.grownInstances = 0;
     this.stats.edgeFaces = this.stats.edgeBatches = 0;
     this.lastTick = -Infinity; this.lastBondRevision = this.poolRevision = -1;
   }

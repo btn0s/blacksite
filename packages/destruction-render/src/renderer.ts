@@ -32,6 +32,8 @@ export interface DestructionRendererOptions {
   showConnections?: boolean;
   effects?: boolean;
   particleCapacity?: number;
+  secondaryAddsPerUpdate?: number;
+  edgeFacesPerUpdate?: number;
   transformCapacity?: number;
   reducedMotion?: boolean;
   materialFor?: (fragment: FragmentDef, surface: FragmentSurface) => Material | undefined;
@@ -131,8 +133,8 @@ export class DestructionRenderer {
     this.neighbours = manifest.fragments.map(() => []);
     const materialFor = (fragment: FragmentDef, surface: FragmentSurface): Material =>
       options.materialFor?.(fragment, surface) ?? this.defaultMaterial(fragment, surface);
-    this.secondary = new SecondaryFragmentRenderer(materialFor, this.transformPool, options.profile);
-    this.edges = new ExposedFractureEdges(manifest, this.transformPool, fragment => materialFor(fragment, 'fracture'), options.profile);
+    this.secondary = new SecondaryFragmentRenderer(materialFor, this.transformPool, options.profile, options.secondaryAddsPerUpdate);
+    this.edges = new ExposedFractureEdges(manifest, this.transformPool, fragment => materialFor(fragment, 'fracture'), options.profile, options.edgeFacesPerUpdate);
     this.connections = new ConnectionOverlay(manifest, this.transformPool);
     this.connections.object.visible = options.showConnections ?? false;
     const surfaceGroups = new Map<Material, Array<SurfaceEntry>>();

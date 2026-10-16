@@ -106,6 +106,7 @@ export class SecondaryFragmentRenderer {
     ) => Material,
     pool?: GPUTransformPool,
     private readonly profile = false,
+    private readonly addsPerUpdate = Number.POSITIVE_INFINITY,
   ) {
     this.ownsPool = !pool;
     this.pool = pool ?? new GPUTransformPool(MAX_SECONDARY_FRAGMENTS + 1);
@@ -237,9 +238,14 @@ export class SecondaryFragmentRenderer {
     }
     const added: Array<{ fragment: SecondaryFragmentDef; surfaces: Array<PendingSurface> }> = [];
     const demand = new Map<string, { instances: number; vertices: number }>();
+    let backlog = false;
     for (const fragment of current.values()) {
       if (this.entries.has(fragment.id)) {
         continue;
+      }
+      if (added.length >= this.addsPerUpdate) {
+        backlog = true;
+        break;
       }
       const surfaces = this.surfaces(fragment);
       for (const surface of surfaces) {
@@ -276,6 +282,8 @@ export class SecondaryFragmentRenderer {
     for (const { fragment, surfaces } of added) {
       this.insert(fragment, surfaces, demand);
     }
+    if (added.length) this.poseFrame = undefined;
+    if (backlog) return;
     this.revision = frame.revision;
     this.count = frame.fragments.length;
   }
