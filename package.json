@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@blacksite/armory": "workspace:*",
+    "@blacksite/input": "workspace:*",
     "@blacksite/relay": "workspace:*",
     "@blacksite/subject": "workspace:*",
     "@blacksite/subject-fpp": "workspace:*",

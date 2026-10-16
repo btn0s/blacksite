@@ -12,6 +12,7 @@
     "./navigation": "./src/useConsoleNavigation.ts",
     "./glyphs": "./src/glyphs.tsx",
     "./touch": "./src/touch.tsx",
+    "./touch-walk": "./src/touch-walk.ts",
     "./observations": "./src/observations.ts",
     "./settings": "./src/settings.ts",
     "./aim-assist": "./src/aimAssist.ts"
