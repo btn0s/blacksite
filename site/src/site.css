@@ -222,7 +222,6 @@ code, kbd { font-family: var(--mono); }
 .stage-poster:hover::before { background: #0c0e0b50; }
 .stage-play { position: relative; padding: 14px 22px; background: var(--accent); color: var(--accent-ink); font: 600 18px var(--display); letter-spacing: 0.12em; text-transform: uppercase; }
 .stage-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px var(--pad); border-bottom: 1px solid var(--line); background: var(--bg-2); }
-.stage-title { font: 500 12px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
 .stage-actions { display: flex; align-items: center; gap: 8px; }
 .stage-actions a, .stage-actions button, .stage-exit {
   display: inline-flex;

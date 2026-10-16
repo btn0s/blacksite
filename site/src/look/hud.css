@@ -8,12 +8,9 @@ canvas { display: block; touch-action: none; image-rendering: pixelated; filter:
 .hud-grain { position: absolute; inset: -50%; pointer-events: none; opacity: 0.075; mix-blend-mode: overlay; background-size: 160px 160px; animation: hud-grain 0.5s steps(4) infinite; }
 @keyframes hud-grain { 0% { transform: translate(0, 0); } 25% { transform: translate(-37px, 21px); } 50% { transform: translate(18px, -44px); } 75% { transform: translate(-13px, 33px); } 100% { transform: translate(0, 0); } }
 
-.hud-title { position: absolute; z-index: 5; top: calc(18px + env(safe-area-inset-top)); left: calc(20px + env(safe-area-inset-left)); display: grid; gap: 2px; pointer-events: none; text-shadow: 0 1px 10px #000a; }
-.hud-title span { font: 500 10.5px/1.4 'IBM Plex Mono', ui-monospace, monospace; letter-spacing: 0.18em; text-transform: uppercase; color: #e2a23b; }
-.hud-title strong { font: 600 30px/1 'Barlow Condensed', 'Arial Narrow', sans-serif; letter-spacing: 0.04em; text-transform: uppercase; color: #f0ecdb; }
-.hud-title em { font-style: normal; color: #cfcbb8; font-size: 13.5px; max-width: 34ch; }
+.hud-title { position: absolute; z-index: 5; top: calc(14px + env(safe-area-inset-top)); left: calc(16px + env(safe-area-inset-left)); pointer-events: none; font: 500 10.5px/1.4 'IBM Plex Mono', ui-monospace, monospace; letter-spacing: 0.18em; text-transform: uppercase; color: #e2a23b; text-shadow: 0 1px 8px #000c; }
 
-.hud-hints { position: absolute; z-index: 5; left: calc(20px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap; gap: 6px 14px; max-width: min(760px, calc(100% - 40px)); pointer-events: none; color: #d8d4c1; font-size: 13px; text-shadow: 0 1px 6px #000; }
+.hud-hints { position: absolute; z-index: 5; left: calc(16px + env(safe-area-inset-left)); bottom: calc(16px + env(safe-area-inset-bottom)); display: flex; gap: 12px; max-width: calc(100% - 32px); overflow: hidden; animation: hud-fade 1s ease 8s forwards; pointer-events: none; color: #d8d4c1; font-size: 13px; text-shadow: 0 1px 6px #000; }
 .hud-hints span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .hud-hints kbd { padding: 1px 6px; border: 1px solid #ffffff38; border-bottom-width: 2px; border-radius: 3px; background: #0c0e0bb0; font: 500 11px/1.5 'IBM Plex Mono', ui-monospace, monospace; color: #f0ecdb; }
 
@@ -37,9 +34,22 @@ canvas { display: block; touch-action: none; image-rendering: pixelated; filter:
 .hud-buttons button { min-height: 50px; padding: 4px; border: 1px solid #f0ecdb50; border-radius: 4px; background: #0c0e0b99; color: #f0ecdb; font: 600 14px 'Barlow Condensed', sans-serif; letter-spacing: 0.1em; text-transform: uppercase; touch-action: none; -webkit-tap-highlight-color: transparent; }
 .hud-buttons button[data-pressed] { background: #e2a23bcc; color: #1a1307; border-color: #e2a23b; }
 
+.hud-actions { position: absolute; z-index: 8; right: calc(18px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); display: flex; gap: 8px; }
+.hud-actions button { min-width: 108px; min-height: 46px; padding: 6px 16px; border: 1px solid #f0ecdb50; border-radius: 3px; background: #0c0e0bb8; color: #f0ecdb; font: 600 15px 'Barlow Condensed', sans-serif; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: background 160ms ease, border-color 160ms ease; }
+.hud-actions button:first-child { border-color: #e2a23b; background: #e2a23bd8; color: #1a1307; }
+.hud-actions button:hover:not(:disabled) { border-color: #f0ecdb; }
+.hud-actions button:disabled { opacity: 0.45; cursor: default; }
+.hud-status { position: absolute; z-index: 5; top: calc(18px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: grid; justify-items: center; gap: 2px; pointer-events: none; text-shadow: 0 1px 10px #000c; }
+.hud-status span { font: 500 10.5px 'IBM Plex Mono', monospace; letter-spacing: 0.2em; text-transform: uppercase; color: #a9b57e; }
+.hud-status strong { font: 600 22px/1 'Barlow Condensed', sans-serif; letter-spacing: 0.12em; text-transform: uppercase; color: #f0ecdb; }
+.hud-status--alert span { color: #ff6a4a; }
+.hud-status--alert strong { color: #ffd9c8; animation: hud-blink 0.5s steps(2) infinite; }
+@keyframes hud-fade { to { opacity: 0; } }
+@keyframes hud-blink { 50% { opacity: 0.55; } }
+
 @media (max-width: 640px) {
-  .hud-title strong { font-size: 24px; }
-  .hud-title em { display: none; }
+  .hud-actions button { min-width: 96px; }
+  .hud-status { top: auto; bottom: calc(80px + env(safe-area-inset-bottom)); }
   .hud-hints { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .hud-grain { animation: none; } }

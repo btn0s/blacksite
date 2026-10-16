@@ -107,8 +107,8 @@ function App() {
     <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 70, near: 0.05, far: 600, position: [-4, 2, 0] }} gl={{ antialias: true, powerPreference: 'high-performance' }} onCreated={state => attachPerfProbe(state.gl)}>
       {ready && <Scene onFirstPerson={setFirstPerson} />}
     </Canvas>
-    <TitleCard kicker="Characters · ALS Web" title="Checkpoint" line="One body, every way through the ruins." />
-    <Hints visible={!touch} items={[['WASD', 'Move'], ['Shift', 'Sprint · tap to roll'], ['Space', 'Jump · mantle'], ['Ctrl', 'Crouch'], ['Alt', 'Walk'], ['X', 'Ragdoll'], ['V', 'View'], ['RMB', 'Aim']]} />
+    <TitleCard title="ALS Web · Checkpoint" />
+    <Hints visible={!touch} items={[['WASD', 'Move'], ['Shift', 'Sprint'], ['Space', 'Mantle'], ['V', 'View'], ['X', 'Ragdoll']]} />
     <Prompt text="Click to look around" visible={ready && !touch && !locked} />
     {touch && ready && <Touch />}
     <Loading title="Checkpoint" detail={progress < 0.9 ? 'Loading the character' : 'Laying the concrete'} progress={progress} done={ready} />

@@ -10,7 +10,6 @@ export type ShowcaseDemo = {
   id: string
   frame?: string
   title: string
-  setting: string
   summary: string
   keyboard: Control[]
   touch: Control[]
@@ -65,8 +64,8 @@ export const tools: Tool[] = [
     name: 'Characters',
     codename: 'ALS Web',
     status: 'Usable',
-    tagline: 'A full animated body that moves like a modern shooter character.',
-    pitch: 'Your game gets a character that walks, runs, sprints, crouches, mantles over ledges, rolls, ragdolls and aims, with first- and third-person cameras. It is a port of ALS Refactored, the Unreal locomotion system, to three.js.',
+    tagline: 'An animated player body with first- and third-person cameras.',
+    pitch: 'A player character that walks, sprints, crouches, mantles, rolls, ragdolls and aims, in first or third person. It is a three.js port of ALS Refactored, the Unreal locomotion system.',
     packages: ['als-ue5-r3f', '@blacksite/subject'],
     thumbnail: 'thumbs/characters.webp',
     material: 'cast',
@@ -74,11 +73,10 @@ export const tools: Tool[] = [
       id: 'checkpoint',
       frame: 'characters',
       title: 'Checkpoint',
-      setting: 'An abandoned zone checkpoint on an overcast afternoon.',
-      summary: 'Run the yard, vault the barriers, climb onto the loading dock and the rooftops, and drop into a ragdoll whenever you like.',
+      summary: 'A zone checkpoint with barriers, containers, a loading dock and a ruined warehouse to climb.',
       keyboard: moveKeys,
       touch: moveTouch,
-      tryThis: ['Sprint at the low concrete barriers and press Space to vault them.', 'Climb the containers and the loading dock: every ledge you can reach is a mantle.', 'Tap Shift while running to roll, then press X to go limp.', 'Press V to see the same body from first person.'],
+      tryThis: ['Sprint at a barrier and press Space to vault it.', 'Climb the containers and the loading dock.', 'Tap Shift while running to roll. Press X to ragdoll.', 'Press V for first person, in the same body.'],
       live: true,
     }],
     agent: {
@@ -108,7 +106,6 @@ export const tools: Tool[] = [
     demos: [{
       id: 'air-strike',
       title: 'Air Strike',
-      setting: 'A Soviet apartment block at the edge of an industrial zone.',
       summary: 'Call in an air strike on a multi-storey concrete block and watch it come apart from a safe distance.',
       keyboard: [],
       touch: [],
@@ -128,12 +125,12 @@ export const tools: Tool[] = [
     name: 'Weapons',
     codename: 'Armory',
     status: 'Usable',
-    tagline: 'First-person arms and guns that feel right.',
-    pitch: 'Your game gets rigged first-person arms holding a rifle or a pistol, with firing, reloading, aiming and recoil. Shots are resolved by a weapon runtime the server can re-run, so hits can be checked in multiplayer.',
+    tagline: 'First-person arms with a rifle and a pistol.',
+    pitch: 'Rigged first-person arms with a rifle and a pistol: fire, reload, aim and recoil. A weapon runtime resolves shots, and the server can re-run it to check hits in multiplayer.',
     packages: ['@blacksite/subject-fpp', '@blacksite/armory'],
     material: 'metal',
     demos: [{
-      id: 'range', frame: 'fpp', title: 'Firing range', setting: 'First-person arms with a rifle and a pistol.', summary: 'Fire, reload, aim down sights and switch weapons.',
+      id: 'range', frame: 'fpp', title: 'Firing range', summary: 'Fire, reload, aim down sights and switch weapons.',
       keyboard: [{ action: 'Look', keys: ['Click', 'Mouse'] }, { action: 'Move', keys: ['W', 'A', 'S', 'D'] }, { action: 'Fire', keys: ['Left mouse'] }, { action: 'Aim', keys: ['Right mouse'] }, { action: 'Reload', keys: ['R'] }],
       touch: [], tryThis: [], live: true,
     }],
@@ -150,12 +147,12 @@ export const tools: Tool[] = [
     name: 'Multiplayer',
     codename: 'Relay',
     status: 'Usable v0',
-    tagline: 'Rooms where other players animate exactly like you do.',
-    pitch: 'Your game gets rooms on Colyseus, or in one browser tab for demos and tests. Each player moves their own body, the server checks hits, and remote players replay the full character animation.',
+    tagline: 'Rooms where remote players run the full character animation.',
+    pitch: 'Rooms on Colyseus, or inside one browser tab for demos and tests. Each player moves their own body, the server checks hits, and remote players run the full character animation.',
     packages: ['@blacksite/relay', '@blacksite/subject'],
     material: 'corrugated',
     demos: [{
-      id: 'arena', frame: 'mp', title: 'Arena', setting: 'Two players in one in-browser room, side by side.', summary: 'Each half of the screen is a separate player connected to the same room.',
+      id: 'arena', frame: 'mp', title: 'Arena', summary: 'Each half of the screen is a separate player connected to the same room.',
       keyboard: [{ action: 'Look', keys: ['Click', 'Mouse'] }, { action: 'Move', keys: ['W', 'A', 'S', 'D'] }, { action: 'First or third person', keys: ['V'] }],
       touch: [], tryThis: [], live: true,
     }],
@@ -172,12 +169,12 @@ export const tools: Tool[] = [
     name: 'AI',
     codename: 'Warden',
     status: 'Experimental',
-    tagline: 'Squads that take cover, flank and work together.',
-    pitch: 'Your game gets enemy squads that read the space, pick cover, flank and coordinate, simulated deterministically in a worker so every fight can be replayed.',
+    tagline: 'Enemy squads that take cover and flank.',
+    pitch: 'Enemy squads that pick cover, flank and coordinate. The simulation is deterministic and runs in a worker, so every fight can be replayed.',
     packages: ['@blacksite/warden', '@blacksite/warden-react'],
     material: 'brick',
     demos: [{
-      id: 'squad', frame: 'warden', title: 'Squad', setting: 'A tactical simulation of two squads.', summary: 'Watch the squads move, take cover and trade fire.',
+      id: 'squad', frame: 'warden', title: 'Squad', summary: 'Watch the squads move, take cover and trade fire.',
       keyboard: [], touch: [], tryThis: [], live: true,
     }],
     agent: {
@@ -192,8 +189,8 @@ export const tools: Tool[] = [
     slug: 'input',
     name: 'Input and UI',
     status: 'Usable',
-    tagline: 'Every device, and the menus around the game.',
-    pitch: 'Your game gets one input layer for keyboard, mouse, gamepad and touch, with actions the game names itself, plus menus, pause and settings screens that work with a controller.',
+    tagline: 'Keyboard, mouse, gamepad and touch, plus menus.',
+    pitch: 'One input layer for keyboard, mouse, gamepad and touch, bound to actions the game names. Plus menus, pause and settings screens that work with a controller.',
     packages: ['@blacksite/input', '@blacksite/ui'],
     material: 'rust',
     demos: [],

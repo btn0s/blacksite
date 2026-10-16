@@ -21,7 +21,6 @@ function Demo({ tool, demo, first }: { tool: Tool; demo: ShowcaseDemo; first: bo
       : <div className="stage stage--soon"><div><p className="eyebrow">Next up</p><h3>{demo.title}</h3><p>{demo.summary}</p></div></div>}
     <div className="showcase-info">
       <div className="showcase-about">
-        <p className="eyebrow">Demo · {demo.setting}</p>
         <h3>{demo.title}</h3>
         <p>{demo.summary}</p>
         {demo.tryThis.length > 0 && <ul className="try">{demo.tryThis.map(item => <li key={item}>{item}</li>)}</ul>}

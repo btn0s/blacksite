@@ -37,7 +37,6 @@ export default function DemoFrame({ frame, title, poster, autoplay }: { frame: s
       {fullscreen && <button type="button" className="stage-exit" onClick={() => void toggleFullscreen()}>Exit fullscreen</button>}
     </div>
     <div className="stage-bar">
-      <span className="stage-title">{title}</span>
       <span className="stage-actions">
         <a href={asset(`frames/${frame}.html`)} target="_blank" rel="noreferrer">Open in new tab</a>
         <button type="button" onClick={() => void toggleFullscreen()}>{fullscreen ? 'Exit fullscreen' : 'Fullscreen'}</button>

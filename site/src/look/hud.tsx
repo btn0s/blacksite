@@ -29,8 +29,8 @@ export function Screen({ children }: { children: ReactNode }) {
   </div>
 }
 
-export function TitleCard({ kicker, title, line }: { kicker: string; title: string; line?: string }) {
-  return <div className="hud-title"><span>{kicker}</span><strong>{title}</strong>{line && <em>{line}</em>}</div>
+export function TitleCard({ title }: { title: string }) {
+  return <div className="hud-title">{title}</div>
 }
 
 export function Loading({ title, detail, progress, done }: { title: string; detail: string; progress?: number; done: boolean }) {
@@ -114,4 +114,12 @@ export function useTouch() {
     return () => { query.removeEventListener('change', update); removeEventListener('touchstart', onTouch) }
   }, [])
   return touch
+}
+
+export function Actions({ items }: { items: Array<{ id: string; label: string; disabled?: boolean; onPress: () => void }> }) {
+  return <div className="hud-actions">{items.map(item => <button key={item.id} type="button" disabled={item.disabled} onClick={event => { event.stopPropagation(); item.onPress() }} onPointerDown={event => event.stopPropagation()}>{item.label}</button>)}</div>
+}
+
+export function Status({ label, value, tone }: { label: string; value: string; tone?: 'alert' }) {
+  return <div className={`hud-status${tone ? ` hud-status--${tone}` : ''}`}><span>{label}</span><strong>{value}</strong></div>
 }
