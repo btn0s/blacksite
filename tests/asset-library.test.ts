@@ -79,6 +79,14 @@ it('writes credits grouped by licence with attribution for CC BY', () => {
   expect(markdown).toContain('"A" by Ann, CC BY 4.0');
 });
 
+it.each(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause'])('requires and carries the complete %s notice into credits', licence => {
+  const base = { ...catalog.assets[0], licence, attribution: `Fixture, ${licence}` };
+  expect(library.validate({ assets: [base] }).join()).toContain('licenceNotice');
+  const licenceNotice = 'Copyright (c) Fixture\n\nPermission is hereby granted, free of charge, to any person obtaining a copy.';
+  expect(library.validate({ assets: [{ ...base, licenceNotice }] })).toEqual([]);
+  expect(library.creditsMarkdown([{ ...base, licenceNotice }])).toContain(licenceNotice);
+});
+
 it('adds a material to a project with web-ready maps and credits', async () => {
   const project = path.join(scratch, 'game');
   const { mkdirSync } = await import('node:fs');
@@ -98,6 +106,35 @@ it('adds a material to a project with web-ready maps and credits', async () => {
   expect(orm[2]).toBeLessThan(6);
   expect(readFileSync(path.join(project, 'CREDITS.md'), 'utf8')).toContain('test-concrete');
   expect(JSON.parse(readFileSync(path.join(project, 'assets.credits.json'), 'utf8')).assets[0].files).toHaveLength(3);
+  for (const file of JSON.parse(readFileSync(path.join(project, 'assets.credits.json'), 'utf8')).assets[0].files) expect(file.sha256).toMatch(/^[0-9a-f]{64}$/);
+}, 60_000);
+
+it('reuses a verified build and rebuilds when an output is missing', async () => {
+  const fixture = JSON.parse(readFileSync(path.join(scratch, 'catalog.json'), 'utf8')).assets[0];
+  const out = path.join(scratch, 'repeat-build');
+  const first = await library.buildAsset(fixture, { out, ktx2: false });
+  const second = await library.buildAsset(fixture, { out, ktx2: false });
+  expect(first.cached).toBe(false);
+  expect(second.cached).toBe(true);
+  expect(second.manifest).toEqual(first.manifest);
+  rmSync(path.join(out, '1k/c.webp'));
+  expect((await library.buildAsset(fixture, { out, ktx2: false })).cached).toBe(false);
+}, 60_000);
+
+it('preserves credits for installed assets if a later asset fails', async () => {
+  const fixtureFile = path.join(scratch, 'catalog.json');
+  const previous = readFileSync(fixtureFile, 'utf8');
+  const fixture = JSON.parse(previous);
+  fixture.assets.push({ ...fixture.assets[0], id: 'missing-material', files: [{ name: 'missing.png', url: `${origin}/missing.png` }] });
+  writeFileSync(fixtureFile, JSON.stringify(fixture));
+  const project = path.join(scratch, 'partial-game');
+  const { mkdirSync } = await import('node:fs');
+  mkdirSync(project);
+  try {
+    await expect(library.runLibrary('add', ['test-concrete', 'missing-material', '--project', project, '--no-ktx2'])).rejects.toThrow('HTTP 404');
+    expect(readFileSync(path.join(project, 'CREDITS.md'), 'utf8')).toContain('test-concrete');
+    expect(existsSync(path.join(project, 'public/assets/library/test-concrete/1k/c.webp'))).toBe(true);
+  } finally { writeFileSync(fixtureFile, previous); }
 }, 60_000);
 
 it.skipIf(!hasFfmpeg)('splits a recording into takes and encodes Opus and AAC', async () => {

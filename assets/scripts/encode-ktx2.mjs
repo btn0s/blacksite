@@ -58,14 +58,14 @@ export async function encodeDirectory(source, out, options = {}) {
       }
       const target = name.replace(/\.[a-z]+$/i, '.ktx2')
       await writeFile(path.join(out, target), chosen.data)
-      const row = { file: target, source: name, width: meta.width, height: meta.height, mode: chosen.mode, bytes: chosen.data.length, sourceBytes: input.length, ...(chosen.quality === undefined ? {} : { psnr: Number(chosen.quality.toFixed(1)) }) }
+      const row = { file: target, source: name, width: meta.width, height: meta.height, mode: chosen.mode, bytes: chosen.data.length, sourceBytes: input.length, ...(chosen.quality === undefined ? {} : { psnr: Number(chosen.quality.toFixed(1)), withinThreshold: chosen.quality >= threshold }) }
       results.push(row)
-      options.log?.(`${target}: ${row.mode}, ${Math.round(row.bytes / 1024)} KB${row.psnr === undefined ? '' : `, ${row.psnr} dB`}`)
+      options.log?.(`${target}: ${row.mode}, ${Math.round(row.bytes / 1024)} KB${row.psnr === undefined ? '' : `, ${row.psnr} dB${row.withinThreshold ? '' : ' BELOW QUALITY THRESHOLD'}`}`)
     }
   } finally {
     await rm(scratch, { recursive: true, force: true })
   }
-  return { threshold, verified: verify, files: results }
+  return { threshold, verified: verify, withinThreshold: verify ? results.every(row => row.withinThreshold) : null, files: results }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

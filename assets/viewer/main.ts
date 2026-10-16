@@ -5,7 +5,7 @@ import { HDRLoader } from 'three/addons/loaders/HDRLoader.js'
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import { autoQuality, createLook } from '@blacksite/look'
+import { applyStochasticTiling, autoQuality, createLook } from '@blacksite/look'
 
 type Build = { ship: string[]; files: Record<string, number>; bytes: number; ktx2Bytes?: number; budget: number; withinBudget: boolean; over: string[]; triangles?: number; size?: number[]; animations?: string[]; skinned?: boolean; variations?: { file: string; fallback: string; seconds: number }[] }
 type Asset = { id: string; title: string; category: string; tags: string[]; source: { url: string; site?: string }; author: string; licence: string; attribution: string; use: string; scale?: { tile?: number }; sourceBytes: number; build: Build }
@@ -67,6 +67,7 @@ const materials = assets.filter(asset => asset.category === 'material')
 const skies = assets.filter(asset => asset.category === 'hdri')
 const models = assets.filter(asset => MODELS.includes(asset.category))
 const sounds = assets.filter(asset => SOUNDS.includes(asset.category))
+const orderedSurface = (asset: Asset) => asset.tags.some(tag => ['brick', 'tile', 'planks', 'grate', 'decal'].includes(tag)) || /pavers|shutter/.test(asset.id)
 
 function fillSelect(select: HTMLSelectElement, options: [string, string][], value?: string) {
   select.replaceChildren(...options.map(([key, label]) => { const option = el('option', '', label) as HTMLOptionElement; option.value = key; return option }))
@@ -93,12 +94,13 @@ function texture(asset: Asset, map: 'c' | 'n' | 'orm', compressed: boolean) {
   return textureCache.get(key)!
 }
 
-async function material(asset: Asset, metres: number, compressed = $<HTMLInputElement>('#ktx2').checked) {
+async function material(asset: Asset, metres: number, compressed = $<HTMLInputElement>('#ktx2').checked, reduceTiling = false) {
   const [map, normalMap, orm] = await Promise.all([texture(asset, 'c', compressed), texture(asset, 'n', compressed), texture(asset, 'orm', compressed)])
   const tile = asset.scale?.tile ?? 2
   const repeat = metres / tile
   const result = new THREE.MeshStandardMaterial({ map: map.clone(), normalMap: normalMap.clone(), roughnessMap: orm.clone(), metalnessMap: orm.clone(), aoMap: orm.clone(), metalness: 1, roughness: 1, transparent: false, alphaTest: asset.tags.includes('decal') ? 0.5 : 0 })
   for (const t of [result.map, result.normalMap, result.roughnessMap, result.metalnessMap, result.aoMap]) { t!.repeat.set(repeat, repeat); t!.needsUpdate = true }
+  if (reduceTiling && !orderedSurface(asset)) applyStochasticTiling(result)
   return result
 }
 
@@ -184,9 +186,22 @@ async function layout() {
   for (const model of placed) { model.position.x -= x / 2; world.add(model) }
 }
 
+let floorRevision = 0
+function disposeFloorMaterial(value: THREE.MeshStandardMaterial) {
+  for (const map of new Set([value.map, value.normalMap, value.roughnessMap, value.metalnessMap, value.aoMap])) map?.dispose()
+  value.dispose()
+}
 async function applyFloor() {
+  const revision = ++floorRevision
   const asset = materials.find(m => m.id === $<HTMLSelectElement>('#floor').value)
-  if (asset) floor.material = await material(asset, 60)
+  if (!asset) return
+  const reduce = $<HTMLInputElement>('#reduce-tiling')
+  reduce.disabled = orderedSurface(asset)
+  $('#tiling-note').textContent = reduce.disabled ? 'Ordered surface: joints and grain preserved.' : reduce.checked ? 'Reduced repetition for this surface.' : 'Original repeating texture.'
+  const next = await material(asset, 60, $<HTMLInputElement>('#ktx2').checked, reduce.checked)
+  if (revision !== floorRevision) { disposeFloorMaterial(next); return }
+  disposeFloorMaterial(floor.material)
+  floor.material = next
 }
 
 function thumbFrame(object: THREE.Object3D, angle = 0.7) {
@@ -263,6 +278,7 @@ function section(title: string, list: Asset[], card: (asset: Asset) => HTMLEleme
   const wrap = el('section')
   wrap.append(el('h2', '', `${title} (${list.length})`))
   const grid = el('div', 'grid')
+  if (list.every(asset => SOUNDS.includes(asset.category))) grid.classList.add('sound-grid')
   for (const asset of list) { const node = card(asset); node.dataset.id = asset.id; grid.append(node) }
   wrap.append(grid)
   $('#sheet').append(wrap)
@@ -331,8 +347,8 @@ function summary() {
   const bytes = shown.reduce((sum, asset) => sum + asset.build.ship.reduce((s, file) => s + (asset.build.files[file] ?? 0), 0), 0)
   const over = shown.filter(asset => !asset.build.withinBudget).length
   const pack = index.packs[$<HTMLSelectElement>('#pack').value]
-  const manual = pack ? pack.assets.length - shown.length : 0
-  $('#summary').textContent = `${shown.length} assets${manual > 0 ? ` built, ${manual} more need a manual download` : ''} · ${kb(bytes)} shipped at 1K WebP / Opus · ${over ? `${over} over budget` : 'all within budget'} · built ${new Date(index.generated).toLocaleString()}`
+  const missing = pack ? pack.assets.length - shown.length : 0
+  $('#summary').textContent = `${shown.length} assets built${missing > 0 ? `, ${missing} not built` : ''} · ${kb(bytes)} at 1K WebP / Opus · ${over ? `${over} over budget` : 'all within budget'} · built ${new Date(index.generated).toLocaleString()}`
 }
 
 function resize() {
@@ -356,6 +372,7 @@ resize()
 
 $<HTMLSelectElement>('#sky').onchange = () => { const sky = skies.find(s => s.id === $<HTMLSelectElement>('#sky').value); if (sky) applySky(sky) }
 $<HTMLSelectElement>('#floor').onchange = applyFloor
+$<HTMLInputElement>('#reduce-tiling').onchange = applyFloor
 $<HTMLSelectElement>('#pack').onchange = () => { summary(); sheet(); layout() }
 $<HTMLInputElement>('#ktx2').onchange = () => { applyFloor(); layout() }
 

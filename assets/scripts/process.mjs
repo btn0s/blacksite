@@ -58,9 +58,11 @@ function probe(file) {
 }
 
 function peak(file, filters, start = 0) {
-  const result = spawnSync('ffmpeg', ['-hide_banner', '-ss', String(start), '-i', file, ...(filters ? ['-af', `${filters},volumedetect`] : ['-af', 'volumedetect']), '-f', 'null', '-'], { encoding: 'utf8' })
-  const match = /max_volume:\s*(-?[\d.]+) dB/.exec(result.stderr)
-  return match ? Number(match[1]) : 0
+  const chain = [filters, 'aformat=sample_fmts=flt', 'astats=metadata=0:reset=0'].filter(Boolean).join(',')
+  const result = spawnSync('ffmpeg', ['-hide_banner', '-ss', String(start), '-i', file, '-af', chain, '-f', 'null', '-'], { encoding: 'utf8' })
+  const levels = [...result.stderr.matchAll(/Peak level dB:\s*(-?[\d.]+)/g)].map(match => Number(match[1]))
+  if (result.status !== 0 || !levels.length) throw new Error(`Cannot measure peak of ${path.basename(file)}`)
+  return Math.max(...levels)
 }
 
 let encoderPromise
@@ -277,6 +279,11 @@ async function model(entry, source, out, options) {
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder, 'meshopt.decoder': MeshoptDecoder })
   const document = await io.read(input)
   document.setLogger(new Logger(Logger.Verbosity.WARN))
+  if (options.animations) {
+    const keep = new RegExp(options.animations, 'i')
+    for (const animation of document.getRoot().listAnimations()) if (!keep.test(animation.getName())) animation.dispose()
+    if (!document.getRoot().listAnimations().length) throw new Error(`${entry.id}: no animations match ${options.animations}`)
+  }
   const nodes = document.getRoot().listNodes()
   if (nodes.some(node => /lod0?$|lod_?0\b/i.test(node.getName()))) for (const node of nodes) if (/lod_?[1-9]\b|lod[1-9]$/i.test(node.getName())) node.dispose()
   const skinned = document.getRoot().listSkins().length > 0
@@ -320,8 +327,13 @@ async function audio(entry, source, out) {
   const kind = entry.category
   const pattern = entry.process?.take ? new RegExp(entry.process.take, 'i') : undefined
   const take = pattern ? list.filter(file => pattern.test(path.basename(file)) || pattern.test(path.relative(source, file).replaceAll(path.sep, '/'))) : list
+  if (!take.length) throw new Error(`${entry.id}: no audio files match the take filter`)
   const limit = entry.process?.limit ?? (kind === 'ambience' || kind === 'ir' ? 1 : 12)
-  const chosen = entry.process?.split ? onsets(take[0], entry.process).slice(0, limit).map(([start, length]) => ({ file: take[0], start, length })) : take.slice(0, limit).map(file => ({ file }))
+  const regions = entry.process?.regions ?? (entry.process?.split ? onsets(take[0], entry.process) : undefined)
+  const sourceDuration = regions ? probe(take[0]).duration : undefined
+  if (regions && (!Array.isArray(regions) || regions.some(region => !Array.isArray(region) || region.length !== 2 || !region.every(Number.isFinite) || region[0] < 0 || region[1] <= 0 || region[0] + region[1] > sourceDuration))) throw new Error(`${entry.id}: audio regions must contain valid [start, length] pairs within the source`)
+  const chosen = regions ? regions.slice(0, limit).map(([start, length]) => ({ file: take[0], start, length })) : take.slice(0, limit).map(file => ({ file }))
+  if (!chosen.length) throw new Error(`${entry.id}: no audio takes were detected`)
   await mkdir(out, { recursive: true })
   const outputs = []
   const variations = []
@@ -331,10 +343,11 @@ async function audio(entry, source, out) {
     const file = item.file
     const info = probe(file)
     const base = chosen.length > 1 ? String(index + 1).padStart(2, '0') : 'clip'
-    const filters = []
+    const channels = stereo ? String(Math.min(2, info.channels)) : '1'
+    const filters = [`aformat=sample_fmts=fltp:channel_layouts=${channels === '2' ? 'stereo' : 'mono'}`, 'aresample=48000']
     const start = item.start ?? entry.process?.start ?? 0
     const length = item.length ?? entry.process?.length ?? (kind === 'ambience' ? Math.min(info.duration - start, 90) : kind === 'ir' ? Math.min(info.duration, 4) : Math.min(info.duration - start, 4))
-    if ((kind === 'sound' || kind === 'footstep') && !item.start) filters.push('silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.004')
+    if ((kind === 'sound' || kind === 'footstep') && item.start === undefined) filters.push(`silenceremove=start_periods=1:start_threshold=${entry.process?.trimThreshold ?? -50}dB:start_silence=0.004`)
     if (entry.process?.highpass) filters.push(`highpass=f=${entry.process.highpass}`)
     filters.push(`atrim=0:${length.toFixed(3)}`)
     if (kind === 'ambience') filters.push(`afade=t=in:d=0.05,afade=t=out:st=${Math.max(0, length - 0.05).toFixed(3)}:d=0.05`)
@@ -346,13 +359,23 @@ async function audio(entry, source, out) {
       filters.push(`volume=${(target - max).toFixed(2)}dB`)
     }
     const chain = filters.join(',')
-    const channels = stereo ? String(Math.min(2, info.channels)) : '1'
     const opus = path.join(out, `${base}.ogg`)
     const aac = path.join(out, `${base}.m4a`)
-    ffmpeg(['-ss', String(start), '-i', file, '-af', chain, '-ac', channels, '-ar', '48000', '-c:a', 'libopus', '-b:a', `${bitrate}k`, '-vbr', 'on', opus])
-    ffmpeg(['-ss', String(start), '-i', file, '-af', chain, '-ac', channels, '-ar', '48000', '-c:a', process.platform === 'darwin' ? 'aac_at' : 'aac', '-b:a', `${Math.round(bitrate * 1.5)}k`, aac])
+    let encodedPeak
+    let correction = 0
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const corrected = correction ? `${chain},volume=${correction.toFixed(3)}dB` : chain
+      ffmpeg(['-ss', String(start), '-i', file, '-af', corrected, '-ac', channels, '-ar', '48000', '-c:a', 'libopus', '-b:a', `${bitrate}k`, '-vbr', 'on', opus])
+      ffmpeg(['-ss', String(start), '-i', file, '-af', corrected, '-ac', channels, '-ar', '48000', '-c:a', process.platform === 'darwin' ? 'aac_at' : 'aac', '-b:a', `${Math.round(bitrate * 1.5)}k`, aac])
+      if (kind === 'ambience') break
+      encodedPeak = Math.max(peak(opus), peak(aac))
+      const ceiling = kind === 'ir' ? -6 : -1
+      if (encodedPeak <= ceiling) break
+      correction -= encodedPeak - ceiling + 0.2
+      if (attempt === 3) throw new Error(`${entry.id}: encoded audio peak ${encodedPeak.toFixed(2)} dB exceeds ${ceiling} dB`)
+    }
     outputs.push(opus, aac)
-    variations.push({ file: `${base}.ogg`, fallback: `${base}.m4a`, seconds: Number(probe(opus).duration.toFixed(3)), source: path.basename(file), ...(item.start !== undefined ? { at: Number(item.start.toFixed(3)) } : {}) })
+    variations.push({ file: `${base}.ogg`, fallback: `${base}.m4a`, seconds: Number(probe(opus).duration.toFixed(3)), source: path.basename(file), ...(item.start !== undefined ? { at: Number(item.start.toFixed(3)) } : {}), ...(encodedPeak === undefined ? {} : { peakDb: Number(encodedPeak.toFixed(2)) }) })
   }
   return { outputs, ship: variations.map(v => v.file), meta: { variations, channels: stereo ? 2 : 1 } }
 }
@@ -369,7 +392,7 @@ function onsets(file, options) {
   for (const start of starts) {
     const end = Math.min(ends.find(e => e > start + 0.02) ?? duration, starts.find(s => s > start + 0.02) ?? duration, start + max)
     const pre = Math.max(0, start - 0.012)
-    if (end - start >= (options.minLength ?? 0.07)) takes.push([pre, Math.min(max, end - pre + 0.08)])
+    if (end - start >= (options.minLength ?? 0.07)) takes.push([pre, Math.min(max, duration - pre, end - pre + 0.08)])
   }
   return takes
 }

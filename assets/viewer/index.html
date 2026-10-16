@@ -14,13 +14,14 @@
         <label>Pack <select id="pack"></select></label>
         <label>Sky <select id="sky"></select></label>
         <label>Floor <select id="floor"></select></label>
+        <label><input type="checkbox" id="reduce-tiling" checked /> Reduce tiling</label>
         <label><input type="checkbox" id="ktx2" /> KTX2 textures</label>
         <a href="./CREDITS.md">Credits</a>
       </nav>
     </header>
     <section class="stage">
       <canvas id="view"></canvas>
-      <p class="hint">Drag to orbit, scroll to zoom. Lit by the selected sky through the zone grade.</p>
+      <p class="hint">Drag to orbit, scroll to zoom. <span id="tiling-note"></span> Lit by the selected sky through the zone grade.</p>
     </section>
     <main id="sheet"></main>
     <script type="module" src="./main.ts"></script>

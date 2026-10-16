@@ -47,16 +47,17 @@
         "anim-rocketbox-walk",
         "anim-rocketbox-idle",
         "anim-mesh2motion-addon",
-        "shot-ak47",
-        "shot-kalashnikov-indoor",
-        "shot-pistol-9mm",
-        "shot-shotgun",
-        "impact-bullets",
+        "gunfire-ak47",
+        "gunfire-ak47-burst",
+        "gunfire-ak47-mid",
+        "gunfire-rifle-distant",
+        "gunfire-pistol-9mm",
+        "gunfire-shotgun",
+        "reload-pistol-zer0sol",
+        "reload-shotgun-zer0sol",
+        "foley-bolt-clicks",
         "impact-metal",
         "impact-wood",
-        "impact-flesh",
-        "casing-concrete",
-        "reload-rifle",
         "step-boots-concrete",
         "step-metal-ladder",
         "step-wood-oga",
@@ -2758,7 +2759,8 @@
           "sha256": "25c92cfc9fc9528e95947bc74dbe4473faf4aaa24ec5afe5c2f2db1800ef9c1c",
           "size": 12582956
         }
-      ]
+      ],
+      "licenceNotice": "MIT License\n\nCopyright (c) 2020 Microsoft\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
     },
     {
       "id": "anim-rocketbox-walk",
@@ -2785,7 +2787,8 @@
           "sha256": "e6805ae6b6b49fe10f06c1b17b14ddde90d09b9fea689ac34793df252f44dcd0",
           "size": 994336
         }
-      ]
+      ],
+      "licenceNotice": "MIT License\n\nCopyright (c) 2020 Microsoft\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
     },
     {
       "id": "anim-rocketbox-run",
@@ -2812,7 +2815,8 @@
           "sha256": "5a22052ea750805ea7e097310f36cd448c838e7c88bc842a78632d9606869fa8",
           "size": 868752
         }
-      ]
+      ],
+      "licenceNotice": "MIT License\n\nCopyright (c) 2020 Microsoft\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
     },
     {
       "id": "anim-rocketbox-idle",
@@ -2838,7 +2842,8 @@
           "sha256": "818cc185af21390575f7fbfdeb3012ba2ce5969fbcb220ea725a2617b339a6e2",
           "size": 2418544
         }
-      ]
+      ],
+      "licenceNotice": "MIT License\n\nCopyright (c) 2020 Microsoft\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
     },
     {
       "id": "anim-rocketbox-crouch-idle",
@@ -2865,7 +2870,8 @@
           "sha256": "d3704294853eda39d566cb31b0e6a6c50bd3cc3c1bda9102c1156c1537c12eeb",
           "size": 2106496
         }
-      ]
+      ],
+      "licenceNotice": "MIT License\n\nCopyright (c) 2020 Microsoft\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
     },
     {
       "id": "anim-mesh2motion-addon",
@@ -2888,7 +2894,7 @@
       "author": "Scott Petrovic (Mesh2Motion)",
       "licence": "CC0-1.0",
       "attribution": "\"Mesh2Motion human add-on animations\" by Scott Petrovic (https://github.com/Mesh2Motion/mesh2motion-app), CC0 1.0",
-      "use": "75 hand-keyed clips on a 66-bone humanoid rig: deaths, ladders, ledge hang, stealth walk and run, strafes, crawl, dodges, hurt idles.",
+      "use": "40 selected clips from the 75-clip CC0 source: deaths, ladder and ledge traversal, stealth locomotion, strafes, dodges, fighting, hurt idles and zombies. Full source remains available through fetch.",
       "files": [
         {
           "name": "human-addon-animations.glb",
@@ -2896,7 +2902,10 @@
           "sha256": "a0d64d555e0d492026b72d58bf8e16c5e86779295f9093e376dcc001915c2c95",
           "size": 5292804
         }
-      ]
+      ],
+      "process": {
+        "animations": "^(Climb|Crawl|Death|Defend|Dodge|Fighting|Idle|Jump_2|Kneeling|Ladder|Land_|Ledge|Pipe Climb|Run Jump|Run_Stealth|Shivering|Strafe|Throw Object|Tired Hunched|Walk_Backwards|Walk_Stealth|Zombie)"
+      }
     },
     {
       "id": "anim-mesh2motion-mocap",
@@ -4530,9 +4539,9 @@
         "site": "nps",
         "url": "https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm"
       },
-      "author": "Rocky Mountain National Park (National Park Service)",
+      "author": "J. Job / National Park Service, Rocky Mountain National Park",
       "licence": "Public-Domain",
-      "attribution": "\"Stream Soundscape from the Black Canyon Trail\" by Rocky Mountain National Park (National Park Service) (https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm), public domain",
+      "attribution": "\"Stream Soundscape from the Black Canyon Trail\" by J. Job / National Park Service, Rocky Mountain National Park (https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm), public domain",
       "use": "Steady stream bed; loops cleanly.",
       "files": [
         {
@@ -5015,6 +5024,394 @@
         {
           "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/current/n41w079/USGS_13_n41w079.tif",
           "name": "USGS_13_n41w079.tif"
+        }
+      ]
+    },
+    {
+      "id": "gunfire-ak47",
+      "title": "The Free Firearm Sound Library: AK-47, near, single shots",
+      "category": "sound",
+      "tags": [
+        "gunshot",
+        "real",
+        "rifle",
+        "ak",
+        "near"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/the-free-firearm-sound-library"
+      },
+      "author": "Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney",
+      "licence": "CC0-1.0",
+      "attribution": "\"The Free Firearm Sound Library: AK-47, near, single shots\" by Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney (https://opengameart.org/content/the-free-firearm-sound-library), CC0 1.0",
+      "use": "Real 7.62x39 single shots recorded beside the shooter, outdoors, with natural tails. The default rifle shot.",
+      "process": {
+        "regions": [
+          [
+            0.599,
+            2.5
+          ],
+          [
+            3.24,
+            2.5
+          ],
+          [
+            6.008,
+            2.5
+          ],
+          [
+            9.138,
+            2.5
+          ]
+        ]
+      },
+      "files": [
+        {
+          "name": "Prepared SFX Library.7z",
+          "url": "https://opengameart.org/sites/default/files/Prepared%20SFX%20Library.7z",
+          "sha256": "cc1ab5a99a0a365105c7c5dd783f4b0b1fe90938114d3ceec53856bfe005f7d6",
+          "size": 193954738,
+          "extract": true,
+          "include": "(^|/)AK-47/C_28P\\.wav$"
+        }
+      ]
+    },
+    {
+      "id": "gunfire-ak47-burst",
+      "title": "The Free Firearm Sound Library: AK-47, near, short burst",
+      "category": "sound",
+      "tags": [
+        "gunshot",
+        "real",
+        "rifle",
+        "ak",
+        "near",
+        "burst"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/the-free-firearm-sound-library"
+      },
+      "author": "Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney",
+      "licence": "CC0-1.0",
+      "attribution": "\"The Free Firearm Sound Library: AK-47, near, short burst\" by Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney (https://opengameart.org/content/the-free-firearm-sound-library), CC0 1.0",
+      "use": "Short real AK bursts; use for automatic fire layered over single shots.",
+      "process": {
+        "regions": [
+          [
+            1.052,
+            3
+          ],
+          [
+            5.508,
+            3
+          ]
+        ]
+      },
+      "files": [
+        {
+          "name": "Prepared SFX Library.7z",
+          "url": "https://opengameart.org/sites/default/files/Prepared%20SFX%20Library.7z",
+          "sha256": "cc1ab5a99a0a365105c7c5dd783f4b0b1fe90938114d3ceec53856bfe005f7d6",
+          "size": 193954738,
+          "extract": true,
+          "include": "(^|/)AK-47/C_29P\\.wav$"
+        }
+      ]
+    },
+    {
+      "id": "gunfire-ak47-mid",
+      "title": "The Free Firearm Sound Library: AK-47, mid distance",
+      "category": "sound",
+      "tags": [
+        "gunshot",
+        "real",
+        "rifle",
+        "ak",
+        "mid",
+        "tail"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/the-free-firearm-sound-library"
+      },
+      "author": "Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney",
+      "licence": "CC0-1.0",
+      "attribution": "\"The Free Firearm Sound Library: AK-47, mid distance\" by Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney (https://opengameart.org/content/the-free-firearm-sound-library), CC0 1.0",
+      "use": "AK shots heard from down range; for other combatants and tails.",
+      "process": {
+        "regions": [
+          [
+            0.326,
+            3
+          ],
+          [
+            4.389,
+            3
+          ]
+        ]
+      },
+      "files": [
+        {
+          "name": "Prepared SFX Library.7z",
+          "url": "https://opengameart.org/sites/default/files/Prepared%20SFX%20Library.7z",
+          "sha256": "cc1ab5a99a0a365105c7c5dd783f4b0b1fe90938114d3ceec53856bfe005f7d6",
+          "size": 193954738,
+          "extract": true,
+          "include": "(^|/)AK-47/C_31P\\.wav$"
+        }
+      ]
+    },
+    {
+      "id": "gunfire-pistol-9mm",
+      "title": "The Free Firearm Sound Library: Walther PPQ 9 mm, near",
+      "category": "sound",
+      "tags": [
+        "gunshot",
+        "real",
+        "pistol",
+        "9mm",
+        "near"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/the-free-firearm-sound-library"
+      },
+      "author": "Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney",
+      "licence": "CC0-1.0",
+      "attribution": "\"The Free Firearm Sound Library: Walther PPQ 9 mm, near\" by Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney (https://opengameart.org/content/the-free-firearm-sound-library), CC0 1.0",
+      "use": "Real 9 mm pistol shots beside the shooter.",
+      "process": {
+        "regions": [
+          [
+            1.395,
+            2.5
+          ],
+          [
+            6.432,
+            2.5
+          ],
+          [
+            10.648,
+            2.5
+          ]
+        ]
+      },
+      "files": [
+        {
+          "name": "Prepared SFX Library.7z",
+          "url": "https://opengameart.org/sites/default/files/Prepared%20SFX%20Library.7z",
+          "sha256": "cc1ab5a99a0a365105c7c5dd783f4b0b1fe90938114d3ceec53856bfe005f7d6",
+          "size": 193954738,
+          "extract": true,
+          "include": "(^|/)Walther PPQ/X_39P\\.wav$"
+        }
+      ]
+    },
+    {
+      "id": "gunfire-pistol-45",
+      "title": "The Free Firearm Sound Library: 1911 .45, near",
+      "category": "sound",
+      "tags": [
+        "gunshot",
+        "real",
+        "pistol",
+        "45",
+        "near"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/the-free-firearm-sound-library"
+      },
+      "author": "Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney",
+      "licence": "CC0-1.0",
+      "attribution": "\"The Free Firearm Sound Library: 1911 .45, near\" by Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney (https://opengameart.org/content/the-free-firearm-sound-library), CC0 1.0",
+      "use": "Heavier .45 pistol report.",
+      "process": {
+        "regions": [
+          [
+            0.925,
+            2.5
+          ],
+          [
+            4.988,
+            2.5
+          ]
+        ]
+      },
+      "files": [
+        {
+          "name": "Prepared SFX Library.7z",
+          "url": "https://opengameart.org/sites/default/files/Prepared%20SFX%20Library.7z",
+          "sha256": "cc1ab5a99a0a365105c7c5dd783f4b0b1fe90938114d3ceec53856bfe005f7d6",
+          "size": 193954738,
+          "extract": true,
+          "include": "(^|/)1911/A_42P\\.wav$"
+        }
+      ]
+    },
+    {
+      "id": "gunfire-shotgun",
+      "title": "The Free Firearm Sound Library: Nova 12 gauge pump, near",
+      "category": "sound",
+      "tags": [
+        "gunshot",
+        "real",
+        "shotgun",
+        "pump",
+        "near"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/the-free-firearm-sound-library"
+      },
+      "author": "Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney",
+      "licence": "CC0-1.0",
+      "attribution": "\"The Free Firearm Sound Library: Nova 12 gauge pump, near\" by Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney (https://opengameart.org/content/the-free-firearm-sound-library), CC0 1.0",
+      "use": "Real pump shotgun blasts; the pump stroke sits between shots.",
+      "process": {
+        "regions": [
+          [
+            0.414,
+            2.7
+          ],
+          [
+            3.448,
+            2.7
+          ]
+        ]
+      },
+      "files": [
+        {
+          "name": "Prepared SFX Library.7z",
+          "url": "https://opengameart.org/sites/default/files/Prepared%20SFX%20Library.7z",
+          "sha256": "cc1ab5a99a0a365105c7c5dd783f4b0b1fe90938114d3ceec53856bfe005f7d6",
+          "size": 193954738,
+          "extract": true,
+          "include": "(^|/)Nova/O_21P\\.wav$"
+        }
+      ]
+    },
+    {
+      "id": "gunfire-rifle-distant",
+      "title": "Audio data for gunshot detection, recorded on the savannah: assault rifle at 150 m",
+      "category": "sound",
+      "tags": [
+        "gunshot",
+        "rifle",
+        "distant",
+        "real"
+      ],
+      "source": {
+        "site": "zenodo",
+        "url": "https://zenodo.org/records/14824927"
+      },
+      "author": "Jakob Wirén and Kasper Nordenram",
+      "licence": "CC-BY-4.0",
+      "attribution": "\"Audio data for gunshot detection, recorded on the savannah: assault rifle at 150 m\" by Jakob Wirén and Kasper Nordenram (https://zenodo.org/records/14824927), CC BY 4.0",
+      "use": "Real rifle fire 150 m away for far-off combat. 16 kHz mono field recordings, so keep them quiet and low in the mix.",
+      "process": {
+        "take": "\\.wav$",
+        "limit": 6,
+        "highpass": 60,
+        "trimThreshold": -24
+      },
+      "files": [
+        {
+          "name": "AR150m.zip",
+          "url": "https://zenodo.org/api/records/14824927/files/AR150m.zip/content",
+          "sha256": "6f9e941877579736fc3417e9590fd7938642f93ab5e1f35759ca149683e4fec6",
+          "size": 1799134,
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "reload-pistol-zer0sol",
+      "title": "Handgun Reload Sound Effect",
+      "category": "sound",
+      "tags": [
+        "reload",
+        "foley",
+        "pistol"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/handgun-reload-sound-effect"
+      },
+      "author": "zer0_sol",
+      "licence": "CC0-1.0",
+      "attribution": "\"Handgun Reload Sound Effect\" by zer0_sol (https://opengameart.org/content/handgun-reload-sound-effect), CC0 1.0",
+      "use": "Magazine out, magazine in and slide rack in one take; cut it to the animation notifies.",
+      "files": [
+        {
+          "name": "reload.wav",
+          "url": "https://opengameart.org/sites/default/files/reload.wav",
+          "sha256": "091399145b174ac3b2e0df245b4712a13ce85df072e37256b0fc32658718be53",
+          "size": 280620
+        }
+      ]
+    },
+    {
+      "id": "reload-shotgun-zer0sol",
+      "title": "Shotgun Reload Sound Effects",
+      "category": "sound",
+      "tags": [
+        "reload",
+        "foley",
+        "shotgun"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/shotgun-reload-sound-effects"
+      },
+      "author": "zer0_sol",
+      "licence": "CC0-1.0",
+      "attribution": "\"Shotgun Reload Sound Effects\" by zer0_sol (https://opengameart.org/content/shotgun-reload-sound-effects), CC0 1.0",
+      "use": "Pump rack, shell into chamber, first and following shells.",
+      "process": {
+        "take": "(Rack|Shell in Chamber|First Shell|Subsequent Shells)\\.mp3$"
+      },
+      "files": [
+        {
+          "name": "shotgunsounds.zip",
+          "url": "https://opengameart.org/sites/default/files/shotgunsounds.zip",
+          "sha256": "31128a93eee729cadcd1cdeabca6b6b1f655578101109b59c0fb5dd4b96e6079",
+          "size": 324193,
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "foley-bolt-clicks",
+      "title": "Equipment Clicks III",
+      "category": "sound",
+      "tags": [
+        "foley",
+        "bolt",
+        "click",
+        "rifle"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/equipment-clicks-iii"
+      },
+      "author": "LFA",
+      "licence": "CC0-1.0",
+      "attribution": "\"Equipment Clicks III\" by LFA (https://opengameart.org/content/equipment-clicks-iii), CC0 1.0",
+      "use": "Bolt-action cocking and mechanical clicks for weapon handling.",
+      "process": {
+        "split": true,
+        "limit": 12,
+        "maxLength": 0.6
+      },
+      "files": [
+        {
+          "name": "equipment_clicks3.wav",
+          "url": "https://opengameart.org/sites/default/files/equipment_clicks3.wav",
+          "sha256": "1cd2612f226886a7c0badbe26e9732e097a448e97cbea72a3e3cd2c8aa91ace8",
+          "size": 2021420
         }
       ]
     }
