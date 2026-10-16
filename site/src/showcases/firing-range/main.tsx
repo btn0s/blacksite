@@ -29,7 +29,6 @@ const solidById = new Map(solids.map(solid => [solid.id, solid]))
 const steelById = new Map(steelSet.steel.map(target => [target.id, target]))
 const paperById = new Map(range.papers.map(paper => [paper.id, paper]))
 const definitions = ALS_WEAPONS.filter(definition => definition.id !== 'bow').map(definition => ({ ...definition, initialReserve: 99990 }))
-const reloadSeconds = Object.fromEntries(definitions.map(definition => [definition.id, definition.reloadSeconds])) as Record<WeaponId, number>
 const audio = createRangeAudio()
 const touchInput = createStandaloneTouch()
 const commands = { reload: false, swap: false, aim: false }
@@ -65,7 +64,7 @@ function Scene({ tier, onReady }: { tier: QualityTier; onReady: () => void }) {
     position: new THREE.Vector3(0, eye, 0.4), aim: { origin: new THREE.Vector3(), direction: new THREE.Vector3(0, 0, -1) },
     flash: 0, shotCount: 0, phaseTimer: 0, startedAt: 0, clock: 0, lastTimeSent: 0, speed: 0, moving: false,
   })
-  const scratch = useMemo(() => ({ right: new THREE.Vector3(), forward: new THREE.Vector3(), muzzle: new THREE.Vector3(), local: new THREE.Vector3(), from: new THREE.Vector3(), along: new THREE.Vector3() }), [])
+  const scratch = useMemo(() => ({ right: new THREE.Vector3(), forward: new THREE.Vector3(), muzzle: new THREE.Vector3(), from: new THREE.Vector3(), along: new THREE.Vector3() }), [])
 
   useEffect(() => { if (presentation) onReady() }, [presentation, onReady])
 
@@ -128,7 +127,7 @@ function Scene({ tier, onReady }: { tier: QualityTier; onReady: () => void }) {
   const handle = (event: WeaponEvent) => {
     const state = control.current
     if (event.type === 'switch-started') { arms.weapon = event.weaponId as WeaponId; arms.equipSequence++; audio.equip(); return }
-    if (event.type === 'reload-started') { arms.reloadSequence++; audio.reload(event.weaponId as WeaponId, reloadSeconds[event.weaponId as WeaponId]); return }
+    if (event.type === 'reload-started') { arms.reloadSequence++; audio.reload(event.weaponId as WeaponId); return }
     if (event.type === 'trigger-blocked' && event.reason === 'empty') { audio.dry(); state.reload = true; return }
     if (event.type === 'shot') {
       const pistol = event.weaponId === 'pistol'
@@ -162,14 +161,12 @@ function Scene({ tier, onReady }: { tier: QualityTier; onReady: () => void }) {
     const strength = event.weaponId === 'pistol' ? 1 : 0.8
     effects.impact(solid.surface, point, normal, strength)
     const distance = point.distanceTo(camera.position)
-    scratch.right.set(1, 0, 0).applyQuaternion(camera.quaternion)
-    const pan = THREE.MathUtils.clamp(scratch.local.subVectors(point, camera.position).normalize().dot(scratch.right), -0.8, 0.8)
     const view = drill.get()
     const counting = view.phase === 'running'
     const steel = hit.targetId ? steelById.get(hit.targetId) : undefined
     if (steel) {
       steel.hit(steel.plate.worldToLocal(point.clone()), strength)
-      audio.steel(steel.pitch, strength, distance, pan)
+      audio.steel(steel.pitch, strength, point)
       drill.set({ marker: view.marker + 1 })
       if (counting) {
         const fresh = !steel.cleared
@@ -179,7 +176,7 @@ function Scene({ tier, onReady }: { tier: QualityTier; onReady: () => void }) {
       }
       return
     }
-    audio.impact(solid.surface, distance, pan)
+    audio.impact(solid.surface, point, distance)
     const paper = hit.targetId ? paperById.get(hit.targetId) : undefined
     if (paper) {
       const ring = point.distanceTo(paper.center) / (paper.radius / 5)
@@ -233,7 +230,8 @@ function Scene({ tier, onReady }: { tier: QualityTier; onReady: () => void }) {
   useFrame(({ size }, dt) => {
     const state = control.current
     for (const target of steelSet.steel) target.update(dt)
-    effects.update(dt, position => audio.casing(position.distanceTo(camera.position)))
+    effects.update(dt, position => audio.casing(position))
+    audio.update(dt, camera.position, scratch.forward.set(0, 0, -1).applyQuaternion(camera.quaternion))
     state.flash = Math.max(0, state.flash - dt)
     lights.flash.intensity = state.flash > 0 ? 14 * state.flash / 0.05 : 0
     const weaponId = drill.get().weapon
