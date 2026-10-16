@@ -10,6 +10,7 @@
     "./console/*": "./src/console/*.tsx",
     "./game-frame": "./src/game-frame/game-frame.tsx",
     "./perf-overlay": "./src/perf-overlay.tsx",
+    "./hud": "./src/hud/hud.tsx",
     "./components/*": "./src/components/*.tsx",
     "./hooks/*": "./src/hooks/*.ts",
     "./lib/*": "./src/lib/*.ts"
@@ -20,6 +21,9 @@
     "three": "^0.185.1"
   },
   "dependencies": {
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
     "@base-ui/react": "^1.9.0",
     "@remixicon/react": "^4.9.0",
     "class-variance-authority": "^0.7.1",

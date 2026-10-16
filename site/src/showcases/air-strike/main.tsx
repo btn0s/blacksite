@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Actions, Hints, Loading, Prompt, Screen, Status, TitleCard, useTouch } from '../../look/hud'
+import { Actions, Hints, Loading, Prompt, Screen, Status, TitleCard, useTouch } from '@blacksite/ui/hud'
 import { AirStrikeScene, type AirStrikeState } from './scene'
 
 function App() {

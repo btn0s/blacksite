@@ -2,7 +2,7 @@
 
 Each building block has a page at `/tools/<tool>` on the site, and every showcase for that block is embedded on its page. A page can hold several showcases, for example the destruction block will gain micro and meso scenes after Air Strike. Old `/demos/<id>` and `/docs/<block>` URLs redirect to the matching tool page.
 
-Showcases are small game scenes built only on public package exports, the way a game would use them. They share one look from `site/src/look/`: chunky geometry wearing CC0 photographic materials at 512 px, an overcast sky with heavy fog, muted greens, browns and greys, ground AO, a light grade and grain, all set in Soviet industrial ruins. The shared HUD in `site/src/look/hud.tsx` gives each scene a title card, loading meter, keyboard hints and touch controls. Every scene posts frame times to the page's perf overlay. Targets are 120 fps on desktop and 60 fps on phones.
+Showcases are small game scenes built only on public package exports, the way a game would use them. They share one look from `@blacksite/look/world`: chunky geometry wearing CC0 photographic materials at 512 px, an overcast sky with heavy fog, muted greens, browns and greys, ground AO, a light grade and grain, all set in Soviet industrial ruins. The shared HUD in `@blacksite/ui/hud` gives each scene a title card, loading meter, keyboard hints and touch controls. Every scene posts frame times to the page's perf overlay. Targets are 120 fps on desktop and 60 fps on phones.
 
 | Block | Showcase | Built on | Status |
 | --- | --- | --- | --- |

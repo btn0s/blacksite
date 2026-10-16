@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { surface } from '../../look/look'
+import { surface } from '@blacksite/look/world'
 import type { Solid } from './hits'
 import { rangeMaterial } from './materials'
 

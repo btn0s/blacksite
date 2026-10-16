@@ -1,7 +1,5 @@
 import * as THREE from 'three'
-import { LevelBuilder } from '../../look/builder'
-import { groundMaterial, puddleMaterial, worldPlaneGeometry } from '../../look/look'
-import { apartmentBlock, apc, deadTree, lada, shed, waterTower } from '../../look/props'
+import { LevelBuilder, groundMaterial, puddleMaterial, worldPlaneGeometry, apartmentBlock, apc, deadTree, lada, shed, waterTower } from '@blacksite/look/world'
 
 function random(seed: number) {
   let state = seed
