@@ -46,6 +46,8 @@ export default defineConfig({
       fpp: resolve(import.meta.dirname, 'frames/fpp.html'),
       tpp: resolve(import.meta.dirname, 'frames/tpp.html'),
       mp: resolve(import.meta.dirname, 'frames/mp.html'),
+      movement: resolve(import.meta.dirname, 'frames/movement.html'),
+      demolition: resolve(import.meta.dirname, 'frames/demolition.html'),
     } },
   },
 })

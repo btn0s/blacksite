@@ -1,0 +1,11 @@
+{
+  "files": [
+    { "path": "movement.webp", "source": "Headless capture of Blacksite Movement showcase in this repository", "license": "Project-generated screenshot; underlying ALS character asset is MIT, see vendor/als-web/public/assets/LICENSE-ALS-Refactored.md" },
+    { "path": "demolition.webp", "source": "Headless capture of Blacksite Demolition showcase in this repository", "license": "Project-generated screenshot; procedural geometry and Blacksite code under repository license" }
+  ],
+  "runtimeAssets": [
+    { "path": "vendor/als-web/public/assets/skm-als.glb", "source": "ALS Refactored via als-web pinned submodule", "license": "MIT, see vendor/als-web/public/assets/LICENSE-ALS-Refactored.md" },
+    { "path": "vendor/als-web/public/assets/skm-als-rifle.glb", "source": "ALS Refactored via als-web pinned submodule", "license": "MIT, see vendor/als-web/public/assets/LICENSE-ALS-Refactored.md" },
+    { "path": "vendor/als-web/public/assets/skm-als-pistol.glb", "source": "ALS Refactored via als-web pinned submodule", "license": "MIT, see vendor/als-web/public/assets/LICENSE-ALS-Refactored.md" }
+  ]
+}

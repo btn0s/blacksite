@@ -18,6 +18,9 @@ importers:
       '@blacksite/armory':
         specifier: workspace:*
         version: link:packages/armory
+      '@blacksite/cascade':
+        specifier: workspace:*
+        version: link:packages/cascade
       '@blacksite/input':
         specifier: workspace:*
         version: link:packages/input
