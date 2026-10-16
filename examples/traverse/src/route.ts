@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { LevelBuilder, apartmentBlock, deadTree, groundMaterial, lada, puddleMaterial, shed, worldPlaneGeometry, type SurfaceName } from '@blacksite/look/world'
 import { feet } from './model'
 import type { Gate } from './race'
+import { dress } from './dressing'
 
 type Vec3 = [number, number, number]
 type Mat = { name: SurfaceName; color?: string; ao?: false }
@@ -60,7 +61,8 @@ export function buildRoute() {
     for (let index = 0; index < steps; index++) {
       const top = from[1] + feet.stairRiser * (index + 1)
       const x = from[0] + direction * feet.stairTread * (index + 0.5)
-      box([feet.stairTread, top - from[1] + 0.02, width], cast, [x, from[1] + (top - from[1]) / 2 - 0.01, (z[0] + z[1]) / 2])
+      const depth = Math.min(top - from[1] + 0.02, feet.stairRiser + 0.28)
+      box([feet.stairTread, depth, width], cast, [x, top - depth / 2 + 0.01, (z[0] + z[1]) / 2])
       box([feet.stairTread + 0.02, 0.035, width + 0.02], { name: 'metal', color: '#3e3f38' }, [x - direction * feet.stairTread * 0.42, top + 0.006, (z[0] + z[1]) / 2], undefined, false, false)
     }
     const to: Vec3 = [from[0] + direction * feet.stairTread * steps, from[1] + feet.stairRiser * steps, from[2]]
@@ -259,7 +261,7 @@ export function buildRoute() {
   ]
 
   const bookmarks: Bookmark[] = [
-    { name: 'gate', position: [24, 3.2, 6.5], target: [9, 3.4, -0.5], fov: 55, stand: [12.5, 0, 0], yaw: 0 },
+    { name: 'gate', position: [17.6, 2.1, 5.6], target: [8.5, 2.2, -0.6], fov: 55, stand: [12.5, 0, 0], yaw: 0 },
     { name: 'garages', position: [30, 2.6, 6], target: [42, 1.8, -4], fov: 55, stand: [38, 0, -0.4], yaw: -Math.PI / 2 },
     { name: 'roofs', position: [36.5, 4.6, -5.6], target: [50, 3, -5.6], fov: 55, stand: [39, garageRoof, -5.6], yaw: 0 },
     { name: 'boiler-yard', position: [64, 3.6, 5.5], target: [78, 1.4, -5], fov: 55, stand: [69, 0, -1], yaw: 0 },
@@ -285,6 +287,8 @@ export function buildRoute() {
     { at: [dockStart[0] - 0.4, 0, -3] }, { at: [dockTop[0] + 0.5, dockTop[1], -3] }, { at: [dockTop[0] + 6.6, dockTop[1], -3] },
     { at: [dockTop[0] + 10, 0, -2] }, { at: [finishX - 3, 0, -1] }, { at: [finishX + 5, 0, -1] },
   ]
+
+  dress(level, { rand, lights, emitters, line, garageRoof, garages, tower, inner, roof, boiler, upper, plant, finishX, slabEnd, dockStart, dockTop })
 
   const group = level.build()
   return { group, colliders: level.colliders, spawn: [2.5, 0, 0] as Vec3, spawnYaw: 0, gates, ledges, ramps, stairs, lights, emitters, zones, bookmarks, line }

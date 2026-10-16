@@ -17,9 +17,13 @@ The shipped version we build: the third-person traversal of a modern action game
 | Sprint | 6.5 m/s | ALS sprint speed. A trained runner's 400 m pace is 7–8 m/s; a game sprint must stay readable through doorways. |
 | Crouch walk / run | 1.5 / 2.0 m/s | ALS crouching settings. |
 | Capsule | radius 0.30 m, half height 0.90 m (1.80 m tall) | ALS capsule, the UE mannequin proportions. |
-| Max step | 0.45 m | UE CharacterMovement default `MaxStepHeight`. Anything at or above 0.5 m is a mantle, not a step. |
+| Max step | 0.45 m | UE CharacterMovement default `MaxStepHeight`. Anything at or above 0.5 m is a mantle, not a step. ALS Web had no step-up; Traverse adds it in `vendor/als-web`. |
 | Walkable slope | 44.8° | UE CharacterMovement default walkable floor angle (z ≥ 0.71). |
-| Jump | see `model.ts` | ALS jump velocity and gravity. |
+| Acceleration | 20 m/s² | ALS ground acceleration. Run speed is reached 90% in 0.17 s, inside feel.md's 0.25 s. |
+| Jump | 4.2 m/s, apex 0.90 m | ALS `JumpZVelocity` and 9.81 m/s² gravity. |
+| Jump buffer | 0.1 s | feel.md: a press up to 0.1 s before landing still jumps. |
+| Coyote time | 0.1 s | feel.md: a press up to 0.1 s after running off a ledge still jumps. |
+| Landing | camera dip 0.12 m at full strength, critically damped at ω 9 | feel.md asks for a dip and a sound on landing; strength scales from 2 m/s to 8 m/s of fall speed. |
 
 ### Mantle
 
@@ -28,14 +32,16 @@ The shipped version we build: the third-person traversal of a modern action game
 | Grounded ledge range | 0.50–2.25 m | ALS `CS_Als_Default` grounded trace. |
 | Low / high split | 1.25 m | ALS `MantlingHighHeightThreshold`. |
 | Route ledges | 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00 m | Every quarter metre of the bar. Each height appears on the route at least once, in rising order before the first fork. |
-| Success | 100% of scripted approaches at each height reach the top inside 1.6 s | A mantle that fails once in ten is a bug report. |
+| Success | 100% of scripted approaches at each height reach the top inside 1.8 s | A mantle that fails once in ten is a bug report. The authored high mantle takes 1.55–1.73 s at 1.75–2.0 m. |
+| Ledge depth | ≥ 0.6 m | The capsule must fit on top; every wall on the route is 0.7–0.8 m deep. |
 
 ### Feet
 
 | Number | Value | Source |
 | --- | --- | --- |
-| Planted foot speed, flat run | p95 ≤ 0.10 m/s, mean ≤ 0.04 m/s | Foot skate is the classic motion-matching failure metric (Holden et al., Learned Motion Matching, 2020, measures it as planted-foot drift). ALS foot locking pins a planted foot; what remains is blend and IK error. |
-| Planted foot speed, stairs and 20° slope | p95 ≤ 0.15 m/s | Foot IK on stairs adds pelvis and foot offsets on top of the locked pose. |
+| Planted-foot travel per contact | p95 ≤ 3 cm | feel.md: bound planted-foot slip at 3 cm per plant (measured 0.83 / 1.03 / 1.78 cm walking, running, sprinting). A contact is a run of frames with the foot within 2.5 cm of the ground, minus 2 edge frames. |
+| Planted-foot drift, flat / uneven | p95 ≤ 0.10 / 0.15 m/s | Foot skate is the classic motion-matching failure metric (Holden et al., Learned Motion Matching, 2020). Foot IK on stairs and slopes adds pelvis and foot offsets on top of the locked pose. |
+| Gait changes | measured, not gated | ALS itself lets the foot slide on start, stop and run→walk (its blend-space smoothing and 5/s lock release); the port reproduces that exactly. See the report. |
 | Foot-to-ground gap while planted | ≤ 0.04 m | Above 4 cm a foot visibly floats at the default camera distance. |
 | Stairs | riser 0.17 m, tread 0.28 m | Building-code stairs (IBC: riser ≤ 178 mm, tread ≥ 279 mm). |
 | Slopes on the route | 10°, 20°, 30° | Ramp, rubble and a fallen slab, all walkable. |
@@ -46,11 +52,21 @@ The shipped version we build: the third-person traversal of a modern action game
 
 | Number | Value | Source |
 | --- | --- | --- |
-| Probe | sphere, radius in `model.ts` | ALS camera trace (spring-arm sweep). |
+| Probe | sphere, 0.15 m | ALS camera trace (spring-arm sweep). |
 | Pull-in / ease-out | in one frame / eased over about 0.4 s | GDC 2014, John Nesky, "50 Game Camera Mistakes": snap in to avoid a wall, ease out to avoid a pop. |
 | Clip budget | 0 frames with geometry inside the near plane | Measured by a sphere query of radius `near × tan(fov/2) × √(1 + aspect²)` at the camera each frame of every scripted run. |
-| Shoulder swap | 0.35 s ease, no frame step over 0.12 m | A swap that teleports reads as a cut. |
+| Shoulder | 0.5 m offset, 0.5 s swap, no frame step over 0.12 m | ALS `CF_Als_CameraBlend_Quick` is 0.5 s. A swap that teleports reads as a cut. |
 | Lag | location lag from ALS, no visible stutter at 120 fps | ALS camera settings. |
+
+### Input
+
+| Number | Value | Source |
+| --- | --- | --- |
+| Mouse | 0.0022 rad per pixel (0.126°) | feel.md. |
+| Touch look | 0.0042 rad per pixel × 1.7 | feel.md: thumbs travel less than mice. |
+| Gamepad look | 240°/s yaw, 90°/s pitch, dead zone 0.2 | feel.md. |
+| Touch sprint | stick past 0.92 | feel.md. |
+| Roll | tap Shift under 0.25 s | Hold Shift sprints. |
 
 ### Route and ghost
 
@@ -66,9 +82,12 @@ The shipped version we build: the third-person traversal of a modern action game
 
 | Number | Value |
 | --- | --- |
-| Desktop | 120 fps, 8.3 ms frame, p95 ≤ 9 ms |
-| Phone | 60 fps sustained, 16.7 ms frame |
+| Desktop | 120 fps, main-thread p95 ≤ 8.3 ms |
+| Phone | 60 fps sustained, main-thread p95 ≤ 16.7 ms, half the ash, low look tier, pixel ratio ≤ 1.25, 1024 shadow map |
+| Hitch | no frame over 33 ms after first playable |
 | First playable | under 5 s |
+| Sound | ≤ 32 voices; one-shots have 4 variants, ±5% pitch, ±2 dB, no back-to-back repeat |
+| JavaScript | every chunk under 4 MB (rapier, three, ALS and vendor split) |
 | Draw calls | ≤ 180 desktop, ≤ 120 phone |
 | Shadowed lights | 1 (the sun) |
 | Point lights | ≤ 4 practicals lit at once |

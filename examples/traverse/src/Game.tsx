@@ -22,7 +22,7 @@ import { Effects, type EffectsHandle } from './fx'
 import { Probe, type ProbeApi } from './probe'
 import { Clock, type ClockHandle } from './hud'
 import { outfit } from './outfit'
-import { formatSplit, formatTime } from './model'
+import { formatSplit, formatTime, locomotion } from './model'
 
 const bestKey = 'blacksite.traverse.best'
 const readBest = (): number[] | null => { try { const value = JSON.parse(localStorage.getItem(bestKey) ?? 'null'); return Array.isArray(value) ? value : null } catch { return null } }
@@ -89,7 +89,7 @@ function Scene({ shared, spawn, onAction, onEvent, ghostVisible, api }: { shared
   return <>
     <Atmosphere />
     <Look atmosphere="zone" sky={false} fog={false} />
-    <Physics gravity={[0, -9.81, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
+    <Physics gravity={[0, -locomotion.gravity, 0]} timeStep={locomotion.physicsStep} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <Player command={shared.command} pose={shared.pose} time={time} audio={shared.footsteps} spawn={spawn} scripted={shared.scripted} touchLook={shared.touchLook} touchMove={shared.touchMove} onAction={onAction} />
       <Level route={shared.route} />
       <Probe shared={shared} api={api} />

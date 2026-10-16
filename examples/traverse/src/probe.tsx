@@ -387,7 +387,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
 
     const bookmarks: Bookmark[] = [
       ...route.bookmarks.map(bookmark => ({ name: bookmark.name, position: bookmark.position, target: bookmark.target, fov: bookmark.fov })),
-      { name: 'overview', position: [60, 34, 42], target: [82, 0, -4], fov: 50 },
+      { name: 'overview', position: [92, 34, 30], target: [84, 0, -4], fov: 55 },
     ]
 
     const check = exposeCheck({
@@ -398,7 +398,8 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         if (!body) return null
         const p = body.translation()
         const v = body.linvel()
-        return { position: [p.x, p.y, p.z], velocity: [v.x, v.y, v.z], grounded: shared.pose.current.character?.locomotionMode === 'Grounded' }
+        const seen = shared.pose.current.ground
+        return { position: [seen.x, p.y, seen.z], velocity: [v.x, v.y, v.z], grounded: shared.pose.current.character?.locomotionMode === 'Grounded' }
       },
       audio: () => shared.sound.sample(),
       scripts: {

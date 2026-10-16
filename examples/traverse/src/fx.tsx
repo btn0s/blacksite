@@ -4,7 +4,9 @@ import { useFrame, useThree } from '@react-three/fiber'
 import type { CharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
 import type { Route } from './route'
 import type { Soundscape } from './audio'
-import { look } from './model'
+import { input as tuning, look } from './model'
+import { isTouchDevice } from '@blacksite/look/world'
+import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 
 export type EffectsHandle = { flash(at: readonly [number, number, number]): void; dust(at: THREE.Vector3, amount: number): void }
 
@@ -69,20 +71,21 @@ const flashShade: [number, number, number] = [1.0, 0.75, 0.38]
 
 export function Effects({ route, pose, handle, sound }: { route: Route; pose: MutableRefObject<CharacterPoseSample>; handle: { current: EffectsHandle | null }; sound: Soundscape }) {
   const { camera, gl } = useThree()
+  const count = useMemo(() => Math.round(look.ash * (isTouchDevice() ? look.phoneDensity : 1)), [])
   const ash = useMemo(() => {
-    const points = cloud(look.ash)
+    const points = cloud(count)
     const size = points.geometry.getAttribute('size') as THREE.BufferAttribute
     const alpha = points.geometry.getAttribute('alpha') as THREE.BufferAttribute
     const tint = points.geometry.getAttribute('tint') as THREE.BufferAttribute
     const position = points.geometry.getAttribute('position') as THREE.BufferAttribute
-    for (let i = 0; i < look.ash; i++) {
+    for (let i = 0; i < count; i++) {
       size.setX(i, 0.018 + Math.random() * 0.03)
       alpha.setX(i, 0.55 + Math.random() * 0.35)
       const shade = 0.62 + Math.random() * 0.2
       tint.setXYZ(i, shade, shade * 0.98, shade * 0.94)
       position.setXYZ(i, (Math.random() - 0.5) * 2 * look.ashRadius, Math.random() * 14, (Math.random() - 0.5) * 2 * look.ashRadius)
     }
-    return { points, seeds: Float32Array.from({ length: look.ash }, () => Math.random() * 100) }
+    return { points, seeds: Float32Array.from({ length: count }, () => Math.random() * 100) }
   }, [])
   const puffs = useMemo(() => cloud(160), [])
   const live = useRef<Puff[]>([])
@@ -90,6 +93,17 @@ export function Effects({ route, pose, handle, sound }: { route: Route; pose: Mu
   const previous = useRef<{ mode: string | null; action: string | null; vz: number; airborne: number }>({ mode: null, action: null, vz: 0, airborne: 0 })
   const forward = useMemo(() => new THREE.Vector3(), [])
   const spot = useMemo(() => new THREE.Vector3(), [])
+  const dip = useRef({ y: 0, v: 0 })
+
+  useFrame((_, rawDelta) => {
+    const dt = Math.min(rawDelta, 1 / 20)
+    const state = dip.current
+    const omega = tuning.landingDipRecovery
+    state.v += (-omega * omega * state.y - 2 * omega * state.v) * dt
+    state.y += state.v * dt
+    if (Math.abs(state.y) < 1e-4 && Math.abs(state.v) < 1e-3) state.y = state.v = 0
+    camera.position.y += state.y
+  }, ALS_FRAME_PRIORITY.Camera + 0.02)
 
   const spawn = (puff: Omit<Puff, 'age'>) => { if (live.current.length < 160) live.current.push({ ...puff, age: 0 }) }
   const api = useMemo<EffectsHandle>(() => ({
@@ -125,7 +139,7 @@ export function Effects({ route, pose, handle, sound }: { route: Route; pose: Mu
     const cx = camera.position.x
     const cz = camera.position.z
     const cy = camera.position.y
-    for (let i = 0; i < look.ash; i++) {
+    for (let i = 0; i < count; i++) {
       const seed = ash.seeds[i]!
       let x = array[i * 3]! + (0.22 + Math.sin(t * 0.7 + seed) * 0.18) * dt
       let y = array[i * 3 + 1]! - (0.18 + (seed % 1) * 0.16) * dt
@@ -164,6 +178,7 @@ export function Effects({ route, pose, handle, sound }: { route: Route; pose: Mu
           spot.y = sample.ground.y
           api.dust(spot, strength)
           sound.play('land', strength)
+          dip.current.v -= tuning.landingDip * strength * tuning.landingDipRecovery * Math.E
         }
       }
       if (mode === 'Grounded') state.airborne = 0

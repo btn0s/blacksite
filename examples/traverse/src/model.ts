@@ -10,14 +10,15 @@ export const locomotion = {
   walkableSlopeDegrees: 44.8,
   acceleration: 20,
   jumpSpeed: 4.2,
-  gravity: 9.81,
+  gravity: 9.8,
+  physicsStep: 1 / 60,
 } as const
 
 export const feel = {
   moveSpeed: locomotion.run,
   sprintSpeed: locomotion.sprint,
   timeToTopSpeed: 0.9 * locomotion.run / locomotion.acceleration,
-  jumpApex: locomotion.jumpSpeed ** 2 / (2 * locomotion.gravity),
+  jumpApex: locomotion.jumpSpeed ** 2 / (2 * locomotion.gravity) - locomotion.jumpSpeed * locomotion.physicsStep / 2,
   tolerance: 0.1,
 } as const
 
@@ -52,15 +53,20 @@ export const camera = {
 } as const
 
 export const input = {
-  mouseDegreesPerPixel: 0.11,
-  touchDegreesPerPixel: 0.32,
-  padYawRate: 220,
-  padPitchRate: 140,
+  mouseDegreesPerPixel: 0.0022 * 180 / Math.PI,
+  touchDegreesPerPixel: 0.0042 * 180 / Math.PI * 1.7,
+  padYawRate: 240,
+  padPitchRate: 90,
   pitchMin: -70,
   pitchMax: 55,
   walkStick: 0.5,
-  stickDeadZone: 0.16,
+  stickDeadZone: 0.2,
+  touchSprint: 0.92,
   rollTapSeconds: 0.25,
+  jumpBufferSeconds: 0.1,
+  coyoteSeconds: 0.1,
+  landingDip: 0.12,
+  landingDipRecovery: 9,
 } as const
 
 export const route = {
@@ -75,6 +81,7 @@ export const route = {
 export const look = {
   atmosphere: { fog: '#858a7e', density: 0.017, shadowSize: 30, sunIntensity: 2.3, ambient: 0.9, sunDirection: [0.5, 0.42, -0.6] as [number, number, number] },
   ash: 1400,
+  phoneDensity: 0.5,
   ashRadius: 22,
 } as const
 

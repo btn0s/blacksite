@@ -49,11 +49,14 @@ export function Practicals({ route }: { route: Route }) {
     if (light.kind === 'tube') glow.position.y -= 0.02
     return { light, point, glow }
   }), [route])
-  const order = useRef<number[]>([])
+  const order = useMemo(() => lights.map((_, index) => index), [lights])
+  const distance = useMemo(() => new Float32Array(lights.length), [lights])
+  const nearer = useMemo(() => (a: number, b: number) => distance[a]! - distance[b]!, [distance])
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
-    order.current = lights.map((_, index) => index).sort((a, b) => lights[a]!.point.position.distanceToSquared(camera.position) - lights[b]!.point.position.distanceToSquared(camera.position))
-    order.current.forEach((index, rank) => {
+    for (let index = 0; index < lights.length; index++) distance[index] = lights[index]!.point.position.distanceToSquared(camera.position)
+    order.sort(nearer)
+    order.forEach((index, rank) => {
       const { light, point, glow } = lights[index]!
       const on = rank < frame.pointLights
       const level = light.kind === 'tube' ? flicker(t, index * 2.7) : light.kind === 'fire' ? 0.75 + 0.25 * Math.sin(t * 17 + Math.sin(t * 5.3) * 2) * Math.sin(t * 3.1) : 1

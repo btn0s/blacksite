@@ -31,6 +31,8 @@ export function Player({ command, pose, time, audio, spawn, scripted, touchLook,
   const { gl } = useThree()
   const ragdoll = useRef<AlsRagdollHandle | null>(null)
   const shift = useRef<{ down: boolean; at: number }>({ down: false, at: 0 })
+  const jumpBuffer = useRef(0)
+  const airborneSince = useRef(0)
   useInputContext(TRAVERSE_INPUT)
 
   useEffect(() => {
@@ -40,7 +42,10 @@ export function Player({ command, pose, time, audio, spawn, scripted, touchLook,
 
   useActionEvents(event => {
     if (scripted.current) return
-    if (event.action === 'jump') command.jumpSequence++
+    if (event.action === 'jump') {
+      command.jumpSequence++
+      if (pose.current.character?.locomotionMode === 'InAir' && performance.now() / 1000 - airborneSince.current > tuning.coyoteSeconds) jumpBuffer.current = performance.now() / 1000 + tuning.jumpBufferSeconds
+    }
     else if (event.action === 'roll') command.rollSequence++
     else if (event.action === 'crouch') command.crouch = !command.crouch
     else if (event.action === 'walk') command.walk = !command.walk
@@ -90,12 +95,18 @@ export function Player({ command, pose, time, audio, spawn, scripted, touchLook,
     command.right = Math.max(-1, Math.min(1, keyRight + padRight + touchMove.current.right))
     const held = hub.isHeld('sprint')
     const now = performance.now() / 1000
+    const character = pose.current.character
+    if (character?.locomotionMode !== 'InAir') airborneSince.current = now
+    if (jumpBuffer.current > now && character?.locomotionMode === 'Grounded' && !character.locomotionAction) {
+      jumpBuffer.current = 0
+      command.jumpSequence++
+    }
     if (held && !shift.current.down) shift.current = { down: true, at: now }
     if (!held && shift.current.down) {
       shift.current.down = false
       if (now - shift.current.at < tuning.rollTapSeconds) command.rollSequence++
     }
-    command.sprint = held && now - shift.current.at >= tuning.rollTapSeconds * 0.5
+    command.sprint = (held && now - shift.current.at >= tuning.rollTapSeconds * 0.5) || Math.hypot(touchMove.current.forward, touchMove.current.right) > tuning.touchSprint
   }, ALS_FRAME_PRIORITY.ControlRotation - 0.2)
 
   const inputSource = useMemo(() => () => codeInput(command), [command])

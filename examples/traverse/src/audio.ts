@@ -7,6 +7,8 @@ type Vec3 = [number, number, number]
 
 const reverbFor: Record<Zone['kind'] | 'open', number> = { open: 0.08, arch: 0.3, stairwell: 0.55 }
 
+const jitterGain = () => Math.pow(10, (Math.random() * 2 - 1) * 2 / 20)
+
 function noiseBuffer(context: BaseAudioContext, seconds: number, shape: (t: number, white: number) => number, start = 1234567) {
   const length = Math.floor(context.sampleRate * seconds)
   const buffer = context.createBuffer(1, length, context.sampleRate)
@@ -44,24 +46,24 @@ function crackle(context: BaseAudioContext) {
   })
 }
 
-function drip(context: BaseAudioContext) {
-  const drops = [0.3, 1.45, 2.2, 3.6]
+function drip(context: BaseAudioContext, index = 0) {
+  const drops = [0.3, 1.45, 2.2, 3.6].map((at, drop) => at + ((index * 7 + drop * 3) % 5) * 0.11)
   return noiseBuffer(context, 4.4, t => {
     let value = 0
     for (const at of drops) {
       const since = t - at
       if (since < 0 || since > 0.2) continue
-      value += Math.sin(2 * Math.PI * (900 + since * 4200) * since) * Math.exp(-since * 40) * 0.6
+      value += Math.sin(2 * Math.PI * (900 + index * 140 + since * 4200) * since) * Math.exp(-since * 40) * 0.6
     }
     return value
   })
 }
 
-function tarp(context: BaseAudioContext) {
+function tarp(context: BaseAudioContext, index = 0) {
   let low = 0
   return noiseBuffer(context, 6, (t, white) => {
     low += (white - low) * 0.12
-    const gust = Math.max(0, Math.sin(t * 1.3) * Math.sin(t * 0.47 + 1) * 1.4)
+    const gust = Math.max(0, Math.sin(t * 1.3 + index * 2.1) * Math.sin(t * 0.47 + 1 + index) * 1.4)
     const flap = Math.pow(Math.max(0, Math.sin(t * 2 * Math.PI * (5 + 3 * Math.sin(t)))), 6)
     return low * (0.15 + gust * flap * 1.6)
   })
@@ -69,6 +71,7 @@ function tarp(context: BaseAudioContext) {
 
 export class Soundscape {
   private context: AudioContext | null = null
+  private buffers = new Map<string, AudioBuffer>()
   private master: GainNode | null = null
   private wind: GainNode | null = null
   private windFilter: BiquadFilterNode | null = null
@@ -145,11 +148,15 @@ export class Soundscape {
     droneFilter.connect(drone).connect(master)
     this.log.start('drone', 'drone-bed')
 
-    const buffers = { fire: crackle(context), drip: drip(context), tarp: tarp(context) }
-    for (const emitter of this.emitters) this.emit(emitter.kind, emitter.at, buffers)
+    const seen = new Map<string, number>()
+    for (const emitter of this.emitters) {
+      const index = seen.get(emitter.kind) ?? 0
+      seen.set(emitter.kind, index + 1)
+      this.emit(emitter.kind, emitter.at, index)
+    }
   }
 
-  private emit(kind: Route['emitters'][number]['kind'], at: Vec3, buffers: { fire: AudioBuffer; drip: AudioBuffer; tarp: AudioBuffer }) {
+  private emit(kind: Route['emitters'][number]['kind'], at: Vec3, index: number) {
     const context = this.context!
     const panner = context.createPanner()
     panner.panningModel = 'HRTF'
@@ -177,14 +184,15 @@ export class Soundscape {
       filter.connect(gain)
     } else {
       gain.gain.value = kind === 'fire' ? 0.55 : kind === 'drip' ? 0.5 : 0.4
+      const buffer = (kind === 'fire' ? crackle : kind === 'drip' ? drip : tarp)(context, index)
       const source = context.createBufferSource()
-      source.buffer = buffers[kind]
+      source.buffer = buffer
       source.loop = true
       source.connect(gain)
-      source.start(context.currentTime, Math.random() * buffers[kind].duration)
+      source.start(context.currentTime, Math.random() * buffer.duration)
     }
     gain.connect(panner).connect(this.bus!)
-    this.log.start(kind, `${kind}-loop`)
+    this.log.start(kind, `${kind}-${index}`)
   }
 
   listen(position: { x: number; y: number; z: number }, forward: { x: number; y: number; z: number }, height: number) {
@@ -246,6 +254,7 @@ export class Soundscape {
       const step = cue === 'checkpoint' ? index : this.variant(cue, 2)
       const transpose = Math.pow(2, (cue === 'checkpoint' ? step * 2 : step) / 12)
       this.voice(cue, `${cue}-${step}`, 1)
+      const level = jitterGain()
       base.forEach((frequency, note) => {
         const at = now + note * (cue === 'start' ? 0.12 : 0.09)
         const oscillator = context.createOscillator()
@@ -253,7 +262,7 @@ export class Soundscape {
         oscillator.frequency.value = frequency * transpose
         const gain = context.createGain()
         gain.gain.setValueAtTime(0, at)
-        gain.gain.linearRampToValueAtTime(0.13, at + 0.008)
+        gain.gain.linearRampToValueAtTime(0.13 * level, at + 0.008)
         gain.gain.exponentialRampToValueAtTime(0.0008, at + 0.9)
         oscillator.connect(gain).connect(this.bus!)
         oscillator.start(at)
@@ -266,14 +275,18 @@ export class Soundscape {
     const length = cue === 'roll' ? 0.5 : cue === 'mantle' ? 0.35 : 0.22
     const decay = (cue === 'roll' ? 8 : cue === 'mantle' ? 12 : 26) * spread
     this.voice(cue, `${cue}-${variant}`, length)
+    const key = `${cue}-${variant}`
+    const buffer = this.buffers.get(key) ?? noiseBuffer(context, length, (t, white) => white * Math.exp(-t * decay), 1234567 + variant * 7919)
+    this.buffers.set(key, buffer)
     const source = context.createBufferSource()
-    source.buffer = noiseBuffer(context, length, (t, white) => white * Math.exp(-t * decay), 1234567 + variant * 7919)
+    source.buffer = buffer
+    source.playbackRate.value = 1 + (Math.random() * 2 - 1) * 0.05
     const filter = context.createBiquadFilter()
     filter.type = cue === 'land' || cue === 'ragdoll' ? 'lowpass' : 'bandpass'
     filter.frequency.value = (cue === 'land' ? 260 : cue === 'ragdoll' ? 180 : cue === 'roll' ? 900 : 1500) * spread
     filter.Q.value = 0.8
     const gain = context.createGain()
-    gain.gain.value = Math.min(1, strength) * (cue === 'ragdoll' ? 0.9 : cue === 'land' ? 0.7 : 0.25)
+    gain.gain.value = Math.min(1, strength) * (cue === 'ragdoll' ? 0.9 : cue === 'land' ? 0.7 : 0.25) * jitterGain()
     source.connect(filter).connect(gain).connect(this.bus!)
     source.start(now)
     if (cue === 'land' || cue === 'ragdoll') {
@@ -293,5 +306,6 @@ export class Soundscape {
     void this.context?.close()
     this.context = null
     this.master = null
+    this.buffers.clear()
   }
 }

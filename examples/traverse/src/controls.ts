@@ -57,6 +57,7 @@ export function codeInput(command: Command): AlsCharacterCodeInput {
   return {
     active: command.active,
     jumpSequence: command.jumpSequence,
+    coyoteSeconds: tuning.coyoteSeconds,
     rollSequence: command.rollSequence,
     ragdollSequence: command.ragdollSequence,
     movementDirection: { x, z },
