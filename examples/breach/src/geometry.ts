@@ -1,4 +1,4 @@
-import { LEVEL, type Block, type Hit } from './layout'
+import { LEVEL, footingAt, type Block, type Hit } from './layout'
 import { HIT_ZONES, type HitZone } from './model'
 
 export type V3 = { x: number; y: number; z: number }
@@ -48,7 +48,10 @@ export function castLevel(origin: V3, direction: V3, maxDistance: number, skip?:
 
 export const GROUND: Block = { id: 'ground', min: [-500, -1, -500], max: [500, 0, 500], look: 'dirt', hit: 'dirt', solid: false, ray: true, render: false, cast: false, contact: false }
 
-export function groundHit(x: number, z: number, indoor: boolean): Hit { return indoor ? 'concrete' : Math.abs(x) < 4 && z > 18 ? 'concrete' : 'dirt' }
+export function groundHit(x: number, z: number): Hit {
+  const footing = footingAt(x, z)
+  return footing === 'rubble' || footing === 'water' ? 'dirt' : footing
+}
 
 export function clearLine(from: V3, to: V3) {
   const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z

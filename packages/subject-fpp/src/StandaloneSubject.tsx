@@ -8,6 +8,7 @@ export type { StandaloneIntent } from './intent'
 export type StandaloneTouch = { forward: number; right: number; lookX: number; lookY: number; fire: boolean }
 export type StandaloneRecoil = { pitch: number; yaw: number }
 export type StandaloneRecovery = { fraction: number; seconds: number }
+export type StandaloneView = { yaw: number; pitch: number; reset?: boolean }
 
 export const createStandaloneTouch = (): StandaloneTouch => ({ forward: 0, right: 0, lookX: 0, lookY: 0, fire: false })
 export const createStandaloneRecoil = (): StandaloneRecoil => ({ pitch: 0, yaw: 0 })
@@ -21,9 +22,10 @@ export type StandaloneSubjectProps = {
   sensitivity?: number
   recoilKept?: number
   recovery?: StandaloneRecovery
+  view?: StandaloneView
 }
 
-export function StandaloneSubject({ onIntent, onFire, onReload, touch, recoil, sensitivity = 1, recoilKept = 0.55, recovery }: StandaloneSubjectProps) {
+export function StandaloneSubject({ onIntent, onFire, onReload, touch, recoil, sensitivity = 1, recoilKept = 0.55, recovery, view }: StandaloneSubjectProps) {
   const { camera, gl } = useThree()
   const keys = useRef(new Set<string>())
   const pointer = useRef({ locked: false, yaw: 0, pitch: 0, fire: false })
@@ -55,6 +57,13 @@ export function StandaloneSubject({ onIntent, onFire, onReload, touch, recoil, s
   }, [gl, onReload])
   useFrame((_, dt) => {
     const state = pointer.current
+    if (view?.reset) {
+      state.yaw = view.yaw
+      state.pitch = view.pitch
+      Object.assign(kick.current, { pitch: 0, yaw: 0, climbPitch: 0, climbYaw: 0, sprayPitch: 0, sprayYaw: 0, restorePitch: 0, restoreYaw: 0 })
+      if (recoil) recoil.pitch = recoil.yaw = 0
+      view.reset = false
+    }
     if (touch) {
       state.yaw -= touch.lookX * 0.0042 * scale.current
       state.pitch = Math.max(-1.48, Math.min(1.48, state.pitch - touch.lookY * 0.0042 * scale.current))
@@ -96,6 +105,7 @@ export function StandaloneSubject({ onIntent, onFire, onReload, touch, recoil, s
     offset.pitch *= settle
     offset.yaw *= settle
     rotation.current.set(Math.max(-1.5, Math.min(1.5, state.pitch + offset.pitch)), state.yaw - offset.yaw, 0)
+    if (view) { view.yaw = state.yaw; view.pitch = state.pitch }
     quaternion.current.setFromEuler(rotation.current)
     camera.quaternion.copy(quaternion.current)
     const intent = readStandaloneIntent(keys.current)

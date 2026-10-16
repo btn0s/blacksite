@@ -284,6 +284,10 @@ const fence = (axis: 'x' | 'z', line: number, from: number, to: number, gaps: Op
 }
 fence('x', 30, -20, 20, [{ from: -3, to: 3, bottom: 0, top: 2.4 }])
 fence('z', -20, 10.4, 30)
+standing(-1.5, 30, [2.9, 2.1, 0.06], { look: 'rust', color: '#7d6a58', contact: false })
+standing(1.5, 30.08, [2.9, 2.1, 0.06], { look: 'rust', color: '#6f5f50', contact: false })
+standing(-13.5, 18.5, [4.1, 1.4, 1.7], { look: 'rust', hit: 'metal', render: false, cast: false, contact: false })
+block([9.6, 0, -25.9], [12.8, 2.3, -18.2], { look: 'metal', hit: 'metal', render: false, cast: false, contact: false })
 fence('z', 20, 10.4, 30)
 fence('x', 10.4, -20, -5.4)
 fence('x', 10.4, 5.4, 20)

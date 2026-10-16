@@ -1,46 +1,60 @@
 import type { WeaponDefinition } from '@blacksite/armory'
 
-export const INCH = 0.0254
 export const DEG = Math.PI / 180
 export const SPEED_OF_SOUND = 343
 
 export const MOVE = {
-  eye: 64 * INCH,
-  crouchEye: 46 * INCH,
-  radius: 16 * INCH,
-  step: 18 * INCH,
-  walk: 150 * INCH,
-  run: 190 * INCH,
-  sprint: 320 * INCH,
-  crouch: 190 * INCH / 3,
-  aimScale: 0.55,
-  accelerate: 10,
-  friction: 4,
-  stopSpeed: 100 * INCH,
-  jumpHeight: 21 * INCH,
-  gravity: 600 * INCH,
+  eye: 1.63,
+  crouchEye: 1.0,
+  eyeSmoothing: 20,
+  radius: 0.3,
+  height: 1.8,
+  crouchHeight: 1.12,
+  step: 0.45,
+  walk: 1.75,
+  run: 3.75,
+  sprint: 6.5,
+  crouch: 2.0,
+  aim: 1.65,
+  accelerate: [20, 7.5] as const,
+  brake: [15, 12.5, 5] as const,
+  airControl: 0.25,
+  jumpSpeed: 4.2,
+  gravity: 9.8,
+  coyoteSeconds: 0.1,
+  bufferSeconds: 0.1,
+  landDip: 0.06,
   crouchSeconds: 0.2,
   sprintOutSeconds: 0.22,
   bobAmplitude: 0.012,
 }
 
-export const jumpSpeed = () => Math.sqrt(2 * MOVE.gravity * MOVE.jumpHeight)
+export const jumpApex = () => MOVE.jumpSpeed * MOVE.jumpSpeed / (2 * MOVE.gravity)
+
+export function acceleration(speed: number) {
+  const k = Math.min(1, Math.max(0, speed / MOVE.sprint))
+  return MOVE.accelerate[0] + (MOVE.accelerate[1] - MOVE.accelerate[0]) * k
+}
+
+export function braking(speed: number) {
+  if (speed <= MOVE.run) return MOVE.brake[0] + (MOVE.brake[1] - MOVE.brake[0]) * speed / MOVE.run
+  return MOVE.brake[1] + (MOVE.brake[2] - MOVE.brake[1]) * Math.min(1, (speed - MOVE.run) / (MOVE.sprint - MOVE.run))
+}
 
 export function timeToTopSpeed(speed: number, fraction = 0.9) {
   let velocity = 0
   let time = 0
   const dt = 1 / 240
   while (velocity < speed * fraction && time < 2) {
-    const drop = Math.max(velocity, MOVE.stopSpeed) * MOVE.friction * dt
-    velocity = Math.max(0, velocity - drop)
-    velocity = Math.min(speed, velocity + MOVE.accelerate * speed * dt)
+    velocity = Math.min(speed, velocity + acceleration(velocity) * dt)
     time += dt
   }
   return time
 }
 
 export const VIEW = {
-  fov: 74,
+  fov: 75,
+  fovBlend: 14,
   viewmodelFov: 56,
   sensitivity: 0.0022,
   touchSensitivity: 0.0042,
@@ -61,13 +75,13 @@ const pistolKicks: Kick[] = [[1.3, 0.1], [1.4, -0.15], [1.4, 0.2], [1.5, -0.2], 
 
 export const WEAPONS = {
   rifle: {
-    id: 'rifle', label: 'AK-74', roundsPerSecond: 10, magazine: 30, reserve: 150,
+    id: 'rifle', label: 'Rifle', roundsPerSecond: 10, magazine: 30, reserve: 150,
     reloadSeconds: 2.43, equipSeconds: 0.5, damage: 36, range: 120,
     adsSeconds: 0.25, adsFov: 55, kicks: rifleKicks, kickResetSeconds: 0.43, kickJitter: 0.04, recoveryFraction: 0.6, recoverySeconds: 0.43,
     spread: { hip: 1.1, aim: 0.12, move: 1.6, sprint: 4, crouch: 0.75, bloomPerShot: 0.18, bloomMax: 2.2, recoverySeconds: 0.43 },
   },
   pistol: {
-    id: 'pistol', label: 'PM', roundsPerSecond: 5, magazine: 8, reserve: 40,
+    id: 'pistol', label: 'Pistol', roundsPerSecond: 5, magazine: 8, reserve: 40,
     reloadSeconds: 1.6, equipSeconds: 0.35, damage: 28, range: 60,
     adsSeconds: 0.15, adsFov: 62, kicks: pistolKicks, kickResetSeconds: 0.3, kickJitter: 0.1, recoveryFraction: 0.85, recoverySeconds: 0.25,
     spread: { hip: 0.9, aim: 0.15, move: 1.2, sprint: 3, crouch: 0.8, bloomPerShot: 0.35, bloomMax: 1.8, recoverySeconds: 0.3 },
@@ -137,10 +151,10 @@ export const AI = {
   firstBurstMisses: true,
   missRadius: [0.5, 1.4] as const,
   accuracy: { start: 0.15, end: 0.45, rampSeconds: 3, moving: 0.6, sprinting: 0.4, crouched: 0.8 },
-  runSpeed: 4.2,
-  crouchSpeed: 2.2,
-  sprintSpeed: 5.8,
-  walkSpeed: 1.8,
+  runSpeed: MOVE.run,
+  crouchSpeed: MOVE.crouch,
+  sprintSpeed: MOVE.sprint,
+  walkSpeed: MOVE.walk,
   magazine: 30,
   reloadSeconds: 2.5,
   acceleration: 18,
@@ -201,7 +215,7 @@ export const FEEL = {
   moveSpeed: MOVE.run,
   sprintSpeed: MOVE.sprint,
   timeToTopSpeed: timeToTopSpeed(MOVE.run),
-  jumpApex: MOVE.jumpHeight,
+  jumpApex: jumpApex(),
   tolerance: 0.1,
 }
 
@@ -219,7 +233,7 @@ export function sprintOk(intentForward: number, aiming: boolean, firing: boolean
 
 export function moveSpeed(state: { sprinting: boolean; crouched: boolean; aiming: boolean; walking: boolean }) {
   const base = state.sprinting ? MOVE.sprint : state.crouched ? MOVE.crouch : state.walking ? MOVE.walk : MOVE.run
-  return state.aiming && !state.sprinting ? base * MOVE.aimScale : base
+  return state.aiming && !state.sprinting ? Math.min(base, MOVE.aim) : base
 }
 
 export function aiHitChance(exposureSeconds: number, target: { moving: boolean; sprinting: boolean; crouched: boolean }) {
