@@ -242,15 +242,14 @@ function Director({ intel, layer, focus, setFocus, freeze }: { intel: Intel; lay
     rig.update(camera, Math.min(dt, 0.1), action, followed ? subject : null)
     camera.updateMatrixWorld()
     frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse))
-    lod.frame++
     for (const agent of snapshot.agents) {
       const at = positions.get(agent.id)!
       sphere.center.set(at.x, at.y + 0.9, at.z)
       const distance = camera.position.distanceTo(sphere.center)
-      let interval = agent.id === followed?.id ? 1 : !frustum.intersectsSphere(sphere) ? 8 : distance < 12 ? 1 : distance < 20 ? 2 : distance < 34 ? 3 : 4
-      if (coarse && interval < 2 && agent.id !== followed?.id) interval = 2
-      if (down.current.has(agent.id)) interval = Math.min(interval, 2)
-      lod.intervals.set(agent.id, interval)
+      lod.set(agent.id, {
+        distance, visible: frustum.intersectsSphere(sphere), focused: agent.id === followed?.id,
+        minInterval: coarse ? 2 : 1, maxInterval: down.current.has(agent.id) ? 2 : 8,
+      })
     }
     listener.copy(rig.mode === 'follow' ? camera.position : rig.target)
     if (rig.mode !== 'follow') listener.y = 9

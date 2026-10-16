@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useContext, type ReactNode, type RefObject } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 import * as THREE from 'three'
-import { context, useFrame, type RootState } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { AlsRemoteActor, type AlsRagdollHandle } from 'als-ue5-r3f/app/AlsRemoteActor'
-import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { clone } from 'three/addons/utils/SkeletonUtils.js'
 import type { TeamId } from '@blacksite/warden'
 import type { SquadFeed } from './feed'
@@ -70,11 +69,7 @@ function dress(root: THREE.Object3D, team: TeamId) {
 
 const ignore = () => {}
 
-type Store = NonNullable<React.ContextType<typeof context>>
-type Subscribe = RootState['internal']['subscribe']
-type FrameRef = Parameters<Subscribe>[0]
-
-export const lod = { frame: 0, intervals: new Map<string, number>() }
+export const lod = new Map<string, { distance: number; visible: boolean; focused: boolean; minInterval: number; maxInterval: number }>()
 
 const wrappers = new Map<string, THREE.Group>()
 
@@ -85,45 +80,6 @@ export function corpseOf(id: string) {
   const body = clone(wrap)
   body.traverse(object => { object.matrixAutoUpdate = false; if (object instanceof THREE.SkinnedMesh) object.frustumCulled = false })
   return body
-}
-
-let phases = 0
-
-function Throttled({ id, children }: { id: string; children: ReactNode }) {
-  const store = useContext(context)!
-  const gated = useMemo(() => {
-    const phase = phases++
-    const subscribe: Subscribe = (ref, priority) => {
-      if (priority !== ALS_FRAME_PRIORITY.Animation) return store.getState().internal.subscribe(ref, priority, store)
-      let pending = 0
-      const gate: FrameRef = {
-        current: (state, delta, frame) => {
-          pending += delta
-          const interval = lod.intervals.get(id) ?? 1
-          if ((lod.frame + phase) % interval !== 0) return
-          const elapsed = pending
-          pending = 0
-          ref.current(state, elapsed, frame)
-        },
-      }
-      return store.getState().internal.subscribe(gate, priority, store)
-    }
-    const proxy = ((selector: never, equality: never) => store(selector, equality)) as unknown as Store
-    Object.assign(proxy, store)
-    let source: RootState | undefined
-    let view: RootState | undefined
-    proxy.getState = () => {
-      const state = store.getState()
-      if (state !== source) {
-        source = state
-        const internal = new Proxy(state.internal, { get: (target, key) => key === 'subscribe' ? subscribe : Reflect.get(target, key) })
-        view = new Proxy(state, { get: (target, key) => key === 'internal' ? internal : Reflect.get(target, key) })
-      }
-      return view!
-    }
-    return proxy
-  }, [store, id])
-  return <context.Provider value={gated}>{children}</context.Provider>
 }
 
 function Soldier({ id, team, feed, handles }: { id: string; team: TeamId; feed: SquadFeed; handles: Map<string, RefObject<AlsRagdollHandle | null>> }) {
@@ -146,9 +102,7 @@ function Soldier({ id, team, feed, handles }: { id: string; team: TeamId; feed: 
     state.meshes = meshes
   })
   return <group ref={wrap}>
-    <Throttled id={id}>
-      <AlsRemoteActor snapshots={feed.buffer(id)} now={feed.now} footIk={false} ragdollRef={ragdoll} onUnsupportedState={ignore} />
-    </Throttled>
+    <AlsRemoteActor snapshots={feed.buffer(id)} now={feed.now} footIk={false} animationLod={() => lod.get(id) ?? {}} ragdollRef={ragdoll} onUnsupportedState={ignore} />
   </group>
 }
 
