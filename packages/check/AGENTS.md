@@ -1,0 +1,3 @@
+# Check
+
+Purpose: headless checks for a Blacksite game. `@blacksite/check` is the browser side: the `window.__blacksite` contract types, `exposeCheck()`, `applyCameraPose()` and `createAudioLog()`. `@blacksite/check/runner` is the Node side behind `blacksite check`: it drives system Chrome through playwright-core with the GPU on and writes `report.json` and PNGs for perf, hitch, pop, feel, critic and audio. The contract and how to read results are documented in `skills/blacksite/references/verify.md`. The runner is plain ESM so the CLI runs it without a build; keep the contract in `src/index.ts` and the runner in `src/runner.mjs` in step.

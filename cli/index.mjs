@@ -7,6 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runAssets } from './assets.mjs'
 import { runPrototype } from './prototype.mjs'
+import { runCheck } from './check.mjs'
 import { product } from './product.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -82,7 +83,7 @@ function doctor() {
   process.stdout.write(`${JSON.stringify(checks, null, flag('--json') ? 0 : 2)}\n`)
 }
 async function main() {
-  if (command === 'help' || command === '--help' || flag('--help')) { process.stdout.write(`${product.cli}\n  install [--agent claude|codex|cursor|auto] [--global|--project] [--yes|--uninstall]\n  doctor\n  catalog [--json]\n  scaffold --profile tpp|fpp|blank|mp --name <name> --dir <absolute-dir> [--json] [--gate]\n  new <scaffold options> [--assets id,...]\n  budget\n  prototype new <name> [--with tpp|fpp|subject|armory|warden|cascade|mp]\n  prototype list|promote\n  architecture\n  update\n  assets login <fab|itch|all>\n  assets logout <fab|itch|all>\n  assets status\n  assets sync [--source fab|itch|all]\n  assets list|search|suggest|pick|add|formats\n`); return }
+  if (command === 'help' || command === '--help' || flag('--help')) { process.stdout.write(`${product.cli}\n  install [--agent claude|codex|cursor|auto] [--global|--project] [--yes|--uninstall]\n  doctor\n  catalog [--json]\n  scaffold --profile tpp|fpp|blank|mp --name <name> --dir <absolute-dir> [--json] [--gate]\n  new <scaffold options> [--assets id,...]\n  budget\n  check <url|built-dir> [--only perf,hitch,pop,feel,critic,audio] [--profile desktop,phone] [--out dir]\n  prototype new <name> [--with tpp|fpp|subject|armory|warden|cascade|mp]\n  prototype list|promote\n  architecture\n  update\n  assets login <fab|itch|all>\n  assets logout <fab|itch|all>\n  assets status\n  assets sync [--source fab|itch|all]\n  assets list|search|suggest|pick|add|formats\n`); return }
   if (command === 'install') return install()
   if (command === 'doctor') return doctor()
   if (command === 'catalog' || command === 'scaffold') return run(nodeBin, [path.join(root, 'cli', 'scaffold.mjs'), ...(command === 'catalog' ? ['catalog', ...argv] : argv)])
@@ -94,6 +95,7 @@ async function main() {
     return
   }
   if (command === 'budget') return run(nodeBin, [path.join(root, 'cli', 'budget-check.mjs'), ...argv])
+  if (command === 'check') return runCheck(argv)
   if (command === 'assets') return runAssets(argv)
   if (command === 'prototype') return runPrototype(argv)
   if (command === 'architecture') { process.stdout.write(await readFile(path.join(root, 'skills', 'game-architecture', 'SKILL.md'), 'utf8')); return }
