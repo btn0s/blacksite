@@ -61,6 +61,7 @@ export interface MultiplayerSceneProps {
   initialSpawn?: readonly [number, number, number]
   onArmsPresentation?: (presentation: ArmsPresentation | null) => void
   input?: 'dom' | 'external'
+  footsteps?: Pick<AlsFootstepAudioRuntime, 'PlayFootstepSound' | 'SetListenerTransform'>
   children?: ReactNode
   onReplica?: (replica: MultiplayerReplica | null) => void
   onStatus?: (status: MultiplayerStatus) => void
@@ -168,7 +169,7 @@ export function MultiplayerScene(props: MultiplayerSceneProps) {
   return replica ? <Suspense fallback={null}><ReplicatedScene {...props} subject={subject} replica={replica} /></Suspense> : null
 }
 
-function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics, onShot, physicsProbe, onArmsPresentation, input = 'dom', children, subject, replica }: MultiplayerSceneProps & { subject: SubjectState; replica: MultiplayerReplica }) {
+function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics, onShot, physicsProbe, onArmsPresentation, input = 'dom', footsteps, children, subject, replica }: MultiplayerSceneProps & { subject: SubjectState; replica: MultiplayerReplica }) {
   const inputSource = useMemo(() => createSubjectInputSource(subject), [subject])
   const controlRotationSource = useMemo(() => () => ({ yaw: subject.player.command.yaw, pitch: subject.player.command.pitch }), [subject])
   const arms = useMemo(createArmsState, [])
@@ -192,7 +193,7 @@ function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics,
   const controller = useMemo(() => world.spawn(Controller({ pawn: connection.id })), [world, connection.id])
   const pawn = useMemo(() => world.spawn(Pawn({ owner: connection.id }), Intent), [world, connection.id])
   const worldTime = useMemo(createWorldTimeState, [])
-  const audio = useMemo(() => new AlsFootstepAudioRuntime({ AutoInstallUserGestureUnlock: true }), [])
+  const audio = useMemo(() => footsteps ?? new AlsFootstepAudioRuntime({ AutoInstallUserGestureUnlock: true }), [footsteps])
   const ragdoll = useRef<AlsRagdollHandle | null>(null)
   const alive = useRef(true)
   const [remotes, setRemotes] = useState<string[]>(() => remoteKeys(replica, connection.id))

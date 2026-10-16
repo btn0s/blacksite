@@ -41,7 +41,7 @@ function Shell() {
       if (locked && !document.pointerLockElement) setScreen(current => current === 'play' ? 'pause' : current)
       locked = Boolean(document.pointerLockElement)
     }
-    const gesture = () => { void sound.start(); sound.setZone('outdoor') }
+    const gesture = () => { void sound.start() }
     document.addEventListener('pointerlockchange', change)
     addEventListener('pointerdown', gesture, { once: true })
     addEventListener('keydown', gesture, { once: true })
@@ -65,5 +65,6 @@ function Shell() {
 }
 
 registerWarmup({ name: 'fonts', stage: 'boot', scope: 'game', run: () => document.fonts.ready })
+registerWarmup({ name: 'sound', stage: 'boot', scope: 'game', run: async () => sound.prepare() })
 await runWarmup({ scope: 'game' })
 createRoot(document.getElementById('root')!).render(<InputProvider runtime={input}><Shell /></InputProvider>)

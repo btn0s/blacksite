@@ -1,4 +1,4 @@
-import { Suspense, useMemo, type ComponentProps, type ReactNode } from 'react'
+import { Suspense, useMemo, type ReactNode } from 'react'
 import { useFrame, type RootState } from '@react-three/fiber'
 import { Character } from 'als-ue5-r3f/app/Character'
 import { AlsCamera } from 'als-ue5-r3f/app/AlsCamera'
@@ -7,6 +7,7 @@ import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import type { AlsCharacterCodeInput } from 'als-ue5-r3f/als/AlsCharacter.hooks'
 import { CheckProbe } from '../../game-shell/src/game/check'
+import { footsteps } from '../../game-shell/src/game/footsteps'
 import { PlayHud } from '../../game-shell/src/game/hud'
 import { held, take, value } from '../../game-shell/src/game/input'
 import { FEEL } from '../../game-shell/src/game/model'
@@ -17,15 +18,6 @@ import { yard } from '../../game-shell/src/game/yard'
 const DEGREES = 180 / Math.PI
 const feel = { moveSpeed: FEEL.moveSpeed, sprintSpeed: FEEL.sprintSpeed, jumpApex: FEEL.jumpApex, tolerance: 0.12 }
 
-type Footsteps = ComponentProps<typeof Character>['footstepSoundSink']
-type Listener = ComponentProps<typeof AlsCamera>['footstepAudioRuntime']
-
-const footsteps: Footsteps = {
-  PlayFootstepSound: request => { sound.play(request.SoundType === 'Land' ? 'landing.concrete' : 'footstep.concrete', { position: [request.Location.x, request.Location.y, request.Location.z] }) },
-}
-const listener: Listener = {
-  SetListenerTransform: transform => sound.setListener({ position: [transform.Location.x, transform.Location.y, transform.Location.z], forward: [transform.Forward.x, transform.Forward.y, transform.Forward.z] }),
-}
 
 function createControl() {
   const control = { yaw: 0, pitch: 0, jumpSequence: 0 }
@@ -55,8 +47,8 @@ function Look({ control }: { control: { yaw: number; pitch: number; jumpSequence
     control.yaw = ((control.yaw + look.x * DEGREES + 180) % 360 + 360) % 360 - 180
     control.pitch = Math.max(-80, Math.min(80, control.pitch - look.y * DEGREES))
     if (take('jump')) control.jumpSequence++
-    sound.update(1 / 60)
   }, ALS_FRAME_PRIORITY.ControlRotation - 0.5)
+  useFrame((_, delta) => sound.update(delta))
   return null
 }
 
@@ -68,7 +60,7 @@ function Player({ pose }: { pose: { current: CharacterPoseSample } }) {
     <Suspense fallback={null}>
       <Character onSizeChange={() => {}} onOverlayModeBridgeChange={() => {}} poseSample={pose} worldTime={time} footstepSoundSink={footsteps} inputEnabled={false} inputSource={drive.source} toggleRotationModeKey={null} showDebugControls={false} initialPosition={yard.spawn} />
     </Suspense>
-    <AlsCamera poseSample={pose} worldTime={time} footstepAudioRuntime={listener} toggleViewModeKey={null} gamepadEnabled={false} controlRotationSource={drive.rotation} />
+    <AlsCamera poseSample={pose} worldTime={time} footstepAudioRuntime={footsteps} toggleViewModeKey={null} gamepadEnabled={false} controlRotationSource={drive.rotation} />
   </>
 }
 

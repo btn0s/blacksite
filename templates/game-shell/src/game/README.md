@@ -9,14 +9,7 @@ The Play entry loads `mode.tsx`. Every profile starts from the same parts:
 - `walker.tsx`: a kinematic character driven by the model's motor.
 - `check.tsx`: the `window.__blacksite` contract: bookmarks, camera override, player, audio, input and model, with `ready()` when the world is loaded.
 - `hud.tsx`: hints, the click-to-play prompt and the touch pad.
-- `sound.ts`: the sound hook. Cues are already named (`footstep.concrete`, `landing.concrete`, `weapon.rifle`, `impact.concrete`).
+- `sound.ts`: the `@blacksite/soundscape` mixer for this device tier, in the `outdoor` zone. The shell prepares it during loading, starts it on the first gesture (which starts the wind bed) and drives the master bus from Settings; the check reads `sound.sample()`.
+- `footsteps.ts`: routes ALS foot plants and the camera listener into the mixer. `surfaceAt` in `yard.ts` picks `concrete`, `metal`, `dirt` or `water`; the walker uses the same function.
 
-## Sound
-
-`sound.ts` exports a silent stand-in until `@blacksite/soundscape` is installed. To turn it on, replace its last line with:
-
-```ts
-export const sound: Sound = createSoundscape({ tier: soundTier, voiceCap })
-```
-
-and import `createSoundscape` from `@blacksite/soundscape`. Nothing else changes: the shell already starts it on the first gesture, sets the `outdoor` zone and drives the master bus from Settings, and the check already reads `sound.sample()`.
+Play a sound by cue name with a world position: `sound.play('impact.metal', { position, delay: true })`. Register your own cues with `sound.registerCue`.

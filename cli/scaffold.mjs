@@ -130,7 +130,7 @@ async function main() {
   emit(options.json, 'submodules', 'done', 'Recursive Blacksite submodule initialized')
   const packageIds = [...requested].map(id => id === 'subject' && profile === 'fpp' ? 'subject-fpp' : id)
   const needsAls = profile === 'tpp' || packageIds.includes('subject') || packageIds.includes('subject-fpp')
-  const base = ['ui', 'look', 'input', 'check']
+  const base = ['ui', 'look', 'input', 'check', 'soundscape']
   const closure = await packageClosure(path.join(root, 'vendor/blacksite'), [...base, ...packageIds])
   const workspace = ['packages:', ...closure.map(item => `  - '${item}'`), ...(needsAls ? ["  - 'vendor/blacksite/vendor/als-web'"] : []), 'allowBuilds:', '  esbuild: true', ...(profile === 'mp' ? ['  msgpackr-extract: false'] : []), 'minimumReleaseAge: 0', ''].join('\n')
   await writeFile(path.join(root, 'pnpm-workspace.yaml'), workspace)

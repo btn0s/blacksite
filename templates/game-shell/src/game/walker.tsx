@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { FEEL, createMotor, stepMotor, type Motor } from './model'
 import { held, take, value } from './input'
 import { sound } from './sound'
-import { yard } from './yard'
+import { surfaceAt, yard } from './yard'
 
 export type Walker = {
   position: THREE.Vector3
@@ -77,13 +77,14 @@ export function WalkerBody({ walker, view = 'eye' }: { walker: Walker; view?: 'e
     walker.motor.grounded = grounded
     walker.position.set(next.x, next.y - FEEL.capsuleHeight / 2, next.z)
     const feet: [number, number, number] = [walker.position.x, walker.position.y, walker.position.z]
-    if (jumped) sound.play('footstep.concrete', { position: feet })
-    if (grounded && !wasGrounded && falling < -3) sound.play('landing.concrete', { position: feet })
+    const surface = surfaceAt(feet[0], feet[1], feet[2])
+    if (jumped) sound.play(`footstep.${surface}`, { position: feet })
+    if (grounded && !wasGrounded && falling < -3) sound.play(`landing.${surface}`, { position: feet, volume: Math.min(1.5, 0.6 - falling * 0.12) })
     if (grounded) {
       walker.stride += Math.hypot(moved.x, moved.z)
       if (walker.stride > FEEL.stride * (velocity.x * velocity.x + velocity.z * velocity.z > 20 ? 1.35 : 1)) {
         walker.stride = 0
-        sound.play('footstep.concrete', { position: feet })
+        sound.play(`footstep.${surface}`, { position: feet })
       }
     }
 

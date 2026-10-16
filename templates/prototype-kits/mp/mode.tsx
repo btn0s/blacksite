@@ -5,6 +5,7 @@ import { createLoopbackRoom, type Connection } from '@blacksite/relay'
 import { createColyseusTransport } from '@blacksite/relay/colyseus'
 import type { ArmsPresentation } from '@blacksite/subject-fpp/arms'
 import { CheckProbe } from '../../game-shell/src/game/check'
+import { footsteps } from '../../game-shell/src/game/footsteps'
 import { PlayHud } from '../../game-shell/src/game/hud'
 import { held, take, value } from '../../game-shell/src/game/input'
 import { FEEL } from '../../game-shell/src/game/model'
@@ -31,7 +32,7 @@ function useConnection() {
 }
 
 function Drive({ subject }: { subject: SubjectState }) {
-  useFrame(() => {
+  useFrame((_, delta) => {
     const look = value('look')
     const command = subject.player.command
     command.yaw = wrapYaw(command.yaw + look.x * DEGREES)
@@ -39,10 +40,7 @@ function Drive({ subject }: { subject: SubjectState }) {
     const move = value('move')
     driveSubject(subject, { forward: move.y, right: move.x, sprint: held('sprint'), crouch: held('crouch'), walk: held('walk'), fire: held('fire'), aim: held('aim') })
     for (const press of ['jump', 'reload', 'view', 'rifle', 'pistol'] as const) if (take(press)) pressSubject(subject, press)
-    const eye = subject.frame.eye
-    const forward = subject.frame.aimDirection
-    sound.setListener({ position: [eye.x, eye.y, eye.z], forward: [forward.x, forward.y, forward.z] })
-    sound.update(1 / 60)
+    sound.update(delta)
   }, -5)
   return null
 }
@@ -61,7 +59,7 @@ export default function Mode({ onCreated, physicsProbe }: { onCreated?: (state: 
   return <>
     <Stage physics={false} overlay={arms} onCreated={onCreated}>
       <Drive subject={subject} />
-      {joined && <MultiplayerScene key={joined.connection.id} connection={joined.connection} offline={!joined.online} subject={subject} input="external" onArmsPresentation={setArms} onStatus={setStatus} onShot={shot} physicsProbe={physicsProbe}>
+      {joined && <MultiplayerScene key={joined.connection.id} connection={joined.connection} offline={!joined.online} subject={subject} input="external" footsteps={footsteps} onArmsPresentation={setArms} onStatus={setStatus} onShot={shot} physicsProbe={physicsProbe}>
         <Yard />
       </MultiplayerScene>}
       <CheckProbe

@@ -2,6 +2,22 @@ import * as THREE from 'three'
 import type { Bookmark } from '@blacksite/check'
 import { LevelBuilder, apartmentBlock, apc, deadTree, groundMaterial, lada, puddleMaterial, shed, waterTower, worldPlaneGeometry } from '@blacksite/look/world'
 
+export type Surface = 'concrete' | 'metal' | 'dirt' | 'water'
+
+const puddleSpots = [[3, -1.4, 2.6, 1.4, 0.3], [17, 1.8, 3.4, 1.8, -0.2], [35, -2.2, 4, 2.2, 0.6], [50, 2.4, 2.4, 1.3, 1.2]] as const
+
+export function surfaceAt(x: number, y: number, z: number): Surface {
+  if (y < 0.25 && puddleSpots.some(([px, pz, width, depth]) => {
+    const dx = (x - px) * 2 / width
+    const dz = (z - pz) * 2 / depth
+    return dx * dx + dz * dz < 1
+  })) return 'water'
+  if (y > 2.2 && x > 20.5 && x < 28 && z > -11 && z < -7.5) return 'metal'
+  if (y > 2.2 && x > 28.8 && x < 31.6 && z > -11 && z < -4.7) return 'metal'
+  if ((x > -10 && x < 74 && Math.abs(z) < 4) || (x > 13 && x < 35 && Math.abs(z) < 9)) return 'concrete'
+  return 'dirt'
+}
+
 function random(seed: number) {
   let state = seed
   return () => { state = (state * 1664525 + 1013904223) % 4294967296; return state / 4294967296 }
@@ -76,7 +92,7 @@ export function buildYard() {
   for (const [x, z, h, r] of [[-4, -10, 7, 0.3], [-10, 9, 6, 1.4], [18, 20, 8, 2.2], [52, -20, 7.5, 0.8], [70, 22, 6.5, 3.1], [-24, -18, 8.5, 1.9]] as const) deadTree(level, [x, 0, z], h, r, Math.abs(z) < 14)
 
   const puddles = puddleMaterial()
-  for (const [x, z, w, d, r] of [[3, -1.4, 2.6, 1.4, 0.3], [17, 1.8, 3.4, 1.8, -0.2], [35, -2.2, 4, 2.2, 0.6], [50, 2.4, 2.4, 1.3, 1.2]] as const) {
+  for (const [x, z, w, d, r] of puddleSpots) {
     for (const [ox, oz, k] of [[0, 0, 1], [w * 0.32, d * 0.18, 0.62], [-w * 0.28, -d * 0.12, 0.55]] as const) {
       const puddle = new THREE.Mesh(new THREE.CircleGeometry(0.5, 18), puddles)
       puddle.rotation.set(-Math.PI / 2, 0, r + k)
