@@ -44,7 +44,7 @@ export const tools: Tool[] = [
     packages: ['als-ue5-r3f', '@blacksite/subject'],
     demos: [],
     agent: {
-      reads: [{ label: 'als skill', path: 'skills/als/SKILL.md' }, { label: 'ALS agent guide', path: 'vendor/als-web/docs/guide/overview.md' }],
+      reads: [{ label: 'Characters reference', path: 'skills/blacksite/references/characters.md' }, { label: 'ALS reference', path: 'skills/blacksite/references/als.md' }, { label: 'ALS agent guide', path: 'vendor/als-web/docs/guide/overview.md' }],
       commands: [
         { label: 'Start a third-person game', code: 'blacksite scaffold --profile tpp --name "My Game" --dir /absolute/path' },
         { label: 'Prototype a mechanic on the character', code: 'blacksite prototype new traversal --with tpp' },
@@ -55,7 +55,7 @@ export const tools: Tool[] = [
     guides: [
       { label: 'ALS agent guide', path: 'vendor/als-web/docs/guide/overview.md' },
       { label: 'Player templates', path: 'docs/player-templates.md' },
-      { label: 'als skill', path: 'skills/als/SKILL.md' },
+      { label: 'ALS reference', path: 'skills/blacksite/references/als.md' },
     ],
   },
   {
@@ -68,7 +68,7 @@ export const tools: Tool[] = [
     packages: ['@blacksite/cascade'],
     demos: [],
     agent: {
-      reads: [{ label: 'Cascade guide', path: 'docs/cascade.md' }, { label: 'Package rules', path: 'packages/cascade/AGENTS.md' }],
+      reads: [{ label: 'Destruction reference', path: 'skills/blacksite/references/destruction.md' }, { label: 'Cascade guide', path: 'docs/cascade.md' }, { label: 'Package rules', path: 'packages/cascade/AGENTS.md' }],
       commands: [{ label: 'Prototype a destructible structure', code: 'blacksite prototype new collapse --with cascade' }],
       note: 'The agent authors a structure as boxes, hands it to a destruction session, and renders the fragments with the package renderer. Impacts, charges and tools are commands sent to the worker.',
     },
@@ -89,7 +89,7 @@ export const tools: Tool[] = [
       touch: [], tryThis: [], live: true,
     }],
     agent: {
-      reads: [{ label: 'First-person arms', path: 'docs/arms.md' }, { label: 'Package rules', path: 'packages/armory/AGENTS.md' }],
+      reads: [{ label: 'Weapons reference', path: 'skills/blacksite/references/weapons.md' }, { label: 'First-person arms', path: 'docs/arms.md' }, { label: 'Package rules', path: 'packages/armory/AGENTS.md' }],
       commands: [{ label: 'Start a first-person game', code: 'blacksite scaffold --profile fpp --name "My Game" --dir /absolute/path' }],
       note: 'The fpp template wires the arms, the weapon runtime and input together; the agent adds targets and hit reactions.',
     },
@@ -106,7 +106,7 @@ export const tools: Tool[] = [
     packages: ['@blacksite/relay', '@blacksite/subject'],
     demos: [],
     agent: {
-      reads: [{ label: 'Player templates', path: 'docs/player-templates.md' }, { label: 'Relay limits', path: 'packages/relay/AGENTS.md' }],
+      reads: [{ label: 'Multiplayer reference', path: 'skills/blacksite/references/multiplayer.md' }, { label: 'Player templates', path: 'docs/player-templates.md' }, { label: 'Relay limits', path: 'packages/relay/AGENTS.md' }],
       commands: [{ label: 'Start a multiplayer game', code: 'blacksite scaffold --profile mp --name "My Game" --dir /absolute/path' }],
       note: 'The mp template runs a local Colyseus room under pnpm dev and an offline loopback room, so the agent can test two players in one tab.',
     },
@@ -126,7 +126,7 @@ export const tools: Tool[] = [
       keyboard: [], touch: [], tryThis: [], live: true,
     }],
     agent: {
-      reads: [{ label: 'Warden guide', path: 'docs/warden.md' }, { label: 'Package rules', path: 'packages/warden/AGENTS.md' }],
+      reads: [{ label: 'AI reference', path: 'skills/blacksite/references/ai.md' }, { label: 'Warden guide', path: 'docs/warden.md' }, { label: 'Package rules', path: 'packages/warden/AGENTS.md' }],
       commands: [{ label: 'Prototype squad AI', code: 'blacksite prototype new firefight --with warden' }],
       note: 'The agent mounts a Warden session, which runs the squads in a worker, and draws the agents with its own characters.',
     },
@@ -142,7 +142,7 @@ export const tools: Tool[] = [
     packages: ['@blacksite/input', '@blacksite/ui'],
     demos: [],
     agent: {
-      reads: [{ label: 'Input guide', path: 'packages/input/README.md' }, { label: 'UI guide', path: 'packages/ui/README.md' }],
+      reads: [{ label: 'Input reference', path: 'skills/blacksite/references/input.md' }, { label: 'Input guide', path: 'packages/input/README.md' }, { label: 'UI guide', path: 'packages/ui/README.md' }],
       commands: [{ label: 'Every template includes both', code: 'blacksite scaffold --profile blank --name "My Game" --dir /absolute/path' }],
       note: 'The agent binds game actions to controls in an input context, and builds menus from the UI components so they work with a gamepad as well as a mouse.',
     },
@@ -155,7 +155,7 @@ export const toolBySlug = (slug: string) => tools.find(tool => tool.slug === slu
 
 export const extras = [
   { name: 'Player templates', text: 'Ready-to-play starting points: fpp, tpp, mp and blank.', path: 'docs/player-templates.md' },
-  { name: 'Assets', text: 'Use art you already own from Fab or itch.io, compressed for the web.', path: 'skills/game-assets/SKILL.md' },
+  { name: 'Assets', text: 'Use art you already own from Fab or itch.io, compressed for the web.', path: 'skills/blacksite/references/assets.md' },
 ]
 
 export const legacyRoutes: Record<string, string> = {

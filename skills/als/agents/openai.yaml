@@ -1,4 +1,0 @@
-interface:
-  display_name: "ALS"
-  short_description: "ALS consumer integration contract"
-  default_prompt: "Use $als to wire ALS in this Blacksite game."

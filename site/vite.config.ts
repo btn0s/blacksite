@@ -31,11 +31,16 @@ export default defineConfig({
         if (id !== '\0virtual:blacksite-skills') return
         const root = resolve(import.meta.dirname, '../skills')
         const files: Record<string, string> = {}
-        for (const name of readdirSync(root)) {
-          const file = resolve(root, name, 'SKILL.md')
-          if (!existsSync(file)) continue
+        const read = (name: string) => {
+          const file = resolve(root, name)
           this.addWatchFile(file)
           files[name] = readFileSync(file, 'utf8')
+        }
+        for (const name of readdirSync(root)) {
+          if (!existsSync(resolve(root, name, 'SKILL.md'))) continue
+          read(`${name}/SKILL.md`)
+          const references = resolve(root, name, 'references')
+          if (existsSync(references)) for (const entry of readdirSync(references).filter(entry => entry.endsWith('.md')).sort()) read(`${name}/references/${entry}`)
         }
         return `export default ${JSON.stringify(files)}`
       },

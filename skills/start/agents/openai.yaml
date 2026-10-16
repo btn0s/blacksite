@@ -1,6 +1,0 @@
-interface:
-  display_name: "Start"
-  short_description: "Start in Blacksite"
-  default_prompt: "Use $start for this Blacksite task."
-policy:
-  allow_implicit_invocation: false

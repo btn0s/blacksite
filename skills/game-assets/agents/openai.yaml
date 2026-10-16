@@ -1,4 +1,0 @@
-interface:
-  display_name: "Game Assets"
-  short_description: "Game Assets in Blacksite"
-  default_prompt: "Use $game-assets for this Blacksite task."
