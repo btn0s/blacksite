@@ -1,0 +1,265 @@
+{
+  "name": "brick",
+  "title": "Weathered red brick",
+  "description": "250 \u00d7 65 mm bricks in running bond with recessed lime mortar, chipped arrises and per-brick colour.",
+  "size": 2.08,
+  "depth": 0.014,
+  "seed": 4,
+  "orientation": "wall",
+  "nodes": {
+    "bricks": {
+      "op": "bricks",
+      "tile": [
+        0.26,
+        0.075
+      ],
+      "gap": 0.012,
+      "bevel": 0.006,
+      "jitter": 0.25,
+      "seed": 773899
+    },
+    "brickId": {
+      "op": "bricks",
+      "tile": [
+        0.26,
+        0.075
+      ],
+      "gap": 0.012,
+      "bevel": 0.006,
+      "output": "random",
+      "seed": 773899
+    },
+    "brickMask": {
+      "op": "bricks",
+      "tile": [
+        0.26,
+        0.075
+      ],
+      "gap": 0.012,
+      "bevel": 0.006,
+      "output": "mask",
+      "seed": 773899
+    },
+    "erode": {
+      "op": "fbm",
+      "cell": 0.03,
+      "octaves": 4
+    },
+    "chipped": {
+      "op": "slopeBlur",
+      "input": "bricks",
+      "slope": "erode",
+      "amount": 0.008,
+      "samples": 8,
+      "mode": "min"
+    },
+    "face": {
+      "op": "fbm",
+      "cell": 0.025,
+      "octaves": 4,
+      "gain": 0.6
+    },
+    "fine": {
+      "op": "fbm",
+      "cell": 0.003,
+      "octaves": 2,
+      "basis": "value"
+    },
+    "pits": {
+      "op": "scatter",
+      "cell": 0.03,
+      "radius": 0.003,
+      "density": 0.5,
+      "shape": "chip"
+    },
+    "face2": {
+      "op": "blend",
+      "a": "chipped",
+      "b": "face",
+      "mode": "overlay",
+      "opacity": 0.35
+    },
+    "face3": {
+      "op": "blend",
+      "a": "face2",
+      "b": "pits",
+      "mode": "subtract",
+      "opacity": 0.3
+    },
+    "mortarH": {
+      "op": "levels",
+      "input": "fine",
+      "out": [
+        0.08,
+        0.2
+      ]
+    },
+    "height": {
+      "op": "blend",
+      "a": "mortarH",
+      "b": "face4",
+      "mode": "max"
+    },
+    "hue": {
+      "op": "blend",
+      "a": "brickId",
+      "b": "face",
+      "mode": "mix",
+      "opacity": 0.25
+    },
+    "brickC": {
+      "op": "ramp",
+      "input": "hue",
+      "stops": [
+        [
+          0,
+          "#3f231b"
+        ],
+        [
+          0.15,
+          "#6a3324"
+        ],
+        [
+          0.35,
+          "#84402c"
+        ],
+        [
+          0.55,
+          "#934d36"
+        ],
+        [
+          0.7,
+          "#a35d43"
+        ],
+        [
+          0.82,
+          "#7a4636"
+        ],
+        [
+          0.92,
+          "#b07a62"
+        ],
+        [
+          1,
+          "#5a3a30"
+        ]
+      ]
+    },
+    "brickC2": {
+      "op": "blend",
+      "a": "brickC",
+      "b": "fine",
+      "mode": "overlay",
+      "opacity": 0.45
+    },
+    "soot": {
+      "op": "levels",
+      "input": "face",
+      "in": [
+        0.55,
+        0.8
+      ],
+      "out": [
+        0,
+        0.5
+      ]
+    },
+    "brickC3": {
+      "op": "blend",
+      "a": "brickC2",
+      "b": "#2e211c",
+      "mode": "mix",
+      "mask": "soot"
+    },
+    "brickC4": {
+      "op": "blend",
+      "a": "brickC3",
+      "b": "#3a2a22",
+      "mode": "mix",
+      "mask": "pits",
+      "opacity": 0.6
+    },
+    "mortarC": {
+      "op": "ramp",
+      "input": "fine",
+      "stops": [
+        [
+          0,
+          "#8d877a"
+        ],
+        [
+          1,
+          "#b4ad9e"
+        ]
+      ]
+    },
+    "color": {
+      "op": "blend",
+      "a": "mortarC",
+      "b": "brickC5",
+      "mode": "mix",
+      "mask": "brickMask"
+    },
+    "roughB": {
+      "op": "levels",
+      "input": "face",
+      "out": [
+        0.78,
+        0.93
+      ]
+    },
+    "roughness": {
+      "op": "blend",
+      "a": 0.96,
+      "b": "roughB",
+      "mode": "mix",
+      "mask": "brickMask"
+    },
+    "spall": {
+      "op": "fbm",
+      "cell": 0.04,
+      "octaves": 5,
+      "gain": 0.6
+    },
+    "spallM": {
+      "op": "levels",
+      "input": "spall",
+      "in": [
+        0.62,
+        0.66
+      ]
+    },
+    "face4": {
+      "op": "blend",
+      "a": "face3",
+      "b": "spallM",
+      "mode": "subtract",
+      "opacity": 0.12
+    },
+    "brickC5": {
+      "op": "blend",
+      "a": "brickC4",
+      "b": "#c08a6e",
+      "mode": "mix",
+      "mask": "spallM",
+      "opacity": 0.45
+    }
+  },
+  "outputs": {
+    "color": "color",
+    "height": "height",
+    "roughness": "roughness",
+    "metalness": 0
+  },
+  "finish": {
+    "normal": 1,
+    "ao": {
+      "radius": 0.025,
+      "strength": 0.9
+    }
+  },
+  "weather": {
+    "age": 0.45,
+    "dirt": 0.3
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "maxChunkBytes": 4000000,
+  "maxTotalJsBytes": 8000000,
+  "maxAssetBytes": 20000000,
+  "fixedStepHz": 60,
+  "requiresFixedStep": false,
+  "legacyAssetPaths": []
+}

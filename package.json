@@ -36,6 +36,7 @@
     "@blacksite/check": "workspace:*",
     "@blacksite/input": "workspace:*",
     "@blacksite/look": "workspace:*",
+    "@blacksite/materials": "workspace:*",
     "@blacksite/relay": "workspace:*",
     "@blacksite/soundscape": "workspace:*",
     "@blacksite/subject": "workspace:*",
