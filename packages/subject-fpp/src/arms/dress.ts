@@ -1,5 +1,5 @@
 import {
-  AdditiveBlending, BufferGeometry, CanvasTexture, Color, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial,
+  AdditiveBlending, BufferGeometry, CanvasTexture, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial,
   PlaneGeometry, PointLight, RepeatWrapping, SRGBColorSpace, SkinnedMesh, TextureLoader, Vector2, type Material, type Object3D, type Texture,
 } from 'three'
 import sleeveColor from '../../assets/materials/sleeve_c.webp?url'
@@ -105,6 +105,9 @@ export async function loadArmsDress() {
     return [name, material]
   })) as Record<Finish, MeshStandardMaterial>
   const flash = flashTexture()
+  const cuff = materials.sleeve.clone()
+  cuff.side = DoubleSide
+  const sleeves: BufferGeometry[] = []
   return {
     arms(scene: Object3D) {
       scene.traverse(object => {
@@ -112,6 +115,18 @@ export async function loadArmsDress() {
         const sources = Array.isArray(object.material) ? object.material : [object.material]
         object.material = sources.map((material: Material) => /^Hand_/.test(material.name) ? materials.glove : materials.sleeve)
       })
+      for (const side of [1, -1]) {
+        const bone = scene.getObjectByName(side > 0 ? 'lowerarm_l' : 'lowerarm_r')
+        if (!bone) continue
+        const geometry = new CylinderGeometry(side > 0 ? 0.052 : 0.064, side > 0 ? 0.064 : 0.052, 0.5, 14, 1, true)
+        geometry.rotateZ(-Math.PI / 2)
+        geometry.translate(side * -0.19, 0, 0)
+        sleeves.push(geometry)
+        const sleeve = new Mesh(geometry, cuff)
+        sleeve.name = 'BlacksiteArmsSleeve'
+        sleeve.frustumCulled = false
+        bone.add(sleeve)
+      }
     },
     weapon(weapon: ArmsWeapon, object: Object3D) {
       object.traverse(child => {
@@ -122,6 +137,8 @@ export async function loadArmsDress() {
     },
     flash: (weapon: ArmsWeapon, object: Object3D) => createMuzzleFlash(object, flash, weapon),
     dispose() {
+      cuff.dispose()
+      for (const geometry of sleeves) geometry.dispose()
       for (const material of Object.values(materials)) { material.map?.dispose(); material.normalMap?.dispose(); material.dispose() }
       for (const texture of textures.values()) texture.dispose()
       flash.dispose()

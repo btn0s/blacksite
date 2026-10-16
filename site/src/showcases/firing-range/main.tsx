@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import * as THREE from 'three'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { RenderPass } from 'postprocessing'
 import { Look } from '@blacksite/look/r3f'
-import { autoQuality, type Look as LookHandle, type QualityTier } from '@blacksite/look'
+import { autoQuality, type QualityTier } from '@blacksite/look'
 import { ALS_WEAPONS, createWeaponRuntime, type QueryHit, type WeaponEvent } from '@blacksite/armory'
 import { StandaloneSubject, createStandaloneRecoil, createStandaloneTouch, type StandaloneIntent } from '@blacksite/subject-fpp'
 import { ArmsViewmodel, createArmsState, portraitFov, type ArmsPresentation } from '@blacksite/subject-fpp/arms'
@@ -38,19 +37,6 @@ const eye = 1.63
 
 drill.set({ cleared: steelSet.steel.map(() => false) })
 
-function ArmsPass({ look, presentation }: { look: LookHandle | null; presentation: ArmsPresentation | null }) {
-  useEffect(() => {
-    if (!look || !presentation) return
-    const pass = new RenderPass(presentation.scene, presentation.camera)
-    pass.clearPass.color = false
-    pass.clearPass.depth = true
-    pass.ignoreBackground = true
-    look.composer.addPass(pass, 2)
-    return () => { look.composer.removePass(pass); pass.dispose() }
-  }, [look, presentation])
-  return null
-}
-
 function Scene({ tier, onReady }: { tier: QualityTier; onReady: () => void }) {
   const camera = useThree(state => state.camera) as THREE.PerspectiveCamera
   const gl = useThree(state => state.gl)
@@ -59,7 +45,6 @@ function Scene({ tier, onReady }: { tier: QualityTier; onReady: () => void }) {
   const recoil = useMemo(createStandaloneRecoil, [])
   const effects = useMemo(() => createEffects(scene), [scene])
   const weapon = useMemo(() => createWeaponRuntime({ ownerId: 'player', seed: 7, definitions, initialWeaponId: 'rifle' }), [])
-  const [look, setLook] = useState<LookHandle | null>(null)
   const [presentation, setPresentation] = useState<ArmsPresentation | null>(null)
   const shadows = tier !== 'low'
   const lights = useMemo(() => {
@@ -213,7 +198,7 @@ function Scene({ tier, onReady }: { tier: QualityTier; onReady: () => void }) {
     scratch.forward.y = 0
     scratch.forward.normalize()
     scratch.right.set(-scratch.forward.z, 0, scratch.forward.x)
-    const sprinting = state.sprint && intent.forward > 0.3 && !state.firing && !arms.aiming
+    const sprinting = (state.sprint || touchInput.forward > 0.92) && intent.forward > 0.3 && !state.firing && !arms.aiming
     const speed = sprinting ? 5.2 : arms.aiming ? 1.8 : 3.1
     const moveX = scratch.forward.x * intent.forward + scratch.right.x * intent.right
     const moveZ = scratch.forward.z * intent.forward + scratch.right.z * intent.right
@@ -257,7 +242,7 @@ function Scene({ tier, onReady }: { tier: QualityTier; onReady: () => void }) {
   })
 
   return <>
-    <Look atmosphere="zone" quality={tier} environment sun={lights.sun} fill={lights.fill} onReady={setLook} />
+    <Look atmosphere="zone" quality={tier} environment sun={lights.sun} fill={lights.fill} overlay={presentation} />
     <primitive object={lights.sun} />
     <primitive object={lights.sun.target} />
     <primitive object={lights.fill} />
@@ -265,7 +250,6 @@ function Scene({ tier, onReady }: { tier: QualityTier; onReady: () => void }) {
     <primitive object={range.group} />
     <primitive object={steelSet.group} />
     <ArmsViewmodel state={arms} render="external" onPresentation={setPresentation} />
-    <ArmsPass look={look} presentation={presentation} />
     <StandaloneSubject onIntent={writeIntent} onFire={useCallback((firing: boolean, aim: { origin: THREE.Vector3; direction: THREE.Vector3 }) => { control.current.firing = firing; control.current.aim.direction.copy(aim.direction) }, [])} onReload={useCallback(() => { control.current.reload = true }, [])} touch={touchInput} recoil={recoil} sensitivity={Math.min(1, camera.fov / 72)} />
   </>
 }
@@ -297,7 +281,7 @@ function Hud({ touch }: { touch: boolean }) {
   const total = view.cleared.length
   const done = view.cleared.filter(Boolean).length
   const accuracy = view.shots ? Math.round(view.hits / view.shots * 100) : 0
-  const label = view.phase === 'ready' ? 'Steel drill · first shot starts the clock' : view.phase === 'running' ? `Steel ${done}/${total} · Score ${view.score}` : `Clear · Score ${view.score} · ${accuracy}% hits`
+  const label = view.phase === 'ready' ? 'Steel clears · paper scores' : view.phase === 'running' ? `Steel ${done}/${total} · Score ${view.score}` : `Clear · Score ${view.score} · ${accuracy}% hits`
   return <div className="range-hud">
     <Status label={label} value={formatTime(view.time)} tone={undefined} />
     <div className="range-pips" aria-hidden="true">
