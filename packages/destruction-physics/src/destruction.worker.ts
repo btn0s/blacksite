@@ -9,8 +9,11 @@ import {
   validatePhysicsOperations,
   type PhysicsOperation,
   type PhysicsActionResult,
+  type BondDef,
   type DestructibleManifest,
   type DestructionCommand,
+  type DestructionActor,
+  type ListPatch,
   type DestructionEvent,
   type ReplayLog,
   type RestPolicy,
@@ -82,6 +85,45 @@ function elideSentPieces(frame: SimulationFrame): void {
   sentPieces = new Set(ids);
 }
 
+let sentBondRevision = -1;
+let sentBonds: Array<BondDef> | undefined;
+let sentActors: Array<DestructionActor> | undefined;
+
+const sameNumbers = (a: ReadonlyArray<number>, b: ReadonlyArray<number>): boolean =>
+  a.length === b.length && a.every((value, index) => value === b[index]);
+
+const sameActor = (actor: DestructionActor, other: DestructionActor): boolean =>
+  actor.id === other.id && actor.supported === other.supported &&
+  sameNumbers(actor.nodes, other.nodes) && sameNumbers(actor.visibleChunks, other.visibleChunks);
+
+function listPatch<T>(next: ReadonlyArray<T>, sent: ReadonlyArray<T>, same: (a: T, b: T) => boolean): ListPatch<T> | undefined {
+  if (next.length < sent.length) return undefined;
+  const indices: number[] = [], values: T[] = [];
+  for (let index = 0; index < next.length; index++) {
+    if (index < sent.length && same(next[index]!, sent[index]!)) continue;
+    if (indices.length * 2 > next.length) return undefined;
+    indices.push(index); values.push(next[index]!);
+  }
+  return { length: next.length, indices, values };
+}
+
+function elideUnchanged(frame: SimulationFrame): void {
+  const bonds = frame.bonds;
+  if (bonds && sentBonds && frame.bondRevision === sentBondRevision) frame.bonds = undefined;
+  else if (bonds && sentBonds) {
+    const patch = listPatch(bonds, sentBonds, (a, b) => a === b);
+    if (patch) { frame.bonds = undefined; frame.bondPatch = patch; }
+  }
+  sentBonds = bonds;
+  sentBondRevision = bonds ? frame.bondRevision ?? -1 : -1;
+  const actors = frame.actors;
+  if (actors && sentActors) {
+    const patch = listPatch(actors, sentActors, sameActor);
+    if (patch) { frame.actors = undefined; if (patch.indices.length || patch.length !== sentActors.length) frame.actorPatch = patch; }
+  }
+  sentActors = actors;
+}
+
 function emitFrame(scheduled = false): void {
   if (!simulation) {
     return;
@@ -91,6 +133,7 @@ function emitFrame(scheduled = false): void {
   frame.events = pendingEvents;
   pendingEvents = [];
   elideSentPieces(frame);
+  elideUnchanged(frame);
   scope.postMessage(frame, [
     frame.transforms.buffer,
     frame.states.buffer,
@@ -153,6 +196,9 @@ async function replace(nextManifest: DestructibleManifest, timestep = dt): Promi
   dt = timestep;
   simulation?.dispose();
   sentPieces.clear();
+  sentBondRevision = -1;
+  sentBonds = undefined;
+  sentActors = undefined;
   simulation = next;
   manifest = nextManifest;
   accumulator = 0;

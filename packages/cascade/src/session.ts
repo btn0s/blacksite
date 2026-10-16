@@ -9,6 +9,7 @@ import {
 import { PresentationWorld } from '../../destruction-ecs/src/index';
 import type {
   BondDef,
+  DestructionActor,
   CollisionBox,
   CollisionObject,
   EmitterLaunch,
@@ -27,6 +28,7 @@ import type {
   DestructionEvent,
   SecondaryFragmentDef,
 } from '../../destruction-domain/src/index';
+import { applyListPatch } from '../../destruction-domain/src/index';
 export interface RuntimeView {
   actionMessage: string;
   actionSerial: number;
@@ -65,6 +67,7 @@ export class DestructionSession {
   private applyMs = 0;
   private pieces = new Map<number, SecondaryFragmentDef>();
   private bonds: Array<BondDef> | undefined;
+  private actors: Array<DestructionActor> | undefined;
   private snapshotPeriod = 1000 / 30;
   private readonly timestep: number | undefined;
   private readonly rest: Partial<RestPolicy> | undefined;
@@ -202,8 +205,14 @@ export class DestructionSession {
         this.snapshotPeriod = this.snapshotPeriod * 0.7 + observed * 0.3;
       }
       if (message.bonds) this.bonds = message.bonds;
+      else if (message.bondPatch && this.bonds) this.bonds = applyListPatch(this.bonds, message.bondPatch);
       else if (this.frame && message.tick < this.frame.tick) this.bonds = undefined;
       message.bonds = this.bonds;
+      if (message.actors) this.actors = message.actors;
+      else if (message.actorPatch && this.actors) this.actors = applyListPatch(this.actors, message.actorPatch);
+      else if (this.frame && message.tick < this.frame.tick) this.actors = undefined;
+      message.actors = this.actors;
+      message.bondPatch = message.actorPatch = undefined;
       const secondary = message.secondary;
       if (secondary?.ids) {
         for (const piece of secondary.fragments) {

@@ -349,13 +349,25 @@ export interface DestructionActor {
   /** Manifest indices of shallowest intact visible chunks. */
   visibleChunks: Array<number>;
 }
+export interface ListPatch<T> {
+  length: number;
+  indices: Array<number>;
+  values: Array<T>;
+}
+export const applyListPatch = <T>(base: ReadonlyArray<T>, patch: ListPatch<T>): Array<T> => {
+  const next = base.slice(0, patch.length);
+  patch.indices.forEach((index, offset) => { next[index] = patch.values[offset]!; });
+  return next;
+};
 export interface SimulationFrame {
   /** Structural support for every authored chunk, including hidden hierarchy members. */
   topologySupported?: Uint8Array;
   /** Updated connection definitions after in-place support demotion. */
   bonds?: Array<BondDef>;
   bondRevision?: number;
+  bondPatch?: ListPatch<BondDef>;
   actors?: Array<DestructionActor>;
+  actorPatch?: ListPatch<DestructionActor>;
   visibleChunks?: Uint32Array;
   hierarchyRevision?: number;
   aim?: AimPreview;

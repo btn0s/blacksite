@@ -80,7 +80,7 @@ export function fragmentSurfaceGeometry(
   return geometry;
 }
 
-export function fragmentEdgeGeometry(fragment: FragmentDef): BufferGeometry | null {
+export function fragmentEdgeGeometry(fragment: FragmentDef, segmentLength = 0.1): BufferGeometry | null {
   if (!fragment.shape) return null;
   const positions: number[] = [], normals: number[] = [], uvs: number[] = [];
   const a = new Vector3(), b = new Vector3(), c = new Vector3(), normal = new Vector3();
@@ -99,7 +99,7 @@ export function fragmentEdgeGeometry(fragment: FragmentDef): BufferGeometry | nu
       normal.add(b.cross(c));
     }
     normal.normalize();
-    const edge = damagedEdgeGeometry(points, normal.toArray() as Vec3, fragment.id, Math.min(0.025, Math.min(...fragment.size) * 0.08));
+    const edge = damagedEdgeGeometry(points, normal.toArray() as Vec3, fragment.id, Math.min(0.025, Math.min(...fragment.size) * 0.08), segmentLength);
     if (!edge) continue;
     positions.push(...Array.from(edge.getAttribute('position').array));
     normals.push(...Array.from(edge.getAttribute('normal').array));
