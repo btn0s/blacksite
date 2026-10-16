@@ -134,6 +134,7 @@ class Side {
     let uninstall: (() => void) | null = null
     if (state.tiling === 'auto' && STOCHASTIC_MATERIALS.has(state.id)) {
       tiled = material.clone()
+      tiled.defines = { ...material.defines }
       tiled.onBeforeCompile = material.onBeforeCompile
       tiled.customProgramCacheKey = material.customProgramCacheKey
       try {
