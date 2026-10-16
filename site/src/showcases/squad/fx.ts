@@ -24,6 +24,8 @@ export class ShotFx {
   private scale = new THREE.Vector3()
   private position = new THREE.Vector3()
   private forward = new THREE.Vector3(0, 0, 1)
+  private dir = new THREE.Vector3()
+  private muzzle = new THREE.Vector3()
   private color = new THREE.Color()
   private cursor = 0
   private sparkCursor = 0
@@ -44,18 +46,22 @@ export class ShotFx {
     for (let i = 0; i < SPARKS; i++) this.sparks.push({ at: new THREE.Vector3(), born: 0, life: 0, size: 0, grow: 0, color: new THREE.Color(), live: false })
   }
 
-  shot(origin: Vec3, end: Vec3, now: number) {
-    const tracer = this.tracers[this.cursor]!
-    this.cursor = (this.cursor + 1) % TRACERS
-    tracer.dir.set(end.x - origin.x, end.y - origin.y, end.z - origin.z)
-    const length = tracer.dir.length()
+  shot(origin: Vec3, end: Vec3, now: number, traced: boolean) {
+    const dir = this.dir.set(end.x - origin.x, end.y - origin.y, end.z - origin.z)
+    const length = dir.length()
     if (length < 0.5) return
-    tracer.dir.divideScalar(length)
-    tracer.from.set(origin.x, origin.y - 0.14, origin.z).addScaledVector(tracer.dir, 0.75)
-    tracer.length = Math.max(0, length - 0.75)
-    tracer.born = now
-    tracer.live = true
-    this.spark(tracer.from, now, 0.05, 0.11 + Math.random() * 0.06, 1.5, flashColor)
+    dir.divideScalar(length)
+    const muzzle = this.muzzle.set(origin.x, origin.y - 0.14, origin.z).addScaledVector(dir, 0.75)
+    if (traced) {
+      const tracer = this.tracers[this.cursor]!
+      this.cursor = (this.cursor + 1) % TRACERS
+      tracer.dir.copy(dir)
+      tracer.from.copy(muzzle)
+      tracer.length = Math.max(0, length - 0.75)
+      tracer.born = now
+      tracer.live = true
+    }
+    this.spark(muzzle, now, 0.05, 0.11 + Math.random() * 0.06, 1.5, flashColor)
     const hit = new THREE.Vector3(end.x, end.y, end.z)
     if (length < 64) {
       this.spark(hit, now + length / SPEED * 1000, 0.09, 0.06, 2, impactColor)

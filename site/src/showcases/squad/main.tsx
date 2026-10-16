@@ -101,6 +101,7 @@ function Director({ intel, layer, focus, setFocus, freeze }: { intel: Intel; lay
   const hits = useRef(new Map<string, THREE.Vector3>())
   const round = useRef(feed.round)
   const lost = useRef<number | null>(null)
+  const rounds = useRef(new Map<string, number>())
   const action = useMemo(() => new THREE.Vector3(), [])
   const subject = useMemo(() => ({ position: new THREE.Vector3(), yaw: 0 }), [])
   const listener = useMemo(() => new THREE.Vector3(), [])
@@ -157,7 +158,9 @@ function Director({ intel, layer, focus, setFocus, freeze }: { intel: Intel; lay
     }
     feed.drain(now, event => {
       if (event.type === 'shot' && event.position && event.endPosition) {
-        fx.shot(event.position, event.endPosition, performance.now() - Math.max(0, now - event.at))
+        const fired = (rounds.current.get(event.agentId ?? '') ?? 0) + 1
+        rounds.current.set(event.agentId ?? '', fired)
+        fx.shot(event.position, event.endPosition, performance.now() - Math.max(0, now - event.at), fired % 3 === 1)
         gunfire.shot(event.position, false)
       } else if (event.type === 'kill' && event.position) {
         const victim = event.text.split(' ').pop()!
