@@ -275,6 +275,7 @@ export class DestructionSession {
     radius: number,
     strength: number,
     fragmentId?: number,
+    minRadius?: number,
   ) {
     if (this.view.status !== 'running') {
       return false;
@@ -289,6 +290,7 @@ export class DestructionSession {
       tick: (this.frame?.tick ?? 0) + 1,
       type,
       ...(fragmentId === undefined ? {} : { fragmentId }),
+      ...(minRadius === undefined ? {} : { minRadius }),
     };
     this.worker?.postMessage({ command, type: 'command' });
     return true;

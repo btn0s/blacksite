@@ -47,6 +47,11 @@ function texture(file: string, color: boolean) {
 
 export const texturesReady = () => Promise.all(pending)
 
+export function preloadSurfaces() {
+  for (const name of Object.keys(SURFACES)) { texture(`${name}_c.webp`, true); texture(`${name}_n.webp`, false) }
+  return texturesReady()
+}
+
 export type GroundAO = { height: number; strength: number }
 
 export function patchGroundAO(material: THREE.MeshStandardMaterial, ao: GroundAO = { height: 1.1, strength: 0.5 }) {
@@ -87,6 +92,24 @@ export function surface(name: SurfaceName, options: { color?: string; scale?: nu
   material.userData.tile = spec.tile * (options.scale ?? 1)
   if (options.ao !== false) patchGroundAO(material, options.ao || undefined)
   materials.set(key, material)
+  return material
+}
+
+export function meterSurface(name: SurfaceName, options: { color?: string; scale?: number; ao?: GroundAO | false; roughness?: number } = {}) {
+  const base = surface(name, options)
+  const material = base.clone()
+  material.onBeforeCompile = base.onBeforeCompile
+  material.customProgramCacheKey = base.customProgramCacheKey
+  if (options.roughness !== undefined) material.roughness = options.roughness
+  const repeat = 1 / (base.userData.tile as number)
+  for (const key of ['map', 'normalMap'] as const) {
+    const map = base[key]
+    if (!map) continue
+    const scaled = map.clone()
+    scaled.repeat.set(repeat, repeat)
+    scaled.needsUpdate = true
+    material[key] = scaled
+  }
   return material
 }
 
