@@ -17,7 +17,7 @@ For a Slice, list at least a bed, a spot emitter, two event families, surface fo
 
 ## The standard path
 
-Create one Soundscape mixer for the game. Call `prepare()` while the scene loads, then `start()` from the first click, key, or touch. Update the listener pose from the game camera each frame; set the current zone as the listener crosses its boundary; play cues by name from animation and game events. Pass a world position for spatial sounds. A local interface cue has no position. Expose `soundscape.sample()` as the check contract's `audio()` and set `model.budget.voices` to the game's voice cap.
+Create one Soundscape mixer for the game. Call `prepare()` while the scene loads, then `start()` from the first click, key, or touch. Update the listener pose from the game camera each frame; set the current zone as the listener crosses its boundary; play cues by name from animation and game events. Pass a world position for spatial sounds. A local interface cue has no position. Expose `soundscape.sample()` as the check contract's `audio()` and set `model.budget.voices` to the game's voice cap. A scaffolded game already does all of this in `src/game/sound.ts`, `src/game/footsteps.ts` and the shell (`setup.md`).
 
 The package starts with synthetic variants for rifle and pistol shots, impacts and footsteps by surface, casing foley, and wind. These make a new scene audible without downloading recordings. Add content by registering cue data rather than building a new audio graph beside the mixer. A cue may contain layered transients, body, and tail, while one play chooses one variant. Keep the source name stable so the audio check can detect repetition.
 

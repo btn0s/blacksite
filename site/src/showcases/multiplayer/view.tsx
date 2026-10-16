@@ -7,6 +7,7 @@ import { Look } from '@blacksite/look/r3f'
 import { QUALITY, type QualityTier } from '@blacksite/look/quality'
 import { MultiplayerScene, type MultiplayerReplica, type MultiplayerShot, type MultiplayerStatus, type SubjectState } from '@blacksite/subject'
 import type { Connection } from '@blacksite/relay'
+import type { ArmsPresentation } from '@blacksite/subject-fpp/arms'
 import { internalPixelRatio, type Collider } from '@blacksite/look/world'
 import { Bot } from './bot'
 import { EffectsLayer, useEffects, type Effects } from './effects'
@@ -76,6 +77,7 @@ export function PlayerView({ index, connection, subject, level, tier, mode, list
 }) {
   const effects = useEffects()
   const [replica, setReplica] = useState<MultiplayerReplica | null>(null)
+  const [arms, setArms] = useState<ArmsPresentation | null>(null)
   const [lights, setLights] = useState<{ sun: THREE.DirectionalLight; fill: THREE.HemisphereLight } | null>(null)
   const [status, setStatus] = useState<MultiplayerStatus | null>(null)
   const [hud, setHud] = useState<Hud>({ hit: 0, kill: 0, hurt: 0, hurtAngle: 0, down: 0, kills: 0 })
@@ -129,12 +131,12 @@ export function PlayerView({ index, connection, subject, level, tier, mode, list
   return <div className={`mp-view mp-view--${mode}`}>
     <Canvas shadows="percentage" dpr={hidden ? 0.25 : [1, dpr]} camera={{ fov: 75, near: 0.05, far: 400, position: [0, 1.63, 0] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={onCreated}>
       <Lights tier={tier} onLights={setLights} />
-      {!hidden && lights && <Look atmosphere="zone" quality={tier} environment sun={lights.sun} fill={lights.fill} />}
+      {!hidden && lights && <Look atmosphere="zone" quality={tier} environment sun={lights.sun} fill={lights.fill} overlay={arms} />}
       {hidden && <Silent />}
       <Suspense fallback={null}><Gunmetal /></Suspense>
       <Listener camera={camera} />
       <EffectsLayer effects={effects} />
-      <MultiplayerScene connection={connection} offline subject={subject} armsOverlay onReplica={handleReplica} onStatus={setStatus} onShot={handleShot}>
+      <MultiplayerScene connection={connection} offline subject={subject} onArmsPresentation={setArms} onReplica={handleReplica} onStatus={setStatus} onShot={handleShot}>
         <LevelBody level={level} />
         <Bot subject={subject} replica={replica} active={mode === 'bot' || mode === 'hidden'} />
       </MultiplayerScene>

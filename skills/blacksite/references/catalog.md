@@ -9,12 +9,13 @@ Every profile, prototype kit, system, package and command in Blacksite, generate
 | fpp | Game shell with rigged, animated first person arms |
 | tpp | Game shell with an ALS controller prototype |
 | mp | Networked rigged FPP arms and ALS bodies with switchable camera |
-| blank | Game shell with an empty R3F scene |
+| blank | Game shell with a walker in the starter yard |
 
 ## Prototype kits
 
 | Kit | Use when | Status |
 | --- | --- | --- |
+| blank | Template walker in the starter yard | usable |
 | tpp | ALS third person traversal | usable |
 | fpp | Arms-only Subject and Armory combat | usable |
 | subject | ALS Subject dependency scaffold | experimental |
@@ -66,14 +67,14 @@ Every profile, prototype kit, system, package and command in Blacksite, generate
 | @blacksite/destruction-render | destruction render |
 | @blacksite/destruction-server | destruction server |
 | @blacksite/destruction-testkit | destruction testkit |
-| @blacksite/input | Keyboard, gamepad and touch input |
+| @blacksite/input | Keyboard, mouse, gamepad and touch input |
 | @blacksite/look | Post stack, atmosphere and the ruins world kit |
 | @blacksite/materials | materials |
 | @blacksite/protocol | Shared room messages |
 | @blacksite/relay | Colyseus and loopback replication |
 | @blacksite/server | server |
 | @blacksite/sim-core | sim core |
-| @blacksite/soundscape | soundscape |
+| @blacksite/soundscape | Mixer, spatial sound, zones and starter cues |
 | @blacksite/subject | ALS player control |
 | @blacksite/subject-fpp | Arms-only first person input and camera |
 | @blacksite/training | training |

@@ -4,7 +4,7 @@ A post-processing and atmosphere stack for three.js: HDR composer, ambient occlu
 
 ## Pipeline
 
-`EffectComposer` (HalfFloat buffers, MSAA by tier) runs `RenderPass`, `N8AOPostPass` (half resolution, depth-aware upsampling, radius 0.35, intensity 1.8, one denoise iteration), `BloomEffect` (intensity 0.8, threshold 1.35, smoothing 0.2, radius 0.45, mipmap blur), then `GradeEffect`. The grade applies exposure, a shoulder tonemap (linear to 0.72, exponential roll-off above), an optional 3D LUT in display space, night split toning, vignette, chromatic aberration and film grain. `createLook` sets `renderer.toneMapping = NoToneMapping`, because the shoulder is the tonemapper, and restores the previous value on `dispose()`.
+`EffectComposer` (HalfFloat buffers, MSAA by tier) runs `RenderPass`, `N8AOPostPass` (half resolution, depth-aware upsampling, radius 0.35, intensity 1.8, one denoise iteration), `BloomEffect` (intensity 0.8, threshold 1.35, smoothing 0.2, radius 0.45, mipmap blur), then `GradeEffect`. The grade applies exposure, a shoulder tonemap (linear to 0.72, exponential roll-off above), an optional 3D LUT in display space, night split toning, vignette, chromatic aberration and film grain. The grade is the only tonemapper and `atmosphere.exposure` the only exposure: `createLook` sets `renderer.toneMapping = NoToneMapping` and restores the previous value on `dispose()`, and nothing else in the package touches tone mapping. To change exposure, pass an atmosphere with your own value, such as `{ ...ZONE, exposure: 1.22 }`. `renderer.toneMappingExposure` has no effect while the composer runs, because the scene renders into the composer's buffers.
 
 ## Vanilla three
 
@@ -90,7 +90,7 @@ await texturesReady()
 - `groundMaterial()` blends dirt, grass and gravel by world-space noise; `puddleMaterial()` is a dark mirror for decals on it.
 - `LevelBuilder` merges every box, cylinder and plane by material into one mesh each, adds contact shadows, and collects box and cylinder colliders for your physics.
 - Props: `apartmentBlock`, `lada`, `shed`, `waterTower`, `apc`, `deadTree`.
-- `createAtmosphere(scene, renderer)` is the plain-three overcast sky, sun and fog the showcases use without the composer; `internalPixelRatio()`, `isTouchDevice()`, `setAnisotropy()`, `preloadSurfaces()` and `texturesReady()` cover loading and resolution.
+- `createAtmosphere(scene, renderer)` is the world kit's photographic overcast sky dome, sun with a texel-snapped shadow that `follow(target)` moves, hemisphere fill and exponential fog. It leaves tone mapping and exposure to the look: pair it with `createLook(…, { sky: false, fog: false })` or `<Look sky={false} fog={false} />`. `internalPixelRatio()`, `isTouchDevice()`, `setAnisotropy()`, `preloadSurfaces()` and `texturesReady()` cover loading and resolution.
 
 Credits for the textures are in `assets/world/CREDITS.md`.
 
