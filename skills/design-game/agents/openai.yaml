@@ -1,4 +1,0 @@
-interface:
-  display_name: "Design Game"
-  short_description: "Design Game in Blacksite"
-  default_prompt: "Use $design-game for this Blacksite task."

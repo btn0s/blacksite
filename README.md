@@ -4,7 +4,7 @@
 
 A coding agent can write a game loop. What it can't do in an afternoon is write a character with hundreds of animations, multiplayer that feels right, buildings that collapse, or squads that flank you, and keep all of it at 120 fps on a desktop and 60 fps on a phone. Blacksite gives the agent two things:
 
-- **Skills** walk the agent from your idea to a playable game: design it with you, set up the project, prototype each risky mechanic, combine what works, then optimise. Every building block also has a guide, so the agent uses it the right way instead of guessing.
+- **One skill** teaches the agent to build the version of each feature that shipped games built, not the tutorial version: footsteps that follow the feet, fog that layers the distance, enemies that react a beat late. It sizes the work, writes the real numbers down first, lists the parts a shipped game has, builds them and checks the result like a critic. Every building block also has a reference, so the agent uses it the right way instead of guessing.
 - **Building blocks** are finished game systems the agent snaps together instead of writing from scratch.
 
 You describe the game. The agent builds it with these.
@@ -17,34 +17,31 @@ You describe the game. The agent builds it with these.
 curl -fsSL https://raw.githubusercontent.com/btn0s/blacksite/main/install.sh | sh
 ```
 
-Then ask your agent to start Blacksite, or run `/blacksite:make-game <your idea>`. The installer clones this repository into `~/.blacksite` and puts `blacksite` on your PATH. On Windows, run [install.ps1](install.ps1) in PowerShell. An agent installing it can follow [AGENTS.md](AGENTS.md).
+Then describe a game to your agent. The skill loads by itself for anything game-related; in Claude Code you can also run `/blacksite:blacksite <your idea>`. The installer clones this repository into `~/.blacksite` and puts `blacksite` on your PATH. On Windows, run [install.ps1](install.ps1) in PowerShell. An agent installing it can follow [AGENTS.md](AGENTS.md).
 
-## Skills
+## The skill
 
-| Skill | What the agent does with it |
+`skills/blacksite/` is the whole skill: a [SKILL.md](skills/blacksite/SKILL.md) the agent always reads, and references it loads when the work calls for them.
+
+| Reference | What the agent does with it |
 | --- | --- |
-| `start` | Asks what you want to do and routes to the right skill. |
-| `make-game` | Runs the whole flow below from one idea, picking up where it left off. |
-| `design-game` | Interviews you one question at a time: fantasy, core loop, camera, scope, performance budget. |
-| `setup-project` | Creates the game project from a player template and checks it runs. |
-| `build-prototype` | Builds one risky mechanic on its own, playable from a developer menu. |
-| `combine-prototypes` | Joins the mechanics that worked into one core loop. |
-| `optimize-game` | Measures the game and brings it within its budget. |
-| `ship-game` | Deploys the game, only when you ask. |
-| `als`, `game-architecture`, `game-assets`, `blacksite-kit` | Reference the agent loads when it needs it: how to drive characters, how the game is wired, how to use assets you own, what blocks exist. |
+| `design`, `setup`, `prototype`, `combine`, `optimise`, `ship` | The workflow: interview one question at a time, create the project, build each risky mechanic alone, join what works, bring it within budget, and deploy only when you ask. |
+| `craft`, `feel`, `sound`, `performance` | How a shipped game is lit, dressed, tuned and mixed, with numbers, and what gives way first when the frame is over budget. |
+| `characters`, `als`, `weapons`, `ai`, `destruction`, `multiplayer`, `input` | One per building block, pointing to its guide, with its numbers, its gaps and the failures that shaped it. |
+| `architecture`, `assets`, `catalog` | Who owns which state, how to use assets you already own, and every package and command. |
+| `verify` | `blacksite check`: frame time, hitches, pop-in, movement feel, audio repeats and critic captures on desktop and phone. |
 
 ```mermaid
 flowchart LR
-  A[start] --> B[make-game]
-  B --> C[design-game]
-  C --> D[setup-project]
-  D --> E[build-prototype]
-  E --> F[combine-prototypes]
-  F --> G[optimize-game]
-  G -. only on request .-> H[ship-game]
+  A[Size] --> B[Truth]
+  B --> C[Parts list]
+  C --> D[Build]
+  D --> E[Make it live]
+  E --> F[Verify]
+  F -. only on request .-> G[Ship]
 ```
 
-Each step writes a handoff into the game project and ends with a check the agent has to pass, so you can stop and resume anywhere.
+Each step writes a file into the game project, and the work ends with checks the agent has to pass, so you can stop and resume anywhere.
 
 ## Building blocks
 
@@ -77,7 +74,7 @@ Now: demos for every block, guides for the remaining blocks, touch controls for 
 
 ## Repository layout
 
-`skills/` holds the skills; `packages/` the building blocks; `templates/` the player templates and game shell; `cli/` the `blacksite` command; `site/` the demo site; `docs/` longer guides; `evals/` agent test scenarios.
+`skills/` holds the skill; `packages/` the building blocks; `templates/` the player templates and game shell; `cli/` the `blacksite` command; `site/` the demo site; `docs/` longer guides; `evals/` agent test scenarios.
 
 ## Contributing
 

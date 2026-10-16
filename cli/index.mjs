@@ -16,8 +16,8 @@ const command = argv.shift() || 'help'
 const flag = (name) => argv.includes(name)
 const value = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined }
 const nodeBin = process.execPath
-const skillNames = ['start', 'make-game', 'design-game', 'setup-project', 'build-prototype', 'combine-prototypes', 'optimize-game', 'ship-game', 'game-architecture', 'blacksite-kit', 'game-assets', 'als']
-const legacySkills = ['stack', 'game-design', 'prototypes', 'orchestrate', 'kit', 'architecture']
+const skillNames = ['blacksite']
+const legacySkills = ['stack', 'game-design', 'prototypes', 'orchestrate', 'kit', 'architecture', 'start', 'make-game', 'design-game', 'setup-project', 'build-prototype', 'combine-prototypes', 'optimize-game', 'ship-game', 'game-architecture', 'blacksite-kit', 'game-assets', 'als']
 function run(executable, args, cwd = process.cwd()) {
   const result = spawnSync(executable, args, { cwd, stdio: 'inherit', shell: process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable) })
   if (result.error) throw result.error
@@ -70,7 +70,7 @@ async function install() {
   await mkdir(target, { recursive: true })
   for (const name of legacySkills) await rm(path.join(target, name), { recursive: true, force: true })
   for (const name of skillNames) await cp(path.join(root, 'skills', name), path.join(target, name), { recursive: true, force: true })
-  await instructions(instructionFile, 'When the user first invokes Blacksite without a specific task, read ' + path.relative(path.dirname(instructionFile), path.join(target, 'start', 'SKILL.md')).replaceAll('\\', '/') + ' and ask: "What would you like to do?" Offer the choices from that skill. For game design, prototypes, architecture, and tools, read the matching skill in ' + path.relative(path.dirname(instructionFile), target).replaceAll('\\', '/') + '. Assets are optional. Never read credential files or copy purchased assets.')
+  await instructions(instructionFile, 'For anything game-related, read ' + path.relative(path.dirname(instructionFile), path.join(target, 'blacksite', 'SKILL.md')).replaceAll('\\', '/') + ' first and follow it; its references are in the references folder beside it. Assets are optional. Never read credential files or copy purchased assets.')
   process.stdout.write(`Installed Blacksite skills for ${selected} in ${target}\n`)
 }
 function doctor() {
@@ -98,7 +98,7 @@ async function main() {
   if (command === 'check') return runCheck(argv)
   if (command === 'assets') return runAssets(argv)
   if (command === 'prototype') return runPrototype(argv)
-  if (command === 'architecture') { process.stdout.write(await readFile(path.join(root, 'skills', 'game-architecture', 'SKILL.md'), 'utf8')); return }
+  if (command === 'architecture') { process.stdout.write(await readFile(path.join(root, 'skills', 'blacksite', 'references', 'architecture.md'), 'utf8')); return }
   if (command === 'update') return process.platform === 'win32' ? run('powershell.exe', ['-NoProfile', '-File', path.join(root, 'install.ps1'), ...argv]) : run('sh', [path.join(root, 'install.sh'), ...argv])
   throw new Error(`Unknown command: ${command}. Run ${product.cli} --help; asset commands start with ${product.cli} assets.`)
 }

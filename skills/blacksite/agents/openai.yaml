@@ -1,0 +1,4 @@
+interface:
+  display_name: "Blacksite"
+  short_description: "Build browser games that look, sound and feel shipped"
+  default_prompt: "Use $blacksite to make this game."
