@@ -33,6 +33,7 @@
     "@blacksite/armory": "workspace:*",
     "@blacksite/cascade": "workspace:*",
     "@blacksite/check": "workspace:*",
+    "@blacksite/example-breach": "workspace:*",
     "@blacksite/input": "workspace:*",
     "@blacksite/look": "workspace:*",
     "@blacksite/relay": "workspace:*",

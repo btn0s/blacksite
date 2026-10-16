@@ -17,9 +17,26 @@ export const MOVE = {
   accelerate: 10,
   friction: 4,
   stopSpeed: 100 * INCH,
+  jumpHeight: 21 * INCH,
+  gravity: 600 * INCH,
   crouchSeconds: 0.2,
   sprintOutSeconds: 0.22,
   bobAmplitude: 0.012,
+}
+
+export const jumpSpeed = () => Math.sqrt(2 * MOVE.gravity * MOVE.jumpHeight)
+
+export function timeToTopSpeed(speed: number, fraction = 0.9) {
+  let velocity = 0
+  let time = 0
+  const dt = 1 / 240
+  while (velocity < speed * fraction && time < 2) {
+    const drop = Math.max(velocity, MOVE.stopSpeed) * MOVE.friction * dt
+    velocity = Math.max(0, velocity - drop)
+    velocity = Math.min(speed, velocity + MOVE.accelerate * speed * dt)
+    time += dt
+  }
+  return time
 }
 
 export const VIEW = {
@@ -121,15 +138,17 @@ export const AI = {
   missRadius: [0.5, 1.4] as const,
   accuracy: { start: 0.15, end: 0.45, rampSeconds: 3, moving: 0.6, sprinting: 0.4, crouched: 0.8 },
   runSpeed: 4.2,
+  crouchSpeed: 2.2,
+  sprintSpeed: 5.8,
   walkSpeed: 1.8,
-  peekSeconds: [1.2, 2.4] as const,
-  flankAfterSeconds: 6,
-  suppressWindowSeconds: [0.6, 5] as const,
+  magazine: 30,
+  reloadSeconds: 2.5,
+  acceleration: 18,
   flinchSeconds: 0.35,
-  decisionHz: 10,
+  squadBarkSeconds: 0.9,
 }
 
-export type RoomId = 'yard' | 'lobby' | 'corridor' | 'hall' | 'office' | 'exfil'
+export type RoomId = 'yard' | 'lobby' | 'corridor' | 'side' | 'hall' | 'office' | 'exfil'
 
 export type Acoustics = { volume: number; area: number; absorption: number; predelay: number }
 
@@ -137,6 +156,7 @@ export const ACOUSTICS: Record<RoomId, Acoustics> = {
   yard: { volume: 0, area: 0, absorption: 1, predelay: 0.12 },
   lobby: { volume: 10 * 8 * 3.2, area: 2 * 10 * 8 + 2 * (10 + 8) * 3.2, absorption: 0.1, predelay: 0.018 },
   corridor: { volume: 2.4 * 7 * 3, area: 2 * 2.4 * 7 + 2 * (2.4 + 7) * 3, absorption: 0.12, predelay: 0.007 },
+  side: { volume: 3.5 * 6.5 * 3, area: 2 * 3.5 * 6.5 + 2 * (3.5 + 6.5) * 3, absorption: 0.2, predelay: 0.008 },
   hall: { volume: 14 * 12 * 5, area: 2 * 14 * 12 + 2 * (14 + 12) * 5, absorption: 0.08, predelay: 0.03 },
   office: { volume: 9 * 8 * 3, area: 2 * 9 * 8 + 2 * (9 + 8) * 3, absorption: 0.22, predelay: 0.014 },
   exfil: { volume: 0, area: 0, absorption: 1, predelay: 0.09 },
@@ -170,10 +190,27 @@ export const BUDGET = {
   frameMs: 16,
   desktopTargetMs: 1000 / 120,
   phoneTargetMs: 1000 / 60,
+  hitchMs: 33,
   drawCalls: { desktop: 260, phone: 160 },
   voices: 28,
   pointLights: { high: 5, medium: 4, low: 2 },
   firstPlayableSeconds: 5,
+}
+
+export const FEEL = {
+  moveSpeed: MOVE.run,
+  sprintSpeed: MOVE.sprint,
+  timeToTopSpeed: timeToTopSpeed(MOVE.run),
+  jumpApex: MOVE.jumpHeight,
+  tolerance: 0.1,
+}
+
+export const CHECK_BUDGET = {
+  frameMs: BUDGET.desktopTargetMs,
+  phoneFrameMs: BUDGET.phoneTargetMs,
+  hitchMs: BUDGET.hitchMs,
+  firstPlayableMs: BUDGET.firstPlayableSeconds * 1000,
+  voices: BUDGET.voices,
 }
 
 export function sprintOk(intentForward: number, aiming: boolean, firing: boolean) {
