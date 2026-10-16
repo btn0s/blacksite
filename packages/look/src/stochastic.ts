@@ -5,6 +5,8 @@ export interface StochasticTilingOptions {
   tileSpan?: number;
   blendSharpness?: number;
   seed?: number;
+  rotation?: 'none' | 'half-turn' | 'quarter-turn';
+  shaderDecodesSRGB?: boolean;
 }
 
 const installed = new WeakSet<MeshStandardMaterial>();
@@ -14,6 +16,9 @@ struct BlacksiteTile {
   vec2 a;
   vec2 b;
   vec2 c;
+  mat2 rotationA;
+  mat2 rotationB;
+  mat2 rotationC;
   vec3 weights;
   vec2 dx;
   vec2 dy;
@@ -23,8 +28,20 @@ vec2 blacksiteTileOffset(vec2 cell) {
   p += dot(p, p.yzx + 33.33 + BLACKSITE_TILE_SEED);
   return fract((p.xx + p.yz) * p.zy);
 }
+mat2 blacksiteTileRotation(vec2 cell) {
+  float choice = floor(blacksiteTileOffset(cell + vec2(19.19, 47.27)).x * 4.0);
+  #if BLACKSITE_TILE_ROTATION == 0
+    choice = 0.0;
+  #elif BLACKSITE_TILE_ROTATION == 2
+    choice = floor(choice * 0.5) * 2.0;
+  #endif
+  if (choice < 0.5) return mat2(1.0, 0.0, 0.0, 1.0);
+  if (choice < 1.5) return mat2(0.0, 1.0, -1.0, 0.0);
+  if (choice < 2.5) return mat2(-1.0, 0.0, 0.0, -1.0);
+  return mat2(0.0, -1.0, 1.0, 0.0);
+}
 BlacksiteTile blacksiteTile(vec2 uv) {
-  vec2 skewed = mat2(1.0, -0.57735026919, 0.0, 1.15470053838) * uv / BLACKSITE_TILE_SPAN;
+  vec2 skewed = mat2(1.0, 0.0, -0.57735026919, 1.15470053838) * uv / BLACKSITE_TILE_SPAN;
   vec2 cell = floor(skewed);
   vec2 local = fract(skewed);
   vec2 a;
@@ -44,12 +61,38 @@ BlacksiteTile blacksiteTile(vec2 uv) {
   }
   weights = pow(max(weights, vec3(0.0)), vec3(BLACKSITE_TILE_SHARPNESS));
   weights /= dot(weights, vec3(1.0));
-  return BlacksiteTile(uv + blacksiteTileOffset(a), uv + blacksiteTileOffset(b), uv + blacksiteTileOffset(c), weights, dFdx(uv), dFdy(uv));
+  mat2 rotationA = blacksiteTileRotation(a);
+  mat2 rotationB = blacksiteTileRotation(b);
+  mat2 rotationC = blacksiteTileRotation(c);
+  return BlacksiteTile(rotationA * uv + blacksiteTileOffset(a), rotationB * uv + blacksiteTileOffset(b), rotationC * uv + blacksiteTileOffset(c), rotationA, rotationB, rotationC, weights, dFdx(uv), dFdy(uv));
 }
 vec4 blacksiteTileSample(sampler2D sourceMap, BlacksiteTile tile) {
-  return textureGrad(sourceMap, tile.a, tile.dx, tile.dy) * tile.weights.x
-    + textureGrad(sourceMap, tile.b, tile.dx, tile.dy) * tile.weights.y
-    + textureGrad(sourceMap, tile.c, tile.dx, tile.dy) * tile.weights.z;
+  return textureGrad(sourceMap, tile.a, tile.rotationA * tile.dx, tile.rotationA * tile.dy) * tile.weights.x
+    + textureGrad(sourceMap, tile.b, tile.rotationB * tile.dx, tile.rotationB * tile.dy) * tile.weights.y
+    + textureGrad(sourceMap, tile.c, tile.rotationC * tile.dx, tile.rotationC * tile.dy) * tile.weights.z;
+}
+vec4 blacksiteTileColour(sampler2D sourceMap, BlacksiteTile tile) {
+  #if defined(DECODE_VIDEO_TEXTURE) || BLACKSITE_TILE_SHADER_SRGB == 1
+    vec4 a = sRGBTransferEOTF(textureGrad(sourceMap, tile.a, tile.rotationA * tile.dx, tile.rotationA * tile.dy));
+    vec4 b = sRGBTransferEOTF(textureGrad(sourceMap, tile.b, tile.rotationB * tile.dx, tile.rotationB * tile.dy));
+    vec4 c = sRGBTransferEOTF(textureGrad(sourceMap, tile.c, tile.rotationC * tile.dx, tile.rotationC * tile.dy));
+    return sRGBTransferOETF(a * tile.weights.x + b * tile.weights.y + c * tile.weights.z);
+  #else
+    return blacksiteTileSample(sourceMap, tile);
+  #endif
+}
+vec3 blacksiteTileNormalSample(sampler2D sourceMap, vec2 uv, mat2 rotation, vec2 dx, vec2 dy, vec2 scale) {
+  vec3 normal = textureGrad(sourceMap, uv, rotation * dx, rotation * dy).xyz * 2.0 - 1.0;
+  #if defined(USE_PACKED_NORMALMAP)
+    normal.z = sqrt(max(1.0 - dot(normal.xy, normal.xy), 0.0));
+  #endif
+  normal.xy = transpose(rotation) * (normal.xy * scale);
+  return normal;
+}
+vec3 blacksiteTileNormal(sampler2D sourceMap, BlacksiteTile tile, vec2 scale) {
+  return blacksiteTileNormalSample(sourceMap, tile.a, tile.rotationA, tile.dx, tile.dy, scale) * tile.weights.x
+    + blacksiteTileNormalSample(sourceMap, tile.b, tile.rotationB, tile.dx, tile.dy, scale) * tile.weights.y
+    + blacksiteTileNormalSample(sourceMap, tile.c, tile.rotationC, tile.dx, tile.dy, scale) * tile.weights.z;
 }
 `;
 
@@ -93,37 +136,43 @@ export function applyStochasticTiling(material: MeshStandardMaterial, options: S
   const sharpness = positive(options.blendSharpness ?? 4, 'blendSharpness');
   const seed = options.seed ?? 0;
   if (!Number.isFinite(seed)) throw new Error('seed must be finite.');
+  const rotation = options.rotation ?? 'quarter-turn';
+  const rotationCode = { none: 0, 'half-turn': 2, 'quarter-turn': 4 }[rotation];
+  if (rotationCode === undefined) throw new Error('rotation must be none, half-turn or quarter-turn.');
   const previousCompile = material.onBeforeCompile;
   const previousCache = material.customProgramCacheKey;
   const baseCache = previousCache === Material.prototype.customProgramCacheKey
     ? () => previousCompile.toString()
     : () => previousCache.call(material);
   const isPacked = () => sameSource(material.roughnessMap, material.metalnessMap) && sameSource(material.roughnessMap, material.aoMap);
-  const define = `#define BLACKSITE_TILE_SPAN ${span}\n#define BLACKSITE_TILE_SHARPNESS ${sharpness}\n#define BLACKSITE_TILE_SEED ${seed.toExponential(8)}\n`;
+  const define = `#define BLACKSITE_TILE_SPAN ${span}\n#define BLACKSITE_TILE_SHARPNESS ${sharpness}\n#define BLACKSITE_TILE_SEED ${seed.toExponential(8)}\n#define BLACKSITE_TILE_ROTATION ${rotationCode}\n#define BLACKSITE_TILE_SHADER_SRGB ${options.shaderDecodesSRGB ? 1 : 0}\n`;
 
   const compile: typeof material.onBeforeCompile = function (this: MeshStandardMaterial, shader, renderer) {
     previousCompile.call(this, shader, renderer);
     checkMaps(material);
     const packed = isPacked();
-    const replace = (anchor: string, replacement: string) => {
-      if (!shader.fragmentShader.includes(anchor)) throw new Error(`Stochastic tiling cannot find shader chunk ${anchor}.`);
+    const replace = (anchor: RegExp, replacement: string) => {
+      if (!anchor.test(shader.fragmentShader)) throw new Error(`Stochastic tiling cannot find shader expression ${anchor}.`);
       shader.fragmentShader = shader.fragmentShader.replace(anchor, replacement);
     };
-    replace('#include <common>', `#include <common>\n${define}${sampling}`);
-    let mapChunk = ShaderChunk.map_fragment.replace('texture2D( map, vMapUv )', 'blacksiteTileSample(map, blacksiteTiles)');
-    mapChunk = `BlacksiteTile blacksiteTiles = blacksiteTile(vMapUv);\n${mapChunk}`;
-    if (packed) mapChunk += '\nvec4 blacksiteOrm = blacksiteTileSample(roughnessMap, blacksiteTiles);';
-    replace('#include <map_fragment>', mapChunk);
-    replace('#include <normal_fragment_maps>', ShaderChunk.normal_fragment_maps.replaceAll('texture2D( normalMap, vNormalMapUv )', 'blacksiteTileSample(normalMap, blacksiteTiles)'));
-    for (const [chunk, sampler, uv] of [
-      ['roughnessmap_fragment', 'roughnessMap', 'vRoughnessMapUv'],
-      ['metalnessmap_fragment', 'metalnessMap', 'vMetalnessMapUv'],
-      ['aomap_fragment', 'aoMap', 'vAoMapUv'],
+    for (const chunk of ['map_fragment', 'normal_fragment_maps', 'roughnessmap_fragment', 'metalnessmap_fragment', 'aomap_fragment'] as const) {
+      shader.fragmentShader = shader.fragmentShader.replace(`#include <${chunk}>`, ShaderChunk[chunk]);
+    }
+    let setup = 'BlacksiteTile blacksiteTiles = blacksiteTile(vMapUv);';
+    if (packed) setup += '\nvec4 blacksiteOrm = blacksiteTileSample(roughnessMap, blacksiteTiles);';
+    replace(/void\s+main\s*\(\s*\)\s*\{/, `${define}${sampling}\nvoid main() {\n${setup}`);
+    replace(/texture(?:2D)?\(\s*map\s*,\s*vMapUv\s*\)/g, 'blacksiteTileColour(map, blacksiteTiles)');
+    replace(/texture(?:2D)?\(\s*normalMap\s*,\s*vNormalMapUv\s*\)\.xyz\s*\*\s*2\.0\s*-\s*1\.0/g, 'blacksiteTileNormal(normalMap, blacksiteTiles, normalScale)');
+    shader.fragmentShader = shader.fragmentShader.replace(/#if defined\( USE_PACKED_NORMALMAP \)\s*mapN = vec3\( mapN\.xy, sqrt\( saturate\( 1\.0 - dot\( mapN\.xy, mapN\.xy \) \) \) \);\s*#endif/, '').replace(/mapN\.xy\s*\*=\s*normalScale\s*;/, '');
+    for (const [sampler, uv] of [
+      ['roughnessMap', 'vRoughnessMapUv'],
+      ['metalnessMap', 'vMetalnessMapUv'],
+      ['aoMap', 'vAoMapUv'],
     ] as const) {
-      replace(`#include <${chunk}>`, ShaderChunk[chunk].replace(`texture2D( ${sampler}, ${uv} )`, packed ? 'blacksiteOrm' : `blacksiteTileSample(${sampler}, blacksiteTiles)`));
+      replace(new RegExp(`texture(?:2D)?\\(\\s*${sampler}\\s*,\\s*${uv}\\s*\\)`, 'g'), packed ? 'blacksiteOrm' : `blacksiteTileSample(${sampler}, blacksiteTiles)`);
     }
   };
-  const cache = () => `${baseCache()}|blacksite-stochastic-v1:${span}:${sharpness}:${seed}:${isPacked()}`;
+  const cache = () => `${baseCache()}|blacksite-stochastic-v2:${span}:${sharpness}:${seed}:${rotation}:${!!options.shaderDecodesSRGB}:${isPacked()}`;
   material.onBeforeCompile = compile;
   material.customProgramCacheKey = cache;
   material.needsUpdate = true;

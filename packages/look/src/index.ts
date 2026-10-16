@@ -11,6 +11,5 @@ export { QUALITY, autoQuality } from './quality';
 export type { QualitySettings, QualityTier } from './quality';
 export { applySkyAtmosphere, bakeSkyEnvironment, createSky, createSkyMaterial } from './sky';
 export type { Sky } from './sky';
-
 export { applyStochasticTiling } from './stochastic';
 export type { StochasticTilingOptions } from './stochastic';
