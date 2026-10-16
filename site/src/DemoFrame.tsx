@@ -27,7 +27,7 @@ export default function DemoFrame({ demo }: { demo: Demo }) {
       setFullscreen(true)
     }
   }
-  return <div ref={stage} className={`demo-stage${fullscreen ? ' demo-stage--fullscreen' : ''}${demo.perfCorner === 'bottom-right' ? ' demo-stage--secondary' : ''}`}>
+  return <div ref={stage} className={`demo-stage${fullscreen ? ' demo-stage--fullscreen' : ''}${demo.perfCorner === 'bottom-right' ? ' demo-stage--secondary' : ''}${demo.showcase ? ' demo-stage--showcase' : ''}`}>
     <iframe ref={ref} title={demo.title} src={`${import.meta.env.BASE_URL}frames/${demo.frame}.html`} onLoad={() => setSource(ref.current?.contentWindow ?? null)} />
     <button className="demo-fullscreen-button" type="button" onClick={() => void toggleFullscreen()}>{fullscreen ? 'Exit fullscreen' : 'Fullscreen'}</button>
     <PerfOverlay source={source} corner={demo.perfCorner} />
