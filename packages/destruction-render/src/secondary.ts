@@ -107,6 +107,7 @@ export class SecondaryFragmentRenderer {
     pool?: GPUTransformPool,
     private readonly profile = false,
     private readonly addsPerUpdate = Number.POSITIVE_INFINITY,
+    private readonly edgeSegmentLength = 0.1,
   ) {
     this.ownsPool = !pool;
     this.pool = pool ?? new GPUTransformPool(MAX_SECONDARY_FRAGMENTS + 1);
@@ -304,7 +305,7 @@ export class SecondaryFragmentRenderer {
         vertices: geometry.getAttribute('position').count,
       });
     }
-    const edge = fragmentEdgeGeometry(fragment);
+    const edge = fragmentEdgeGeometry(fragment, this.edgeSegmentLength);
     if (edge) {
       const material = this.materialFor(fragment, 'fracture');
       result.push({ key: `edge:${material.uuid}`, geometry: edge, material, vertices: edge.getAttribute('position').count });
@@ -376,7 +377,7 @@ export class SecondaryFragmentRenderer {
       material,
     );
     mesh.name = key.startsWith('edge:') ? 'secondary-damaged-edges' : 'secondary-concrete';
-    mesh.castShadow = !material.transparent;
+    mesh.castShadow = !material.transparent && !key.startsWith('edge:');
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
     mesh.perObjectFrustumCulled = false;

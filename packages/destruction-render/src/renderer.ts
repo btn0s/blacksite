@@ -34,6 +34,7 @@ export interface DestructionRendererOptions {
   particleCapacity?: number;
   secondaryAddsPerUpdate?: number;
   edgeFacesPerUpdate?: number;
+  edgeSegmentLength?: number;
   transformCapacity?: number;
   reducedMotion?: boolean;
   materialFor?: (fragment: FragmentDef, surface: FragmentSurface) => Material | undefined;
@@ -97,6 +98,10 @@ export class DestructionRenderer {
   private shadowVisibilityRevision = 0;
   private lastSnapshotTick = -Infinity;
   private connectionsDirty = false;
+  private readonly fragmentIndices: ReadonlyMap<number, number>;
+  private layoutActors?: SimulationFrame['actors'];
+  private readonly layoutVisible: Uint8Array;
+  private layoutSecondaryVisible = new Uint8Array(0);
 
   get secondaryStats() { return this.secondary.stats; }
   get secondaryTimings() { return this.secondary.timings; }
@@ -131,10 +136,12 @@ export class DestructionRenderer {
     this.boundSlots = new Uint32Array(manifest.fragments.length);
     this.boundGenerations = new Uint32Array(manifest.fragments.length);
     this.neighbours = manifest.fragments.map(() => []);
+    this.fragmentIndices = new Map(manifest.fragments.map((fragment, index) => [fragment.id, index]));
+    this.layoutVisible = new Uint8Array(manifest.fragments.length);
     const materialFor = (fragment: FragmentDef, surface: FragmentSurface): Material =>
       options.materialFor?.(fragment, surface) ?? this.defaultMaterial(fragment, surface);
-    this.secondary = new SecondaryFragmentRenderer(materialFor, this.transformPool, options.profile, options.secondaryAddsPerUpdate);
-    this.edges = new ExposedFractureEdges(manifest, this.transformPool, fragment => materialFor(fragment, 'fracture'), options.profile, options.edgeFacesPerUpdate);
+    this.secondary = new SecondaryFragmentRenderer(materialFor, this.transformPool, options.profile, options.secondaryAddsPerUpdate, options.edgeSegmentLength);
+    this.edges = new ExposedFractureEdges(manifest, this.transformPool, fragment => materialFor(fragment, 'fracture'), options.profile, options.edgeFacesPerUpdate, options.edgeSegmentLength);
     this.connections = new ConnectionOverlay(manifest, this.transformPool);
     this.connections.object.visible = options.showConnections ?? false;
     const surfaceGroups = new Map<Material, Array<SurfaceEntry>>();
@@ -150,7 +157,7 @@ export class DestructionRenderer {
         entries.push({ fragment: index, geometry, interior: surface === 'fracture' });
         surfaceGroups.set(material, entries);
       }
-      const edge = fragmentEdgeGeometry(fragment);
+      const edge = fragmentEdgeGeometry(fragment, options.edgeSegmentLength);
       if (edge) {
         const material = materialFor(fragment, 'fracture');
         const entries = edgeGroups.get(material) ?? [];
@@ -167,7 +174,7 @@ export class DestructionRenderer {
         material,
       );
       mesh.name = channel === 'surface' ? 'cascade-fragments' : 'cascade-damaged-edges';
-      mesh.castShadow = !material.transparent;
+      mesh.castShadow = channel === 'surface' && !material.transparent;
       mesh.receiveShadow = true;
       mesh.frustumCulled = false;
       mesh.perObjectFrustumCulled = false;
@@ -216,7 +223,7 @@ export class DestructionRenderer {
       throw new Error('Destruction frame does not match the renderer manifest');
     }
     if (frame?.bonds && this.bondRevision !== frame.bondRevision) {
-      const indices = new Map(this.manifest.fragments.map((fragment, index) => [fragment.id, index]));
+      const indices = this.fragmentIndices;
       for (const neighbours of this.neighbours) neighbours.length = 0;
       for (const bond of frame.bonds) {
         const a = indices.get(bond.a), b = indices.get(bond.b);
@@ -371,7 +378,11 @@ export class DestructionRenderer {
 
   private synchronizeTransforms(frame?: SimulationFrame | null): boolean {
     const tick = frame?.tick ?? -1;
-    if (this.lastLayoutTick === tick && this.layoutRevision === (frame?.hierarchyRevision ?? -1) && this.secondaryRevision === (frame?.secondary?.revision ?? -1)) return false;
+    const sameLayout = this.layoutRevision === (frame?.hierarchyRevision ?? -1) && this.secondaryRevision === (frame?.secondary?.revision ?? -1);
+    if (this.lastLayoutTick === tick && sameLayout) return false;
+    const visibilityChanged = this.recordVisibility(frame);
+    if (frame && sameLayout && !visibilityChanged && frame.actors === this.layoutActors) { this.lastLayoutTick = tick; return false; }
+    this.layoutActors = frame?.actors;
     this.lastLayoutTick = tick;
     this.layoutRevision = frame?.hierarchyRevision ?? -1;
     this.secondaryRevision = frame?.secondary?.revision ?? -1;
@@ -393,6 +404,23 @@ export class DestructionRenderer {
       if (frame!.secondary!.states[index] !== FragmentState.Retired) owners.set(`secondary:${fragment.id}`, [`secondary:${fragment.id}`]);
     }
     return this.transformPool.synchronize(owners);
+  }
+
+  private recordVisibility(frame?: SimulationFrame | null): boolean {
+    let changed = !frame;
+    for (let index = 0; index < this.layoutVisible.length; index++) {
+      const state = frame?.states[index];
+      const visible = state !== FragmentState.Retired && state !== FragmentState.Hidden ? 1 : 0;
+      if (this.layoutVisible[index] !== visible) { this.layoutVisible[index] = visible; changed = true; }
+    }
+    const states = frame?.secondary?.states;
+    const count = states ? frame!.secondary!.fragments.length : 0;
+    if (this.layoutSecondaryVisible.length !== count) { this.layoutSecondaryVisible = new Uint8Array(count); changed = true; }
+    for (let index = 0; index < count; index++) {
+      const visible = states![index] !== FragmentState.Retired ? 1 : 0;
+      if (this.layoutSecondaryVisible[index] !== visible) { this.layoutSecondaryVisible[index] = visible; changed = true; }
+    }
+    return changed;
   }
 
   private defaultMaterial(fragment: FragmentDef, surface: FragmentSurface): Material {

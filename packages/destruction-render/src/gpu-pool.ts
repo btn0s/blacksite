@@ -27,6 +27,10 @@ export class GPUTransformPool {
     this.matrices.name = 'cascade-global-transforms';
     this.colors.name = 'cascade-global-instance-colors';
     this.matrices.needsUpdate = this.colors.needsUpdate = true;
+    for (const texture of [this.matrices, this.colors]) {
+      texture.userData.fullUpload = true;
+      texture.onUpdate = () => { texture.userData.fullUpload = false; };
+    }
     this.generationBySlot = new Uint32Array(capacity);
     this.free = [{ start: 1, count: capacity - 1 }];
   }
@@ -106,14 +110,29 @@ export class GPUTransformPool {
 
   flush(): void {
     // Three's texture update ranges are component offsets and must not cross rows.
-    for (const slot of this.matrixDirty) this.matrices.addUpdateRange(slot * 16, 16);
-    for (const slot of this.colorDirty) this.colors.addUpdateRange(slot * 4, 4);
-    if (this.matrixDirty.size) this.matrices.needsUpdate = true;
-    if (this.colorDirty.size) this.colors.needsUpdate = true;
+    uploadRows(this.matrices, this.matrixDirty, 16);
+    uploadRows(this.colors, this.colorDirty, 4);
     this.matrixDirty.clear(); this.colorDirty.clear();
   }
 
   dispose(): void { this.matrices.dispose(); this.colors.dispose(); this.actors.clear(); this.slots.clear(); }
+}
+
+function uploadRows(texture: DataTexture, dirty: ReadonlySet<number>, components: number): void {
+  if (!dirty.size) return;
+  const rowComponents = texture.image.width * 4, rows = texture.image.height;
+  const first = new Int32Array(rows).fill(-1), last = new Int32Array(rows);
+  let touched = 0;
+  for (const slot of dirty) {
+    const start = slot * components, row = Math.floor(start / rowComponents);
+    if (first[row] === -1) { first[row] = start; last[row] = start + components; touched++; }
+    else { if (start < first[row]!) first[row] = start; if (start + components > last[row]!) last[row] = start + components; }
+  }
+  if (texture.userData.fullUpload || touched * 2 > rows) {
+    texture.clearUpdateRanges();
+    texture.userData.fullUpload = true;
+  } else for (let row = 0; row < rows; row++) if (first[row] !== -1) texture.addUpdateRange(first[row]!, last[row]! - first[row]!);
+  texture.needsUpdate = true;
 }
 
 type BatchStorage = {
