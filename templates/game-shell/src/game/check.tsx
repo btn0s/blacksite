@@ -7,10 +7,11 @@ import { bookmarks } from './yard'
 
 const checkFeel: FeelModel = { moveSpeed: FEEL.moveSpeed, sprintSpeed: FEEL.sprintSpeed, timeToTopSpeed: FEEL.timeToTopSpeed, jumpApex: FEEL.jumpApex, tolerance: FEEL.tolerance }
 
-export function CheckProbe({ player, ready, reset, feel = checkFeel, priority = 0.5 }: {
+export function CheckProbe({ player, ready, reset, onCameraOverride, feel = checkFeel, priority = 0.5 }: {
   player: () => PlayerSample | null
   ready: () => boolean
   reset?: () => void
+  onCameraOverride?: (active: boolean) => void
   feel?: FeelModel
   priority?: number
 }) {
@@ -18,12 +19,13 @@ export function CheckProbe({ player, ready, reset, feel = checkFeel, priority = 
   const size = useThree(state => state.size)
   const override = useRef<CameraPose | null>(null)
   const rendered = useRef(false)
-  const latest = useRef({ player, ready, reset })
-  latest.current = { player, ready, reset }
+  const latest = useRef({ player, ready, reset, onCameraOverride })
+  latest.current = { player, ready, reset, onCameraOverride }
   const check = useMemo(() => exposeCheck({
     bookmarks,
     camera(next) {
       override.current = next
+      latest.current.onCameraOverride?.(next !== null)
       if (!next) { camera.clearViewOffset(); camera.updateProjectionMatrix() }
     },
     player: () => latest.current.player(),
@@ -32,7 +34,7 @@ export function CheckProbe({ player, ready, reset, feel = checkFeel, priority = 
     input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
     model: { feel, budget: BUDGET },
   }), [camera, feel])
-  useEffect(() => check.dispose, [check])
+  useEffect(() => () => { latest.current.onCameraOverride?.(false); check.dispose() }, [check])
   useFrame(() => {
     if (!check.probe.ready && latest.current.ready()) {
       if (rendered.current) check.ready()

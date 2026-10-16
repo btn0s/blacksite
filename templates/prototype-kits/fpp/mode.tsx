@@ -69,19 +69,21 @@ export default function Mode({ onCreated, physicsProbe }: { onCreated?: (state: 
   const walker = useMemo(createWalker, [])
   const arms = useMemo(createArmsState, [])
   const [presentation, setPresentation] = useState<ArmsPresentation | null>(null)
+  const [cameraOverride, setCameraOverride] = useState(false)
   const ready = useSurfaces()
   return <>
-    <Stage overlay={presentation} onCreated={onCreated}>
+    <Stage overlay={cameraOverride ? null : presentation} onCreated={onCreated}>
       <WalkerBody walker={walker} view="eye" />
       <Rifle walker={walker} arms={arms} />
       <ArmsViewmodel state={arms} render="external" onPresentation={setPresentation} />
       <CheckProbe
+        onCameraOverride={setCameraOverride}
         ready={() => surfacesReady() && presentation !== null}
         reset={walker.reset}
         player={() => ({ position: [walker.position.x, walker.position.y, walker.position.z], velocity: [walker.motor.velocity.x, walker.motor.velocity.y, walker.motor.velocity.z], grounded: walker.motor.grounded })} />
       {physicsProbe}
     </Stage>
     <div className="reticle" aria-hidden="true" />
-    <PlayHud ready={ready} hints={[['WASD', 'Move'], ['Mouse', 'Look'], ['LMB', 'Fire'], ['RMB', 'Aim'], ['R', 'Reload'], ['1 / 2', 'Weapon'], ['Shift', 'Sprint'], ['Space', 'Jump']]} buttons={[{ id: 'fire', label: 'Fire' }, { id: 'aim', label: 'Aim' }, { id: 'jump', label: 'Jump' }, { id: 'reload', label: 'Reload' }, { id: 'sprint', label: 'Sprint' }, { id: 'crouch', label: 'Crouch' }]} />
+    <PlayHud ready={ready} hints={[['WASD', 'Move'], ['Mouse', 'Look'], ['LMB', 'Fire'], ['RMB', 'Aim'], ['R', 'Reload'], ['1 / 2', 'Weapon'], ['Shift', 'Sprint'], ['Space', 'Jump']]} buttons={[{ id: 'fire', label: 'Fire' }, { id: 'aim', label: 'Aim' }, { id: 'jump', label: 'Jump' }, { id: 'reload', label: 'Reload' }, { id: 'sprint', label: 'Sprint' }]} />
   </>
 }

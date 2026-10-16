@@ -49,6 +49,7 @@ export default function Mode({ onCreated, physicsProbe }: { onCreated?: (state: 
   const subject = useMemo(() => createSubject({ cameraMode: 'switchable', spawn: yard.spawn }), [])
   const [arms, setArms] = useState<ArmsPresentation | null>(null)
   const [status, setStatus] = useState<MultiplayerStatus | null>(null)
+  const [cameraOverride, setCameraOverride] = useState(false)
   const ready = useSurfaces()
   useEffect(() => subject.setVirtual(true), [subject])
   const shot = (event: MultiplayerShot) => {
@@ -56,12 +57,13 @@ export default function Mode({ onCreated, physicsProbe }: { onCreated?: (state: 
     if (event.point) sound.play('impact.concrete', { position: [event.point.x, event.point.y, event.point.z], delay: true })
   }
   return <>
-    <Stage physics={false} overlay={arms} onCreated={onCreated}>
+    <Stage physics={false} overlay={cameraOverride ? null : arms} onCreated={onCreated}>
       <Drive subject={subject} />
       {joined && <MultiplayerScene key={joined.connection.id} connection={joined.connection} offline={!joined.online} subject={subject} input="external" gaitSpeedOverrides={GAIT_SPEEDS} footsteps={footsteps} onArmsPresentation={setArms} onStatus={setStatus} onShot={shot} physicsProbe={physicsProbe}>
         <Yard />
       </MultiplayerScene>}
       <CheckProbe
+        onCameraOverride={setCameraOverride}
         feel={CHARACTER_FEEL}
         reset={() => subject.respawn(yard.spawn, 0)}
         priority={-0.2}
