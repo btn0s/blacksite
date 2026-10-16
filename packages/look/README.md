@@ -23,7 +23,15 @@ look.setQuality('low')
 look.dispose()
 ```
 
-`createLook` returns `{ composer, grade, sky, atmosphere, quality, render(dt), setSize(w, h, updateStyle?), setAtmosphere(atmosphere | name), setQuality(tier), setAberration(extra), dispose() }`. Options: `atmosphere` (default `'zone'`), `quality` (default `autoQuality()`), `sky` (default true; adds the dome to the scene), `environment` (default false; PMREM-bakes the sky into `scene.environment`), `fog` (default true), `sun` (a `DirectionalLight` to drive) and `fill` (a `HemisphereLight` to drive).
+`createLook` returns `{ composer, grade, sky, atmosphere, quality, render(dt), setSize(w, h, updateStyle?), setAtmosphere(atmosphere | name), setQuality(tier), setAberration(extra), addOverlay(scene, camera), dispose() }`. Options: `atmosphere` (default `'zone'`), `quality` (default `autoQuality()`), `sky` (default true; adds the dome to the scene), `environment` (default false; PMREM-bakes the sky into `scene.environment`), `fog` (default true), `sun` (a `DirectionalLight` to drive) and `fill` (a `HemisphereLight` to drive).
+
+## Overlays
+
+`addOverlay(scene, camera)` draws a second scene over the world, for a first-person viewmodel or held props. It runs after ambient occlusion and before bloom, so the overlay gets the same bloom, grade, vignette and grain as the world but no world AO. Depth is cleared first, so the overlay never clips into walls, and the overlay scene's background is ignored. It returns a function that removes the pass. Several overlays draw in the order they were added. Keep the overlay's lights in the overlay scene, and update its camera's aspect yourself.
+
+```ts
+const removeViewmodel = look.addOverlay(viewmodelScene, viewmodelCamera)
+```
 
 ## React Three Fiber
 
@@ -37,7 +45,7 @@ import { Look } from '@blacksite/look/r3f'
 </Canvas>
 ```
 
-`<Look>` creates the stack on mount, follows the canvas size and pixel ratio, and renders with `useFrame` priority 1, so R3F stops its own render. Props mirror the options above plus `aberration` and `onReady(look)`.
+`<Look>` creates the stack on mount, follows the canvas size and pixel ratio, and renders with `useFrame` priority 1, so R3F stops its own render. Props mirror the options above plus `aberration`, `overlay` (`{ scene, camera }`, added with `addOverlay` and removed when it changes) and `onReady(look)`.
 
 ## Atmospheres
 

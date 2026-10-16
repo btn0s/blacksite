@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { DirectionalLight, HemisphereLight } from 'three';
+import type { Camera, DirectionalLight, HemisphereLight, Scene } from 'three';
 import type { Atmosphere } from './atmosphere';
 import { createLook } from './look';
 import type { Look as LookHandle } from './look';
@@ -17,10 +17,11 @@ export interface LookProps {
   readonly sun?: DirectionalLight | null;
   readonly fill?: HemisphereLight | null;
   readonly aberration?: number;
+  readonly overlay?: { readonly scene: Scene; readonly camera: Camera } | null;
   readonly onReady?: (look: LookHandle | null) => void;
 }
 
-export function Look({ atmosphere = 'zone', quality, sky = true, environment = false, fog = true, sun = null, fill = null, aberration = 0, onReady }: LookProps) {
+export function Look({ atmosphere = 'zone', quality, sky = true, environment = false, fog = true, sun = null, fill = null, aberration = 0, overlay = null, onReady }: LookProps) {
   const gl = useThree(state => state.gl);
   const scene = useThree(state => state.scene);
   const camera = useThree(state => state.camera);
@@ -57,6 +58,13 @@ export function Look({ atmosphere = 'zone', quality, sky = true, environment = f
   useEffect(() => {
     look?.setAberration(aberration);
   }, [look, aberration]);
+
+  const overlayScene = overlay?.scene;
+  const overlayCamera = overlay?.camera;
+  useEffect(() => {
+    if (!look || !overlayScene || !overlayCamera) return;
+    return look.addOverlay(overlayScene, overlayCamera);
+  }, [look, overlayScene, overlayCamera]);
 
   useEffect(() => {
     onReady?.(look);

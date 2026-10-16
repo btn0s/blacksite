@@ -39,6 +39,7 @@ export interface Look {
   setAtmosphere(next: Atmosphere | PresetName): void;
   setQuality(next: QualityTier): void;
   setAberration(extra: number): void;
+  addOverlay(scene: Scene, camera: Camera): () => void;
   dispose(): void;
 }
 
@@ -181,6 +182,18 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
     setAberration(extra) {
       extraAberration = extra;
       grade.aberration = atmosphere.grade.aberration + extra;
+    },
+    addOverlay(overlayScene, overlayCamera) {
+      const pass = new RenderPass(overlayScene, overlayCamera);
+      pass.clearPass.color = false;
+      pass.clearPass.depth = true;
+      pass.ignoreBackground = true;
+      composer.addPass(pass, composer.passes.indexOf(bloomPass));
+      return () => {
+        if (disposed || !composer.passes.includes(pass)) return;
+        composer.removePass(pass);
+        pass.dispose();
+      };
     },
     dispose() {
       disposed = true;
