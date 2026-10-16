@@ -1,3 +1,4 @@
+import * as THREE from 'three'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Physics } from '@react-three/rapier'
@@ -84,15 +85,39 @@ function RaceDriver({ shared, onEvent, ghostVisible }: { shared: Shared; onEvent
   return null
 }
 
+function Warmup({ onDone }: { onDone: () => void }) {
+  const { gl, scene, camera } = useThree()
+  useFrame(() => {}, 1)
+  useEffect(() => {
+    let cancelled = false
+    const frame = requestAnimationFrame(() => {
+      void gl.compileAsync(scene, camera).then(() => {
+        if (cancelled) return
+        scene.traverse(object => {
+          const material = (object as THREE.Mesh).material
+          for (const entry of Array.isArray(material) ? material : material ? [material] : []) {
+            for (const value of Object.values(entry)) if (value instanceof THREE.Texture) gl.initTexture(value)
+          }
+        })
+        onDone()
+      })
+    })
+    return () => { cancelled = true; cancelAnimationFrame(frame) }
+  }, [gl, scene, camera, onDone])
+  return null
+}
+
 function Scene({ shared, spawn, onAction, onEvent, ghostVisible, api }: { shared: Shared; spawn: Spawn; onAction: (action: string) => void; onEvent: (event: RaceEvent, now: number) => void; ghostVisible: boolean; api: ProbeApi }) {
   const time = useMemo(createWorldTimeState, [])
+  const [compiled, setCompiled] = useState(false)
+  const done = useCallback(() => setCompiled(true), [])
   return <>
     <Atmosphere />
-    <Look atmosphere="zone" sky={false} fog={false} />
+    {compiled ? <Look atmosphere="zone" sky={false} fog={false} /> : <Warmup onDone={done} />}
     <Physics gravity={[0, -locomotion.gravity, 0]} timeStep={locomotion.physicsStep} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <Player command={shared.command} pose={shared.pose} time={time} audio={shared.footsteps} spawn={spawn} scripted={shared.scripted} touchLook={shared.touchLook} touchMove={shared.touchMove} onAction={onAction} />
       <Level route={shared.route} />
-      <Probe shared={shared} api={api} />
+      {compiled && <Probe shared={shared} api={api} />}
     </Physics>
     <Practicals route={shared.route} />
     <Markers route={shared.route} race={shared.race} />

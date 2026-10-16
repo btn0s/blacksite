@@ -277,7 +277,7 @@ export function buildRoute() {
     { at: [20.2, 0.75, 0.6], action: 'mantle' }, { at: [23, 0, 0.6] },
     { at: [26.2, 1, 0.6], action: 'mantle' }, { at: [28.5, 0, 0.6] },
     { at: [38.6, 0, 0.5] }, { at: [40, 0, 0.1] }, { at: [40, 1.25, -1.6], action: 'mantle' }, { at: [40, garageRoof, -3.8], action: 'mantle' },
-    { at: [42.6, garageRoof, -5.6] }, { at: [43.45, garageRoof, -5.6], action: 'jump' }, { at: [46.2, garageRoof, -5.6] },
+    { at: [40.4, garageRoof, -5.6] }, { at: [43.45, garageRoof, -5.6], action: 'jump' }, { at: [46.2, garageRoof, -5.6] },
     { at: [60.9, garageRoof, -5.6] }, { at: [64, 0, -4.6] }, { at: [67.4, 0, -4] }, { at: [74.6, 2.05, -4] }, { at: [80.8, 0, -4] },
     { at: [90.6, 0, -5.3] }, { at: [93.2, 0, -5.3] }, { at: [flights[0]!.from[0] - 0.3, 0, flights[0]!.from[2]] },
     ...flights.flatMap((flight, index) => [{ at: flight.to }, ...(index < 2 ? [{ at: [index === 0 ? inner.x1 - 0.7 : inner.x0 + 1.4, flight.to[1], (inner.z0 + inner.z1) / 2] as Vec3 }] : [])]),

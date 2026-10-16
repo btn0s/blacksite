@@ -333,6 +333,8 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         const began = clock.current
         const notes: string[] = []
         let pressedAt = -1
+        const previous = new THREE.Vector3()
+        let retreat = false
         command.sprint = true
         for (let index = 0; index < route.line.length; index++) {
           const point = route.line[index]!
@@ -342,12 +344,28 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
             const yaw = Math.atan2(point.at[2] - p.z, point.at[0] - p.x)
             command.yaw = toDegrees(yaw)
             command.forward = 1
-            command.sprint = true
+            const near = Math.hypot(point.at[0] - p.x, point.at[2] - p.z) < 3 && point.action === 'mantle'
+            command.sprint = !near && !route.zones.some(zone => zone.kind === 'stairwell' && p.x > zone.min[0] && p.x < zone.max[0] && p.z > zone.min[2] && p.z < zone.max[2])
             const free = c?.locomotionMode === 'Grounded' && c.locomotionAction === null && clock.current - pressedAt > 0.35
             const flat = Math.hypot(point.at[0] - p.x, point.at[2] - p.z)
             if (free && point.action === 'mantle' && faceDistance(p.x, p.y + 0.3, p.z, yaw) < 0.7) { pressedAt = clock.current; command.jumpSequence++ }
-            if (free && point.action === 'jump' && flat < 0.45) { pressedAt = clock.current; command.jumpSequence++ }
-            return flat < (point.action === 'jump' ? 0.3 : 0.6) && Math.abs(p.y - point.at[1]) < 0.6
+            if (point.action === 'jump') {
+              const from = route.line[index - 1]!.at
+              const length = Math.hypot(point.at[0] - from[0], point.at[2] - from[2])
+              const dx = (point.at[0] - from[0]) / length
+              const dz = (point.at[2] - from[2]) / length
+              const along = (p.x - point.at[0]) * dx + (p.z - point.at[2]) * dz
+              const lateral = Math.abs((p.x - point.at[0]) * dz - (p.z - point.at[2]) * dx)
+              const moved = Math.hypot(p.x - previous.x, p.z - previous.z)
+              const aligned = moved > 0 && ((p.x - previous.x) * dx + (p.z - previous.z) * dz) / moved > 0.8
+              previous.copy(p)
+              if (free && along > -0.6 && lateral < 0.5 && aligned) { pressedAt = clock.current; command.jumpSequence++; return true }
+              if (along > 0.2) retreat = true
+              if (retreat && Math.hypot(from[0] - p.x, from[2] - p.z) < 0.6) retreat = false
+              if (retreat) command.yaw = toDegrees(Math.atan2(from[2] - p.z, from[0] - p.x))
+              return false
+            }
+            return flat < 0.6 && Math.abs(p.y - point.at[1]) < 0.6
           }, 9)
           if (!ok) { notes.push(`stuck before waypoint ${index} [${point.at.map(v => v.toFixed(1)).join(', ')}] at [${position().toArray().map(v => v.toFixed(1)).join(', ')}]`); break }
         }
@@ -447,7 +465,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
       },
       respawn: (position: Vec3, yaw = 0) => api.respawn(position, yaw),
       restart: () => api.restart(),
-      gl: () => ({ calls: gl.info.render.calls, triangles: gl.info.render.triangles }),
+      gl: () => ({ calls: gl.info.render.calls, triangles: gl.info.render.triangles, programs: gl.info.programs?.map(program => program.name) ?? [] }),
       recording: () => last.current && { left: last.current.left, right: last.current.right },
       fog(density: number) { if (scene.fog instanceof THREE.FogExp2) scene.fog.density = density },
     }
