@@ -43,6 +43,10 @@
         "gas-mask",
         "weeds",
         "weapon-akm",
+        "character-rocketbox-soldier",
+        "anim-rocketbox-walk",
+        "anim-rocketbox-idle",
+        "anim-mesh2motion-addon",
         "shot-ak47",
         "shot-kalashnikov-indoor",
         "shot-pistol-9mm",
@@ -53,20 +57,20 @@
         "impact-flesh",
         "casing-concrete",
         "reload-rifle",
-        "step-concrete",
-        "step-metal-grate",
-        "step-wood",
-        "step-gravel",
-        "step-puddle",
-        "bed-wind-winter",
-        "bed-warehouse",
-        "bed-dripping",
-        "bed-fluorescent-hum",
-        "bed-rain-inside",
-        "ir-corridor",
-        "ir-stairwell",
-        "ir-bathroom",
-        "ir-garage"
+        "step-boots-concrete",
+        "step-metal-ladder",
+        "step-wood-oga",
+        "step-gravel-oga",
+        "step-water-oga",
+        "step-tile-oga",
+        "bed-wind-alpine",
+        "bed-hum-ups",
+        "bed-mine-winding",
+        "bed-drip-basement",
+        "bed-rain-loop",
+        "ir-classroom",
+        "ir-lecture-hall",
+        "ir-open-air"
       ]
     },
     "zone": {
@@ -97,14 +101,14 @@
         "tree-stump",
         "log-dead",
         "branches-dry",
-        "step-dirt",
-        "step-grass",
-        "step-mud",
-        "bed-wind-leaves",
-        "bed-forest-spring",
-        "bed-city-distant",
-        "bed-rain-downpour",
-        "ir-outdoor-blocks",
+        "step-grass-oga",
+        "step-gravel-oga",
+        "step-water-oga",
+        "bed-storm-wind",
+        "bed-stream",
+        "bed-station-tunnel",
+        "bed-rain-loop",
+        "ir-open-air",
         "terrain-ridge-valley"
       ]
     }
@@ -1046,6 +1050,11 @@
       "attribution": "\"Barrel 03\" by Serhii Khromov (Poly Haven) (https://polyhaven.com/a/barrel_03), CC0 1.0",
       "use": "Steel drum; cover, clutter, explosive variant.",
       "triangles": 1473,
+      "dimensions": [
+        0.634,
+        0.639,
+        0.93
+      ],
       "files": [
         {
           "name": "barrel_03_1k.gltf",
@@ -1098,6 +1107,11 @@
       "attribution": "\"Old Military Crate\" by Jack Mava (Poly Haven) (https://polyhaven.com/a/old_military_crate), CC0 1.0",
       "use": "Long ammo or weapon crate; loot and cover.",
       "triangles": 10476,
+      "dimensions": [
+        1.815,
+        0.979,
+        0.301
+      ],
       "files": [
         {
           "name": "old_military_crate_1k.gltf",
@@ -1150,6 +1164,11 @@
       "attribution": "\"Metal Jerrycan\" by Sean Buckley (Poly Haven) (https://polyhaven.com/a/metal_jerrycan), CC0 1.0",
       "use": "Fuel can clutter near vehicles and generators.",
       "triangles": 20022,
+      "dimensions": [
+        0.35,
+        0.172,
+        0.455
+      ],
       "files": [
         {
           "name": "metal_jerrycan_1k.gltf",
@@ -1203,6 +1222,11 @@
       "attribution": "\"Concrete Road Barrier\" by Amal Kumar (Poly Haven) (https://polyhaven.com/a/concrete_road_barrier), CC0 1.0",
       "use": "Jersey barrier; road blocks and hard cover.",
       "triangles": 80776,
+      "dimensions": [
+        1.545,
+        0.641,
+        0.835
+      ],
       "process": {
         "simplify": 0.25
       },
@@ -1258,6 +1282,11 @@
       "attribution": "\"Modular Industrial Pipes 01\" by Jorge Camacho (Poly Haven) (https://polyhaven.com/a/modular_industrial_pipes_01), CC0 1.0",
       "use": "Modular pipe run for walls and ceilings.",
       "triangles": 12340,
+      "dimensions": [
+        1.403,
+        0.308,
+        1.955
+      ],
       "files": [
         {
           "name": "modular_industrial_pipes_01_1k.gltf",
@@ -1328,6 +1357,11 @@
       "attribution": "\"Old Tyre\" by MP (Poly Haven) (https://polyhaven.com/a/old_tyre), CC0 1.0",
       "use": "Dumped tyres for yards and roadsides.",
       "triangles": 2880,
+      "dimensions": [
+        0.6,
+        0.165,
+        0.6
+      ],
       "files": [
         {
           "name": "old_tyre_1k.gltf",
@@ -1380,6 +1414,11 @@
       "attribution": "\"Korean Fire Extinguisher 01\" by UM JOORIN (Poly Haven) (https://polyhaven.com/a/korean_fire_extinguisher_01), CC0 1.0",
       "use": "Wall clutter for corridors and stairwells.",
       "triangles": 9913,
+      "dimensions": [
+        0.28,
+        0.367,
+        0.659
+      ],
       "files": [
         {
           "name": "korean_fire_extinguisher_01_1k.gltf",
@@ -1468,6 +1507,11 @@
       "attribution": "\"Utility Box 02\" by James Ray Cock (Poly Haven) (https://polyhaven.com/a/utility_box_02), CC0 1.0",
       "use": "Electrical cabinet; objectives and wall clutter.",
       "triangles": 6268,
+      "dimensions": [
+        0.92,
+        0.432,
+        1.12
+      ],
       "files": []
     },
     {
@@ -1490,6 +1534,11 @@
       "attribution": "\"Power Box 01\" by Rico Cilliers and Yann Kervran (Poly Haven) (https://polyhaven.com/a/power_box_01), CC0 1.0",
       "use": "Fuse box for power puzzles and interiors.",
       "triangles": 21272,
+      "dimensions": [
+        0.377,
+        0.418,
+        0.503
+      ],
       "files": [
         {
           "name": "power_box_01_1k.gltf",
@@ -1542,6 +1591,11 @@
       "attribution": "\"Steel Frame Shelves 01\" by James Ray Cock (Poly Haven) (https://polyhaven.com/a/steel_frame_shelves_01), CC0 1.0",
       "use": "Storage shelving for warehouses and basements.",
       "triangles": 4348,
+      "dimensions": [
+        1.097,
+        0.502,
+        2.141
+      ],
       "files": [
         {
           "name": "steel_frame_shelves_01_1k.gltf",
@@ -1595,6 +1649,11 @@
       "attribution": "\"Mounted Fluorescent Lights\" by Ulan Cabanilla (Poly Haven) (https://polyhaven.com/a/mounted_fluorescent_lights), CC0 1.0",
       "use": "Ceiling tube fitting; pair with an emissive practical light.",
       "triangles": 17820,
+      "dimensions": [
+        0.912,
+        0.645,
+        0.035
+      ],
       "files": [
         {
           "name": "mounted_fluorescent_lights_1k.gltf",
@@ -1654,6 +1713,11 @@
       "attribution": "\"Old Bed Frame\" by Luca B (Poly Haven) (https://polyhaven.com/a/old_bed_frame), CC0 1.0",
       "use": "Iron bed frame for wards and dormitories.",
       "triangles": 49990,
+      "dimensions": [
+        0.905,
+        2.002,
+        1.201
+      ],
       "process": {
         "simplify": 0.5
       },
@@ -1709,6 +1773,11 @@
       "attribution": "\"Painted Wooden Chair 02\" by Kirill Sannikov (Poly Haven) (https://polyhaven.com/a/painted_wooden_chair_02), CC0 1.0",
       "use": "Painted wooden chair for flats and offices.",
       "triangles": 1246,
+      "dimensions": [
+        0.639,
+        0.662,
+        1.264
+      ],
       "files": [
         {
           "name": "painted_wooden_chair_02_1k.gltf",
@@ -1761,6 +1830,11 @@
       "attribution": "\"Painted Wooden Table\" by Kirill Sannikov (Poly Haven) (https://polyhaven.com/a/painted_wooden_table), CC0 1.0",
       "use": "Long painted table for canteens and offices.",
       "triangles": 600,
+      "dimensions": [
+        2.406,
+        1.137,
+        0.959
+      ],
       "files": []
     },
     {
@@ -1783,6 +1857,11 @@
       "attribution": "\"Russian Food Cans 01\" by Kosan Aziz (Poly Haven) (https://polyhaven.com/a/russian_food_cans_01), CC0 1.0",
       "use": "Tinned food loot and shelf clutter.",
       "triangles": 1348,
+      "dimensions": [
+        0.142,
+        0.046,
+        0.085
+      ],
       "files": [
         {
           "name": "russian_food_cans_01_1k.gltf",
@@ -1835,6 +1914,11 @@
       "attribution": "\"Old Gas Mask\" by Michał Wiśniewski (Poly Haven) (https://polyhaven.com/a/old_gas_mask), CC0 1.0",
       "use": "Gas mask loot or wall hanging.",
       "triangles": 18900,
+      "dimensions": [
+        0.211,
+        0.309,
+        1.126
+      ],
       "files": [
         {
           "name": "old_gas_mask_1k.gltf",
@@ -1887,6 +1971,11 @@
       "attribution": "\"Metal Trash Can\" by GurJas Studios (Poly Haven) (https://polyhaven.com/a/metal_trash_can), CC0 1.0",
       "use": "Steel bin for streets and yards.",
       "triangles": 13960,
+      "dimensions": [
+        1.847,
+        0.556,
+        0.906
+      ],
       "files": [
         {
           "name": "metal_trash_can_1k.gltf",
@@ -1958,6 +2047,11 @@
       "attribution": "\"Rollershutter Door\" by MP (Poly Haven) (https://polyhaven.com/a/rollershutter_door), CC0 1.0",
       "use": "Roller shutter for garages and loading bays.",
       "triangles": 1104,
+      "dimensions": [
+        3.08,
+        0.3,
+        2.4
+      ],
       "files": [
         {
           "name": "rollershutter_door_1k.gltf",
@@ -2017,6 +2111,11 @@
       "attribution": "\"Street Lamp 01\" by Josh Dean (Poly Haven) (https://polyhaven.com/a/street_lamp_01), CC0 1.0",
       "use": "Street lamp with practical light.",
       "triangles": 30610,
+      "dimensions": [
+        0.704,
+        0.386,
+        3.871
+      ],
       "process": {
         "simplify": 0.7
       },
@@ -2072,6 +2171,11 @@
       "attribution": "\"Wheelchair 01\" by Garreth Dean (Poly Haven) (https://polyhaven.com/a/wheelchair_01), CC0 1.0",
       "use": "Hospital wheelchair for horror set dressing.",
       "triangles": 40252,
+      "dimensions": [
+        0.824,
+        1.091,
+        1.104
+      ],
       "process": {
         "simplify": 0.6
       },
@@ -2096,6 +2200,11 @@
       "attribution": "\"Modular Chainlink Fence\" by James Ray Cock and Amal Kumar (Poly Haven) (https://polyhaven.com/a/modular_chainlink_fence), CC0 1.0",
       "use": "Modular chain-link fence for perimeters.",
       "triangles": 89232,
+      "dimensions": [
+        8.115,
+        2.149,
+        2.523
+      ],
       "process": {
         "simplify": 0.3
       },
@@ -2169,6 +2278,11 @@
       "attribution": "\"Fern 02\" by Rob Tuytel and Rico Cilliers (Poly Haven) (https://polyhaven.com/a/fern_02), CC0 1.0",
       "use": "Forest floor fern clumps.",
       "triangles": 6232,
+      "dimensions": [
+        1.973,
+        1.724,
+        0.428
+      ],
       "files": [
         {
           "name": "fern_02_1k.gltf",
@@ -2220,6 +2334,11 @@
       "attribution": "\"Shrub 03\" by Rico Cilliers (Poly Haven) (https://polyhaven.com/a/shrub_03), CC0 1.0",
       "use": "Low shrub for verges and clearings.",
       "triangles": 16955,
+      "dimensions": [
+        1.367,
+        0.151,
+        0.403
+      ],
       "files": [
         {
           "name": "shrub_03_1k.gltf",
@@ -2272,6 +2391,11 @@
       "attribution": "\"Weed Plant 02\" by Rob Tuytel and Rico Cilliers (Poly Haven) (https://polyhaven.com/a/weed_plant_02), CC0 1.0",
       "use": "Weeds pushing through ruins and pavements.",
       "triangles": 17062,
+      "dimensions": [
+        2.125,
+        0.291,
+        0.075
+      ],
       "files": [
         {
           "name": "weed_plant_02_1k.gltf",
@@ -2323,6 +2447,11 @@
       "attribution": "\"Nettle Plant\" by Rob Tuytel and Rico Cilliers (Poly Haven) (https://polyhaven.com/a/nettle_plant), CC0 1.0",
       "use": "Nettle patches for overgrown yards.",
       "triangles": 46195,
+      "dimensions": [
+        1.084,
+        0.095,
+        0.219
+      ],
       "process": {
         "simplify": 0.6
       },
@@ -2377,6 +2506,11 @@
       "attribution": "\"Tree Stump 01\" by Rob Tuytel (Poly Haven) (https://polyhaven.com/a/tree_stump_01), CC0 1.0",
       "use": "Cut stump for clearings.",
       "triangles": 41046,
+      "dimensions": [
+        1.426,
+        1.59,
+        0.573
+      ],
       "process": {
         "simplify": 0.5
       },
@@ -2432,6 +2566,11 @@
       "attribution": "\"Dead Tree Trunk\" by Rob Tuytel (Poly Haven) (https://polyhaven.com/a/dead_tree_trunk), CC0 1.0",
       "use": "Fallen trunk; forest cover.",
       "triangles": 101802,
+      "dimensions": [
+        3.051,
+        0.278,
+        0.29
+      ],
       "process": {
         "simplify": 0.25
       },
@@ -2486,6 +2625,11 @@
       "attribution": "\"Dry Branches Medium 01\" by Rico Cilliers (Poly Haven) (https://polyhaven.com/a/dry_branches_medium_01), CC0 1.0",
       "use": "Dry branch debris.",
       "triangles": 16803,
+      "dimensions": [
+        1.059,
+        1.299,
+        0.341
+      ],
       "files": [
         {
           "name": "dry_branches_medium_01_1k.gltf",
@@ -2546,6 +2690,264 @@
           "url": "https://opengameart.org/sites/default/files/akm54.blend",
           "sha256": "4fe01a2cc27c6d31136e7a776fcef56fc9d336dd0d93e128b2f42778e94cf4d6",
           "size": 42527467
+        }
+      ]
+    },
+    {
+      "id": "character-rocketbox-soldier",
+      "title": "Rocketbox Military Male 02",
+      "category": "character",
+      "tags": [
+        "soldier",
+        "military",
+        "humanoid",
+        "rigged",
+        "realistic"
+      ],
+      "source": {
+        "site": "github",
+        "url": "https://github.com/microsoft/Microsoft-Rocketbox/tree/master/Assets/Avatars/Professions/Military_Male_02"
+      },
+      "author": "Microsoft and Rocketbox Studios",
+      "licence": "MIT",
+      "attribution": "Microsoft Rocketbox Avatar Library (https://github.com/microsoft/Microsoft-Rocketbox), Copyright (c) 2020 Microsoft, MIT License",
+      "use": "Realistic soldier in ACU camo on the Biped rig; NPC squads and remote players. Plays the Rocketbox clips directly.",
+      "process": {
+        "file": "Export/Military_Male_02\\.fbx$|Textures"
+      },
+      "files": [
+        {
+          "name": "Export/Military_Male_02.fbx",
+          "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/master/Assets/Avatars/Professions/Military_Male_02/Export/Military_Male_02.fbx",
+          "sha256": "0f20df55226028524122fc70383aa8fab5d5e9da797436e07d3606245893efc5",
+          "size": 573440
+        },
+        {
+          "name": "Textures/sm024_body_color_acu.tga",
+          "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/master/Assets/Avatars/Professions/Military_Male_02/Textures/sm024_body_color_acu.tga",
+          "sha256": "cec15838f0ff7df44a8b2ad638080fa514ae16573bfdb67f9dea10fa62825c36",
+          "size": 12582956
+        },
+        {
+          "name": "Textures/sm024_body_normal.tga",
+          "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/master/Assets/Avatars/Professions/Military_Male_02/Textures/sm024_body_normal.tga",
+          "sha256": "9c7ca9264b53ef1810afcc821515c684a5a6fcef50b423460d790147b8b47bdd",
+          "size": 12582956
+        },
+        {
+          "name": "Textures/sm024_body_specular.tga",
+          "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/master/Assets/Avatars/Professions/Military_Male_02/Textures/sm024_body_specular.tga",
+          "sha256": "9168d4e572aba42b8240d2e09a010a69cbf706d62e572a416228b36f6c80ab62",
+          "size": 12582956
+        },
+        {
+          "name": "Textures/sm024_head_color_acu.tga",
+          "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/master/Assets/Avatars/Professions/Military_Male_02/Textures/sm024_head_color_acu.tga",
+          "sha256": "22bc144187842cfe5971aa98ab8ed57145e124302d3b537180670608c6d5214e",
+          "size": 12582956
+        },
+        {
+          "name": "Textures/sm024_head_normal.tga",
+          "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/master/Assets/Avatars/Professions/Military_Male_02/Textures/sm024_head_normal.tga",
+          "sha256": "76d97b7cb633c719fa080a532a05179cfb1b546c067773564ee2009a4dbdab67",
+          "size": 12582956
+        },
+        {
+          "name": "Textures/sm024_head_specular.tga",
+          "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/master/Assets/Avatars/Professions/Military_Male_02/Textures/sm024_head_specular.tga",
+          "sha256": "25c92cfc9fc9528e95947bc74dbe4473faf4aaa24ec5afe5c2f2db1800ef9c1c",
+          "size": 12582956
+        }
+      ]
+    },
+    {
+      "id": "anim-rocketbox-walk",
+      "title": "Rocketbox walk neutral",
+      "category": "animation",
+      "tags": [
+        "mocap",
+        "biped",
+        "walk",
+        "locomotion"
+      ],
+      "source": {
+        "site": "github",
+        "url": "https://github.com/microsoft/Microsoft-Rocketbox/tree/master/Assets/Animations"
+      },
+      "author": "Microsoft and Rocketbox Studios",
+      "licence": "MIT",
+      "attribution": "Microsoft Rocketbox Avatar Library (https://github.com/microsoft/Microsoft-Rocketbox), Copyright (c) 2020 Microsoft, MIT License",
+      "use": "Realistic mocap walk loop with root motion on X/Y.",
+      "files": [
+        {
+          "name": "m_walk_neutral_01.max.fbx",
+          "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/master/Assets/Animations/all_animations_max_motextr_xy/m_walk_neutral_01.max.fbx",
+          "sha256": "e6805ae6b6b49fe10f06c1b17b14ddde90d09b9fea689ac34793df252f44dcd0",
+          "size": 994336
+        }
+      ]
+    },
+    {
+      "id": "anim-rocketbox-run",
+      "title": "Rocketbox run neutral",
+      "category": "animation",
+      "tags": [
+        "mocap",
+        "biped",
+        "run",
+        "locomotion"
+      ],
+      "source": {
+        "site": "github",
+        "url": "https://github.com/microsoft/Microsoft-Rocketbox/tree/master/Assets/Animations"
+      },
+      "author": "Microsoft and Rocketbox Studios",
+      "licence": "MIT",
+      "attribution": "Microsoft Rocketbox Avatar Library (https://github.com/microsoft/Microsoft-Rocketbox), Copyright (c) 2020 Microsoft, MIT License",
+      "use": "Realistic mocap run loop with root motion.",
+      "files": [
+        {
+          "name": "m_run_neutral_01.max.fbx",
+          "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/master/Assets/Animations/all_animations_max_motextr_xy/m_run_neutral_01.max.fbx",
+          "sha256": "5a22052ea750805ea7e097310f36cd448c838e7c88bc842a78632d9606869fa8",
+          "size": 868752
+        }
+      ]
+    },
+    {
+      "id": "anim-rocketbox-idle",
+      "title": "Rocketbox idle neutral",
+      "category": "animation",
+      "tags": [
+        "mocap",
+        "biped",
+        "idle"
+      ],
+      "source": {
+        "site": "github",
+        "url": "https://github.com/microsoft/Microsoft-Rocketbox/tree/master/Assets/Animations"
+      },
+      "author": "Microsoft and Rocketbox Studios",
+      "licence": "MIT",
+      "attribution": "Microsoft Rocketbox Avatar Library (https://github.com/microsoft/Microsoft-Rocketbox), Copyright (c) 2020 Microsoft, MIT License",
+      "use": "Standing idle with weight shifts.",
+      "files": [
+        {
+          "name": "m_idle_neutral_01.max.fbx",
+          "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/master/Assets/Animations/all_animations_max_motextr_static/m_idle_neutral_01.max.fbx",
+          "sha256": "818cc185af21390575f7fbfdeb3012ba2ce5969fbcb220ea725a2617b339a6e2",
+          "size": 2418544
+        }
+      ]
+    },
+    {
+      "id": "anim-rocketbox-crouch-idle",
+      "title": "Rocketbox crouch idle",
+      "category": "animation",
+      "tags": [
+        "mocap",
+        "biped",
+        "crouch",
+        "idle"
+      ],
+      "source": {
+        "site": "github",
+        "url": "https://github.com/microsoft/Microsoft-Rocketbox/tree/master/Assets/Animations"
+      },
+      "author": "Microsoft and Rocketbox Studios",
+      "licence": "MIT",
+      "attribution": "Microsoft Rocketbox Avatar Library (https://github.com/microsoft/Microsoft-Rocketbox), Copyright (c) 2020 Microsoft, MIT License",
+      "use": "Crouched idle for cover.",
+      "files": [
+        {
+          "name": "m_crouch_idle.max.fbx",
+          "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/master/Assets/Animations/all_animations_max_motextr_static/m_crouch_idle.max.fbx",
+          "sha256": "d3704294853eda39d566cb31b0e6a6c50bd3cc3c1bda9102c1156c1537c12eeb",
+          "size": 2106496
+        }
+      ]
+    },
+    {
+      "id": "anim-mesh2motion-addon",
+      "title": "Mesh2Motion human add-on animations",
+      "category": "animation",
+      "tags": [
+        "death",
+        "climb",
+        "ladder",
+        "stealth",
+        "strafe",
+        "crawl",
+        "dodge",
+        "zombie"
+      ],
+      "source": {
+        "site": "github",
+        "url": "https://github.com/Mesh2Motion/mesh2motion-app"
+      },
+      "author": "Scott Petrovic (Mesh2Motion)",
+      "licence": "CC0-1.0",
+      "attribution": "\"Mesh2Motion human add-on animations\" by Scott Petrovic (https://github.com/Mesh2Motion/mesh2motion-app), CC0 1.0",
+      "use": "75 hand-keyed clips on a 66-bone UE-style rig: deaths, ladders, ledge hang, stealth walk and run, strafes, crawl, dodges, hurt idles.",
+      "files": [
+        {
+          "name": "human-addon-animations.glb",
+          "url": "https://raw.githubusercontent.com/Mesh2Motion/mesh2motion-app/main/static/animations/human-addon-animations.glb",
+          "sha256": "a0d64d555e0d492026b72d58bf8e16c5e86779295f9093e376dcc001915c2c95",
+          "size": 5292804
+        }
+      ]
+    },
+    {
+      "id": "anim-mesh2motion-mocap",
+      "title": "Mesh2Motion mocopi captures",
+      "category": "animation",
+      "tags": [
+        "mocap",
+        "turn",
+        "salute",
+        "breach"
+      ],
+      "source": {
+        "site": "github",
+        "url": "https://github.com/Mesh2Motion/mesh2motion-app"
+      },
+      "author": "Scott Petrovic (Mesh2Motion)",
+      "licence": "CC0-1.0",
+      "attribution": "\"Mesh2Motion mocopi captures\" by Scott Petrovic (https://github.com/Mesh2Motion/mesh2motion-app), CC0 1.0",
+      "use": "16 mocap clips: turn in place 90 and 180, salute, door kick breach, help gestures.",
+      "files": [
+        {
+          "name": "human-mocap-animations.glb",
+          "url": "https://raw.githubusercontent.com/Mesh2Motion/mesh2motion-app/main/static/animations/human-mocap-animations.glb",
+          "sha256": "814593d62522f5be8d6bd32df2a8fa3c7feb90a8e1a1ba43f4aaf0048555280d",
+          "size": 2025372
+        }
+      ]
+    },
+    {
+      "id": "character-mesh2motion-mannequin",
+      "title": "Mesh2Motion human base model",
+      "category": "character",
+      "tags": [
+        "mannequin",
+        "humanoid",
+        "rigged"
+      ],
+      "source": {
+        "site": "github",
+        "url": "https://github.com/Mesh2Motion/mesh2motion-app"
+      },
+      "author": "Scott Petrovic (Mesh2Motion)",
+      "licence": "CC0-1.0",
+      "attribution": "\"Mesh2Motion human base model\" by Scott Petrovic (https://github.com/Mesh2Motion/mesh2motion-app), CC0 1.0",
+      "use": "Neutral mannequin that plays the Mesh2Motion clips without retargeting.",
+      "files": [
+        {
+          "name": "model-human.glb",
+          "url": "https://raw.githubusercontent.com/Mesh2Motion/mesh2motion-app/main/static/models/model-human.glb",
+          "sha256": "8766a46e82c63c947f7eff70c9d72d6ef0661e2280928048559f8975dcd1086d",
+          "size": 364868
         }
       ]
     },
@@ -3855,6 +4257,528 @@
         {
           "url": "https://freesound.org/s/816877/",
           "name": "816877-original.wav"
+        }
+      ]
+    },
+    {
+      "id": "step-boots-concrete",
+      "title": "Footsteps on different surfaces: boots",
+      "category": "footstep",
+      "tags": [
+        "concrete",
+        "boots"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/footsteps-on-different-surfaces"
+      },
+      "author": "congusbongus",
+      "licence": "CC-BY-3.0",
+      "attribution": "\"Footsteps on different surfaces: boots\" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from \"footstep-concrete.wav\" by swuing (https://freesound.org/s/38873/), CC BY 3.0",
+      "use": "Boots on concrete; nine short takes.",
+      "process": {
+        "take": "^footsteps/boots/"
+      },
+      "files": [
+        {
+          "name": "footsteps_0.zip",
+          "url": "https://opengameart.org/sites/default/files/footsteps_0.zip",
+          "sha256": "542564e7f6b3a0b89a0d08542438e030e77a46303855fe5bf1644a48185861e9",
+          "size": 414824,
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "step-metal-ladder",
+      "title": "Footsteps on different surfaces: metal",
+      "category": "footstep",
+      "tags": [
+        "metal",
+        "grate",
+        "catwalk"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/footsteps-on-different-surfaces"
+      },
+      "author": "congusbongus",
+      "licence": "CC-BY-3.0",
+      "attribution": "\"Footsteps on different surfaces: metal\" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from \"fboots on aluminum ladder 01\" by Eelke (https://freesound.org/s/462598/), CC BY",
+      "use": "Catwalks, grates and ladders.",
+      "process": {
+        "take": "^footsteps/metal/"
+      },
+      "files": [
+        {
+          "name": "footsteps_0.zip",
+          "url": "https://opengameart.org/sites/default/files/footsteps_0.zip",
+          "sha256": "542564e7f6b3a0b89a0d08542438e030e77a46303855fe5bf1644a48185861e9",
+          "size": 414824,
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "step-gravel-oga",
+      "title": "Footsteps on different surfaces: gravel",
+      "category": "footstep",
+      "tags": [
+        "gravel"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/footsteps-on-different-surfaces"
+      },
+      "author": "congusbongus",
+      "licence": "CC-BY-3.0",
+      "attribution": "\"Footsteps on different surfaces: gravel\" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from the Gravel Footsteps pack by Ali_6868 (https://freesound.org/people/Ali_6868/packs/21608/), CC0",
+      "use": "Crunchy gravel steps.",
+      "process": {
+        "take": "^footsteps/gravel/"
+      },
+      "files": [
+        {
+          "name": "footsteps_0.zip",
+          "url": "https://opengameart.org/sites/default/files/footsteps_0.zip",
+          "sha256": "542564e7f6b3a0b89a0d08542438e030e77a46303855fe5bf1644a48185861e9",
+          "size": 414824,
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "step-wood-oga",
+      "title": "Footsteps on different surfaces: wood",
+      "category": "footstep",
+      "tags": [
+        "wood"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/footsteps-on-different-surfaces"
+      },
+      "author": "congusbongus",
+      "licence": "CC-BY-3.0",
+      "attribution": "\"Footsteps on different surfaces: wood\" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from \"footstep-wood.wav\" by swuing (https://freesound.org/s/38876/), CC BY 3.0",
+      "use": "Plank floors.",
+      "process": {
+        "take": "^footsteps/wood/"
+      },
+      "files": [
+        {
+          "name": "footsteps_0.zip",
+          "url": "https://opengameart.org/sites/default/files/footsteps_0.zip",
+          "sha256": "542564e7f6b3a0b89a0d08542438e030e77a46303855fe5bf1644a48185861e9",
+          "size": 414824,
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "step-grass-oga",
+      "title": "Footsteps on different surfaces: grass",
+      "category": "footstep",
+      "tags": [
+        "grass",
+        "dirt"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/footsteps-on-different-surfaces"
+      },
+      "author": "congusbongus",
+      "licence": "CC-BY-3.0",
+      "attribution": "\"Footsteps on different surfaces: grass\" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from \"footstep-grass.wav\" by swuing (https://freesound.org/s/38874/), CC BY 3.0",
+      "use": "Grass and soft ground.",
+      "process": {
+        "take": "^footsteps/grass/"
+      },
+      "files": [
+        {
+          "name": "footsteps_0.zip",
+          "url": "https://opengameart.org/sites/default/files/footsteps_0.zip",
+          "sha256": "542564e7f6b3a0b89a0d08542438e030e77a46303855fe5bf1644a48185861e9",
+          "size": 414824,
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "step-water-oga",
+      "title": "Footsteps on different surfaces: water",
+      "category": "footstep",
+      "tags": [
+        "water",
+        "puddle",
+        "wet"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/footsteps-on-different-surfaces"
+      },
+      "author": "congusbongus",
+      "licence": "CC-BY-3.0",
+      "attribution": "\"Footsteps on different surfaces: water\" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from \"Water Footsteps\" by EminYILDIRIM (https://freesound.org/s/608663/) and \"footstep-concrete.wav\" by swuing (https://freesound.org/s/38873/), CC BY",
+      "use": "Puddles and shallow water.",
+      "process": {
+        "take": "^footsteps/water/"
+      },
+      "files": [
+        {
+          "name": "footsteps_0.zip",
+          "url": "https://opengameart.org/sites/default/files/footsteps_0.zip",
+          "sha256": "542564e7f6b3a0b89a0d08542438e030e77a46303855fe5bf1644a48185861e9",
+          "size": 414824,
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "step-tile-oga",
+      "title": "Footsteps on different surfaces: tile",
+      "category": "footstep",
+      "tags": [
+        "tile",
+        "interior"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/footsteps-on-different-surfaces"
+      },
+      "author": "congusbongus",
+      "licence": "CC-BY-3.0",
+      "attribution": "\"Footsteps on different surfaces: tile\" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from \"footstep-concrete.wav\" by swuing (https://freesound.org/s/38873/) and \"Squeaky footstep.wav\" by ceberation (https://freesound.org/s/235524/), CC BY 3.0",
+      "use": "Tiled floors in hospitals and bathrooms.",
+      "process": {
+        "take": "^footsteps/tile/"
+      },
+      "files": [
+        {
+          "name": "footsteps_0.zip",
+          "url": "https://opengameart.org/sites/default/files/footsteps_0.zip",
+          "sha256": "542564e7f6b3a0b89a0d08542438e030e77a46303855fe5bf1644a48185861e9",
+          "size": 414824,
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "step-wet-rubberduck",
+      "title": "100 CC0 SFX #2: wet footsteps",
+      "category": "footstep",
+      "tags": [
+        "water",
+        "wet"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/100-cc0-sfx-2"
+      },
+      "author": "rubberduck",
+      "licence": "CC0-1.0",
+      "attribution": "\"100 CC0 SFX #2: wet footsteps\" by rubberduck (https://opengameart.org/content/100-cc0-sfx-2), CC0 1.0",
+      "use": "Wet steps; pair with step-water-oga.",
+      "process": {
+        "take": "^sfx100v2_footstep_wet_"
+      },
+      "files": [
+        {
+          "name": "sfx_100_v2.zip",
+          "url": "https://opengameart.org/sites/default/files/sfx_100_v2.zip",
+          "sha256": "0fc61b4494e2e893c0c015ced4877b3f689c7d84a48cb61daecd7ddb52db797b",
+          "size": 2367871,
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "bed-wind-alpine",
+      "title": "Wind Soundscape from Gem Lake",
+      "category": "ambience",
+      "tags": [
+        "wind",
+        "exterior"
+      ],
+      "source": {
+        "site": "nps",
+        "url": "https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm"
+      },
+      "author": "J. Job, Rocky Mountain National Park (National Park Service)",
+      "licence": "Public-Domain",
+      "attribution": "\"Wind Soundscape from Gem Lake\" by J. Job, Rocky Mountain National Park (National Park Service) (https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm), CC0 1.0",
+      "use": "Cold exterior wind bed.",
+      "files": [
+        {
+          "name": "romo-wind-gem-lake.mp3",
+          "url": "https://www.nps.gov/nps-audiovideo/legacy/mp3/imr/avElement/romo-WindAmbientGemLakeROMO52516Final1.mp3",
+          "sha256": "aa4bd8042d04eb6b956bc1721fe6856145526bda5ff89edd8bc78559cd38451c",
+          "size": 8602680
+        }
+      ]
+    },
+    {
+      "id": "bed-stream",
+      "title": "Stream Soundscape from the Black Canyon Trail",
+      "category": "ambience",
+      "tags": [
+        "water",
+        "stream",
+        "exterior"
+      ],
+      "source": {
+        "site": "nps",
+        "url": "https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm"
+      },
+      "author": "Rocky Mountain National Park (National Park Service)",
+      "licence": "Public-Domain",
+      "attribution": "\"Stream Soundscape from the Black Canyon Trail\" by Rocky Mountain National Park (National Park Service) (https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm), CC0 1.0",
+      "use": "Steady stream bed; loops cleanly.",
+      "files": [
+        {
+          "name": "romo-stream.mp3",
+          "url": "https://www.nps.gov/nps-audiovideo/legacy/mp3/imr/avElement/romo-StreamAmbientROMO52516BlackCanyonTrailFinal1.mp3",
+          "sha256": "efca2f156a26e63ca2348e20107c3c99b9a4d1c9f22231feba7e6e690a512c7f",
+          "size": 11161056
+        }
+      ]
+    },
+    {
+      "id": "bed-storm-wind",
+      "title": "Storm Arwen 2022",
+      "category": "ambience",
+      "tags": [
+        "wind",
+        "storm",
+        "exterior"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/storm-arwen-2022"
+      },
+      "author": "Tsorthan Grove",
+      "licence": "CC-BY-4.0",
+      "attribution": "\"Storm Arwen 2022\" by Tsorthan Grove (https://opengameart.org/content/storm-arwen-2022), CC BY 4.0",
+      "use": "Violent wind for bleak exteriors and storms.",
+      "files": [
+        {
+          "name": "storm_arwen_2022.flac",
+          "url": "https://opengameart.org/sites/default/files/storm_arwen_2022.flac",
+          "sha256": "ca24175b6ee7e180d64f393988d07c7d48e89714072cd1ffde6af768bbbab1df",
+          "size": 22791504
+        }
+      ]
+    },
+    {
+      "id": "bed-hum-ups",
+      "title": "WWS UPS – uninterruptible power supply",
+      "category": "ambience",
+      "tags": [
+        "hum",
+        "electrical",
+        "interior",
+        "room tone"
+      ],
+      "source": {
+        "site": "wikimedia",
+        "url": "https://commons.wikimedia.org/wiki/File:WWS_UPS8211uninterruptiblepowersupply.ogg"
+      },
+      "author": "Work With Sounds / Torsten Nilsson",
+      "licence": "CC-BY-4.0",
+      "attribution": "\"WWS UPS – uninterruptible power supply\" by Work With Sounds / Torsten Nilsson (https://commons.wikimedia.org/wiki/File:WWS_UPS8211uninterruptiblepowersupply.ogg), CC BY 4.0",
+      "use": "Steady electrical room tone for bunkers and control rooms.",
+      "files": [
+        {
+          "name": "wws-ups.ogg",
+          "url": "https://upload.wikimedia.org/wikipedia/commons/6/6a/WWS_UPS8211uninterruptiblepowersupply.ogg",
+          "sha256": "64deffee0dc570b1c21480bf55edc9f881d587bd5c40eae7d0e09688701d426d",
+          "size": 1829679
+        }
+      ]
+    },
+    {
+      "id": "bed-mine-winding",
+      "title": "WWS Steam winding engine soundscape",
+      "category": "ambience",
+      "tags": [
+        "industrial",
+        "machinery",
+        "underground"
+      ],
+      "source": {
+        "site": "wikimedia",
+        "url": "https://commons.wikimedia.org/wiki/File:WWS_Steamwindingenginesoundscape.ogg"
+      },
+      "author": "Work With Sounds",
+      "licence": "CC-BY-4.0",
+      "attribution": "\"WWS Steam winding engine soundscape\" by Work With Sounds (https://commons.wikimedia.org/wiki/File:WWS_Steamwindingenginesoundscape.ogg), CC BY 4.0",
+      "use": "Gritty underground machinery.",
+      "files": [
+        {
+          "name": "wws-winding-engine.ogg",
+          "url": "https://upload.wikimedia.org/wikipedia/commons/4/4d/WWS_Steamwindingenginesoundscape.ogg",
+          "sha256": "2621d4751c3c876fe3777727d87c0289eb3ce30c195b7d4b76cd7be4cc70d18f",
+          "size": 1494670
+        }
+      ]
+    },
+    {
+      "id": "bed-station-tunnel",
+      "title": "WWS The Station Tunnel of the Tampere Station",
+      "category": "ambience",
+      "tags": [
+        "tunnel",
+        "city",
+        "reverb"
+      ],
+      "source": {
+        "site": "wikimedia",
+        "url": "https://commons.wikimedia.org/wiki/File:WWS_TheStationTunnelOfTheTampereStation.ogg"
+      },
+      "author": "Work With Sounds",
+      "licence": "CC-BY-4.0",
+      "attribution": "\"WWS The Station Tunnel of the Tampere Station\" by Work With Sounds (https://commons.wikimedia.org/wiki/File:WWS_TheStationTunnelOfTheTampereStation.ogg), CC BY 4.0",
+      "use": "Echoing tunnel with distant trains.",
+      "files": [
+        {
+          "name": "wws-station-tunnel.ogg",
+          "url": "https://upload.wikimedia.org/wikipedia/commons/e/e6/WWS_TheStationTunnelOfTheTampereStation.ogg",
+          "sha256": "f173d45ef7dd6f9355f8ef28d4480f71ed71b1547a33f49d968cb13fb7d35085",
+          "size": 2061019
+        }
+      ]
+    },
+    {
+      "id": "bed-rain-loop",
+      "title": "Rain (loopable)",
+      "category": "ambience",
+      "tags": [
+        "rain",
+        "loop"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/rain-loopable"
+      },
+      "author": "Ylmir",
+      "licence": "CC0-1.0",
+      "attribution": "\"Rain (loopable)\" by Ylmir (https://opengameart.org/content/rain-loopable), CC0 1.0",
+      "use": "Loop-ready rain bed.",
+      "process": {
+        "take": "^3\\.ogg$"
+      },
+      "files": [
+        {
+          "name": "rain-ogg.zip",
+          "url": "https://opengameart.org/sites/default/files/Rain%20OGG.zip",
+          "sha256": "e68f3e1c77493cf43bec84cebff5043bff6be9ce16d59b24caa988cd460aa75b",
+          "size": 2736596,
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "bed-drip-basement",
+      "title": "Dripping water loop",
+      "category": "ambience",
+      "tags": [
+        "drips",
+        "interior",
+        "horror",
+        "loop"
+      ],
+      "source": {
+        "site": "opengameart",
+        "url": "https://opengameart.org/content/dripping-water-loop"
+      },
+      "author": "qubodup",
+      "licence": "CC0-1.0",
+      "attribution": "\"Dripping water loop\" by qubodup (https://opengameart.org/content/dripping-water-loop), CC0 1.0",
+      "use": "Basement drips; 20 s loop.",
+      "files": [
+        {
+          "name": "atmosbasement.flac",
+          "url": "https://opengameart.org/sites/default/files/atmosbasement.mp3_.flac",
+          "sha256": "247c0ef181c8ba8d190a6194f6ea02d9defb23b70194c52c7f9187b5b7b1cc61",
+          "size": 1309638
+        }
+      ]
+    },
+    {
+      "id": "ir-classroom",
+      "title": "Classroom omni IR (TH Köln spatial RIR database)",
+      "category": "ir",
+      "tags": [
+        "small room",
+        "interior"
+      ],
+      "source": {
+        "site": "zenodo",
+        "url": "https://zenodo.org/records/5031335"
+      },
+      "author": "Lübeck, Arend and Pörschmann (TH Köln)",
+      "licence": "CC-BY-4.0",
+      "attribution": "\"Classroom omni IR (TH Köln spatial RIR database)\" by Lübeck, Arend and Pörschmann (TH Köln) (https://zenodo.org/records/5031335), CC BY 4.0",
+      "use": "Mid-sized room; offices and classrooms.",
+      "files": [
+        {
+          "name": "thk-classroom.wav",
+          "url": "https://zenodo.org/api/records/5031335/files/Omni_ir_earthworksM30_Classroom_LSC_P1.wav/content",
+          "sha256": "8fdebf9d7b7ae69257bf4ea1439d0c51edea11d32e7a9a22589d5ef2e8f4395f",
+          "size": 224080
+        }
+      ]
+    },
+    {
+      "id": "ir-lecture-hall",
+      "title": "Audimax omni IR (TH Köln spatial RIR database)",
+      "category": "ir",
+      "tags": [
+        "large",
+        "hall",
+        "interior"
+      ],
+      "source": {
+        "site": "zenodo",
+        "url": "https://zenodo.org/records/5031335"
+      },
+      "author": "Lübeck, Arend and Pörschmann (TH Köln)",
+      "licence": "CC-BY-4.0",
+      "attribution": "\"Audimax omni IR (TH Köln spatial RIR database)\" by Lübeck, Arend and Pörschmann (TH Köln) (https://zenodo.org/records/5031335), CC BY 4.0",
+      "use": "Large hall; gyms and assembly halls.",
+      "files": [
+        {
+          "name": "thk-audimax.wav",
+          "url": "https://zenodo.org/api/records/5031335/files/Omni_ir_earthworksM30_Audimax_LSC_P1.wav/content",
+          "sha256": "95f293ac55043c4f37f74e6d2f362bf307b283a5a25ac6123c2106c5ede3936e",
+          "size": 280080
+        }
+      ]
+    },
+    {
+      "id": "ir-open-air",
+      "title": "Ancient open-air theatre of Tyndaris, S1 R9",
+      "category": "ir",
+      "tags": [
+        "outdoor"
+      ],
+      "source": {
+        "site": "zenodo",
+        "url": "https://zenodo.org/records/7928804"
+      },
+      "author": "Astolfi, Bo and Shtrepi (Politecnico di Torino)",
+      "licence": "CC-BY-4.0",
+      "attribution": "\"Ancient open-air theatre of Tyndaris, S1 R9\" by Astolfi, Bo and Shtrepi (Politecnico di Torino) (https://zenodo.org/records/7928804), CC BY 4.0",
+      "use": "Short open-air slap for exteriors.",
+      "process": {
+        "length": 0.6
+      },
+      "files": [
+        {
+          "name": "tyndaris-s1-r9.wav",
+          "url": "https://zenodo.org/api/records/7928804/files/S1_R9_dodecahedron.wav/content",
+          "sha256": "946e3d9850af49c103930f0cdb1c403e1a4fbd8c9a72618befbfded284ebdefc",
+          "size": 525178
         }
       ]
     },

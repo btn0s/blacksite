@@ -60,7 +60,14 @@ it('rejects licences and hosts outside the allowlist', () => {
   const base = { id: 'bad-asset', title: 'Bad', category: 'sound', tags: [], source: { url: 'https://example.com' }, author: 'Someone', use: 'x', files: [{ url: 'https://example.com/a.wav', name: 'a.wav' }] };
   expect(library.validate({ assets: [{ ...base, licence: 'CC-BY-NC-4.0' }] }).join()).toMatch(/not on the allowlist/);
   expect(library.validate({ assets: [{ ...base, licence: 'CC-BY-4.0' }] }).join()).toMatch(/needs attribution/);
-  expect(library.validate({ assets: [{ ...base, licence: 'CC0-1.0', files: [{ url: 'https://www.fab.com/x.zip', name: 'x.zip' }] }] }).join()).toMatch(/denied host/);
+  expect(library.validate({ assets: [{ ...base, licence: 'CC0-1.0', files: [{ url: 'https://www.mixamo.com/x.zip', name: 'x.zip' }] }] }).join()).toMatch(/denied host/);
+  const fab = { ...base, source: { url: 'https://www.fab.com/listings/x' }, attribution: '"Bad" by Someone, CC BY 4.0', acquire: 'manual' as const };
+  expect(library.validate({ assets: [{ ...fab, licence: 'CC0-1.0' }] }).join()).toMatch(/only CC-BY-4.0/);
+  expect(library.validate({ assets: [{ ...fab, licence: 'CC-BY-4.0' }] }).join()).toMatch(/licenceEvidence.page/);
+  expect(library.validate({ assets: [{ ...fab, licence: 'CC-BY-4.0', licenceEvidence: { page: 'Creative Commons Attribution 4.0' } }] })).toEqual([]);
+  const itch = { ...base, source: { url: 'https://someone.itch.io/pack' }, licence: 'CC0-1.0', acquire: 'manual' as const, licenceEvidence: { page: 'CC0' } };
+  expect(library.validate({ assets: [itch] }).join()).toMatch(/licenceEvidence.file/);
+  expect(library.validate({ assets: [{ ...itch, licenceEvidence: { page: 'CC0', file: 'LICENSE.txt: CC0 1.0' } }] })).toEqual([]);
 });
 
 it('writes credits grouped by licence with attribution for CC BY', () => {
@@ -101,9 +108,10 @@ it.skipIf(!hasFfmpeg)('splits a recording into takes and encodes Opus and AAC', 
   const expression = '0.8*sin(2*PI*180*t)*exp(-30*mod(t\\,0.5))*lt(mod(t\\,0.5)\\,0.15)';
   expect(spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `aevalsrc=${expression}:s=48000:d=2.5`, path.join(source, 'steps.wav')]).status).toBe(0);
   const manifest = await processAsset({ id: 'test-steps', category: 'footstep', process: { split: true } }, source, path.join(scratch, 'steps-out'));
-  expect(manifest.variations.length).toBe(5);
+  const takes = manifest.variations ?? [];
+  expect(takes.length).toBe(5);
   expect(manifest.withinBudget).toBe(true);
-  for (const take of manifest.variations) {
+  for (const take of takes) {
     expect(take.seconds).toBeGreaterThan(0.1);
     expect(take.seconds).toBeLessThan(0.7);
     expect(existsSync(path.join(scratch, 'steps-out', take.fallback))).toBe(true);

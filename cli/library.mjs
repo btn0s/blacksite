@@ -23,7 +23,9 @@ export const LICENCES = {
   'MIT': { name: 'MIT', url: 'https://opensource.org/license/mit', attribution: true },
   'Public-Domain': { name: 'Public domain', url: 'https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits', attribution: false },
 }
-const DENIED_HOSTS = /(fab\.com|unrealengine\.com|quixel|megascans|mixamo|sonniss|pixabay|bbcrewind|itch\.io|cgtrader|turbosquid|unity\.com|assetstore)/i
+const DENIED_HOSTS = /(unrealengine\.com|quixel|megascans|mixamo|sonniss|pixabay|bbcrewind|cgtrader|turbosquid|unity\.com|assetstore)/i
+const EVIDENCE_HOSTS = [{ host: /(^|\.)fab\.com$/i, licences: ['CC-BY-4.0'], needs: ['page'] }, { host: /(^|\.)itch\.io$/i, licences: ['CC0-1.0', 'CC-BY-4.0', 'CC-BY-3.0'], needs: ['page', 'file'] }]
+const hostOf = url => { try { return new URL(url).hostname } catch { return '' } }
 const CATEGORIES = ['material', 'hdri', 'prop', 'foliage', 'weapon', 'character', 'animation', 'sound', 'footstep', 'ambience', 'ir', 'terrain']
 
 export async function loadCatalog() {
@@ -45,6 +47,12 @@ export function validate(catalog) {
     if (!entry.source?.url || !entry.author || !entry.title || !entry.use) problems.push(`${at}: needs title, author, use and source.url`)
     for (const file of entry.files ?? []) if (DENIED_HOSTS.test(file.url)) problems.push(`${at}: ${file.url} is a denied host`)
     if (DENIED_HOSTS.test(entry.source?.url ?? '')) problems.push(`${at}: source host is denied`)
+    for (const rule of EVIDENCE_HOSTS) {
+      if (![entry.source?.url, ...(entry.files ?? []).map(file => file.url)].some(url => rule.host.test(hostOf(url ?? '')))) continue
+      if (!rule.licences.includes(entry.licence)) problems.push(`${at}: only ${rule.licences.join(', ')} is accepted from this store`)
+      for (const need of rule.needs) if (!entry.licenceEvidence?.[need]) problems.push(`${at}: needs licenceEvidence.${need} quoting the ${need === 'page' ? 'listing page' : 'licence file in the download'}`)
+      if (entry.acquire !== 'manual') problems.push(`${at}: store downloads need a login, so acquire must be manual`)
+    }
     if (!entry.files?.length && !['polyhaven', 'ambientcg'].includes(entry.source?.site)) problems.push(`${at}: needs files`)
   }
   for (const pack of Object.values(catalog.packs ?? {})) for (const id of pack.assets) if (!ids.has(id)) problems.push(`pack references unknown asset ${id}`)
@@ -91,7 +99,7 @@ async function resolveAmbientCG(entry) {
 }
 
 async function download(url, target) {
-  const response = await fetch(url, { headers: { 'user-agent': 'blacksite-asset-library' }, redirect: 'follow' })
+  const response = await fetch(url, { headers: { 'user-agent': 'blacksite-asset-library/1.0 (open asset library fetcher; one download per user request)' }, redirect: 'follow' })
   if (!response.ok || !response.body) throw new Error(`${url}: HTTP ${response.status}`)
   await mkdir(path.dirname(target), { recursive: true })
   const partial = `${target}.part`
@@ -169,7 +177,7 @@ export async function buildAsset(entry, options = {}) {
   const fetched = await fetchAsset(entry, options)
   const { processAsset } = await import('../assets/scripts/process.mjs')
   const out = options.out ?? path.join(buildRoot, entry.id)
-  const manifest = await processAsset(entry, fetched.directory, out, { ktx2: options.ktx2 })
+  const manifest = await processAsset({ ...entry, process: { ...(entry.dimensions ? { dimensions: entry.dimensions } : {}), ...entry.process } }, fetched.directory, out, { ktx2: options.ktx2 })
   return { fetched, manifest, out }
 }
 

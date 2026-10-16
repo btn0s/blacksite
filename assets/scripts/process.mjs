@@ -64,20 +64,28 @@ function peak(file, filters, start = 0) {
 }
 
 let encoderPromise
-async function ktx2(buffer, { srgb, normal, uastc }) {
+export const KTX2_MODES = {
+  etc1s: { isUASTC: false, qualityLevel: 255, compressionLevel: 4 },
+  'etc1s-160': { isUASTC: false, qualityLevel: 160, compressionLevel: 2 },
+  'uastc-rdo': { isUASTC: true, needSupercompression: true, enableRDO: true, rdoQualityLevel: 1, uastcLDRQualityLevel: 2 },
+  'uastc-rdo-1': { isUASTC: true, needSupercompression: true, enableRDO: true, rdoQualityLevel: 2, uastcLDRQualityLevel: 1 },
+  'uastc-rdo-0': { isUASTC: true, needSupercompression: true, enableRDO: true, rdoQualityLevel: 3, uastcLDRQualityLevel: 0 },
+  uastc: { isUASTC: true, needSupercompression: true, enableRDO: false, uastcLDRQualityLevel: 2 },
+}
+
+export async function encodeKtx2(buffer, { srgb, normal, mode }) {
   const sharp = (await import('sharp')).default
   encoderPromise ||= import('ktx2-encoder')
   const { encodeToKTX2 } = await encoderPromise
-  const log = console.log
+  const flipped = await sharp(buffer).flip().png().toBuffer()
   const imageDecoder = async input => {
     const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
     return { width: info.width, height: info.height, data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength) }
   }
-  const options = uastc
-    ? { isUASTC: true, needSupercompression: true, enableRDO: true, rdoQualityLevel: normal ? 2 : 3, uastcLDRQualityLevel: normal ? 1 : 0, isNormalMap: normal, isPerceptual: srgb, isSetKTX2SRGBTransferFunc: srgb, generateMipmap: true, isKTX2File: true, imageDecoder }
-    : { isUASTC: false, qualityLevel: 160, compressionLevel: 2, isPerceptual: srgb, isSetKTX2SRGBTransferFunc: srgb, isNormalMap: normal, generateMipmap: true, isKTX2File: true, imageDecoder }
+  const options = { ...KTX2_MODES[mode], isNormalMap: normal, isPerceptual: srgb, isSetKTX2SRGBTransferFunc: srgb, generateMipmap: true, isKTX2File: true, imageDecoder }
+  const log = console.log
   console.log = () => {}
-  try { return Buffer.from(await encodeToKTX2(new Uint8Array(buffer), options)) } finally { console.log = log }
+  try { return Buffer.from(await encodeToKTX2(new Uint8Array(flipped), options)) } finally { console.log = log }
 }
 
 async function grey(sharp, file, size, fallback) {
@@ -116,13 +124,21 @@ async function material(entry, source, out, options) {
     }
     const ormPng = await sharp(orm, { raw: { width: size, height: size, channels: 3 } }).png().toBuffer()
     const write = async (name, data) => { await writeFile(path.join(tier, name), data); outputs.push(path.join(tier, name)) }
-    await write('c.webp', await sharp(colourPng).webp({ quality: 82, effort: 6, alphaQuality: 90 }).toBuffer())
-    await write('n.webp', await sharp(normalPng).webp({ quality: 90, effort: 6 }).toBuffer())
-    await write('orm.webp', await sharp(ormPng).webp({ quality: 85, effort: 6 }).toBuffer())
+    const limit = (BUDGETS.material.bytes * (size >= 1024 ? 1 : 0.3))
+    let quality = [82, 90, 85]
+    let encoded
+    for (let step = 0; step < 6; step++) {
+      encoded = await Promise.all([sharp(colourPng).webp({ quality: quality[0], effort: 6, alphaQuality: 90 }).toBuffer(), sharp(normalPng).webp({ quality: quality[1], effort: 6 }).toBuffer(), sharp(ormPng).webp({ quality: quality[2], effort: 6 }).toBuffer()])
+      if (encoded.reduce((sum, buffer) => sum + buffer.length, 0) <= limit) break
+      quality = quality.map(q => Math.max(60, q - 5))
+    }
+    await write('c.webp', encoded[0])
+    await write('n.webp', encoded[1])
+    await write('orm.webp', encoded[2])
     if (options.ktx2 !== false) {
-      await write('c.ktx2', await ktx2(colourPng, { srgb: true, normal: false, uastc: false }))
-      await write('n.ktx2', await ktx2(normalPng, { srgb: false, normal: true, uastc: true }))
-      await write('orm.ktx2', await ktx2(ormPng, { srgb: false, normal: false, uastc: true }))
+      await write('c.ktx2', await encodeKtx2(colourPng, { srgb: true, normal: false, mode: 'etc1s-160' }))
+      await write('n.ktx2', await encodeKtx2(normalPng, { srgb: false, normal: true, mode: 'uastc-rdo-1' }))
+      await write('orm.ktx2', await encodeKtx2(ormPng, { srgb: false, normal: false, mode: 'uastc-rdo-0' }))
     }
   }
   return { outputs, ship: ['1k/c.webp', '1k/n.webp', '1k/orm.webp'], meta: { maps: Object.fromEntries(Object.entries(maps).filter(([, v]) => v).map(([k, v]) => [k, path.basename(v)])), packed: arm ? 'arm' : 'orm' } }
@@ -253,8 +269,8 @@ async function model(entry, source, out, options) {
     converted = input = path.join(path.dirname(out), `.${entry.id}.convert.glb`)
     const kind = path.extname(foreign).slice(1).toLowerCase()
     const load = kind === 'blend' ? 'bpy.ops.wm.open_mainfile(filepath=src)' : kind === 'fbx' ? "bpy.ops.wm.read_factory_settings(use_empty=True)\nbpy.ops.import_scene.fbx(filepath=src)" : "bpy.ops.wm.read_factory_settings(use_empty=True)\nbpy.ops.wm.obj_import(filepath=src)"
-    const script = `import bpy,sys\nsrc,dst=sys.argv[-2],sys.argv[-1]\n${load}\nfor image in bpy.data.images:\n    image.pack() if image.source=='FILE' and not image.packed_file and image.has_data else None\nbpy.ops.export_scene.gltf(filepath=dst,export_format='GLB',export_apply=True,export_yup=True,export_image_format='AUTO',use_visible=True)\n`
-    const result = spawnSync('blender', ['-b', '--factory-startup', '--python-expr', script, '--', foreign, input], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    const script = `import bpy,sys,os\nroot,src,dst=sys.argv[-3],sys.argv[-2],sys.argv[-1]\n${load}\nfound={}\nfor d,_,names in os.walk(root):\n    for n in names: found.setdefault(n.lower(),os.path.join(d,n))\nfor image in bpy.data.images:\n    if image.source=='FILE' and not image.packed_file:\n        name=os.path.basename(image.filepath.replace('\\\\','/')).lower()\n        if not image.has_data and name in found:\n            image.filepath=found[name]\n            image.reload()\n        if image.has_data: image.pack()\nbpy.ops.export_scene.gltf(filepath=dst,export_format='GLB',export_apply=True,export_yup=True,export_image_format='AUTO',use_visible=True)\n`
+    const result = spawnSync('blender', ['-b', '--factory-startup', '--python-expr', script, '--', source, foreign, input], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
     if (result.status !== 0 || !existsSync(input)) throw new Error(`${entry.id}: converting ${path.basename(foreign)} needs Blender on PATH (${(result.stderr || result.error?.message || '').trim().split('\n').pop()})`)
   }
   if (!input) throw new Error(`${entry.id}: no glTF, GLB, FBX, OBJ or .blend found`)
@@ -263,6 +279,17 @@ async function model(entry, source, out, options) {
   document.setLogger(new Logger(Logger.Verbosity.WARN))
   const nodes = document.getRoot().listNodes()
   if (nodes.some(node => /lod0?$|lod_?0\b/i.test(node.getName()))) for (const node of nodes) if (/lod_?[1-9]\b|lod[1-9]$/i.test(node.getName())) node.dispose()
+  const skinned = document.getRoot().listSkins().length > 0
+  const scene = document.getRoot().listScenes()[0]
+  let rescaled
+  if (options.dimensions && !skinned) {
+    const before = functions.getBounds(scene)
+    const factor = options.dimensions[2] / (before.max[1] - before.min[1])
+    if (Math.abs(factor - 1) > 0.05) {
+      rescaled = Number(factor.toFixed(4))
+      for (const node of scene.listChildren()) { node.setScale(node.getScale().map(v => v * factor)); node.setTranslation(node.getTranslation().map(v => v * factor)) }
+    }
+  }
   const steps = [functions.dedup(), functions.prune(), functions.weld()]
   if (document.getRoot().listAnimations().length) steps.push(functions.resample())
   if (options.simplify && !document.getRoot().listSkins().length) steps.push(functions.simplify({ simplifier: (await import('meshoptimizer')).MeshoptSimplifier, ratio: options.simplify, error: 0.001 }))
@@ -276,21 +303,22 @@ async function model(entry, source, out, options) {
     const position = prim.getAttribute('POSITION')
     if (prim.getMode() === 4) triangles += (indices ? indices.getCount() : position?.getCount() ?? 0) / 3
   }
-  const bounds = functions.getBounds(document.getRoot().listScenes()[0])
+  const bounds = functions.getBounds(scene)
   await mkdir(out, { recursive: true })
   const target = path.join(out, 'model.glb')
   await io.write(target, document)
   if (converted) await rm(converted, { force: true })
   const animations = document.getRoot().listAnimations().map(animation => animation.getName())
-  const size = bounds.max.map((v, i) => Number((v - bounds.min[i]).toFixed(3)))
-  return { outputs: [target], ship: ['model.glb'], meta: { triangles: Math.round(triangles), size, animations: animations.length ? animations : undefined, skinned: document.getRoot().listSkins().length > 0 } }
+  const size = skinned ? undefined : bounds.max.map((v, i) => Number((v - bounds.min[i]).toFixed(3)))
+  return { outputs: [target], ship: ['model.glb'], meta: { triangles: Math.round(triangles), size, ...(rescaled ? { rescaled } : {}), animations: animations.length ? animations : undefined, skinned } }
 }
 
 async function audio(entry, source, out) {
-  const list = (await files(source)).filter(file => /\.(wav|flac|ogg|oga|mp3|aiff?|m4a|opus)$/i.test(file)).sort()
+  const list = (await files(source)).filter(file => /\.(wav|flac|ogg|oga|mp3|aiff?|m4a|opus)$/i.test(file) && !/(?:^|\/)(?:__MACOSX|\._)/.test(path.relative(source, file))).sort()
   if (!list.length) throw new Error(`${entry.id}: no audio files found`)
   const kind = entry.category
-  const take = entry.process?.take ? list.filter(file => new RegExp(entry.process.take, 'i').test(path.basename(file))) : list
+  const pattern = entry.process?.take ? new RegExp(entry.process.take, 'i') : undefined
+  const take = pattern ? list.filter(file => pattern.test(path.basename(file)) || pattern.test(path.relative(source, file).replaceAll(path.sep, '/'))) : list
   const limit = entry.process?.limit ?? (kind === 'ambience' || kind === 'ir' ? 1 : 12)
   const chosen = entry.process?.split ? onsets(take[0], entry.process).slice(0, limit).map(([start, length]) => ({ file: take[0], start, length })) : take.slice(0, limit).map(file => ({ file }))
   await mkdir(out, { recursive: true })

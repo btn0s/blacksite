@@ -30,6 +30,8 @@ Processing needs `ffmpeg` for audio and Blender on `PATH` for `.blend`, `.fbx` a
 
 Accept CC0, public domain, MIT/Apache/BSD-style, and CC BY 3.0 or 4.0 with attribution. Reject everything else, including anything ambiguous. `blacksite assets library --check` enforces the allowlist, requires attribution text for attribution licences, and rejects denied hosts.
 
+Two stores are allowed only with evidence. Fab listings whose seller chose CC BY 4.0 instead of the Standard License follow CC terms; record the listing's licence wording in `licenceEvidence.page`. On itch.io every asset has its own creator licence and the default is all rights reserved; accept a listing only when the page and the licence file inside the download both say CC0 or CC BY, and record both in `licenceEvidence.page` and `licenceEvidence.file`. Both stores need a login to download, so these entries are `acquire: "manual"`. `--check` enforces all three rules.
+
 Read the licence page, not the badge. Three sources that look open are not:
 
 - **Quaternius** still labels its packs CC0, but its Quaternius Asset License v1.0 (28 August 2026) says "You may not… redistribute the Assets (in original or modified form) as a standalone asset, asset pack…", whatever the platform. The two licences conflict, so the library holds Quaternius out until the author confirms in writing.
@@ -40,7 +42,7 @@ Rejected sources, with the clause that rules them out:
 
 | Source | Why |
 | --- | --- |
-| Fab, Megascans, Unreal Marketplace | Platform EULA; UE-only content; no standalone redistribution |
+| Fab Standard License listings, Megascans, Unreal Marketplace | Platform EULA; engine-only content; no standalone redistribution |
 | Mixamo | Raw character and animation files may not be distributed |
 | Sonniss GDC bundles | May not supply the sounds "as sound effects… as part of… an asset pack" |
 | Pixabay | No standalone distribution; bans systematic copying |

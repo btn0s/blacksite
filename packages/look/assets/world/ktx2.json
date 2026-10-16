@@ -1,0 +1,276 @@
+{
+  "threshold": 42,
+  "verified": true,
+  "files": [
+    {
+      "file": "asphalt_c.ktx2",
+      "source": "asphalt_c.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 288933,
+      "sourceBytes": 82376,
+      "psnr": 48.6
+    },
+    {
+      "file": "asphalt_n.ktx2",
+      "source": "asphalt_n.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 288662,
+      "sourceBytes": 60536,
+      "psnr": 42.9
+    },
+    {
+      "file": "brick_c.ktx2",
+      "source": "brick_c.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc",
+      "bytes": 333711,
+      "sourceBytes": 46940,
+      "psnr": 43.2
+    },
+    {
+      "file": "brick_n.ktx2",
+      "source": "brick_n.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc",
+      "bytes": 299110,
+      "sourceBytes": 55760,
+      "psnr": 38.7
+    },
+    {
+      "file": "cast_c.ktx2",
+      "source": "cast_c.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 231934,
+      "sourceBytes": 26774,
+      "psnr": 48.1
+    },
+    {
+      "file": "cast_n.ktx2",
+      "source": "cast_n.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 264454,
+      "sourceBytes": 36774,
+      "psnr": 43.4
+    },
+    {
+      "file": "corrugated_c.ktx2",
+      "source": "corrugated_c.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 225393,
+      "sourceBytes": 22096,
+      "psnr": 47.5
+    },
+    {
+      "file": "corrugated_n.ktx2",
+      "source": "corrugated_n.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 100534,
+      "sourceBytes": 6488,
+      "psnr": 44.9
+    },
+    {
+      "file": "dirt_c.ktx2",
+      "source": "dirt_c.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 325750,
+      "sourceBytes": 67858,
+      "psnr": 47
+    },
+    {
+      "file": "dirt_n.ktx2",
+      "source": "dirt_n.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc",
+      "bytes": 339089,
+      "sourceBytes": 91926,
+      "psnr": 38.6
+    },
+    {
+      "file": "grass_c.ktx2",
+      "source": "grass_c.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc",
+      "bytes": 347749,
+      "sourceBytes": 116880,
+      "psnr": 38.4
+    },
+    {
+      "file": "grass_n.ktx2",
+      "source": "grass_n.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc",
+      "bytes": 339637,
+      "sourceBytes": 107064,
+      "psnr": 37.8
+    },
+    {
+      "file": "gravel_c.ktx2",
+      "source": "gravel_c.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 337108,
+      "sourceBytes": 85592,
+      "psnr": 44.4
+    },
+    {
+      "file": "gravel_n.ktx2",
+      "source": "gravel_n.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc",
+      "bytes": 336220,
+      "sourceBytes": 99192,
+      "psnr": 38.8
+    },
+    {
+      "file": "metal_c.ktx2",
+      "source": "metal_c.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 327067,
+      "sourceBytes": 58022,
+      "psnr": 42.7
+    },
+    {
+      "file": "metal_n.ktx2",
+      "source": "metal_n.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 17077,
+      "sourceBytes": 2134,
+      "psnr": 61.7
+    },
+    {
+      "file": "paint_c.ktx2",
+      "source": "paint_c.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 235270,
+      "sourceBytes": 27838,
+      "psnr": 47.2
+    },
+    {
+      "file": "paint_n.ktx2",
+      "source": "paint_n.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc",
+      "bytes": 333609,
+      "sourceBytes": 57032,
+      "psnr": 42.3
+    },
+    {
+      "file": "panel_c.ktx2",
+      "source": "panel_c.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 149932,
+      "sourceBytes": 12122,
+      "psnr": 47.8
+    },
+    {
+      "file": "panel_n.ktx2",
+      "source": "panel_n.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 172111,
+      "sourceBytes": 13434,
+      "psnr": 47.8
+    },
+    {
+      "file": "rust_c.ktx2",
+      "source": "rust_c.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 281797,
+      "sourceBytes": 33724,
+      "psnr": 43.3
+    },
+    {
+      "file": "rust_n.ktx2",
+      "source": "rust_n.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 187088,
+      "sourceBytes": 15564,
+      "psnr": 46
+    },
+    {
+      "file": "sky.ktx2",
+      "source": "sky.webp",
+      "width": 1024,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 211718,
+      "sourceBytes": 8908,
+      "psnr": 51.3
+    },
+    {
+      "file": "slab_c.ktx2",
+      "source": "slab_c.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 186097,
+      "sourceBytes": 14654,
+      "psnr": 47.5
+    },
+    {
+      "file": "slab_n.ktx2",
+      "source": "slab_n.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 247729,
+      "sourceBytes": 30678,
+      "psnr": 43.9
+    },
+    {
+      "file": "stained_c.ktx2",
+      "source": "stained_c.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 222605,
+      "sourceBytes": 23932,
+      "psnr": 48.7
+    },
+    {
+      "file": "stained_n.ktx2",
+      "source": "stained_n.webp",
+      "width": 512,
+      "height": 512,
+      "mode": "uastc-rdo",
+      "bytes": 35184,
+      "sourceBytes": 2758,
+      "psnr": 57.4
+    }
+  ]
+}

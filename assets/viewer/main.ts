@@ -4,6 +4,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js'
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { autoQuality, createLook } from '@blacksite/look'
 
 type Build = { ship: string[]; files: Record<string, number>; bytes: number; ktx2Bytes?: number; budget: number; withinBudget: boolean; over: string[]; triangles?: number; size?: number[]; animations?: string[]; skinned?: boolean; variations?: { file: string; fallback: string; seconds: number }[] }
@@ -23,7 +24,7 @@ const canvas = $<HTMLCanvasElement>('#view')
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' })
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
 renderer.shadowMap.enabled = true
-renderer.shadowMap.type = THREE.PCFSoftShadowMap
+renderer.shadowMap.type = THREE.PCFShadowMap
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.05, 400)
 camera.position.set(0, 1.8, 11)
@@ -31,7 +32,7 @@ const controls = new OrbitControls(camera, canvas)
 controls.target.set(0, 1.1, 0)
 controls.enableDamping = true
 controls.maxPolarAngle = Math.PI * 0.495
-const sun = new THREE.DirectionalLight('#ffffff', 1)
+const sun = new THREE.DirectionalLight('#ffffff', 0.75)
 sun.position.set(-6, 10, 4)
 sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
@@ -39,7 +40,7 @@ sun.shadow.camera.left = sun.shadow.camera.bottom = -16
 sun.shadow.camera.right = sun.shadow.camera.top = 16
 sun.shadow.radius = 6
 sun.shadow.bias = -0.0004
-const fill = new THREE.HemisphereLight('#b8c0c4', '#4a4a40', 0.6)
+const fill = new THREE.HemisphereLight('#b8c0c4', '#4a4a40', 0.35)
 scene.add(sun, fill)
 const look = createLook(renderer, scene, camera, { atmosphere: 'zone', quality: autoQuality(), sky: false, environment: false, sun, fill })
 
@@ -73,7 +74,7 @@ function fillSelect(select: HTMLSelectElement, options: [string, string][], valu
 }
 fillSelect($('#pack'), [['all', `All (${assets.length})`], ...Object.entries(index.packs).map(([name, pack]): [string, string] => [name, `${name} (${pack.assets.length})`])], index.packs.starter ? 'starter' : 'all')
 fillSelect($('#sky'), skies.map(asset => [asset.id, asset.title]))
-const defaultFloor = materials.find(asset => asset.tags.includes('floor')) ?? materials[0]
+const defaultFloor = materials.find(asset => asset.id === 'concrete-floor-cracked') ?? materials.find(asset => asset.tags.includes('floor')) ?? materials[0]
 fillSelect($('#floor'), materials.map(asset => [asset.id, asset.title]), defaultFloor?.id)
 
 const textureCache = new Map<string, Promise<THREE.Texture>>()
@@ -107,9 +108,9 @@ async function applySky(asset: Asset) {
   backdrop.colorSpace = THREE.SRGBColorSpace
   environment.mapping = THREE.EquirectangularReflectionMapping
   scene.background = backdrop
-  scene.backgroundIntensity = 0.85
+  scene.backgroundIntensity = 0.7
   scene.environment = pmrem.fromEquirectangular(environment).texture
-  scene.environmentIntensity = 0.9
+  scene.environmentIntensity = 0.55
   thumbScene.environment = thumbPmrem.fromEquirectangular(environment).texture
   thumbScene.background = new THREE.Color('#1a1c19')
   const probe = document.createElement('canvas')
@@ -129,8 +130,8 @@ floor.rotation.x = -Math.PI / 2
 floor.receiveShadow = true
 scene.add(floor)
 const mixers: THREE.AnimationMixer[] = []
-const modelCache = new Map<string, Promise<THREE.Group>>()
-const loadModel = (asset: Asset) => { if (!modelCache.has(asset.id)) modelCache.set(asset.id, gltf.loadAsync(url(asset, 'model.glb')).then(result => { result.scene.userData.clips = result.animations; return result.scene })); return modelCache.get(asset.id)! }
+const modelCache = new Map<string, Promise<{ scene: THREE.Group; clips: THREE.AnimationClip[] }>>()
+const loadModel = (asset: Asset) => { if (!modelCache.has(asset.id)) modelCache.set(asset.id, gltf.loadAsync(url(asset, 'model.glb')).then(result => ({ scene: result.scene, clips: result.animations }))); return modelCache.get(asset.id)! }
 
 function inPack(asset: Asset) {
   const pack = $<HTMLSelectElement>('#pack').value
@@ -141,8 +142,7 @@ function shadows(object: THREE.Object3D) {
   object.traverse(child => { if ((child as THREE.Mesh).isMesh) { child.castShadow = true; child.receiveShadow = true } })
 }
 
-function idle(object: THREE.Object3D) {
-  const clips = (object.userData.clips ?? []) as THREE.AnimationClip[]
+function idle(object: THREE.Object3D, clips: THREE.AnimationClip[]) {
   if (!clips.length) return
   const clip = clips.find(c => /idle/i.test(c.name) && !/crouch|pistol|gun|sword/i.test(c.name)) ?? clips[0]
   const mixer = new THREE.AnimationMixer(object)
@@ -168,17 +168,16 @@ async function layout() {
     world.add(wall, block)
   }))
   const shownModels = models.filter(inPack)
-  const loaded = await Promise.all(shownModels.map(asset => loadModel(asset).then(model => ({ asset, model: model.clone(true) }))))
+  const loaded = await Promise.all(shownModels.map(asset => loadModel(asset).then(model => ({ asset, model: cloneSkinned(model.scene), clips: model.clips }))))
   let x = 0
   const placed: THREE.Object3D[] = []
-  for (const { asset, model } of loaded) {
-    const size = asset.build.size ?? [1, 1, 1]
-    const width = Math.max(size[0], size[2], 0.4)
-    model.userData.clips = (modelCache.has(asset.id) ? (await modelCache.get(asset.id)!).userData.clips : [])
-    model.position.set(x + width / 2, 0, 1.5)
+  for (const { asset, model, clips } of loaded) {
+    const box = new THREE.Box3().setFromObject(model)
+    const width = Math.max(box.max.x - box.min.x, 0.4)
+    model.position.set(x + width / 2 - (box.max.x + box.min.x) / 2, -box.min.y, 1.5 - (box.max.z + box.min.z) / 2)
     x += width + 0.6
     shadows(model)
-    idle(model)
+    idle(model, clips)
     placed.push(model)
   }
   for (const model of placed) { model.position.x -= x / 2; world.add(model) }
@@ -221,7 +220,7 @@ async function materialThumb(asset: Asset) {
 }
 
 async function modelThumb(asset: Asset) {
-  const model = (await loadModel(asset)).clone(true)
+  const model = cloneSkinned((await loadModel(asset)).scene)
   thumbFrame(model)
   return snapshot(model)
 }
@@ -335,9 +334,11 @@ function resize() {
   look.setSize(width, height, false)
 }
 
-const clock = new THREE.Clock()
-renderer.setAnimationLoop(() => {
-  const dt = Math.min(clock.getDelta(), 0.1)
+const timer = new THREE.Timer()
+timer.connect(document)
+renderer.setAnimationLoop(timestamp => {
+  timer.update(timestamp)
+  const dt = Math.min(timer.getDelta(), 0.1)
   for (const mixer of mixers) mixer.update(dt)
   controls.update()
   look.render(dt)
