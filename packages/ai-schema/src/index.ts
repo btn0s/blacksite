@@ -405,7 +405,7 @@ export type SimEvent = {
   team?: TeamId;
   text: string;
   tick: Tick;
-  type: 'contact' | 'radio' | 'shot' | 'kill' | 'order' | 'interrupt' | 'objective' | 'fallback';
+  type: 'contact' | 'radio' | 'shot' | 'kill' | 'order' | 'interrupt' | 'objective' | 'fallback' | 'intent';
 };
 export type RuntimeMetrics = {
   activeReservations: number;
@@ -439,6 +439,21 @@ export type RenderSnapshot = {
   tick: Tick;
   version: number;
   winner?: TeamId | 'draw';
+};
+export type Intent = 'advance' | 'flank' | 'cover' | 'engage' | 'suppress' | 'reload' | 'fallback' | 'search' | 'hold';
+export type AttackTokenRules = {
+  /** Agents per team allowed to hold the fire button at once. */
+  count: number;
+  /** Ticks a holder keeps its token before handing it on. */
+  holdTicks: number;
+  /** Ticks before a released holder may take a token again. */
+  cooldownTicks: number;
+  /** Ticks without trying to fire before a holder gives its token back. */
+  idleTicks?: number;
+};
+export type IntentRules = {
+  /** Ticks an agent waits in place after announcing a new advance or flank, so the callout leads the move. */
+  leadTicks: number;
 };
 export type ScenarioId = 'crossfire' | 'breach' | 'search' | 'casualty' | 'low-ammo' | 'deadlock';
 export type RuntimeConfig = {

@@ -86,6 +86,24 @@ Author a `TacticalMap` with bounds, obstacle rectangles, region topology, tactic
 
 The default authority runs the included planar reference simulation. To integrate an existing game, supply a `TacticalAuthority` adapter to `TacticalRuntime`: it exposes self status, generates legal observations, and applies normalized `AgentCommand`s through the same controller interface as players. Warden runs the hierarchy, beliefs, planning, execution and motors. For elevated levels, use the included navigation builder and tactical baker below and pass their `spatial` queries to the runtime. Your existing ECS, controller, physics and weapons remain authoritative; hidden enemy state never enters planning snapshots.
 
+## A human player against the squad
+
+A single-player shooter runs `TacticalRuntime` on the main thread with its own `TacticalAuthority`, steps it with a fixed 30 Hz accumulator, and lists the player in `controlledAgentIds`. The authority owns movement, weapons, health and the win condition; `ObservationGenerator` gives the bots legal senses, and `recordShot` and `recordDamage` let them hear the player's gunfire and feel hits. `neutralCommand`, `normalizeCommand`, `hashValue`, `lineClear` and `insideObstacle` are exported for authorities.
+
+Two runtime options make a squad read as smart rather than lethal:
+
+```ts
+const runtime = new TacticalRuntime(config, world, {
+  authority,
+  controlledAgentIds: ["alpha-1"],
+  attackTokens: { count: 2, holdTicks: 90, cooldownTicks: 36 },
+  intents: { leadTicks: 24 },
+});
+```
+
+- `attackTokens` lets at most `count` AI agents per team hold the fire button at once. A holder hands its token on after `holdTicks`, or after `idleTicks` (default 15) without trying to fire, and waits `cooldownTicks` before taking another. The rest keep aiming with `fireGate: 'attack-token'`. `runtime.attackTokenHolders(team)` lists the holders.
+- `intents` emits a `SimEvent` of type `intent` whenever an AI agent's activity changes (`advance`, `flank`, `cover`, `engage`, `suppress`, `reload`, `fallback`, `search`, `hold`; `intentOf` derives it). A new `advance` or `flank` waits in place for `leadTicks`, so a game can play the callout before the move starts.
+
 ## Worker and bundler integration
 
 The default worker factory uses the bundler-recognized form:
