@@ -23,7 +23,7 @@ The installer clones this repository into `~/.blacksite`, installs its workspace
 | Input / UI | Device input and a stock neutral game frame | Usable |
 | CLI / skills | Scaffold, prototypes, budgets, assets, agent phases | Usable |
 | Asset pipeline | Owned Fab metadata, fetch, export, meshopt/KTX2 install | Experimental |
-| Relay (`@blacksite/relay`) | Replication, prediction, and transport adapters | Planned |
+| Relay (`@blacksite/relay`) | Multiplayer rooms: Colyseus, offline loopback, owner movement, server-checked hits | Usable v0 |
 | Scale profiles / significance | Automatic quality and update-rate defaults | Planned |
 
 ## How it works
@@ -52,13 +52,9 @@ Each phase writes its handoff to the game project and runs a checkable gate. The
 
 The CLI scaffolds `mp` with a local Colyseus room under `pnpm dev`; Play joins through the same-origin `/relay` path and Offline uses loopback. Open a second tab to join the online room. The local camera starts in FPP with rigged ALS arms (rifle and pistol; see [arms](docs/arms.md)), and V switches to TPP while the canvas has focus even without pointer lock; set `cameraMode="fpp"` or `cameraMode="tpp"` on `MultiplayerSubject` to lock a game's camera. Remote players always use ALS bodies, and camera choice stays local. Vite accepts `*.getbb.app` and `*.ts.net` preview hosts by default; `VITE_ALLOWED_HOSTS` adds comma-separated hostnames. `VITE_RELAY_URL` overrides the room endpoint for another deployment topology. [Game architecture](skills/game-architecture/SKILL.md) explains the ownership model and transport choices. For a static two-player demo, mount `LoopbackSplitView` from `@blacksite/subject`; it creates two connections through `createLoopbackRoom()` from `@blacksite/relay` and renders both canvases. Relay v0 has full snapshots, owner movement, and Armory-validated hits; see [Relay limits](packages/relay/AGENTS.md).
 
-## Using it without agents
-
-Add this repository as one recursive Git submodule, list the package paths your game needs in `pnpm-workspace.yaml`, and depend on them with `workspace:*`. [Submodule migration](docs/migration-blacksite.md) has the package mapping. The CLI is optional for games that consume the engine directly.
-
 ## Roadmap
 
-Performance measurement and desktop/mobile quality tiers come first. Shared scale profiles, significance, workers, and networking follow. World streaming and LOD, destruction tiers, animation/AI scale, and fidelity controls build on that floor. A headless Rust/WASM sim and later wgpu renderer remain a long-term path. See [ROADMAP.md](ROADMAP.md) for status, proof scenes, and phase exits.
+Now: showcase demos, agent guides for every system, touch controls for the player templates, and measurement on reference devices. Next: automatic quality tiers, scale profiles, and workers by default. Later: open worlds, destruction tiers, crowds, network scale, and 2.5D/2D. See [ROADMAP.md](ROADMAP.md).
 
 ## Repository layout
 
