@@ -183,6 +183,8 @@ export function createSubjectInputSource(controller: SubjectState): AlsCharacter
     const forward = command.active ? command.forward : 0
     const right = command.active ? command.right : 0
     return {
+      active: command.active,
+      jumpSequence: command.jumpSequence,
       movementDirection: {
         x: forward * Math.cos(yaw) - right * Math.sin(yaw),
         z: forward * Math.sin(yaw) + right * Math.cos(yaw),

@@ -5,7 +5,7 @@ import { createColyseusTransport } from './colyseus'
 import { startMatchServer } from './server'
 import type { Server } from '@colyseus/core'
 import { isClientMessage } from '@blacksite/protocol'
-import type { ServerMessage } from '@blacksite/protocol'
+import type { ClientMessage, PawnLocomotion, PawnState, ServerMessage } from '@blacksite/protocol'
 
 const servers: Server[] = []
 afterEach(async () => { for (const server of servers.splice(0)) await server.gracefullyShutdown(false) })
@@ -178,4 +178,101 @@ test('detaching and reattaching a replica requests a fresh snapshot without clos
       expect(replica.states.get(connection.id)!.position.x).toBe(3)
     } finally { replica.close(); connection.close(); first.close() }
   }
+})
+
+const locomotion: PawnLocomotion = {
+  gait: 'running', stance: 'standing', mode: 'grounded', actorYaw: 175,
+  rotationMode: 'viewDirection', hasInput: true, inputYaw: 170, targetYaw: 178,
+  relativeAcceleration: { x: 0.4, y: -0.2 },
+}
+
+const movement = (seq = 1): Extract<ClientMessage, { type: 'move' }> => ({
+  type: 'move', seq, position: { x: 0.5, y: 0, z: 0 }, velocity: { x: 3.75, y: 0, z: 0 },
+  intent: { forward: 1, right: 0, jump: false, yaw: -179, pitch: 20, aiming: true },
+  locomotion: structuredClone(locomotion),
+})
+
+test('locomotion protocol accepts legacy moves and rejects malformed locomotion', () => {
+  expect(isClientMessage(movement())).toBe(true)
+  expect(isClientMessage({ ...movement(), locomotion: undefined })).toBe(true)
+  for (const invalid of [
+    null, {}, { ...locomotion, gait: 'idle' }, { ...locomotion, stance: 'prone' },
+    { ...locomotion, mode: 'flying' }, { ...locomotion, rotationMode: 'camera' },
+    { ...locomotion, actorYaw: Infinity }, { ...locomotion, inputYaw: NaN },
+    { ...locomotion, targetYaw: '0' }, { ...locomotion, hasInput: 1 },
+    { ...locomotion, relativeAcceleration: null },
+    { ...locomotion, relativeAcceleration: { x: 0, y: Infinity } },
+    { ...locomotion, relativeAcceleration: { x: 1.01, y: 0 } },
+  ]) expect(isClientMessage({ ...movement(), locomotion: invalid })).toBe(false)
+})
+
+test('loopback and Colyseus replicate actual locomotion independently from view yaw', async () => {
+  const port = await freePort()
+  servers.push(await startMatchServer(port))
+  for (const transport of [createLoopbackRoom(), createColyseusTransport(`http://127.0.0.1:${port}`)]) {
+    const a = createReplica(await transport.connect())
+    const b = createReplica(await transport.connect())
+    try {
+      if (b.states.size < 2) await wait(b, message => message.type === 'welcome' && message.states.length === 2)
+      for (const [index, mode] of ['grounded', 'inAir'].entries()) {
+        const message = movement(index + 1)
+        message.locomotion = { ...locomotion, mode: mode as PawnLocomotion['mode'], stance: index === 0 ? 'crouching' : 'standing', gait: index === 0 ? 'walking' : 'sprinting' }
+        const received = wait(b, event => event.type === 'state' && event.state.id === a.id && event.state.seq === message.seq)
+        a.send(message)
+        await received
+        expect(b.states.get(a.id)).toMatchObject({ yaw: -179, pitch: 20, aiming: true, velocity: message.velocity, locomotion: message.locomotion })
+      }
+    } finally { a.close(); b.close() }
+  }
+})
+
+test('match owns a copy of locomotion and legacy moves clear obsolete state', () => {
+  const match = createMatch()
+  const events: ServerMessage[] = []
+  match.join('a', event => events.push(event))
+  const message = movement()
+  match.receive('a', message)
+  expect(match.states.get('a')?.locomotion).toEqual(locomotion)
+  message.locomotion!.relativeAcceleration.x = -1
+  message.locomotion!.gait = 'walking'
+  expect(match.states.get('a')?.locomotion).toEqual(locomotion)
+  match.receive('a', { ...movement(2), locomotion: { ...locomotion, actorYaw: NaN } })
+  expect(events.at(-1)).toEqual({ type: 'rejected', reason: 'invalid or unowned message' })
+  expect(match.states.get('a')?.seq).toBe(1)
+  match.receive('a', { ...movement(2), locomotion: undefined })
+  expect(match.states.get('a')?.locomotion).toBeUndefined()
+  match.leave('a')
+})
+
+test('replica interpolation crosses wrapped actor, input and view yaw without full turns', () => {
+  const match = createMatch({ now: () => 1000 })
+  match.join('a', () => {})
+  const a: PawnState = { ...match.states.get('a')!, yaw: 179, locomotion: { ...locomotion, actorYaw: 179, inputYaw: -179, targetYaw: 179 } }
+  const b: PawnState = { ...a, t: 1050, yaw: -179, locomotion: { ...locomotion, actorYaw: -179, inputYaw: 179, targetYaw: -179, relativeAcceleration: { x: 0.8, y: 0.2 } } }
+  const midpoint = interpolate(a, b, 1025)
+  expect(Math.abs(midpoint.yaw)).toBeCloseTo(180)
+  expect(Math.abs(midpoint.locomotion!.actorYaw)).toBeCloseTo(180)
+  expect(Math.abs(midpoint.locomotion!.inputYaw)).toBeCloseTo(180)
+  expect(Math.abs(midpoint.locomotion!.targetYaw)).toBeCloseTo(180)
+  expect(midpoint.locomotion!.relativeAcceleration.x).toBeCloseTo(0.6)
+  expect(midpoint.locomotion!.relativeAcceleration.y).toBeCloseTo(0)
+  expect(interpolate({ ...a, locomotion: undefined }, b, 1025).locomotion).toEqual(b.locomotion)
+  expect(interpolate(a, { ...b, locomotion: undefined }, 1025).locomotion).toBeUndefined()
+  match.leave('a')
+})
+
+test('predicted and unacknowledged moves keep their own locomotion and view state', () => {
+  const initial: PawnState = { id: 'a', owner: 'a', authority: 'owner', seq: 0, t: 0, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0, health: 100 }
+  let receive: (message: ServerMessage) => void = () => {}
+  const replica = createReplica({ id: 'a', send() {}, close() {}, onMessage(listener) { receive = listener; listener({ type: 'welcome', id: 'a', states: [initial] }); return () => {} } })
+  const first = movement(1)
+  const second = movement(2)
+  second.locomotion = { ...locomotion, gait: 'sprinting', mode: 'inAir', actorYaw: -160 }
+  second.intent = { ...second.intent, yaw: -155, pitch: 30, aiming: false }
+  replica.send(first)
+  replica.send(second)
+  expect(replica.states.get('a')).toMatchObject({ seq: 2, yaw: -155, pitch: 30, aiming: false, locomotion: second.locomotion })
+  receive({ type: 'state', state: { ...initial, seq: 1, locomotion: first.locomotion } })
+  expect(replica.states.get('a')).toMatchObject({ seq: 2, yaw: -155, pitch: 30, aiming: false, locomotion: second.locomotion })
+  replica.close()
 })

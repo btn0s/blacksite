@@ -99,6 +99,22 @@ describe('classic FPS input over one ALS player', () => {
     expect(c.player.command.jumpSequence).toBe(2)
   })
 
+  it('forwards jump edges and cancellation through the external ALS input source', () => {
+    const c = lockedController()
+    const sample = createSubjectInputSource(c)
+    updateFpsMovementInput(c)
+    expect(sample()).toMatchObject({ active: true, jumpSequence: 0 })
+    keySubject(c, 'Space', true)
+    keySubject(c, 'Space', true, true)
+    expect(sample()).toMatchObject({ active: true, jumpSequence: 1 })
+    expect(sample()).toMatchObject({ active: true, jumpSequence: 1 })
+    c.frame.locked = false
+    updateFpsMovementInput(c)
+    expect(sample()).toMatchObject({ active: false, jumpSequence: 1 })
+    c.respawn([2, 0, 0])
+    expect(sample()).toMatchObject({ active: false, jumpSequence: 1 })
+  })
+
   it('holds crouch and cancels sprint until Ctrl is released', () => {
     const c = lockedController()
     for (const key of ['KeyW', 'ShiftLeft', 'ControlLeft']) keySubject(c, key, true)
