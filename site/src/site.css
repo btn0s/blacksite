@@ -235,7 +235,7 @@ kbd { display: inline-block; min-width: 24px; padding: 2px 6px; border: 1px soli
 
 @media (max-width: 860px) {
   .topbar { height: 54px; }
-  .menu-button { display: inline-flex; margin-left: auto; min-height: 36px; padding: 6px 12px; border: 1px solid var(--line-2); border-radius: var(--radius); background: transparent; color: var(--text); font: 500 12px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+  .menu-button { display: inline-flex; align-items: center; justify-content: center; margin-left: auto; min-height: 36px; padding: 0 12px 0 calc(12px + 0.08em); line-height: 1; border: 1px solid var(--line-2); border-radius: var(--radius); background: transparent; color: var(--text); font: 500 12px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
   .topbar nav { display: none; position: absolute; top: 54px; left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 0; padding: 8px var(--pad) 18px; background: #0c0e0bf5; border-bottom: 1px solid var(--line); max-height: calc(100dvh - 54px); overflow: auto; }
   .topbar nav.open { display: flex; }
   .nav-group { flex-direction: column; }
