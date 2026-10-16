@@ -104,11 +104,7 @@ export const tools: Tool[] = [
     tagline: 'Rooms where remote players run the full character animation.',
     pitch: 'Rooms on Colyseus, or inside one browser tab for demos and tests. Each player moves their own body, the server checks hits, and remote players run the full character animation.',
     packages: ['@blacksite/relay', '@blacksite/subject'],
-    demos: [{
-      id: 'arena', frame: 'mp', title: 'Arena', summary: 'Each half of the screen is a separate player connected to the same room.',
-      keyboard: [{ action: 'Look', keys: ['Click', 'Mouse'] }, { action: 'Move', keys: ['W', 'A', 'S', 'D'] }, { action: 'First or third person', keys: ['V'] }],
-      touch: [], tryThis: [], live: true,
-    }],
+    demos: [],
     agent: {
       reads: [{ label: 'Player templates', path: 'docs/player-templates.md' }, { label: 'Relay limits', path: 'packages/relay/AGENTS.md' }],
       commands: [{ label: 'Start a multiplayer game', code: 'blacksite scaffold --profile mp --name "My Game" --dir /absolute/path' }],
