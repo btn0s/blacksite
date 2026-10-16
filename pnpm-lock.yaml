@@ -36,6 +36,9 @@ importers:
       '@blacksite/relay':
         specifier: workspace:*
         version: link:packages/relay
+      '@blacksite/soundscape':
+        specifier: workspace:*
+        version: link:packages/soundscape
       '@blacksite/subject':
         specifier: workspace:*
         version: link:packages/subject
@@ -642,6 +645,12 @@ importers:
       koota:
         specifier: ^0.6.0
         version: 0.6.6(@types/react@19.3.0)(react@19.3.1)
+
+  packages/soundscape:
+    dependencies:
+      '@blacksite/check':
+        specifier: workspace:*
+        version: link:../check
 
   packages/subject:
     dependencies:
