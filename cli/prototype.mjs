@@ -13,6 +13,7 @@ const safe = name => /^[a-z][a-z0-9-]{0,63}$/.test(name)
 const kits = ['als-tpp', 'tpp', 'fpp', 'subject', 'armory', 'warden', 'cascade', 'mp']
 async function ensureKitPackages(project, kit, prototypeName) {
   const multiplayer = ['mp'].includes(kit)
+  const needsAls = ['als-tpp', 'tpp', 'subject', 'mp', 'fpp'].includes(kit)
   const requested = kit === 'fpp' ? ['subject-fpp', 'armory'] : ['mp'].includes(kit) ? ['subject', 'armory', 'relay', 'protocol'] : ['als-tpp', 'tpp'].includes(kit) ? [] : kit ? [kit] : []
   if ((!requested.length && !['als-tpp', 'tpp'].includes(kit)) || !existsSync(path.join(project, '.stack-complete'))) return
   const manifestFile = path.join(project, 'package.json')
@@ -21,8 +22,14 @@ async function ensureKitPackages(project, kit, prototypeName) {
   let workspace = await readFile(workspaceFile, 'utf8')
   const packagesRoot = path.join(project, 'vendor', 'blacksite', 'packages')
   let changed = false
-  if (['als-tpp', 'tpp', 'subject', 'mp'].includes(kit) && !manifest.dependencies['als-ue5-r3f']) { manifest.dependencies['als-ue5-r3f'] = 'workspace:*'; changed = true }
-  if (['als-tpp', 'tpp', 'subject', 'mp'].includes(kit) && !workspace.includes("  - 'vendor/blacksite/vendor/als-web'")) { workspace = workspace.replace('allowBuilds:', "  - 'vendor/blacksite/vendor/als-web'\nallowBuilds:"); changed = true }
+  if (needsAls && !manifest.dependencies['als-ue5-r3f']) { manifest.dependencies['als-ue5-r3f'] = 'workspace:*'; changed = true }
+  if (needsAls && !workspace.includes("  - 'vendor/blacksite/vendor/als-web'")) { workspace = workspace.replace('allowBuilds:', "  - 'vendor/blacksite/vendor/als-web'\nallowBuilds:"); changed = true }
+  if (needsAls) {
+    const configFile = path.join(project, 'tsconfig.json')
+    const config = JSON.parse(await readFile(configFile, 'utf8'))
+    config.include = [...new Set([...(config.include || ['src']), 'vendor/blacksite/vendor/als-web/src/app/globals.d.ts'])]
+    await writeFile(configFile, `${JSON.stringify(config, null, 2)}\n`)
+  }
   if (multiplayer && !workspace.includes('msgpackr-extract: false')) { workspace = workspace.replace('  esbuild: true', '  esbuild: true\n  msgpackr-extract: false'); changed = true }
   const seen = new Set()
   async function add(folder) {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { createAlsCharacter, refreshGait, refreshLocomotion } from '../../../vendor/als-web/src/als/AlsCharacter'
+import { refreshGroundedMovementSettings } from '../../../vendor/als-web/src/als/AlsCharacterMovementComponent'
 import {
-  createSubject, keySubject, lookSubject, resetFpsInput,
+  createSubject, createSubjectInputSource, keySubject, lookSubject, resetFpsInput,
   updateFpsMovementInput,
 } from './controller'
 
@@ -11,6 +13,48 @@ function lockedController() {
 }
 
 describe('classic FPS input over one ALS player', () => {
+  it('classifies authored running speed as Running instead of the old 300 m/s walking threshold', () => {
+    const c = lockedController()
+    keySubject(c, 'KeyW', true)
+    updateFpsMovementInput(c)
+    const input = createSubjectInputSource(c)()
+    const classify = (walkSpeed?: number) => {
+      const character = createAlsCharacter({ gaitSpeedOverrides: walkSpeed === undefined ? undefined : {
+        Standing: { walkForwardSpeed: walkSpeed, walkBackwardSpeed: walkSpeed },
+      } })
+      character.desiredGait = input.desiredGait!
+      refreshLocomotion(character, { x: 3.75, y: 0, z: 0 })
+      Object.assign(character.movement.velocity, { x: 3.75, y: 0, z: 0 })
+      refreshGait(character)
+      refreshGroundedMovementSettings(character.movement, 0)
+      return { gait: character.gait, gaitAmount: character.movement.gaitAmount, speed: character.movement.maxWalkSpeed }
+    }
+    expect(classify(300)).toEqual({ gait: 'Walking', gaitAmount: 0.0125, speed: 3.75 })
+    expect(classify(input.desiredSpeed)).toEqual({ gait: 'Running', gaitAmount: 2, speed: 3.75 })
+  })
+
+  it('uses authored gait settings and camera-relative world direction at the ALS boundary', () => {
+    const c = lockedController()
+    const sample = createSubjectInputSource(c)
+    keySubject(c, 'KeyW', true)
+    updateFpsMovementInput(c)
+    expect(sample()).toMatchObject({ desiredGait: 'Running', desiredStance: 'Standing', movementDirection: { x: 1, z: 0 } })
+    expect(sample().desiredSpeed).toBeUndefined()
+    c.player.command.yaw = 90
+    expect(sample().movementDirection?.x).toBeCloseTo(0)
+    expect(sample().movementDirection?.z).toBeCloseTo(1)
+    keySubject(c, 'ShiftLeft', true)
+    updateFpsMovementInput(c)
+    expect(sample().desiredGait).toBe('Sprinting')
+    expect(sample().desiredSpeed).toBeUndefined()
+    keySubject(c, 'ControlLeft', true)
+    updateFpsMovementInput(c)
+    expect(sample()).toMatchObject({ desiredGait: 'Running', desiredStance: 'Crouching' })
+    c.frame.locked = false
+    updateFpsMovementInput(c)
+    expect(sample().movementDirection).toEqual({ x: 0, z: 0 })
+  })
+
   it('normalizes diagonal movement, cancels opposing keys and stops outside pointer lock', () => {
     const c = lockedController()
     keySubject(c, 'KeyW', true)

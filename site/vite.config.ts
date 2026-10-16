@@ -3,30 +3,31 @@ import react from '@vitejs/plugin-react'
 import mdx from '@mdx-js/rollup'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { resolve } from 'node:path'
+import { blacksiteAssets } from '../cli/serve-assets.mjs'
 
 const base = process.env.SITE_BASE || '/blacksite/'
 
 export default defineConfig({
   root: resolve(import.meta.dirname),
   base,
-  publicDir: resolve(import.meta.dirname, '../vendor/als-web/public'),
   resolve: {
     alias: {
       '@react-three/fiber': resolve(import.meta.dirname, '../node_modules/@react-three/fiber'),
       '@react-three/rapier': resolve(import.meta.dirname, '../node_modules/@react-three/rapier'),
     },
-    dedupe: ['react', 'react-dom', 'three', '@react-three/fiber', '@react-three/rapier'],
+    dedupe: ['react', 'react-dom', 'three', '@react-three/fiber', '@react-three/rapier', '@dimforge/rapier3d-compat'],
   },
   plugins: [
     mdx(),
     react(),
     tsconfigPaths({ root: resolve(import.meta.dirname, '..') }),
+    blacksiteAssets({ blacksiteRoot: resolve(import.meta.dirname, '..') }),
     {
-      name: 'als-pages-base',
+      name: 'blacksite-pages-assets',
       enforce: 'pre',
       transform(source, id) {
-        if (!id.includes('/vendor/als-web/src/') || !source.includes("'/assets/")) return
-        return source.replaceAll("'/assets/", `'${base}assets/`)
+        if ((!id.includes('/vendor/als-web/src/') && !id.includes('/packages/subject-fpp/src/arms/')) || !source.includes('/assets/')) return
+        return source.replace(/(['"`])\/assets\//g, (_, quote) => `${quote}${base}assets/`)
       },
     },
   ],

@@ -16,7 +16,9 @@
     "@react-three/fiber": "^9.8.1",
     "react": "^19.2.0",
     "three": "^0.185.1",
-    "als-ue5-r3f": "workspace:*"
+    "als-ue5-r3f": "workspace:*",
+    "@blacksite/subject-fpp": "workspace:*",
+    "@blacksite/armory": "workspace:*"
   },
   "license": "FSL-1.1-ALv2"
 }

@@ -4,7 +4,8 @@ import { createLoopbackRoom, createMatch, createReplica, interpolate, Ownership,
 import { createColyseusTransport } from './colyseus'
 import { startMatchServer } from './server'
 import type { Server } from '@colyseus/core'
-import type { PawnState, ServerMessage } from '@blacksite/protocol'
+import { isClientMessage } from '@blacksite/protocol'
+import type { ServerMessage } from '@blacksite/protocol'
 
 const servers: Server[] = []
 afterEach(async () => { for (const server of servers.splice(0)) await server.gracefullyShutdown(false) })
@@ -57,5 +58,124 @@ test('loopback and in-process Colyseus share movement and server hit policy', as
     const result = await hit as Extract<ServerMessage, { type: 'hit' }>
     expect(result.health).toBeLessThan(100)
     a.close(); b.close()
+  }
+})
+
+
+test('weapon time follows elapsed server time and packet floods cannot bypass cadence', () => {
+  let time = 0
+  const match = createMatch({ now: () => time })
+  const messages: ServerMessage[] = []
+  match.join('a', message => messages.push(message))
+  match.join('b', () => {})
+  for (let seq = 0; seq < 100; seq++) match.receive('a', { type: 'fire', seq, direction: { x: 1, y: 0, z: 0 } })
+  expect(match.states.get('b')!.health).toBe(100)
+  time = 17
+  match.advance()
+  expect(match.states.get('b')!.health).toBe(76)
+  for (let seq = 100; seq < 200; seq++) match.receive('a', { type: 'fire', seq, direction: { x: 1, y: 0, z: 0 } })
+  time = 34
+  match.advance()
+  expect(match.states.get('b')!.health).toBe(76)
+  time = 100
+  match.receive('a', { type: 'fire', seq: 200, direction: { x: 1, y: 0, z: 0 } })
+  time = 117
+  match.advance()
+  expect(match.states.get('b')!.health).toBe(52)
+  match.receive('a', { type: 'fire', seq: 200, direction: { x: 1, y: 0, z: 0 } })
+  expect(messages.at(-1)).toEqual({ type: 'rejected', reason: 'invalid shot' })
+  time = -100
+  match.advance()
+  expect(match.states.get('b')!.health).toBe(52)
+  match.leave('a'); match.leave('b')
+})
+
+test('authoritative pistol equip and reload use wall time and replicate weapon and aim', () => {
+  let time = 0
+  const match = createMatch({ now: () => time })
+  const messages: ServerMessage[] = []
+  match.join('a', message => messages.push(message))
+  match.join('b', () => {})
+  match.receive('a', { type: 'weapon', seq: 1, weapon: 'pistol', reload: false })
+  time = 17
+  match.advance()
+  expect(match.states.get('a')!.weapon).toBe('pistol')
+  match.receive('a', { type: 'fire', seq: 1, direction: { x: 1, y: 0, z: 0 } })
+  time = 34
+  match.advance()
+  expect(match.states.get('b')!.health).toBe(100)
+  time = 200
+  match.receive('a', { type: 'fire', seq: 2, direction: { x: 1, y: 0, z: 0 } })
+  time = 217
+  match.advance()
+  expect(match.states.get('b')!.health).toBe(62)
+  match.receive('a', { type: 'weapon', seq: 2, weapon: 'pistol', reload: true })
+  time = 234
+  match.advance()
+  time = 1000
+  match.receive('a', { type: 'fire', seq: 3, direction: { x: 1, y: 0, z: 0 } })
+  time = 1017
+  match.advance()
+  expect(match.states.get('b')!.health).toBe(62)
+  time = 1600
+  match.receive('a', { type: 'fire', seq: 4, direction: { x: 1, y: 0, z: 0 } })
+  time = 1617
+  match.advance()
+  expect(match.states.get('b')!.health).toBe(24)
+  match.receive('a', { type: 'move', seq: 1, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, intent: { forward: 0, right: 0, jump: false, yaw: 0, pitch: 0, aiming: true } })
+  expect(match.states.get('a')).toMatchObject({ weapon: 'pistol', aiming: true })
+  match.receive('a', { type: 'weapon', seq: 2, weapon: 'rifle', reload: false })
+  expect(messages.at(-1)).toEqual({ type: 'rejected', reason: 'invalid weapon sequence' })
+  time = 1700
+  match.advance()
+  expect(match.states.get('a')!.weapon).toBe('pistol')
+  match.leave('a'); match.leave('b')
+})
+
+test('weapon and aiming protocol fields reject malformed messages', () => {
+  expect(isClientMessage({ type: 'weapon', seq: 1, weapon: 'pistol', reload: false })).toBe(true)
+  for (const message of [
+    { type: 'weapon', seq: 1, weapon: 'bow', reload: false },
+    { type: 'weapon', seq: 1, weapon: 'rifle', reload: 1 },
+    { type: 'weapon', seq: -1, weapon: 'rifle', reload: false },
+    { type: 'weapon', seq: NaN, weapon: 'pistol', reload: true },
+    { type: 'move', seq: 1, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, intent: { forward: 0, right: 0, jump: false, yaw: 0, pitch: 0, aiming: 1 } },
+  ]) expect(isClientMessage(message)).toBe(false)
+})
+
+test('new peers take an available spawn after departures and avoid occupied moved positions', () => {
+  let time = 0
+  const match = createMatch({ now: () => time })
+  match.join('a', () => {})
+  match.join('b', () => {})
+  expect(match.states.get('a')!.position.x).toBe(0)
+  expect(match.states.get('b')!.position.x).toBe(3)
+  match.leave('a')
+  match.join('c', () => {})
+  expect(match.states.get('c')!.position.x).toBe(0)
+  match.leave('c')
+  time = 200
+  match.receive('b', { type: 'move', seq: 1, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, intent: { forward: 0, right: 0, jump: false, yaw: 0, pitch: 0 } })
+  expect(match.states.get('b')!.position.x).toBe(0)
+  match.join('d', () => {})
+  expect(match.states.get('d')!.position.x).toBe(3)
+  match.leave('b'); match.leave('d')
+})
+
+test('detaching and reattaching a replica requests a fresh snapshot without closing its transport', async () => {
+  const port = await freePort()
+  servers.push(await startMatchServer(port))
+  for (const transport of [createLoopbackRoom(), createColyseusTransport(`http://127.0.0.1:${port}`)]) {
+    const first = await transport.connect()
+    const connection = await transport.connect()
+    let replica = createReplica(connection, undefined, { closeConnection: false })
+    try {
+      if (!replica.states.has(connection.id)) await wait(replica, message => message.type === 'welcome')
+      expect(replica.states.get(connection.id)!.position.x).toBe(3)
+      replica.close()
+      replica = createReplica(connection, undefined, { closeConnection: false })
+      if (!replica.states.has(connection.id)) await wait(replica, message => message.type === 'welcome')
+      expect(replica.states.get(connection.id)!.position.x).toBe(3)
+    } finally { replica.close(); connection.close(); first.close() }
   }
 })

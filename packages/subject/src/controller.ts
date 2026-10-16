@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three'
 import { createAlsPlayer } from 'als-ue5-r3f/app/AlsPlayer'
 import type { AlsPlayer } from 'als-ue5-r3f/app/AlsPlayer'
+import type { AlsCharacterInputSource } from 'als-ue5-r3f/als/AlsCharacter.hooks'
 import { createGameplayContext } from '@blacksite/input/actions'
 
 export type FpsView = 'first-person' | 'third-person'
@@ -174,6 +175,28 @@ export function createSubject(options: SubjectOptions = {}): SubjectState {
 }
 
 export function wrapYaw(degrees: number): number { return ((degrees + 180) % 360 + 360) % 360 - 180 }
+
+export function createSubjectInputSource(controller: SubjectState): AlsCharacterInputSource {
+  return () => {
+    const command = controller.player.command
+    const yaw = command.yaw * Math.PI / 180
+    const forward = command.active ? command.forward : 0
+    const right = command.active ? command.right : 0
+    return {
+      movementDirection: {
+        x: forward * Math.cos(yaw) - right * Math.sin(yaw),
+        z: forward * Math.sin(yaw) + right * Math.cos(yaw),
+      },
+      desiredGait: command.sprint ? 'Sprinting' : 'Running',
+      desiredStance: command.crouch ? 'Crouching' : 'Standing',
+      desiredRotationMode: 'ViewDirection',
+      viewYawAngle: command.yaw,
+      viewPitchAngle: command.pitch,
+      aiming: command.aim,
+      overlayMode: command.overlay,
+    }
+  }
+}
 
 export function lookSubject(controller: SubjectState, movementX: number, movementY: number): void {
   if (!controller.enabled) return

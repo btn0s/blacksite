@@ -3,4 +3,7 @@ dist/
 .vite/
 .asset-cache/
 assets-owned/
+public/assets/fab_*/
+public/assets/itch_*/
+public/assets/owned/
 .env*

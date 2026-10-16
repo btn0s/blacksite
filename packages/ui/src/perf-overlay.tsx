@@ -14,22 +14,40 @@ export function installPerfProbe() {
 export function attachPerfProbe(renderer: WebGLRenderer) {
   const original = renderer.render.bind(renderer)
   const durations: number[] = []
-  let last = 0
+  let last: number | null = null
   let reported = performance.now()
+  let frames = 0
+  let pending = false
+  let frameCalls = 0
+  let frameTriangles = 0
   renderer.render = function (scene, camera) {
+    const previousCalls = renderer.info.autoReset ? 0 : renderer.info.render.calls
+    const previousTriangles = renderer.info.autoReset ? 0 : renderer.info.render.triangles
     original(scene, camera)
-    const now = performance.now()
-    if (last) durations.push(now - last)
-    last = now
-    if (durations.length > 240) durations.shift()
-    if (now - reported < 1000 || !durations.length) return
-    const sorted = [...durations].sort((a, b) => a - b)
-    const percentile = (p: number) => sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p))]!
-    const elapsed = now - reported
-    const value: PerfSample = { fps: durations.length * 1000 / elapsed, p50: percentile(.5), p95: percentile(.95), drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, activeBodies: bodies }
-    parent.postMessage({ type: messageType, value }, location.origin)
-    durations.length = 0
-    reported = now
+    frameCalls += renderer.info.render.calls - previousCalls
+    frameTriangles += renderer.info.render.triangles - previousTriangles
+    if (pending) return
+    pending = true
+    queueMicrotask(() => {
+      pending = false
+      const drawCalls = frameCalls
+      const triangles = frameTriangles
+      frameCalls = frameTriangles = 0
+      const now = performance.now()
+      if (last !== null) durations.push(now - last)
+      last = now
+      frames++
+      if (durations.length > 240) durations.shift()
+      if (now - reported < 1000 || !durations.length) return
+      const sorted = [...durations].sort((a, b) => a - b)
+      const percentile = (p: number) => sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p))]!
+      const elapsed = now - reported
+      const value: PerfSample = { fps: frames * 1000 / elapsed, p50: percentile(.5), p95: percentile(.95), drawCalls, triangles, activeBodies: bodies }
+      parent.postMessage({ type: messageType, value }, location.origin)
+      durations.length = 0
+      frames = 0
+      reported = now
+    })
   }
 }
 

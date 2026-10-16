@@ -72,7 +72,7 @@ export function Subject({ controller }: SubjectProps) {
       if (doc.pointerLockElement === canvas) lookSubject(controller, event.movementX, event.movementY)
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (doc.pointerLockElement !== canvas || isTextInput(event.target)) return
+      if (doc.pointerLockElement !== canvas && doc.activeElement !== canvas || isTextInput(event.target)) return
       if (event.code === 'Escape') {
         resetFpsInput(controller)
         controller.frame.locked = false
