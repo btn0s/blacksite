@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { CharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
 import type { Route } from './route'
-import type { Soundscape } from './audio'
+import type { TraverseAudio } from './audio'
 import { input as tuning, look } from './model'
 import { isTouchDevice } from '@blacksite/look/world'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
@@ -69,7 +69,7 @@ const dustShade: [number, number, number] = [0.56, 0.53, 0.47]
 const smokeShade: [number, number, number] = [0.3, 0.29, 0.27]
 const flashShade: [number, number, number] = [1.0, 0.75, 0.38]
 
-export function Effects({ route, pose, handle, sound }: { route: Route; pose: MutableRefObject<CharacterPoseSample>; handle: { current: EffectsHandle | null }; sound: Soundscape }) {
+export function Effects({ route, pose, handle, sound }: { route: Route; pose: MutableRefObject<CharacterPoseSample>; handle: { current: EffectsHandle | null }; sound: TraverseAudio }) {
   const { camera, gl } = useThree()
   const count = useMemo(() => Math.round(look.ash * (isTouchDevice() ? look.phoneDensity : 1)), [])
   const ash = useMemo(() => {
@@ -193,7 +193,7 @@ export function Effects({ route, pose, handle, sound }: { route: Route; pose: Mu
     }
 
     camera.getWorldDirection(forward)
-    sound.listen(camera.position, forward, sample.ready ? sample.ground.y : 0)
+    sound.listen(camera.position, forward, sample.ready ? sample.ground.y : 0, rawDelta)
 
     const puffPosition = puffs.geometry.getAttribute('position') as THREE.BufferAttribute
     const puffSize = puffs.geometry.getAttribute('size') as THREE.BufferAttribute

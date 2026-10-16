@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import type { Surface } from '@blacksite/soundscape'
 import { LevelBuilder, apartmentBlock, deadTree, groundMaterial, lada, puddleMaterial, shed, worldPlaneGeometry, type SurfaceName } from '@blacksite/look/world'
 import { feet } from './model'
 import type { Gate } from './race'
@@ -236,7 +237,8 @@ export function buildRoute() {
   }
 
   const puddles = puddleMaterial()
-  for (const [x, z, w, d, r] of [[17, 4, 2.6, 1.4, 0.3], [30.5, -1.2, 3.4, 1.8, -0.2], [64, 2, 4.2, 2.4, 0.6], [80, 4, 2.2, 1.3, 1.2], [146, 2, 3, 1.5, 0.1], [152, -6, 3.6, 2, 0.4]] as const) {
+  const puddleSpots = [[17, 4, 2.6, 1.4, 0.3], [30.5, -1.2, 3.4, 1.8, -0.2], [64, 2, 4.2, 2.4, 0.6], [80, 4, 2.2, 1.3, 1.2], [146, 2, 3, 1.5, 0.1], [152, -6, 3.6, 2, 0.4]] as const
+  for (const [x, z, w, d, r] of puddleSpots) {
     for (const [ox, oz, k] of [[0, 0, 1], [w * 0.32, d * 0.18, 0.62], [-w * 0.28, -d * 0.12, 0.55]] as const) {
       const puddle = new THREE.Mesh(new THREE.CircleGeometry(0.5, 18), puddles)
       puddle.rotation.set(-Math.PI / 2, 0, r + k)
@@ -291,7 +293,14 @@ export function buildRoute() {
   dress(level, { rand, lights, emitters, line, garageRoof, garages, tower, inner, roof, boiler, upper, plant, finishX, slabEnd, dockStart, dockTop })
 
   const group = level.build()
-  return { group, colliders: level.colliders, spawn: [2.5, 0, 0] as Vec3, spawnYaw: 0, gates, ledges, ramps, stairs, lights, emitters, zones, bookmarks, line }
+  const surfaceAt = (x: number, y: number, z: number): Surface => {
+    if (y < 0.25 && puddleSpots.some(([px, pz, w, d]) => { const dx = (x - px) * 2 / w; const dz = (z - pz) * 2 / d; return dx * dx + dz * dz < 1 })) return 'water'
+    if (y > garageRoof - 0.1 && y < garageRoof + 0.6 && z > -8.8 && z < -2.3 && garages.some(gx => x > gx - 0.1 && x < gx + 3.3)) return 'metal'
+    if (x > 67.5 && x < top[0] + 0.2 && z > -4 - rampWidth / 2 && z < -4 + rampWidth / 2) return 'dirt'
+    return 'concrete'
+  }
+
+  return { group, colliders: level.colliders, surfaceAt, spawn: [2.5, 0, 0] as Vec3, spawnYaw: 0, gates, ledges, ramps, stairs, lights, emitters, zones, bookmarks, line }
 }
 
 export type Route = ReturnType<typeof buildRoute>

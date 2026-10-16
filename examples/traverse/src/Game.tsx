@@ -1,24 +1,23 @@
 import * as THREE from 'three'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Physics } from '@react-three/rapier'
+import { Physics, useRapier } from '@react-three/rapier'
 import { InputProvider, makeInputDevices } from '@blacksite/input'
 import { Look } from '@blacksite/look/r3f'
-import { internalPixelRatio, texturesReady } from '@blacksite/look/world'
+import { internalPixelRatio, isTouchDevice, texturesReady } from '@blacksite/look/world'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
 import { Hints, Loading, Prompt, Screen, TitleCard, TouchPad, useTouch } from '@blacksite/ui/hud'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import { createCharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
 import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
-import { AlsFootstepAudioRuntime } from 'als-ue5-r3f/engine/alsAudioBridge'
 import { createCommand, type Command } from './controls'
 import { Player, type Spawn } from './player'
 import { buildRoute, type Route } from './route'
 import { Atmosphere, Level, Markers, Practicals } from './world'
 import { createRace, elapsed, stepRace, type Race, type RaceEvent } from './race'
 import { GhostPlayer, GhostRecorder, loadTake, modelOf, saveTake, type GhostTake } from './ghost'
-import { Soundscape } from './audio'
+import { TraverseAudio } from './audio'
 import { Effects, type EffectsHandle } from './fx'
 import { Probe, type ProbeApi } from './probe'
 import { Clock, type ClockHandle } from './hud'
@@ -36,8 +35,7 @@ type Shared = {
   scripted: { current: boolean }
   touchLook: { current: { x: number; y: number } }
   touchMove: { current: { forward: number; right: number } }
-  sound: Soundscape
-  footsteps: AlsFootstepAudioRuntime
+  sound: TraverseAudio
   effects: { current: EffectsHandle | null }
   clock: { current: ClockHandle | null }
 }
@@ -107,6 +105,25 @@ function Warmup({ onDone }: { onDone: () => void }) {
   return null
 }
 
+function SoundOcclusion({ sound }: { sound: TraverseAudio }) {
+  const { world, rapier } = useRapier()
+  useEffect(() => {
+    const ray = new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
+    sound.setOcclusion((listener, source) => {
+      const dx = source[0] - listener[0]
+      const dy = source[1] - listener[1]
+      const dz = source[2] - listener[2]
+      const length = Math.hypot(dx, dy, dz)
+      if (length < 0.6) return false
+      ray.origin = { x: listener[0], y: listener[1], z: listener[2] }
+      ray.dir = { x: dx / length, y: dy / length, z: dz / length }
+      return world.castRay(ray, length - 0.3, true, rapier.QueryFilterFlags.ONLY_FIXED) !== null
+    })
+    return () => sound.setOcclusion(null)
+  }, [rapier, sound, world])
+  return null
+}
+
 function Scene({ shared, spawn, onAction, onEvent, ghostVisible, api }: { shared: Shared; spawn: Spawn; onAction: (action: string) => void; onEvent: (event: RaceEvent, now: number) => void; ghostVisible: boolean; api: ProbeApi }) {
   const time = useMemo(createWorldTimeState, [])
   const [compiled, setCompiled] = useState(false)
@@ -115,9 +132,10 @@ function Scene({ shared, spawn, onAction, onEvent, ghostVisible, api }: { shared
     <Atmosphere />
     {compiled ? <Look atmosphere="zone" sky={false} fog={false} /> : <Warmup onDone={done} />}
     <Physics gravity={[0, -locomotion.gravity, 0]} timeStep={locomotion.physicsStep} updatePriority={ALS_FRAME_PRIORITY.Physics}>
-      <Player command={shared.command} pose={shared.pose} time={time} audio={shared.footsteps} spawn={spawn} scripted={shared.scripted} touchLook={shared.touchLook} touchMove={shared.touchMove} onAction={onAction} />
+      <Player command={shared.command} pose={shared.pose} time={time} audio={shared.sound} spawn={spawn} scripted={shared.scripted} touchLook={shared.touchLook} touchMove={shared.touchMove} onAction={onAction} />
       <Level route={shared.route} />
       {compiled && <Probe shared={shared} api={api} />}
+      <SoundOcclusion sound={shared.sound} />
     </Physics>
     <Practicals route={shared.route} />
     <Markers route={shared.route} race={shared.race} />
@@ -133,7 +151,7 @@ export function Game() {
   const touch = useTouch()
   const shared = useMemo<Shared>(() => {
     const route = buildRoute()
-    const sound = new Soundscape(route)
+    const sound = new TraverseAudio(route, isTouchDevice() ? 'phone' : 'desktop')
     return {
       route,
       command: createCommand(route.spawnYaw),
@@ -143,7 +161,6 @@ export function Game() {
       touchLook: { current: { x: 0, y: 0 } },
       touchMove: { current: { forward: 0, right: 0 } },
       sound,
-      footsteps: new AlsFootstepAudioRuntime({ AutoInstallUserGestureUnlock: true, OnPlay: (type, wave) => sound.footstep(type, wave) }),
       effects: { current: null },
       clock: { current: null },
     }

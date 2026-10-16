@@ -7,7 +7,7 @@ import { AlsCamera } from 'als-ue5-r3f/app/AlsCamera'
 import type { CharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
 import type { WorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
-import type { AlsFootstepAudioRuntime } from 'als-ue5-r3f/engine/alsAudioBridge'
+import type { TraverseAudio } from './audio'
 import { TRAVERSE_INPUT, codeInput, look, stickCurve, type Command } from './controls'
 import { camera as cameraModel, input as tuning } from './model'
 
@@ -17,7 +17,7 @@ export type PlayerProps = {
   command: Command
   pose: MutableRefObject<CharacterPoseSample>
   time: Readonly<WorldTimeState>
-  audio: AlsFootstepAudioRuntime
+  audio: TraverseAudio
   spawn: Spawn
   scripted: MutableRefObject<boolean>
   touchLook: MutableRefObject<{ x: number; y: number }>

@@ -1,71 +1,46 @@
-import { createAudioLog } from '@blacksite/check'
+import type { AlsFootstepAudioRuntime } from 'als-ue5-r3f/engine/alsAudioBridge'
+import { createSoundscape, type CueDefinition, type SoundLayer, type Surface, type Vec3 } from '@blacksite/soundscape'
 import type { Route, Zone } from './route'
 
 export type Cue = 'start' | 'checkpoint' | 'record' | 'finish' | 'land' | 'mantle' | 'roll' | 'ragdoll'
+export type Occlusion = (listener: Vec3, source: Vec3) => boolean
 
-type Vec3 = [number, number, number]
-
-const reverbFor: Record<Zone['kind'] | 'open', number> = { open: 0.08, arch: 0.3, stairwell: 0.55 }
-
-const jitterGain = () => Math.pow(10, (Math.random() * 2 - 1) * 2 / 20)
+type Footstep = Parameters<AlsFootstepAudioRuntime['PlayFootstepSound']>[0]
+type EmitterKind = Route['emitters'][number]['kind']
 
 const rate = 24000
+const zoneFor: Record<Zone['kind'] | 'open', string> = { open: 'outdoor', arch: 'corridor', stairwell: 'hall' }
 
-type Pcm = Float32Array<ArrayBuffer>[]
-
-function noiseBuffer(seconds: number, shape: (t: number, white: number) => number, start = 1234567): Pcm {
+function pcm(seconds: number, shape: (t: number, white: number) => number, start = 1234567) {
   const length = Math.floor(rate * seconds)
-  const data = new Float32Array(length)
+  const buffer = new AudioBuffer({ length, sampleRate: rate, numberOfChannels: 1 })
+  const data = buffer.getChannelData(0)
   let seed = start
   for (let i = 0; i < length; i++) {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff
     data[i] = shape(i / rate, seed / 0x3fffffff - 1)
   }
-  return [data]
-}
-
-function impulse(seconds: number): Pcm {
-  const length = Math.floor(rate * seconds)
-  return [0, 1].map(() => {
-    const data = new Float32Array(length)
-    for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 3.2)
-    return data
-  })
-}
-
-function toBuffer(context: BaseAudioContext, pcm: Pcm) {
-  const buffer = context.createBuffer(pcm.length, pcm[0]!.length, rate)
-  pcm.forEach((data, channel) => buffer.copyToChannel(data, channel))
   return buffer
 }
 
-const oneShots = ['land', 'mantle', 'roll', 'ragdoll'] as const
-
-function oneShot(cue: (typeof oneShots)[number], variant: number) {
-  const spread = 1 + (variant - 1.5) * 0.08
-  const length = cue === 'roll' ? 0.5 : cue === 'mantle' ? 0.35 : 0.22
-  const decay = (cue === 'roll' ? 8 : cue === 'mantle' ? 12 : 26) * spread
-  return noiseBuffer(length, (t, white) => white * Math.exp(-t * decay), 1234567 + variant * 7919)
-}
-
-function crackle() {
+function crackle(index: number) {
+  let random = 991 + index * 7919
+  const next = () => (random = (random * 16807) % 2147483647) / 2147483647
   const pops: number[] = []
-  for (let t = 0; t < 4; t += 0.02 + Math.random() * 0.16) pops.push(t)
-  let last = 0
+  for (let t = 0; t < 4; t += 0.02 + next() * 0.16) pops.push(t)
   let low = 0
-  return noiseBuffer(4, (t, white) => {
+  return pcm(4, (t, white) => {
     while (pops.length > 1 && pops[1]! <= t) pops.shift()
     const since = t - pops[0]!
     const pop = since >= 0 ? Math.exp(-since * 260) * (0.5 + 0.5 * Math.sin(pops[0]! * 999)) : 0
     low += (white - low) * 0.02
-    last = white * pop * 0.9 + low * 0.5
-    return last
-  })
+    return white * pop * 0.9 + low * 0.5
+  }, 1234567 + index * 104729)
 }
 
-function drip(index = 0) {
+function drip(index: number) {
   const drops = [0.3, 1.45, 2.2, 3.6].map((at, drop) => at + ((index * 7 + drop * 3) % 5) * 0.11)
-  return noiseBuffer(4.4, t => {
+  return pcm(4.4, t => {
     let value = 0
     for (const at of drops) {
       const since = t - at
@@ -76,269 +51,147 @@ function drip(index = 0) {
   })
 }
 
-function tarp(index = 0) {
+function tarp(index: number) {
   let low = 0
-  return noiseBuffer(6, (t, white) => {
+  return pcm(6, (t, white) => {
     low += (white - low) * 0.12
     const gust = Math.max(0, Math.sin(t * 1.3 + index * 2.1) * Math.sin(t * 0.47 + 1 + index) * 1.4)
     const flap = Math.pow(Math.max(0, Math.sin(t * 2 * Math.PI * (5 + 3 * Math.sin(t)))), 6)
     return low * (0.15 + gust * flap * 1.6)
-  })
+  }, 7654321 + index * 15485863)
 }
 
-export class Soundscape {
-  private context: AudioContext | null = null
-  private buffers = new Map<string, AudioBuffer>()
-  private master: GainNode | null = null
-  private wind: GainNode | null = null
-  private windFilter: BiquadFilterNode | null = null
-  private wet: GainNode | null = null
-  private bus: GainNode | null = null
+function buzz(index: number) {
+  const saw = (t: number, f: number) => 2 * ((t * f) % 1) - 1
+  const weights = [[1, 0.5, 0.6], [0.8, 0.7, 0.4], [1, 0.35, 0.8]][index % 3]!
+  return pcm(1, (t, white) => (saw(t, 100) * weights[0]! + Math.sign(Math.sin(2 * Math.PI * 200 * t)) * weights[1]! + saw(t, 300) * weights[2]!) * 0.25 + white * 0.02)
+}
+
+const noise = (frequency: number, gain: number, duration: number, type: BiquadFilterType, q = 0.8, offset = 0): SoundLayer => ({ kind: 'noise', gain, duration, offset, filter: { type, frequency, q } })
+const note = (frequency: number, gain: number, duration: number, offset: number): SoundLayer => ({ kind: 'tone', frequency, gain, duration, offset, attack: 0.008, waveform: 'triangle', send: 0.35 })
+
+function chime(notes: readonly number[], gap: number): CueDefinition {
+  return {
+    class: 'ui', bus: 'ui', pitchJitter: 0, volumeJitterDb: 2, gain: 0.5,
+    variants: [0, 1].map(step => ({ id: String(step), layers: notes.map((frequency, index) => note(frequency * Math.pow(2, step / 12), 0.26, 0.9, index * gap)) })),
+  }
+}
+
+function body(build: (spread: number) => SoundLayer[], gain: number): CueDefinition {
+  return {
+    class: 'foley', bus: 'sfx', gain, reverbSend: 0.2,
+    variants: [0, 1, 2, 3].map(variant => ({ id: String(variant), layers: build(1 + (variant - 1.5) * 0.08) })),
+  }
+}
+
+function emitter(kind: EmitterKind, gain: number, near: number, far: number): CueDefinition {
+  const build = kind === 'fire' ? crackle : kind === 'drip' ? drip : kind === 'tarp' ? tarp : buzz
+  const filter = kind === 'buzz' ? { type: 'bandpass' as const, frequency: 600, q: 1.4 } : undefined
+  return {
+    class: 'ambience', bus: 'sfx', loop: true, gain, pitchJitter: 0.02, reverbSend: 0.3,
+    attenuation: { near, far, rolloff: 1.4 },
+    variants: [0, 1, 2].map(index => ({ id: `${kind}-${index}`, layers: [{ kind: 'buffer', buffer: build(index), loop: true, gain: 1, filter }] })),
+  }
+}
+
+export class TraverseAudio {
+  private readonly mixer: ReturnType<typeof createSoundscape>
   private readonly zones: Zone[]
   private readonly emitters: Route['emitters']
+  private readonly surfaceAt: Route['surfaceAt']
+  private occlusion: Occlusion | null = null
+  private readonly blocked = new WeakMap<Vec3, { at: number; value: boolean }>()
   private zone: Zone['kind'] | 'open' = 'open'
-  private readonly log = createAudioLog()
-  private readonly last = new Map<string, number>()
+  private exposure = -1
+  private prepared = false
+  private started = false
 
-  private bank: { reverb: Pcm; wind: Pcm; emitters: Map<string, Pcm>; shots: Map<string, Pcm> } | null = null
-
-  constructor(route: Route) {
+  constructor(route: Route, tier: 'desktop' | 'phone') {
     this.zones = route.zones
     this.emitters = route.emitters
+    this.surfaceAt = route.surfaceAt
+    this.mixer = createSoundscape({ tier, voiceCap: tier === 'phone' ? 16 : 32, occlusion: (listener, source) => this.occluded(listener, source) })
+  }
+
+  setOcclusion(occlusion: Occlusion | null) {
+    this.occlusion = occlusion
+  }
+
+  private occluded(listener: Vec3, source: Vec3) {
+    if (!this.occlusion) return false
+    const now = performance.now()
+    const cached = this.blocked.get(source)
+    if (cached && now - cached.at < 120) return cached.value
+    const value = this.occlusion(listener, source)
+    this.blocked.set(source, { at: now, value })
+    return value
   }
 
   prepare() {
-    if (this.bank) return
-    let pink = 0
-    const emitters = new Map<string, Pcm>()
-    const seen = new Map<string, number>()
-    for (const emitter of this.emitters) {
-      const index = seen.get(emitter.kind) ?? 0
-      seen.set(emitter.kind, index + 1)
-      if (emitter.kind !== 'buzz') emitters.set(`${emitter.kind}-${index}`, emitter.kind === 'fire' ? crackle() : emitter.kind === 'drip' ? drip(index) : tarp(index))
-    }
-    const shots = new Map<string, Pcm>()
-    for (const cue of oneShots) for (let variant = 0; variant < 4; variant++) shots.set(`${cue}-${variant}`, oneShot(cue, variant))
-    this.bank = { reverb: impulse(1.7), wind: noiseBuffer(6, (_, white) => (pink = pink * 0.97 + white * 0.03) * 6), emitters, shots }
+    if (this.prepared) return
+    this.prepared = true
+    const mixer = this.mixer
+    mixer.registerCue('traverse.start', chime([660, 880], 0.12))
+    mixer.registerCue('traverse.checkpoint', chime([988, 1318], 0.09))
+    mixer.registerCue('traverse.finish', chime([784, 659, 523], 0.09))
+    mixer.registerCue('traverse.record', chime([523, 659, 784, 1046], 0.09))
+    mixer.registerCue('traverse.land', body(spread => [noise(260 * spread, 0.7, 0.22, 'lowpass'), { kind: 'tone', frequency: 95 * spread, endFrequency: 40, gain: 0.35, duration: 0.22, waveform: 'sine' }], 0.9))
+    mixer.registerCue('traverse.mantle', body(spread => [noise(1500 * spread, 0.25, 0.35, 'bandpass'), noise(700 * spread, 0.18, 0.12, 'lowpass', 0.8, 0.16)], 1))
+    mixer.registerCue('traverse.roll', body(spread => [noise(900 * spread, 0.3, 0.5, 'bandpass'), noise(260 * spread, 0.3, 0.14, 'lowpass', 0.8, 0.05)], 1))
+    mixer.registerCue('traverse.ragdoll', body(spread => [noise(180 * spread, 0.9, 0.22, 'lowpass'), { kind: 'tone', frequency: 70 * spread, endFrequency: 40, gain: 0.35, duration: 0.25, waveform: 'sine' }], 1))
+    mixer.registerCue('traverse.fire', emitter('fire', 0.55, 1.2, 40))
+    mixer.registerCue('traverse.drip', emitter('drip', 0.5, 1.2, 30))
+    mixer.registerCue('traverse.tarp', emitter('tarp', 0.4, 3, 45))
+    mixer.registerCue('traverse.buzz', emitter('buzz', 0.12, 1.2, 25))
+    mixer.setZone('outdoor')
+    mixer.prepare()
   }
 
   unlock() {
-    if (this.context) { if (this.context.state === 'suspended') void this.context.resume(); return }
     this.prepare()
-    const AudioContextClass = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AudioContextClass) return
-    const context = new AudioContextClass()
-    this.context = context
-    const master = context.createGain()
-    master.gain.value = 0.9
-    const limiter = context.createDynamicsCompressor()
-    limiter.threshold.value = -10
-    limiter.ratio.value = 6
-    master.connect(limiter).connect(context.destination)
-    this.master = master
-    const bus = context.createGain()
-    bus.connect(master)
-    this.bus = bus
-    const reverb = context.createConvolver()
-    reverb.buffer = toBuffer(context, this.bank!.reverb)
-    const wet = context.createGain()
-    wet.gain.value = reverbFor.open
-    bus.connect(wet).connect(reverb).connect(master)
-    this.wet = wet
-
-    const windSource = context.createBufferSource()
-    windSource.buffer = toBuffer(context, this.bank!.wind)
-    windSource.loop = true
-    const windFilter = context.createBiquadFilter()
-    windFilter.type = 'bandpass'
-    windFilter.frequency.value = 420
-    windFilter.Q.value = 0.7
-    const wind = context.createGain()
-    wind.gain.value = 0.05
-    const lfo = context.createOscillator()
-    lfo.frequency.value = 0.09
-    const lfoDepth = context.createGain()
-    lfoDepth.gain.value = 180
-    lfo.connect(lfoDepth).connect(windFilter.frequency)
-    windSource.connect(windFilter).connect(wind).connect(master)
-    windSource.start()
-    lfo.start()
-    this.log.start('wind', 'wind-bed')
-    this.wind = wind
-    this.windFilter = windFilter
-
-    const drone = context.createGain()
-    drone.gain.value = 0.018
-    const droneFilter = context.createBiquadFilter()
-    droneFilter.type = 'lowpass'
-    droneFilter.frequency.value = 160
-    for (const frequency of [49, 49.6, 73.5]) {
-      const oscillator = context.createOscillator()
-      oscillator.type = 'sawtooth'
-      oscillator.frequency.value = frequency
-      oscillator.connect(droneFilter)
-      oscillator.start()
-    }
-    droneFilter.connect(drone).connect(master)
-    this.log.start('drone', 'drone-bed')
-
-    const seen = new Map<string, number>()
-    for (const emitter of this.emitters) {
-      const index = seen.get(emitter.kind) ?? 0
-      seen.set(emitter.kind, index + 1)
-      this.emit(emitter.kind, emitter.at, index)
-    }
+    void this.mixer.start().then(() => {
+      if (this.started) return
+      this.started = true
+      for (const { kind, at } of this.emitters) this.mixer.play(`traverse.${kind}`, { position: at })
+    }).catch(() => {})
   }
 
-  private emit(kind: Route['emitters'][number]['kind'], at: Vec3, index: number) {
-    const context = this.context!
-    const panner = context.createPanner()
-    panner.panningModel = 'HRTF'
-    panner.distanceModel = 'inverse'
-    panner.refDistance = kind === 'tarp' ? 3 : 1.2
-    panner.rolloffFactor = 1.4
-    panner.maxDistance = 60
-    panner.positionX.value = at[0]
-    panner.positionY.value = at[1]
-    panner.positionZ.value = at[2]
-    const gain = context.createGain()
-    if (kind === 'buzz') {
-      gain.gain.value = 0.035
-      const filter = context.createBiquadFilter()
-      filter.type = 'bandpass'
-      filter.frequency.value = 600
-      filter.Q.value = 1.4
-      for (const [frequency, type] of [[100, 'sawtooth'], [200, 'square'], [300.4, 'sawtooth']] as const) {
-        const oscillator = context.createOscillator()
-        oscillator.type = type
-        oscillator.frequency.value = frequency
-        oscillator.connect(filter)
-        oscillator.start(context.currentTime + Math.random())
-      }
-      filter.connect(gain)
-    } else {
-      gain.gain.value = kind === 'fire' ? 0.55 : kind === 'drip' ? 0.5 : 0.4
-      const buffer = toBuffer(context, this.bank!.emitters.get(`${kind}-${index}`)!)
-      const source = context.createBufferSource()
-      source.buffer = buffer
-      source.loop = true
-      source.connect(gain)
-      source.start(context.currentTime, Math.random() * buffer.duration)
-    }
-    gain.connect(panner).connect(this.bus!)
-    this.log.start(kind, `${kind}-${index}`)
-  }
-
-  listen(position: { x: number; y: number; z: number }, forward: { x: number; y: number; z: number }, height: number) {
-    const context = this.context
-    if (!context || context.state !== 'running') return
-    const listener = context.listener
-    const now = context.currentTime
-    if (listener.positionX) {
-      listener.positionX.setTargetAtTime(position.x, now, 0.03)
-      listener.positionY.setTargetAtTime(position.y, now, 0.03)
-      listener.positionZ.setTargetAtTime(position.z, now, 0.03)
-      listener.forwardX.setTargetAtTime(forward.x, now, 0.03)
-      listener.forwardY.setTargetAtTime(forward.y, now, 0.03)
-      listener.forwardZ.setTargetAtTime(forward.z, now, 0.03)
-    } else {
-      listener.setPosition(position.x, position.y, position.z)
-      listener.setOrientation(forward.x, forward.y, forward.z, 0, 1, 0)
-    }
+  listen(position: { x: number; y: number; z: number }, forward: { x: number; y: number; z: number }, height: number, delta: number) {
+    this.mixer.setListener({ position: [position.x, position.y, position.z], forward: [forward.x, forward.y, forward.z] })
     let zone: Zone['kind'] | 'open' = 'open'
     for (const candidate of this.zones) {
       if (position.x >= candidate.min[0] && position.x <= candidate.max[0] && position.y >= candidate.min[1] && position.y <= candidate.max[1] && position.z >= candidate.min[2] && position.z <= candidate.max[2]) { zone = candidate.kind; break }
     }
     if (zone !== this.zone) {
       this.zone = zone
-      this.wet!.gain.setTargetAtTime(reverbFor[zone], now, 0.25)
+      this.mixer.setZone(zoneFor[zone])
     }
-    const exposed = zone === 'stairwell' ? 0.2 : Math.min(1, Math.max(0, height / 6))
-    this.wind!.gain.setTargetAtTime(0.035 + exposed * 0.11, now, 0.6)
-    this.windFilter!.Q.setTargetAtTime(0.7 + exposed * 1.6, now, 0.6)
+    const exposure = Math.round((zone === 'open' ? Math.min(1, Math.max(0, height / 6)) : 0) * 10) / 10
+    if (exposure !== this.exposure) {
+      this.exposure = exposure
+      this.mixer.setBusVolume('ambience', 0.6 + exposure * 0.9, 0.8)
+    }
+    this.mixer.update(delta)
   }
 
-  private variant(cue: string, count: number) {
-    const previous = this.last.get(cue) ?? -1
-    let next = Math.floor(Math.random() * count)
-    if (next === previous) next = (next + 1) % count
-    this.last.set(cue, next)
-    return next
+  PlayFootstepSound(request: Footstep) {
+    const { x, y, z } = request.Location
+    const surface: Surface = this.surfaceAt(x, y, z)
+    this.mixer.play(`${request.SoundType === 'Land' ? 'landing' : 'footstep'}.${surface}`, { position: [x, y, z], volume: request.VolumeMultiplier, pitch: request.PitchMultiplier })
   }
 
-  private voice(cue: string, sample: string, seconds: number) {
-    this.log.start(cue, sample)
-    setTimeout(() => this.log.end(), seconds * 1000)
-  }
+  SetListenerTransform() {}
 
-  footstep(type: string, wave: string) {
-    if (this.context?.state === 'running') this.voice(`footstep-${type}`, wave, 0.6)
+  play(cue: Cue, strength = 1, index = 0) {
+    if (cue === 'checkpoint') { this.mixer.play('traverse.checkpoint', { pitch: Math.pow(2, index * 2 / 12) }); return }
+    this.mixer.play(`traverse.${cue}`, { volume: Math.min(1, strength) })
   }
 
   sample() {
-    return this.log.sample()
-  }
-
-  play(cue: Cue, strength = 1, index = 0) {
-    const context = this.context
-    if (!context || context.state !== 'running') return
-    const now = context.currentTime
-    if (cue === 'start' || cue === 'checkpoint' || cue === 'finish' || cue === 'record') {
-      const base = cue === 'start' ? [660, 880] : cue === 'checkpoint' ? [988, 1318] : cue === 'finish' ? [784, 659, 523] : [523, 659, 784, 1046]
-      const step = cue === 'checkpoint' ? index : this.variant(cue, 2)
-      const transpose = Math.pow(2, (cue === 'checkpoint' ? step * 2 : step) / 12)
-      this.voice(cue, `${cue}-${step}`, 1)
-      const level = jitterGain()
-      base.forEach((frequency, note) => {
-        const at = now + note * (cue === 'start' ? 0.12 : 0.09)
-        const oscillator = context.createOscillator()
-        oscillator.type = 'triangle'
-        oscillator.frequency.value = frequency * transpose
-        const gain = context.createGain()
-        gain.gain.setValueAtTime(0, at)
-        gain.gain.linearRampToValueAtTime(0.13 * level, at + 0.008)
-        gain.gain.exponentialRampToValueAtTime(0.0008, at + 0.9)
-        oscillator.connect(gain).connect(this.bus!)
-        oscillator.start(at)
-        oscillator.stop(at + 1)
-      })
-      return
-    }
-    const variant = this.variant(cue, 4)
-    const spread = 1 + (variant - 1.5) * 0.08
-    const length = cue === 'roll' ? 0.5 : cue === 'mantle' ? 0.35 : 0.22
-    this.voice(cue, `${cue}-${variant}`, length)
-    const key = `${cue}-${variant}`
-    const buffer = this.buffers.get(key) ?? toBuffer(context, this.bank!.shots.get(key)!)
-    this.buffers.set(key, buffer)
-    const source = context.createBufferSource()
-    source.buffer = buffer
-    source.playbackRate.value = 1 + (Math.random() * 2 - 1) * 0.05
-    const filter = context.createBiquadFilter()
-    filter.type = cue === 'land' || cue === 'ragdoll' ? 'lowpass' : 'bandpass'
-    filter.frequency.value = (cue === 'land' ? 260 : cue === 'ragdoll' ? 180 : cue === 'roll' ? 900 : 1500) * spread
-    filter.Q.value = 0.8
-    const gain = context.createGain()
-    gain.gain.value = Math.min(1, strength) * (cue === 'ragdoll' ? 0.9 : cue === 'land' ? 0.7 : 0.25) * jitterGain()
-    source.connect(filter).connect(gain).connect(this.bus!)
-    source.start(now)
-    if (cue === 'land' || cue === 'ragdoll') {
-      const thump = context.createOscillator()
-      thump.frequency.setValueAtTime((cue === 'ragdoll' ? 70 : 95) * spread, now)
-      thump.frequency.exponentialRampToValueAtTime(40, now + 0.18)
-      const body = context.createGain()
-      body.gain.setValueAtTime(Math.min(1, strength) * 0.35, now)
-      body.gain.exponentialRampToValueAtTime(0.001, now + 0.22)
-      thump.connect(body).connect(this.bus!)
-      thump.start(now)
-      thump.stop(now + 0.25)
-    }
+    return this.mixer.sample()
   }
 
   dispose() {
-    void this.context?.close()
-    this.context = null
-    this.master = null
-    this.buffers.clear()
+    this.mixer.dispose()
   }
 }
