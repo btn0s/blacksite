@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 
 const root = path.resolve('skills')
-const names = ['start', 'make-game', 'design-game', 'setup-project', 'build-prototype', 'combine-prototypes', 'optimize-game', 'ship-game', 'game-architecture', 'blacksite-kit', 'game-assets']
+const names = ['start', 'make-game', 'design-game', 'setup-project', 'build-prototype', 'combine-prototypes', 'optimize-game', 'ship-game', 'game-architecture', 'blacksite-kit', 'game-assets', 'als']
 const errors = []
 for (const name of names) {
   const directory = path.join(root, name)

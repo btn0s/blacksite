@@ -7,6 +7,7 @@ Generated from `blacksite catalog --json` on release.
 | Skill | Use when |
 | --- | --- |
 | `game-architecture` | Choosing Koota, XState, Effect, transport, protocol, sim, and client ownership |
+| `als` | Wiring ALS bodies, input, camera, overlays, actions, arms, or replication |
 
 ## Profiles
 
