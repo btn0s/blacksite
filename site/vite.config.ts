@@ -58,10 +58,7 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: { input: {
       main: resolve(import.meta.dirname, 'index.html'),
-      characters: resolve(import.meta.dirname, 'frames/characters.html'),
-      warden: resolve(import.meta.dirname, 'frames/warden.html'),
-      fpp: resolve(import.meta.dirname, 'frames/fpp.html'),
-      mp: resolve(import.meta.dirname, 'frames/mp.html'),
+      ...Object.fromEntries(readdirSync(resolve(import.meta.dirname, 'frames')).filter(name => name.endsWith('.html')).map(name => [name.slice(0, -5), resolve(import.meta.dirname, 'frames', name)])),
     } },
   },
 })

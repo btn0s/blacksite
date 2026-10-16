@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { resolveLegacy, tools } from './content'
 import { githubUrl, linkFor, rewriteHref } from './docs'
 import { invocationOf, parseFrontmatter } from './skill-meta'
+import { showcases } from './showcases/registry'
 
 const root = resolve(import.meta.dirname, '../..')
 
@@ -63,6 +64,18 @@ describe('tools', () => {
       expect(tool.guides.length).toBeGreaterThan(0)
       expect(tool.statusNote.length).toBeGreaterThan(0)
       for (const demo of tool.demos) if (demo.live) expect(demo.frame).toBeTruthy()
+    }
+  })
+})
+
+describe('showcases', () => {
+  it('registers each showcase on a real tool with its own frame', () => {
+    expect(showcases.length).toBeGreaterThan(0)
+    for (const showcase of showcases) {
+      expect(tools.some(tool => tool.slug === showcase.tool)).toBe(true)
+      expect(existsSync(resolve(root, 'site/frames', `${showcase.frame}.html`))).toBe(true)
+      expect(readFileSync(resolve(root, 'site/frames', `${showcase.frame}.html`), 'utf8')).toContain(`../src/showcases/${showcase.id}/`)
+      if (showcase.thumbnail) expect(existsSync(resolve(root, 'site/public', showcase.thumbnail))).toBe(true)
     }
   })
 })

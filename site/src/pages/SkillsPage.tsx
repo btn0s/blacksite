@@ -1,4 +1,6 @@
-import { githubUrl } from '../docs'
+import { extras } from '../content'
+import { githubUrl, linkFor } from '../docs'
+import { base } from '../links'
 import { invocationLabel, skills } from '../skills'
 
 const flowNames = ['start', 'make-game', 'design-game', 'setup-project', 'build-prototype', 'combine-prototypes', 'optimize-game', 'ship-game']
@@ -19,7 +21,6 @@ export function SkillsPage() {
     <section className="section">
       <h2 className="section-title">One skill per phase</h2>
       <div className="skill-table" role="table">
-        <div className="skill-row skill-row--head" role="row"><span role="columnheader">Skill</span><span role="columnheader">What it does</span><span role="columnheader">Who starts it</span></div>
         {phases.map(skill => <div className="skill-row" role="row" key={skill.name}>
           <span role="cell"><a href={githubUrl(skill.path)}><code>{skill.name}</code></a>{skill.argument && <small> {skill.argument}</small>}</span>
           <span role="cell">{skill.summary}</span>
@@ -34,10 +35,14 @@ export function SkillsPage() {
         {references.map(skill => <div className="skill-row" role="row" key={skill.name}>
           <span role="cell"><a href={githubUrl(skill.path)}><code>{skill.name}</code></a></span>
           <span role="cell">{skill.summary}</span>
-          <span role="cell"><span className="invoke invoke--reference">{invocationLabel.reference}</span></span>
         </div>)}
       </div>
       <p className="section-note"><strong>You run it</strong> means only you can start it, with a slash command. <strong>The agent runs it</strong> means the agent loads it when the work calls for it, and you can still start it yourself. Each building block also has its own guide, linked from its page.</p>
+    </section>
+
+    <section className="section">
+      <h2 className="section-title">Also included</h2>
+      {extras.map(extra => <p className="extra" key={extra.name}><a href={linkFor(base, extra.path)}>{extra.name}</a>. {extra.text}</p>)}
     </section>
   </div>
 }

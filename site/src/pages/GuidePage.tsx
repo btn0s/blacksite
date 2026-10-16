@@ -12,8 +12,8 @@ export function GuidePage({ doc }: { doc: Doc }) {
   }), [doc])
   return <div className="page guide-page">
     <header className="guide-head">
-      <p className="eyebrow">{tool ? <><a href={link(`tools/${tool.slug}`)}>{tool.name}</a> / Guide</> : 'Blacksite'}</p>
-      <p className="guide-source">Source: <a href={githubUrl(doc.path)}>{doc.path}</a></p>
+      {tool && <a href={link(`tools/${tool.slug}`)}>← {tool.name}</a>}
+      <a className="guide-source" href={githubUrl(doc.path)}>{doc.path}</a>
     </header>
     <article className="markdown"><Suspense fallback={<p className="loading-line">Loading…</p>}><Content components={components} /></Suspense></article>
   </div>

@@ -27,36 +27,11 @@ export type Tool = {
   tagline: string
   pitch: string
   packages: string[]
-  thumbnail?: string
-  material: string
   demos: ShowcaseDemo[]
   agent: { reads: Guide[]; commands: { label: string; code: string }[]; note: string }
   statusNote: string
   guides: Guide[]
 }
-
-const moveKeys: Control[] = [
-  { action: 'Look', keys: ['Click', 'Mouse'] },
-  { action: 'Move', keys: ['W', 'A', 'S', 'D'] },
-  { action: 'Sprint · tap to roll', keys: ['Shift'] },
-  { action: 'Walk or run', keys: ['Alt'] },
-  { action: 'Crouch', keys: ['Ctrl'] },
-  { action: 'Jump · mantle a ledge', keys: ['Space'] },
-  { action: 'Aim', keys: ['Right mouse'] },
-  { action: 'Ragdoll · get up', keys: ['X'] },
-  { action: 'First or third person', keys: ['V'] },
-  { action: 'Swap shoulder', keys: ['C'] },
-]
-
-const moveTouch: Control[] = [
-  { action: 'Move', keys: ['Left stick'] },
-  { action: 'Look', keys: ['Drag right side'] },
-  { action: 'Jump · mantle', keys: ['Jump'] },
-  { action: 'Sprint · tap to roll', keys: ['Sprint'] },
-  { action: 'Crouch', keys: ['Crouch'] },
-  { action: 'Ragdoll', keys: ['Ragdoll'] },
-  { action: 'First or third person', keys: ['View'] },
-]
 
 export const tools: Tool[] = [
   {
@@ -67,18 +42,7 @@ export const tools: Tool[] = [
     tagline: 'An animated player body with first- and third-person cameras.',
     pitch: 'A player character that walks, sprints, crouches, mantles, rolls, ragdolls and aims, in first or third person. It is a three.js port of ALS Refactored, the Unreal locomotion system.',
     packages: ['als-ue5-r3f', '@blacksite/subject'],
-    thumbnail: 'thumbs/characters.webp',
-    material: 'cast',
-    demos: [{
-      id: 'checkpoint',
-      frame: 'characters',
-      title: 'Checkpoint',
-      summary: 'A zone checkpoint with barriers, containers, a loading dock and a ruined warehouse to climb.',
-      keyboard: moveKeys,
-      touch: moveTouch,
-      tryThis: ['Sprint at a barrier and press Space to vault it.', 'Climb the containers and the loading dock.', 'Tap Shift while running to roll. Press X to ragdoll.', 'Press V for first person, in the same body.'],
-      live: true,
-    }],
+    demos: [],
     agent: {
       reads: [{ label: 'als skill', path: 'skills/als/SKILL.md' }, { label: 'ALS agent guide', path: 'vendor/als-web/docs/guide/overview.md' }],
       commands: [
@@ -99,19 +63,10 @@ export const tools: Tool[] = [
     name: 'Destruction',
     codename: 'Cascade',
     status: 'Experimental',
-    tagline: 'Concrete buildings that crack, lose their supports and come down.',
-    pitch: 'Your game gets buildings made of real structure: columns, slabs and walls joined by bonds that crack and break. When a building loses its supports it collapses under its own weight, and the physics runs in a web worker so the game keeps its frame rate.',
+    tagline: 'Concrete buildings that crack, lose their supports and fall.',
+    pitch: 'Buildings made of walls, slabs and columns joined by bonds that crack and break. When a building loses its supports it falls under its own weight. The physics runs in a web worker, so the game keeps its frame rate.',
     packages: ['@blacksite/cascade'],
-    material: 'panel',
-    demos: [{
-      id: 'air-strike',
-      title: 'Air Strike',
-      summary: 'Call in an air strike on a multi-storey concrete block and watch it come apart from a safe distance.',
-      keyboard: [],
-      touch: [],
-      tryThis: [],
-      live: false,
-    }],
+    demos: [],
     agent: {
       reads: [{ label: 'Cascade guide', path: 'docs/cascade.md' }, { label: 'Package rules', path: 'packages/cascade/AGENTS.md' }],
       commands: [{ label: 'Prototype a destructible structure', code: 'blacksite prototype new collapse --with cascade' }],
@@ -128,7 +83,6 @@ export const tools: Tool[] = [
     tagline: 'First-person arms with a rifle and a pistol.',
     pitch: 'Rigged first-person arms with a rifle and a pistol: fire, reload, aim and recoil. A weapon runtime resolves shots, and the server can re-run it to check hits in multiplayer.',
     packages: ['@blacksite/subject-fpp', '@blacksite/armory'],
-    material: 'metal',
     demos: [{
       id: 'range', frame: 'fpp', title: 'Firing range', summary: 'Fire, reload, aim down sights and switch weapons.',
       keyboard: [{ action: 'Look', keys: ['Click', 'Mouse'] }, { action: 'Move', keys: ['W', 'A', 'S', 'D'] }, { action: 'Fire', keys: ['Left mouse'] }, { action: 'Aim', keys: ['Right mouse'] }, { action: 'Reload', keys: ['R'] }],
@@ -150,7 +104,6 @@ export const tools: Tool[] = [
     tagline: 'Rooms where remote players run the full character animation.',
     pitch: 'Rooms on Colyseus, or inside one browser tab for demos and tests. Each player moves their own body, the server checks hits, and remote players run the full character animation.',
     packages: ['@blacksite/relay', '@blacksite/subject'],
-    material: 'corrugated',
     demos: [{
       id: 'arena', frame: 'mp', title: 'Arena', summary: 'Each half of the screen is a separate player connected to the same room.',
       keyboard: [{ action: 'Look', keys: ['Click', 'Mouse'] }, { action: 'Move', keys: ['W', 'A', 'S', 'D'] }, { action: 'First or third person', keys: ['V'] }],
@@ -172,7 +125,6 @@ export const tools: Tool[] = [
     tagline: 'Enemy squads that take cover and flank.',
     pitch: 'Enemy squads that pick cover, flank and coordinate. The simulation is deterministic and runs in a worker, so every fight can be replayed.',
     packages: ['@blacksite/warden', '@blacksite/warden-react'],
-    material: 'brick',
     demos: [{
       id: 'squad', frame: 'warden', title: 'Squad', summary: 'Watch the squads move, take cover and trade fire.',
       keyboard: [], touch: [], tryThis: [], live: true,
@@ -192,7 +144,6 @@ export const tools: Tool[] = [
     tagline: 'Keyboard, mouse, gamepad and touch, plus menus.',
     pitch: 'One input layer for keyboard, mouse, gamepad and touch, bound to actions the game names. Plus menus, pause and settings screens that work with a controller.',
     packages: ['@blacksite/input', '@blacksite/ui'],
-    material: 'rust',
     demos: [],
     agent: {
       reads: [{ label: 'Input guide', path: 'packages/input/README.md' }, { label: 'UI guide', path: 'packages/ui/README.md' }],
@@ -209,15 +160,6 @@ export const toolBySlug = (slug: string) => tools.find(tool => tool.slug === slu
 export const extras = [
   { name: 'Player templates', text: 'Ready-to-play starting points: fpp, tpp, mp and blank.', path: 'docs/player-templates.md' },
   { name: 'Assets', text: 'Use art you already own from Fab or itch.io, compressed for the web.', path: 'skills/game-assets/SKILL.md' },
-]
-
-export const flow = [
-  { skill: 'design-game', title: 'Design', text: 'The agent interviews you one question at a time: fantasy, core loop, camera, scope and performance budget.' },
-  { skill: 'setup-project', title: 'Set up', text: 'It creates the game from a player template and checks that it runs.' },
-  { skill: 'build-prototype', title: 'Prototype', text: 'It builds each risky mechanic on its own, playable from a developer menu.' },
-  { skill: 'combine-prototypes', title: 'Combine', text: 'It joins the mechanics that worked into one core loop.' },
-  { skill: 'optimize-game', title: 'Optimise', text: 'It measures the game and brings it within its budget.' },
-  { skill: 'ship-game', title: 'Ship', text: 'It deploys the game, only when you ask.' },
 ]
 
 export const legacyRoutes: Record<string, string> = {

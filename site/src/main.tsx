@@ -35,7 +35,7 @@ function useRoute() {
 }
 
 function NotFound() {
-  return <section className="page narrow"><p className="eyebrow">404</p><h1 className="page-title">Nothing here</h1><p className="lede">That page moved or never existed. <a href={base}>Back to the start</a>.</p></section>
+  return <section className="page narrow"><h1 className="page-title">Nothing here</h1><p className="lede">That page moved or never existed. <a href={base}>Back to the start</a>.</p></section>
 }
 
 function Page({ route }: { route: string }) {
@@ -67,11 +67,7 @@ function Nav({ route }: { route: string }) {
 }
 
 function Footer() {
-  return <footer className="footer">
-    <div><span className="brand-mark" aria-hidden="true" /> Blacksite</div>
-    <p>Skills and building blocks for game-dev agents. Source-available under the <a href={`${repo}/blob/main/LICENSE.md`}>Functional Source License</a>; each release becomes Apache-2.0 after two years.</p>
-    <p className="footer-links"><a href={link('skills')}>Skills</a><a href={link('roadmap')}>Roadmap</a><a href={`${repo}/blob/main/site/public/CREDITS.md`}>Credits</a><a href={repo}>GitHub</a></p>
-  </footer>
+  return <footer className="footer">Blacksite · <a href={`${repo}/blob/main/LICENSE.md`}>FSL</a>, Apache-2.0 after two years · <a href={`${repo}/blob/main/site/public/CREDITS.md`}>Credits</a> · <a href={repo}>GitHub</a></footer>
 }
 
 function App() {
