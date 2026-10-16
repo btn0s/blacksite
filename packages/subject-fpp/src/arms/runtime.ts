@@ -19,6 +19,7 @@ export const DEFAULT_ARMS_PRESENTATION = {
 
 export function createArmsRuntime(assets: ArmsAssets, state: ArmsState) {
   const mesh = createArmsMesh(assets.character.scene)
+  if (assets.dress && assets.dressed?.arms) assets.dress.arms(mesh.scene)
   const rig = createRigDefinition(mesh.scene, ALS_VIRTUAL_BONES)
   const applicator = createPoseApplicator(mesh.scene, rig)
   const virtualScratch = createVirtualBonePoseScratch(rig.boneCount)
@@ -59,7 +60,8 @@ export function createArmsRuntime(assets: ArmsAssets, state: ArmsState) {
     object.rotation.set(...(attachment?.rotation ?? [0, 0, 0]))
     object.scale.setScalar(attachment?.scale ?? 1)
     object.traverse(child => { child.frustumCulled = false })
-    return { weapon, object }
+    if (assets.dress && assets.dressed?.[weapon]) assets.dress.weapon(weapon, object)
+    return { weapon, object, flash: assets.dress?.flash(weapon, object) }
   })
   const previous = { fire: state.fireSequence, reload: state.reloadSequence, equip: state.equipSequence, weapon: state.weapon }
   let sequence = 0
@@ -106,7 +108,10 @@ export function createArmsRuntime(assets: ArmsAssets, state: ArmsState) {
       input.gaitSprintingAmount = state.sprinting ? 1 : 0
       if (state.weapon !== previous.weapon || state.equipSequence !== previous.equip) startAction('equip', state.weapon)
       else if (state.reloadSequence !== previous.reload) startAction('reload', state.weapon)
-      else if (state.fireSequence !== previous.fire) startAction('fire', state.weapon)
+      else if (state.fireSequence !== previous.fire) {
+        startAction('fire', state.weapon)
+        weapons.find(entry => entry.weapon === state.weapon)!.flash?.fire((sequence * 0.618034) % 1)
+      }
       else if (montage) {
         actionTime += delta
         if (actionTime >= clipMap.get(montage.clip)!.duration) { montage = null; action = null }
@@ -130,7 +135,7 @@ export function createArmsRuntime(assets: ArmsAssets, state: ArmsState) {
         for (let index = 0; index < pose.rotations.length; index++) poseDelta = Math.max(poseDelta, Math.abs(pose.rotations[index] - previousRotations[index]))
         previousRotations.set(pose.rotations)
       } else previousRotations = pose.rotations.slice()
-      for (const entry of weapons) entry.object.visible = entry.weapon === state.weapon
+      for (const entry of weapons) { entry.object.visible = entry.weapon === state.weapon; entry.flash?.update(delta) }
       aimAmount += ((state.aiming ? 1 : 0) - aimAmount) * (1 - Math.exp(-16 * delta))
       movementAmount += ((input.moving ? 1 : 0) - movementAmount) * (1 - Math.exp(-12 * delta))
       const bob = Math.sin(phase * Math.PI * 2) * movementAmount * (state.sprinting ? 0.012 : 0.006) * (1 - aimAmount * 0.8)
@@ -153,7 +158,10 @@ export function createArmsRuntime(assets: ArmsAssets, state: ArmsState) {
       state.debug.aimAmount = aimAmount
       state.debug.poseDelta = poseDelta
     },
-    dispose: mesh.dispose,
+    dispose() {
+      mesh.dispose()
+      for (const entry of weapons) entry.flash?.dispose()
+    },
   }
 }
 
