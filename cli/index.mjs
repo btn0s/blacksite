@@ -15,7 +15,7 @@ const command = argv.shift() || 'help'
 const flag = (name) => argv.includes(name)
 const value = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined }
 const nodeBin = process.execPath
-const skillNames = ['start', 'make-game', 'design-game', 'setup-project', 'build-prototype', 'combine-prototypes', 'optimize-game', 'ship-game', 'game-architecture', 'blacksite-kit', 'game-assets']
+const skillNames = ['start', 'make-game', 'design-game', 'setup-project', 'build-prototype', 'combine-prototypes', 'optimize-game', 'ship-game', 'game-architecture', 'blacksite-kit', 'game-assets', 'als']
 const legacySkills = ['stack', 'game-design', 'prototypes', 'orchestrate', 'kit', 'architecture']
 function run(executable, args, cwd = process.cwd()) {
   const result = spawnSync(executable, args, { cwd, stdio: 'inherit', shell: process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable) })
