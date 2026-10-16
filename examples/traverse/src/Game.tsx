@@ -108,6 +108,7 @@ export function Game() {
   const touch = useTouch()
   const shared = useMemo<Shared>(() => {
     const route = buildRoute()
+    const sound = new Soundscape(route)
     return {
       route,
       command: createCommand(route.spawnYaw),
@@ -116,8 +117,8 @@ export function Game() {
       scripted: { current: false },
       touchLook: { current: { x: 0, y: 0 } },
       touchMove: { current: { forward: 0, right: 0 } },
-      sound: new Soundscape(route),
-      footsteps: new AlsFootstepAudioRuntime({ AutoInstallUserGestureUnlock: true }),
+      sound,
+      footsteps: new AlsFootstepAudioRuntime({ AutoInstallUserGestureUnlock: true, OnPlay: (type, wave) => sound.footstep(type, wave) }),
       effects: { current: null },
       clock: { current: null },
     }
@@ -182,7 +183,7 @@ export function Game() {
     const gates = shared.route.gates
     if (event.kind === 'start') { shared.sound.play('start'); setCheckpoint(0); return }
     if (event.kind === 'split') {
-      shared.sound.play('checkpoint')
+      shared.sound.play('checkpoint', 1, event.index)
       effects?.flash(gates[event.index + 1]!.at)
       setCheckpoint(event.index + 1)
       setBanner({ title: gates[event.index + 1]!.name, detail: event.delta === null ? formatTime(event.time) : formatSplit(event.delta), tone: event.delta === null ? 'even' : event.delta < 0 ? 'ahead' : 'behind', key: now })

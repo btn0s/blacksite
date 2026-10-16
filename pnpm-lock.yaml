@@ -24,6 +24,9 @@ importers:
       '@blacksite/check':
         specifier: workspace:*
         version: link:packages/check
+      '@blacksite/example-traverse':
+        specifier: workspace:*
+        version: link:examples/traverse
       '@blacksite/input':
         specifier: workspace:*
         version: link:packages/input
@@ -187,6 +190,9 @@ importers:
 
   examples/traverse:
     dependencies:
+      '@blacksite/check':
+        specifier: workspace:*
+        version: link:../../packages/check
       '@blacksite/input':
         specifier: workspace:*
         version: link:../../packages/input

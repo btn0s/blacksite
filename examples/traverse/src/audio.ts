@@ -1,3 +1,4 @@
+import { createAudioLog } from '@blacksite/check'
 import type { Route, Zone } from './route'
 
 export type Cue = 'start' | 'checkpoint' | 'record' | 'finish' | 'land' | 'mantle' | 'roll' | 'ragdoll'
@@ -6,11 +7,11 @@ type Vec3 = [number, number, number]
 
 const reverbFor: Record<Zone['kind'] | 'open', number> = { open: 0.08, arch: 0.3, stairwell: 0.55 }
 
-function noiseBuffer(context: BaseAudioContext, seconds: number, shape: (t: number, white: number) => number) {
+function noiseBuffer(context: BaseAudioContext, seconds: number, shape: (t: number, white: number) => number, start = 1234567) {
   const length = Math.floor(context.sampleRate * seconds)
   const buffer = context.createBuffer(1, length, context.sampleRate)
   const data = buffer.getChannelData(0)
-  let seed = 1234567
+  let seed = start
   for (let i = 0; i < length; i++) {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff
     data[i] = shape(i / context.sampleRate, seed / 0x3fffffff - 1)
@@ -76,6 +77,8 @@ export class Soundscape {
   private readonly zones: Zone[]
   private readonly emitters: Route['emitters']
   private zone: Zone['kind'] | 'open' = 'open'
+  private readonly log = createAudioLog()
+  private readonly last = new Map<string, number>()
 
   constructor(route: Route) {
     this.zones = route.zones
@@ -123,6 +126,7 @@ export class Soundscape {
     windSource.connect(windFilter).connect(wind).connect(master)
     windSource.start()
     lfo.start()
+    this.log.start('wind', 'wind-bed')
     this.wind = wind
     this.windFilter = windFilter
 
@@ -139,6 +143,7 @@ export class Soundscape {
       oscillator.start()
     }
     droneFilter.connect(drone).connect(master)
+    this.log.start('drone', 'drone-bed')
 
     const buffers = { fire: crackle(context), drip: drip(context), tarp: tarp(context) }
     for (const emitter of this.emitters) this.emit(emitter.kind, emitter.at, buffers)
@@ -179,6 +184,7 @@ export class Soundscape {
       source.start(context.currentTime, Math.random() * buffers[kind].duration)
     }
     gain.connect(panner).connect(this.bus!)
+    this.log.start(kind, `${kind}-loop`)
   }
 
   listen(position: { x: number; y: number; z: number }, forward: { x: number; y: number; z: number }, height: number) {
@@ -210,17 +216,41 @@ export class Soundscape {
     this.windFilter!.Q.setTargetAtTime(0.7 + exposed * 1.6, now, 0.6)
   }
 
-  play(cue: Cue, strength = 1) {
+  private variant(cue: string, count: number) {
+    const previous = this.last.get(cue) ?? -1
+    let next = Math.floor(Math.random() * count)
+    if (next === previous) next = (next + 1) % count
+    this.last.set(cue, next)
+    return next
+  }
+
+  private voice(cue: string, sample: string, seconds: number) {
+    this.log.start(cue, sample)
+    setTimeout(() => this.log.end(), seconds * 1000)
+  }
+
+  footstep(type: string, wave: string) {
+    if (this.context?.state === 'running') this.voice(`footstep-${type}`, wave, 0.6)
+  }
+
+  sample() {
+    return this.log.sample()
+  }
+
+  play(cue: Cue, strength = 1, index = 0) {
     const context = this.context
     if (!context || context.state !== 'running') return
     const now = context.currentTime
     if (cue === 'start' || cue === 'checkpoint' || cue === 'finish' || cue === 'record') {
-      const notes = cue === 'start' ? [660, 880] : cue === 'checkpoint' ? [988, 1318] : cue === 'finish' ? [784, 659, 523] : [523, 659, 784, 1046]
-      notes.forEach((frequency, index) => {
-        const at = now + index * (cue === 'start' ? 0.12 : 0.09)
+      const base = cue === 'start' ? [660, 880] : cue === 'checkpoint' ? [988, 1318] : cue === 'finish' ? [784, 659, 523] : [523, 659, 784, 1046]
+      const step = cue === 'checkpoint' ? index : this.variant(cue, 2)
+      const transpose = Math.pow(2, (cue === 'checkpoint' ? step * 2 : step) / 12)
+      this.voice(cue, `${cue}-${step}`, 1)
+      base.forEach((frequency, note) => {
+        const at = now + note * (cue === 'start' ? 0.12 : 0.09)
         const oscillator = context.createOscillator()
         oscillator.type = 'triangle'
-        oscillator.frequency.value = frequency
+        oscillator.frequency.value = frequency * transpose
         const gain = context.createGain()
         gain.gain.setValueAtTime(0, at)
         gain.gain.linearRampToValueAtTime(0.13, at + 0.008)
@@ -231,12 +261,16 @@ export class Soundscape {
       })
       return
     }
+    const variant = this.variant(cue, 4)
+    const spread = 1 + (variant - 1.5) * 0.08
     const length = cue === 'roll' ? 0.5 : cue === 'mantle' ? 0.35 : 0.22
+    const decay = (cue === 'roll' ? 8 : cue === 'mantle' ? 12 : 26) * spread
+    this.voice(cue, `${cue}-${variant}`, length)
     const source = context.createBufferSource()
-    source.buffer = noiseBuffer(context, length, (t, white) => white * Math.exp(-t * (cue === 'roll' ? 8 : cue === 'mantle' ? 12 : 26)))
+    source.buffer = noiseBuffer(context, length, (t, white) => white * Math.exp(-t * decay), 1234567 + variant * 7919)
     const filter = context.createBiquadFilter()
     filter.type = cue === 'land' || cue === 'ragdoll' ? 'lowpass' : 'bandpass'
-    filter.frequency.value = cue === 'land' ? 260 : cue === 'ragdoll' ? 180 : cue === 'roll' ? 900 : 1500
+    filter.frequency.value = (cue === 'land' ? 260 : cue === 'ragdoll' ? 180 : cue === 'roll' ? 900 : 1500) * spread
     filter.Q.value = 0.8
     const gain = context.createGain()
     gain.gain.value = Math.min(1, strength) * (cue === 'ragdoll' ? 0.9 : cue === 'land' ? 0.7 : 0.25)
@@ -244,7 +278,7 @@ export class Soundscape {
     source.start(now)
     if (cue === 'land' || cue === 'ragdoll') {
       const thump = context.createOscillator()
-      thump.frequency.setValueAtTime(cue === 'ragdoll' ? 70 : 95, now)
+      thump.frequency.setValueAtTime((cue === 'ragdoll' ? 70 : 95) * spread, now)
       thump.frequency.exponentialRampToValueAtTime(40, now + 0.18)
       const body = context.createGain()
       body.gain.setValueAtTime(Math.min(1, strength) * 0.35, now)

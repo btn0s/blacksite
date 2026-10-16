@@ -12,6 +12,7 @@ export type Bookmark = { name: string; position: Vec3; target: Vec3; fov: number
 export type Light = { kind: 'tube' | 'sodium' | 'fire'; at: Vec3; color: string; intensity: number; distance: number }
 export type Emitter = { kind: 'buzz' | 'fire' | 'drip' | 'tarp'; at: Vec3 }
 export type Zone = { kind: 'stairwell' | 'arch'; min: Vec3; max: Vec3 }
+export type Waypoint = { at: Vec3; action?: 'mantle' | 'jump' }
 
 const cast: Mat = { name: 'cast' }
 const panel: Mat = { name: 'panel' }
@@ -91,11 +92,11 @@ export function buildRoute() {
   for (let index = 0; index < 6; index++) box([3, 2, 0.12], corrugated, [12.6 + index * 3.05, 1, -9.6], [0, 0, (rand() - 0.5) * 0.06], true)
   for (let index = 0; index < 6; index++) box([3, 2, 0.12], { name: 'corrugated', color: '#6d6a58' }, [12.6 + index * 3.05, 1, 9.6], [0, 0, (rand() - 0.5) * 0.06], true)
 
-  ledge('kerb wall', 0.5, [0.45, 19], cast, [15, 0], 0)
+  ledge('kerb wall', 0.5, [0.7, 19], cast, [15, 0], 0)
   ledge('planter', 0.75, [2.6, 19], stained, [20.5, 0], 0)
   for (let index = 0; index < 7; index++) deadTree(level, [19.6 + (index % 2) * 1.6, 0.75, -8 + index * 2.6], 3.2 + rand() * 1.6, rand() * 6, false)
-  ledge('brick wall', 1, [0.4, 19], brick, [26, 0], 0)
-  box([0.46, 0.08, 19.1], cast, [26, 1.04, 0], undefined, false, false)
+  ledge('brick wall', 1, [0.8, 19], brick, [26, 0], 0)
+  box([0.86, 0.08, 19.1], cast, [26, 1.04, 0], undefined, false, false)
 
   const garageRoof = 2.75
   const garages: number[] = []
@@ -142,10 +143,14 @@ export function buildRoute() {
 
   const tower = { x0: 92, x1: 100, z0: -6.4, z1: 0 }
   const wall = 0.3
-  box([wall, 7.4, tower.z1 - tower.z0], panel, [tower.x0 + wall / 2, 3.7 + 0, (tower.z0 + tower.z1) / 2 + 0], undefined, true)
   zones.push({ kind: 'stairwell', min: [tower.x0, 0, tower.z0], max: [tower.x1, 7.4, tower.z1] })
   const doorZ: [number, number] = [-6.1, -4.5]
-  box([wall, 7.4 - 2.3, doorZ[1] - doorZ[0]], panel, [tower.x0 - 0.01, 2.3 + (7.4 - 2.3) / 2, (doorZ[0] + doorZ[1]) / 2], undefined, false, false)
+  box([wall, 7.4, tower.z1 - doorZ[1]], panel, [tower.x0 + wall / 2, 3.7, (doorZ[1] + tower.z1) / 2])
+  box([wall, 7.4, doorZ[0] - tower.z0 + 0.3], panel, [tower.x0 + wall / 2, 3.7, (tower.z0 - 0.3 + doorZ[0]) / 2])
+  box([wall, 7.4 - 2.3, doorZ[1] - doorZ[0]], panel, [tower.x0 + wall / 2, 2.3 + (7.4 - 2.3) / 2, (doorZ[0] + doorZ[1]) / 2])
+  box([0.06, 2.3, 0.12], { name: 'metal', color: '#2f302a' }, [tower.x0 - 0.02, 1.15, doorZ[1] + 0.06], undefined, false, false)
+  box([0.06, 2.3, 0.12], { name: 'metal', color: '#2f302a' }, [tower.x0 - 0.02, 1.15, doorZ[0] - 0.06], undefined, false, false)
+  box([0.06, 2.0, 0.85], { name: 'rust', color: '#4a4f47' }, [tower.x0 - 0.5, 1.0, doorZ[1] + 0.4], [0, -1.1, 0], true)
   box([tower.x1 - tower.x0, 7.4, wall], panel, [(tower.x0 + tower.x1) / 2, 3.7, tower.z0 + wall / 2 - 0.3])
   box([tower.x1 - tower.x0, 7.4, wall], panel, [(tower.x0 + tower.x1) / 2, 3.7, tower.z1 - wall / 2])
   box([tower.x1 - tower.x0, 0.25, tower.z1 - tower.z0], cast, [(tower.x0 + tower.x1) / 2, 7.5, (tower.z0 + tower.z1) / 2])
@@ -264,8 +269,25 @@ export function buildRoute() {
     { name: 'hero', position: [36.6, 2.2, 1.6], target: [39.6, 1.3, -1.4], fov: 50, stand: [39.6, 0, -0.2], yaw: -Math.PI / 2 },
   ]
 
+  const flights = stairs.slice(0, 3)
+  const line: Waypoint[] = [
+    { at: [9.5, 0, 0] }, { at: [15.4, 0.5, 0], action: 'mantle' }, { at: [17.2, 0, 0] },
+    { at: [20.2, 0.75, 0.6], action: 'mantle' }, { at: [23, 0, 0.6] },
+    { at: [26.2, 1, 0.6], action: 'mantle' }, { at: [28.5, 0, 0.6] },
+    { at: [38.6, 0, 0.5] }, { at: [40, 0, 0.1] }, { at: [40, 1.25, -1.6], action: 'mantle' }, { at: [40, garageRoof, -3.8], action: 'mantle' },
+    { at: [42.6, garageRoof, -5.6] }, { at: [43.45, garageRoof, -5.6], action: 'jump' }, { at: [46.2, garageRoof, -5.6] },
+    { at: [60.9, garageRoof, -5.6] }, { at: [64, 0, -4.6] }, { at: [67.4, 0, -4] }, { at: [74.6, 2.05, -4] }, { at: [80.8, 0, -4] },
+    { at: [90.6, 0, -5.3] }, { at: [93.2, 0, -5.3] }, { at: [flights[0]!.from[0] - 0.3, 0, flights[0]!.from[2]] },
+    ...flights.flatMap((flight, index) => [{ at: flight.to }, ...(index < 2 ? [{ at: [index === 0 ? inner.x1 - 0.7 : inner.x0 + 1.4, flight.to[1], (inner.z0 + inner.z1) / 2] as Vec3 }] : [])]),
+    { at: [inner.x1 - 0.5, c[1], -3.9] }, { at: [101.2, roof, -3.6] },
+    { at: [104.5, roof, -3] }, { at: [113, upper, -3], action: 'mantle' }, { at: [117.2, upper + plant, -3], action: 'mantle' },
+    { at: [119.5, upper + plant, -3] }, { at: [121.6, upper, -3] }, { at: [slabEnd[0] + 0.6, 0, -3] }, { at: [slabEnd[0] + 3, 0, -3] },
+    { at: [dockStart[0] - 0.4, 0, -3] }, { at: [dockTop[0] + 0.5, dockTop[1], -3] }, { at: [dockTop[0] + 6.6, dockTop[1], -3] },
+    { at: [dockTop[0] + 10, 0, -2] }, { at: [finishX - 3, 0, -1] }, { at: [finishX + 5, 0, -1] },
+  ]
+
   const group = level.build()
-  return { group, colliders: level.colliders, spawn: [2.5, 0, 0] as Vec3, spawnYaw: 0, gates, ledges, ramps, stairs, lights, emitters, zones, bookmarks }
+  return { group, colliders: level.colliders, spawn: [2.5, 0, 0] as Vec3, spawnYaw: 0, gates, ledges, ramps, stairs, lights, emitters, zones, bookmarks, line }
 }
 
 export type Route = ReturnType<typeof buildRoute>

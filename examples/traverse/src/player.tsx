@@ -9,7 +9,7 @@ import type { WorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import type { AlsFootstepAudioRuntime } from 'als-ue5-r3f/engine/alsAudioBridge'
 import { TRAVERSE_INPUT, codeInput, look, stickCurve, type Command } from './controls'
-import { input as tuning } from './model'
+import { camera as cameraModel, input as tuning } from './model'
 
 export type Spawn = { revision: number; position: [number, number, number]; yaw: number }
 
@@ -108,7 +108,7 @@ export function Player({ command, pose, time, audio, spawn, scripted, touchLook,
       onSizeChange={noop} onOverlayModeBridgeChange={noop} toggleRotationModeKey={null}
       showDebugControls={false} exposeDebugGlobals={false} gamepadEnabled={false} />
     <AlsCamera poseSample={pose} worldTime={time} footstepAudioRuntime={audio} toggleViewModeKey={null}
-      controlRotationSource={rotation} rightShoulder={shoulder} aspectRatioAxisConstraint="MajorAxisFOV" gamepadEnabled={false} />
+      controlRotationSource={rotation} rightShoulder={shoulder} shoulderOffset={cameraModel.shoulderOffset} aspectRatioAxisConstraint="MajorAxisFOV" gamepadEnabled={false} />
   </>
 }
 

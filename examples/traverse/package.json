@@ -16,6 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@blacksite/check": "workspace:*",
     "@blacksite/input": "workspace:*",
     "@blacksite/look": "workspace:*",
     "@blacksite/ui": "workspace:*",

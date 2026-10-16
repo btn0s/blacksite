@@ -3,9 +3,10 @@ import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useRapier } from '@react-three/rapier'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
+import { applyCameraPose, exposeCheck, type Bookmark, type CameraPose } from '@blacksite/check'
 import type { Shared } from './Game'
 import * as model from './model'
-import { mean, nearPlaneRadius, percentile, plantedSpeeds, type FootSample } from './model'
+import { contacts, nearPlaneRadius, percentile, type FootSample } from './model'
 
 type Vec3 = [number, number, number]
 
@@ -24,16 +25,24 @@ export type CheckName = (typeof checkNames)[number]
 
 const toDegrees = (radians: number) => radians * 180 / Math.PI
 
+const feelLane = { start: [-10, 0, -22] as Vec3, yaw: Math.PI / 2 }
+
+const perfTour: { start: Vec3; yaw: number; path: Vec3[]; sprint: boolean }[] = [
+  { start: [2.5, 0, 0], yaw: 0, path: [[13.6, 0, 0]], sprint: true },
+  { start: [-10, 0, -22], yaw: Math.PI / 2, path: [[-10, 0, 8]], sprint: true },
+]
+
 export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
   const { world, rapier } = useRapier()
-  const { camera, gl } = useThree()
+  const { camera, gl, scene } = useThree()
   const clock = useRef(0)
   const waiters = useRef<Waiter[]>([])
   const recording = useRef<Recording | null>(null)
+  const last = useRef<Recording | null>(null)
   const ankle = useRef<number | null>(null)
   const ankleSamples = useRef<number[]>([])
-  const view = useRef<{ position: THREE.Vector3; target: THREE.Vector3; fov: number } | null>(null)
-  const restoreFov = useRef<number | null>(null)
+  const override = useRef<CameraPose | null>(null)
+  const exposed = useRef<ReturnType<typeof exposeCheck> | null>(null)
   const busy = useRef(false)
   const scratch = useMemo(() => ({ center: new THREE.Vector3(), forward: new THREE.Vector3(), inverse: new THREE.Quaternion(), up: new THREE.Vector3(0, 1, 0) }), [])
 
@@ -42,6 +51,11 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
   const groundBelow = (x: number, y: number, z: number) => {
     const hit = world.castRay(new rapier.Ray({ x, y: y + 0.6, z }, { x: 0, y: -1, z: 0 }), 3, true, undefined, undefined, undefined, undefined, fixedOnly as never)
     return hit ? y + 0.6 - hit.timeOfImpact : -Infinity
+  }
+
+  const faceDistance = (x: number, y: number, z: number, yaw: number) => {
+    const hit = world.castRay(new rapier.Ray({ x, y, z }, { x: Math.cos(yaw), y: 0, z: Math.sin(yaw) }), 4, true, undefined, undefined, undefined, undefined, fixedOnly as never)
+    return hit ? hit.timeOfImpact : Infinity
   }
 
   const cameraClips = () => {
@@ -87,15 +101,12 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
     }
   }, ALS_FRAME_PRIORITY.Camera + 0.2)
 
-  useFrame(() => {
-    const bookmark = view.current
-    if (!bookmark) return
-    const perspective = camera as THREE.PerspectiveCamera
-    if (restoreFov.current === null) restoreFov.current = perspective.fov
-    perspective.position.copy(bookmark.position)
-    perspective.lookAt(bookmark.target)
-    if (perspective.fov !== bookmark.fov) { perspective.fov = bookmark.fov; perspective.updateProjectionMatrix() }
-  }, ALS_FRAME_PRIORITY.Camera + 0.3)
+  useFrame(state => {
+    const check = exposed.current
+    if (check && !check.probe.ready && shared.pose.current.ready) check.ready()
+    const pose = override.current
+    if (pose) applyCameraPose(camera as Parameters<typeof applyCameraPose>[0], pose, state.size)
+  }, ALS_FRAME_PRIORITY.Camera + 0.05)
 
   useEffect(() => {
     const wait = (seconds: number) => new Promise<void>(resolve => waiters.current.push({ at: clock.current + seconds, resolve }))
@@ -145,10 +156,10 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
     }
 
     const start = () => { recording.current = { left: [], right: [], clipFrames: 0, frames: 0, cameraLocal: [], times: [] } }
-    const stop = () => { const result = recording.current!; recording.current = null; return result }
+    const stop = () => { const result = recording.current!; recording.current = null; last.current = result; return result }
 
     const slide = (record: Recording) => {
-      const speeds = [...plantedSpeeds(record.left), ...plantedSpeeds(record.right)]
+      const planted = [...contacts(record.left), ...contacts(record.right)]
       const gaps: number[] = []
       for (const list of [record.left, record.right]) {
         for (let index = 1; index < list.length; index++) {
@@ -160,7 +171,14 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
           if (height < 0.12 && Math.hypot(b.x - a.x, b.z - a.z) / dt < 0.3) gaps.push(Math.abs(height))
         }
       }
-      return { planted: speeds.length, slideP95: percentile(speeds, 0.95), slideMean: mean(speeds), gapP95: percentile(gaps, 0.95), clipFrames: record.clipFrames }
+      return {
+        contacts: planted.length,
+        driftP95: percentile(planted.map(contact => contact.drift), 0.95),
+        excursionP95: percentile(planted.map(contact => contact.excursion), 0.95),
+        jitterMm: percentile(planted.map(contact => contact.jitter), 0.5) * 1000,
+        gapP95: percentile(gaps, 0.95),
+        clipFrames: record.clipFrames,
+      }
     }
 
     const result = (name: string, metrics: Record<string, number>, limits: Record<string, number>, pass: boolean, notes: string[] = []): CheckResult => ({ name, pass, metrics, limits, notes })
@@ -175,8 +193,8 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         await follow([[13.5, 0, 0]], { sprint: true })
         await wait(0.8)
         const m = slide(stop())
-        const limits = { slideP95: model.feet.flatSlideP95, slideMean: model.feet.flatSlideMean, clipFrames: model.camera.clipFrames }
-        return result('feet-flat', m, limits, m.planted > 40 && m.slideP95 <= limits.slideP95 && m.slideMean <= limits.slideMean && m.clipFrames <= limits.clipFrames, [`ankle ${(ankle.current ?? 0).toFixed(3)} m`])
+        const limits = { driftP95: model.feet.flatDriftP95, excursionP95: model.feet.excursionP95, clipFrames: model.camera.clipFrames }
+        return result('feet-flat', m, limits, m.contacts > 12 && m.driftP95 <= limits.driftP95 && m.excursionP95 <= limits.excursionP95 && m.clipFrames <= limits.clipFrames, [`ankle ${(ankle.current ?? 0).toFixed(3)} m`])
       },
       async stairs() {
         const flights = route.stairs
@@ -189,8 +207,8 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         const reached = await follow(path, { reach: 0.45, timeout: 10 })
         await wait(0.6)
         const m = slide(stop())
-        const limits = { slideP95: model.feet.unevenSlideP95, gapP95: model.feet.plantedGap, clipFrames: model.camera.clipFrames }
-        return result('stairs', { ...m, reached: reached ? 1 : 0 }, limits, reached && m.slideP95 <= limits.slideP95 && m.gapP95 <= limits.gapP95 && m.clipFrames <= limits.clipFrames)
+        const limits = { driftP95: model.feet.unevenDriftP95, excursionP95: model.feet.excursionP95, gapP95: model.feet.plantedGap, clipFrames: model.camera.clipFrames }
+        return result('stairs', { ...m, reached: reached ? 1 : 0 }, limits, reached && m.contacts > 8 && m.driftP95 <= limits.driftP95 && m.excursionP95 <= limits.excursionP95 && m.gapP95 <= limits.gapP95 && m.clipFrames <= limits.clipFrames)
       },
       async slope() {
         const metrics: Record<string, number> = {}
@@ -205,14 +223,15 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
           await wait(0.4)
           const m = slide(stop())
           const key = ramp.label.replace(/\W+/g, '-')
-          metrics[`${key}.slideP95`] = m.slideP95
+          metrics[`${key}.driftP95`] = m.driftP95
+          metrics[`${key}.excursionP95`] = m.excursionP95
           metrics[`${key}.gapP95`] = m.gapP95
           metrics[`${key}.degrees`] = ramp.degrees
-          const ok = reached && m.slideP95 <= model.feet.unevenSlideP95 && m.gapP95 <= model.feet.plantedGap
-          if (!ok) notes.push(`${ramp.label} ${up ? 'up' : 'down'} ${ramp.degrees}° reached ${reached} slide ${m.slideP95.toFixed(3)} gap ${m.gapP95.toFixed(3)}`)
+          const ok = reached && m.contacts > 4 && m.driftP95 <= model.feet.unevenDriftP95 && m.excursionP95 <= model.feet.excursionP95 && m.gapP95 <= model.feet.plantedGap
+          if (!ok) notes.push(`${ramp.label} ${up ? 'up' : 'down'} ${ramp.degrees}° reached ${reached} contacts ${m.contacts} drift ${m.driftP95.toFixed(3)} excursion ${m.excursionP95.toFixed(3)} gap ${m.gapP95.toFixed(3)}`)
           pass &&= ok
         }
-        return result('slope', metrics, { slideP95: model.feet.unevenSlideP95, gapP95: model.feet.plantedGap }, pass, notes)
+        return result('slope', metrics, { driftP95: model.feet.unevenDriftP95, excursionP95: model.feet.excursionP95, gapP95: model.feet.plantedGap }, pass, notes)
       },
       async 'mantle-ladder'() {
         const metrics: Record<string, number> = {}
@@ -224,26 +243,29 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
           const began = clock.current
           let mantled = -1
           let jumps = 0
-          command.forward = 1
+          let pressedAt = -1
           const reached = await until(() => {
             const c = character()
             command.yaw = toDegrees(ledge.yaw)
             command.forward = 1
-            if (c?.locomotionAction === 'Mantling' && mantled < 0) mantled = clock.current - began
-            if (c?.locomotionMode === 'Grounded' && c.locomotionAction === null && clock.current - began > 0.35 && jumps < 12 && Math.round((clock.current - began) / 0.25) > jumps) { jumps++; command.jumpSequence++ }
-            return position().y >= top - 0.12 && c?.locomotionAction === null && c.locomotionMode === 'Grounded'
-          }, 6)
+            if (c?.locomotionAction === 'Mantling' && mantled < 0) mantled = clock.current
+            const p = position()
+            const face = faceDistance(p.x, p.y + 0.3, p.z, ledge.yaw)
+            if (c?.locomotionMode === 'Grounded' && c.locomotionAction === null && face < 0.7 && clock.current - pressedAt > 0.3 && jumps < 6) { jumps++; pressedAt = clock.current; command.jumpSequence++ }
+            return p.y >= top - 0.12 && c?.locomotionAction === null && c.locomotionMode === 'Grounded'
+          }, 7)
           idle()
-          const elapsed = clock.current - began
           const key = `${ledge.label} ${ledge.height.toFixed(2)}`
-          metrics[`${key}.seconds`] = reached ? elapsed : -1
-          metrics[`${key}.mantled`] = mantled >= 0 ? 1 : 0
-          if (reached && mantled >= 0) passed++
-          else notes.push(`${key}: ${reached ? 'reached without mantle' : 'did not reach the top'} after ${jumps} jump presses`)
+          const climb = mantled >= 0 ? clock.current - mantled : -1
+          metrics[`${key}.seconds`] = reached ? clock.current - began : -1
+          metrics[`${key}.mantleSeconds`] = climb
+          const ok = reached && mantled >= 0 && climb <= model.mantle.reachTopWithin
+          if (ok) passed++
+          else notes.push(`${key}: ${!reached ? 'did not reach the top' : mantled < 0 ? 'reached without a mantle' : `mantle took ${climb.toFixed(2)} s`} after ${jumps} jump presses`)
         }
         const rate = passed / route.ledges.length
         metrics.successRate = rate
-        return result('mantle-ladder', metrics, { successRate: model.mantle.successRate, minLedge: model.mantle.minLedge, maxLedge: 2 }, rate >= model.mantle.successRate, notes)
+        return result('mantle-ladder', metrics, { successRate: model.mantle.successRate, reachTopWithin: model.mantle.reachTopWithin }, rate >= model.mantle.successRate, notes)
       },
       async 'camera-wall'() {
         let clips = 0
@@ -279,6 +301,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         await wait(0.8)
         const steps: number[] = []
         const settle: number[] = []
+        const travel: number[] = []
         for (let swap = 0; swap < 2; swap++) {
           start()
           await wait(0.1)
@@ -290,26 +313,51 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
           const from = points[0]!
           const to = points[points.length - 1]!
           const distance = from.distanceTo(to)
+          travel.push(distance)
           let settled = -1
           for (let index = 1; index < points.length; index++) {
             steps.push(points[index]!.distanceTo(points[index - 1]!))
-            if (settled < 0 && points[index]!.distanceTo(to) < distance * 0.05) settled = record.times[index]! - swapped
+            if (settled < 0 && points[index]!.distanceTo(to) < distance * 0.1) settled = record.times[index]! - swapped
           }
           settle.push(settled)
         }
         const maxStep = Math.max(...steps)
         const seconds = Math.max(...settle)
-        return result('shoulder', { maxStep, seconds }, { maxStep: model.camera.shoulderMaxStep, seconds: model.camera.shoulderSwapSeconds }, maxStep <= model.camera.shoulderMaxStep && seconds > 0 && seconds <= model.camera.shoulderSwapSeconds + 0.25)
+        return result('shoulder', { maxStep, seconds, travel: Math.max(...travel) }, { maxStep: model.camera.shoulderMaxStep, seconds: model.camera.shoulderSwapSeconds }, maxStep <= model.camera.shoulderMaxStep && seconds > 0 && seconds <= model.camera.shoulderSwapSeconds + 0.1)
       },
       async route() {
         await place(route.spawn, route.spawnYaw)
         api.restart()
-        await wait(0.6)
+        await wait(0.4)
         start()
         const began = clock.current
-        const reached = await until(() => shared.race.current.state === 'finished', 0.1)
+        const notes: string[] = []
+        let pressedAt = -1
+        command.sprint = true
+        for (let index = 0; index < route.line.length; index++) {
+          const point = route.line[index]!
+          const ok = await until(() => {
+            const c = character()
+            const p = position()
+            const yaw = Math.atan2(point.at[2] - p.z, point.at[0] - p.x)
+            command.yaw = toDegrees(yaw)
+            command.forward = 1
+            command.sprint = true
+            const free = c?.locomotionMode === 'Grounded' && c.locomotionAction === null && clock.current - pressedAt > 0.35
+            const flat = Math.hypot(point.at[0] - p.x, point.at[2] - p.z)
+            if (free && point.action === 'mantle' && faceDistance(p.x, p.y + 0.3, p.z, yaw) < 0.7) { pressedAt = clock.current; command.jumpSequence++ }
+            if (free && point.action === 'jump' && flat < 0.45) { pressedAt = clock.current; command.jumpSequence++ }
+            return flat < (point.action === 'jump' ? 0.3 : 0.6) && Math.abs(p.y - point.at[1]) < 0.6
+          }, 9)
+          if (!ok) { notes.push(`stuck before waypoint ${index} [${point.at.map(v => v.toFixed(1)).join(', ')}] at [${position().toArray().map(v => v.toFixed(1)).join(', ')}]`); break }
+        }
+        await until(() => shared.race.current.state === 'finished', 3)
+        idle()
         const m = slide(stop())
-        return result('route', { finished: reached ? 1 : 0, seconds: clock.current - began, clipFrames: m.clipFrames }, { par: model.route.parSeconds }, reached, ['scripted route not yet authored'])
+        const race = shared.race.current
+        const finished = race.state === 'finished'
+        const time = finished ? race.splits[race.splits.length - 1] ?? -1 : -1
+        return result('route', { finished: finished ? 1 : 0, time, wall: clock.current - began, gates: race.next, clipFrames: m.clipFrames, driftP95: m.driftP95 }, { par: model.route.parSeconds, gold: model.route.goldSeconds, clipFrames: model.camera.clipFrames }, finished && time <= model.route.parSeconds && m.clipFrames <= model.camera.clipFrames, notes)
       },
     }
 
@@ -327,6 +375,46 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
       }
     }
 
+    const setCamera = (pose: CameraPose | null) => {
+      if (!pose && override.current) (camera as THREE.PerspectiveCamera).clearViewOffset()
+      override.current = pose
+    }
+
+    const scripted = async (body: () => Promise<void>) => {
+      shared.scripted.current = true
+      try { await body() } finally { idle(); shared.scripted.current = false }
+    }
+
+    const bookmarks: Bookmark[] = [
+      ...route.bookmarks.map(bookmark => ({ name: bookmark.name, position: bookmark.position, target: bookmark.target, fov: bookmark.fov })),
+      { name: 'overview', position: [60, 34, 42], target: [82, 0, -4], fov: 50 },
+    ]
+
+    const check = exposeCheck({
+      bookmarks,
+      camera: setCamera,
+      player() {
+        const body = shared.pose.current.ownerRigidBody
+        if (!body) return null
+        const p = body.translation()
+        const v = body.linvel()
+        return { position: [p.x, p.y, p.z], velocity: [v.x, v.y, v.z], grounded: shared.pose.current.character?.locomotionMode === 'Grounded' }
+      },
+      audio: () => shared.sound.sample(),
+      scripts: {
+        feelStart: () => place(feelLane.start, feelLane.yaw),
+        perf: () => scripted(async () => {
+          for (const leg of perfTour) {
+            await place(leg.start, leg.yaw)
+            await follow(leg.path, { sprint: leg.sprint, timeout: 6, reach: 0.8 })
+          }
+        }),
+      },
+      input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
+      model: { feel: model.feel, budget: model.budget },
+    })
+    exposed.current = check
+
     const traverse = {
       version: 1,
       model,
@@ -340,17 +428,13 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         return { ready: sample.ready, position: sample.ground.toArray(), mode: c?.locomotionMode ?? null, action: c?.locomotionAction ?? null, speed: c?.locomotionState.speed ?? 0, race: race.state, next: race.next, camera: camera.position.toArray(), ankle: ankle.current }
       },
       async view(name: string | null) {
-        if (name === null) {
-          view.current = null
-          if (restoreFov.current !== null) { (camera as THREE.PerspectiveCamera).fov = restoreFov.current; (camera as THREE.PerspectiveCamera).updateProjectionMatrix(); restoreFov.current = null }
-          return true
-        }
+        if (name === null) { setCamera(null); return true }
         const bookmark = route.bookmarks.find(entry => entry.name === name)
         if (!bookmark) throw new Error(`unknown bookmark ${name}`)
         shared.scripted.current = true
         await place(bookmark.stand, bookmark.yaw)
         shared.scripted.current = false
-        view.current = { position: new THREE.Vector3(...bookmark.position), target: new THREE.Vector3(...bookmark.target), fov: bookmark.fov }
+        setCamera({ position: bookmark.position, target: bookmark.target, fov: bookmark.fov })
         await wait(0.6)
         return true
       },
@@ -363,10 +447,16 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
       respawn: (position: Vec3, yaw = 0) => api.respawn(position, yaw),
       restart: () => api.restart(),
       gl: () => ({ calls: gl.info.render.calls, triangles: gl.info.render.triangles }),
+      recording: () => last.current && { left: last.current.left, right: last.current.right },
+      fog(density: number) { if (scene.fog instanceof THREE.FogExp2) scene.fog.density = density },
     }
     Object.assign(window, { __traverse: traverse })
-    return () => { if ((window as { __traverse?: unknown }).__traverse === traverse) delete (window as { __traverse?: unknown }).__traverse }
-  }, [api, camera, gl, rapier, shared, world])
+    return () => {
+      check.dispose()
+      exposed.current = null
+      if ((window as { __traverse?: unknown }).__traverse === traverse) delete (window as { __traverse?: unknown }).__traverse
+    }
+  }, [api, camera, gl, rapier, scene, shared, world])
 
   return null
 }
