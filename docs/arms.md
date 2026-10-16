@@ -13,7 +13,7 @@ Each generated game has `public/assets/arms.json`, initially `{ "version": 1 }`.
 ```json
 {
   "version": 1,
-  "fov": 70,
+  "fov": 56,
   "weapons": {
     "rifle": {
       "meshUrl": "/assets/owned/infima/rifle.glb",
@@ -51,9 +51,9 @@ The default ALS rifle calibration is:
 
 ```json
 {
-  "position": [0.05, -1.47, -0.05],
+  "position": [0.2, -1.6, -0.36],
   "sight": [0, 0.15937, 0.03789],
-  "aimOffset": [0, 0, -0.08]
+  "aimOffset": [0, 0, 0.21]
 }
 ```
 
@@ -61,11 +61,15 @@ The viewmodel keeps all 68 physical bones while rendering only forearms and hand
 
 ## Dress
 
-The default mannequin and ALS weapons are dressed at load with CC0 materials from `packages/subject-fpp/assets/materials`: an olive sleeve, leather gloves, gunmetal, worn olive paint, polymer and brass. Rifle and pistol triangles are regrouped by skinning bone and position into those finishes. Each weapon gets a muzzle flash and light on its `muzzle` bone, driven by `fireSequence`. A manifest `characterUrl` or weapon `meshUrl` keeps that asset's own materials.
+The default mannequin and ALS weapons are dressed at load with CC0 materials from `packages/subject-fpp/assets/materials`: an olive sleeve, leather gloves, gunmetal, worn olive paint, polymer and brass. Rifle and pistol triangles are regrouped by skinning bone and position into those finishes. Each forearm carries a rigid sleeve that runs past the elbow and off screen, so the cropped arm never ends in view. Each weapon gets a muzzle flash and light on its `muzzle` bone, driven by `fireSequence`. A manifest `characterUrl` or weapon `meshUrl` keeps that asset's own materials.
+
+## Framing
+
+The viewmodel camera has its own 56° vertical FOV (manifest `fov`), independent of the world camera. At rest the rifle sits lower right and spans roughly a quarter to a third of a landscape screen; aiming centres the measured sight. Sprinting lowers and cants the weapon procedurally instead of playing the ALS sprint arms pose. Below a 4:3 aspect the viewmodel widens its vertical FOV to keep 4:3 horizontal coverage and shifts its hip framing inward, returning to centre as aim blends in. `portraitFov(fov, aspect, minimum)` exposes the same widening for the world camera.
 
 ## Composition
 
-By default the viewmodel renders the arms itself after the world. With a post stack such as `@blacksite/look`, pass `render="external"` and `onPresentation`, then add a `RenderPass(presentation.scene, presentation.camera)` to the composer with `clearPass.color = false`, `clearPass.depth = true` and `ignoreBackground = true`. Inserted before bloom and the grade, the arms share the world's grade and environment light. `portraitFov(fov, aspect)` widens vertical FOV below a 0.8 aspect so portrait phones keep the weapon in frame; the viewmodel applies it to its own camera.
+By default the viewmodel renders the arms itself after the world. With `@blacksite/look`, pass `render="external"` and `onPresentation`, then hand the presentation to Look: `<Look overlay={presentation} />` in React Three Fiber, or `look.addOverlay(presentation.scene, presentation.camera)` in plain three. Look draws it after AO and before bloom, the grade and grain, so the arms match the world. The viewmodel keeps its lights in the presentation scene and sets its own camera aspect.
 
 `StandaloneSubject` also accepts `touch` (`createStandaloneTouch()`: move, look deltas and fire), `recoil` (`createStandaloneRecoil()`: add Armory shot recoil; part climbs, part kicks back) and `sensitivity` (scale look while aiming).
 

@@ -24,3 +24,4 @@
   .range-hud .hud-status { top: calc(40px + env(safe-area-inset-top)); bottom: auto; }
   .range-pips { top: calc(86px + env(safe-area-inset-top)); bottom: auto; }
 }
+.range-hud .hud-status span { white-space: nowrap; }

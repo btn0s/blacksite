@@ -38,16 +38,17 @@ function LoadedArmsViewmodel({ state, visible = true, manifestUrl, render = 'com
   const renderer = useThree(state => state.gl)
   const assets = use(preloadArmsAssets(manifestUrl, renderer))
   const runtime = useMemo(() => createArmsRuntime(assets, state), [assets, state])
+  const fov = assets.manifest.fov ?? 56
   const presentation = useMemo(() => {
     const scene = new Scene()
-    const camera = new PerspectiveCamera(assets.manifest.fov ?? 70, 1, 0.005, 10)
+    const camera = new PerspectiveCamera(fov, 1, 0.005, 10)
     camera.add(runtime.root)
     scene.add(camera, new HemisphereLight('#dfe6ea', '#4a4638', 1.9))
     const light = new DirectionalLight('#fff3e2', 2.2)
     light.position.set(-1, 3, 2)
     camera.add(light, light.target)
     return { scene, camera }
-  }, [assets, runtime])
+  }, [fov, runtime])
   useEffect(() => () => runtime.dispose(), [runtime])
   useEffect(() => {
     onPresentation?.(presentation)
@@ -60,8 +61,10 @@ function LoadedArmsViewmodel({ state, visible = true, manifestUrl, render = 'com
     camera.getWorldPosition(view.position)
     camera.getWorldQuaternion(view.quaternion)
     const aspect = size.width / size.height
-    const fov = portraitFov(assets.manifest.fov ?? 70, aspect, NARROWEST_ASPECT)
-    if (view.aspect !== aspect || view.fov !== fov) { view.aspect = aspect; view.fov = fov; view.updateProjectionMatrix() }
+    const vertical = portraitFov(fov, aspect, NARROWEST_ASPECT)
+    const narrow = Math.min(1, Math.max(0, (NARROWEST_ASPECT - aspect) / (NARROWEST_ASPECT - 0.5)))
+    const shift = Math.round(narrow * (1 - state.debug.aimAmount) * 0.16 * view.getFilmWidth() * 1000) / 1000
+    if (view.aspect !== aspect || view.fov !== vertical || view.filmOffset !== shift) { view.aspect = aspect; view.fov = vertical; view.filmOffset = shift; view.updateProjectionMatrix() }
     view.updateWorldMatrix(true, true)
     presentation.scene.environment = scene.environment
     presentation.scene.visible = visible
