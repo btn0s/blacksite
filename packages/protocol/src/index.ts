@@ -10,8 +10,12 @@ export type PawnLocomotion = {
   inputYaw: number
   targetYaw: number
   relativeAcceleration: { x: number; y: number }
+  action?: 'none' | 'roll' | 'mantle' | 'getUp' | 'ragdoll'
+  actionSeq?: number
+  mantle?: { settings: string; position: number }
+  rolling?: { position: number; playRate: number }
 }
-export type PawnState = { id: string; owner: string; authority: 'server' | 'owner'; seq: number; t: number; position: Vec3; velocity: Vec3; yaw: number; pitch: number; health: number; weapon?: WeaponId; aiming?: boolean; locomotion?: PawnLocomotion }
+export type PawnState = { id: string; owner: string; authority: 'server' | 'owner'; seq: number; t: number; position: Vec3; velocity: Vec3; yaw: number; pitch: number; health: number; life?: number; weapon?: WeaponId; aiming?: boolean; locomotion?: PawnLocomotion }
 export type PawnIntent = { forward: number; right: number; jump: boolean; yaw: number; pitch: number; aiming?: boolean }
 export type ClientMessage =
   | { type: 'move'; seq: number; position: Vec3; velocity: Vec3; intent: PawnIntent; locomotion?: PawnLocomotion }
@@ -21,7 +25,8 @@ export type ServerMessage =
   | { type: 'welcome'; id: string; states: PawnState[] }
   | { type: 'state'; state: PawnState }
   | { type: 'leave'; id: string }
-  | { type: 'hit'; shooter: string; target: string; damage: number; health: number }
+  | { type: 'hit'; shooter: string; target: string; damage: number; health: number; point?: Vec3; direction?: Vec3 }
+  | { type: 'shot'; shooter: string; weapon: WeaponId; origin: Vec3; direction: Vec3; end: Vec3 }
   | { type: 'rejected'; reason: string }
 export const finiteVec = (value: unknown): value is Vec3 => !!value && typeof value === 'object' && ['x', 'y', 'z'].every(axis => Number.isFinite((value as Record<string, number>)[axis]))
 function isPawnLocomotion(value: unknown): value is PawnLocomotion {
@@ -36,6 +41,16 @@ function isPawnLocomotion(value: unknown): value is PawnLocomotion {
     && ['actorYaw', 'inputYaw', 'targetYaw'].every(field => Number.isFinite(state[field]))
     && !!acceleration && typeof acceleration === 'object'
     && ['x', 'y'].every(axis => Number.isFinite(acceleration[axis]) && Math.abs(acceleration[axis] as number) <= 1)
+    && (state.action === undefined || ['none', 'roll', 'mantle', 'getUp', 'ragdoll'].includes(state.action as string))
+    && (state.actionSeq === undefined || Number.isSafeInteger(state.actionSeq) && (state.actionSeq as number) >= 0)
+    && (state.mantle === undefined || isMontage(state.mantle, 'settings'))
+    && (state.rolling === undefined || isMontage(state.rolling, 'playRate'))
+}
+function isMontage(value: unknown, field: 'settings' | 'playRate') {
+  if (!value || typeof value !== 'object') return false
+  const montage = value as Record<string, unknown>
+  if (!Number.isFinite(montage.position)) return false
+  return field === 'settings' ? typeof montage.settings === 'string' && montage.settings.length <= 64 : Number.isFinite(montage.playRate)
 }
 export function isClientMessage(value: unknown): value is ClientMessage {
   if (!value || typeof value !== 'object') return false
