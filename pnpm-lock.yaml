@@ -21,6 +21,9 @@ importers:
       '@blacksite/cascade':
         specifier: workspace:*
         version: link:packages/cascade
+      '@blacksite/check':
+        specifier: workspace:*
+        version: link:packages/check
       '@blacksite/input':
         specifier: workspace:*
         version: link:packages/input
@@ -453,6 +456,12 @@ importers:
       xstate:
         specifier: ^5.23.0
         version: 5.33.2
+
+  packages/check:
+    dependencies:
+      playwright-core:
+        specifier: ^1.64.1
+        version: 1.64.1
 
   packages/client-r3f:
     dependencies:
@@ -3778,6 +3787,11 @@ packages:
 
   playwright-core@1.64.0:
     resolution: {integrity: sha512-T9r+MZkTECl2+oUcZ26YgZzTrYidTsIhYYkJix+6iDOymOb1FB2RLLSOxRGnZGv5DStt+aduIVbt+E8WygXYpg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright-core@1.64.1:
+    resolution: {integrity: sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -7569,6 +7583,8 @@ snapshots:
       find-up: 3.0.0
 
   playwright-core@1.64.0: {}
+
+  playwright-core@1.64.1: {}
 
   playwright@1.64.0:
     dependencies:
