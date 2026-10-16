@@ -13,6 +13,7 @@ import { Home } from './pages/Home'
 import { ToolPage } from './pages/ToolPage'
 import { SkillsPage } from './pages/SkillsPage'
 import { GuidePage } from './pages/GuidePage'
+import { GetStartedPage } from './pages/GetStartedPage'
 import { base, link } from './links'
 
 function currentRoute() {
@@ -42,6 +43,7 @@ function Page({ route }: { route: string }) {
   const [section, slug] = route.split('/')
   if (!route) return <Home />
   if (section === 'tools' && slug && toolBySlug(slug)) return <ToolPage tool={toolBySlug(slug)!} />
+  if (section === 'get-started' && !slug) return <GetStartedPage />
   if (section === 'skills' && !slug) return <SkillsPage />
   if (section === 'roadmap' && !slug) return <GuidePage doc={docBySlug('roadmap')!} />
   if (section === 'guides' && slug && docBySlug(slug)) return <GuidePage doc={docBySlug(slug)!} />
@@ -58,6 +60,7 @@ function Nav({ route }: { route: string }) {
     <nav id="site-nav" className={open ? 'open' : undefined}>
       <div className="nav-group">{tools.map(tool => <a key={tool.slug} className={active(`tools/${tool.slug}`)} href={link(`tools/${tool.slug}`)}>{tool.name}</a>)}</div>
       <div className="nav-group nav-group--secondary">
+        <a className={active('get-started')} href={link('get-started')}>Get started</a>
         <a className={active('skills')} href={link('skills')}>Skills</a>
         <a className={active('roadmap')} href={link('roadmap')}>Roadmap</a>
         <a href={repo} className="nav-external">GitHub</a>
@@ -76,7 +79,7 @@ function App() {
     const [section, slug] = route.split('/')
     const tool = section === 'tools' && slug ? toolBySlug(slug) : undefined
     const doc = section === 'guides' && slug ? docBySlug(slug) : section === 'roadmap' ? docBySlug('roadmap') : undefined
-    const title = tool ? `${tool.name} · Blacksite` : doc ? `${doc.title} · Blacksite` : section === 'skills' ? 'Skills · Blacksite' : 'Blacksite · Skills and building blocks for game-dev agents'
+    const title = tool ? `${tool.name} · Blacksite` : doc ? `${doc.title} · Blacksite` : section === 'skills' ? 'Skills · Blacksite' : section === 'get-started' ? 'Get started · Blacksite' : 'Blacksite · Skills and building blocks for game-dev agents'
     document.title = title
     if (!location.hash) window.scrollTo(0, 0)
   }, [route])
