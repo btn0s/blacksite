@@ -16,8 +16,8 @@ Two promises shape everything below:
 | Area | What you get | Status |
 |---|---|---|
 | Player templates | `fpp` (single-player first person, rigged arms), `tpp` (ALS third person), `mp` (multiplayer, first/third person switch), `blank` | Usable |
-| Multiplayer | Relay v0: Colyseus rooms plus an in-browser loopback, owner movement, server-checked hits | Usable v0 |
-| Characters | ALS Web: the ALS Refactored animation system ported to three.js | Usable |
+| Multiplayer | Relay v0: Colyseus rooms plus an in-browser loopback, owner movement, server-checked hits, remote bodies replaying full ALS state | Usable v0 |
+| Characters | ALS Web: the ALS Refactored animation system ported to three.js, with an [agent guide](vendor/als-web/docs/guide/overview.md) and `als` skill | Usable |
 | Weapons | Armory: rifle and pistol with fire, reload, aim and recoil | Usable |
 | Destruction | Cascade: structural collapse in a worker, walk mode with tools | Experimental |
 | AI | Warden: squad AI and tactical simulation | Experimental |
@@ -30,8 +30,7 @@ Two promises shape everything below:
 Work in progress or next up. Each item is done when the line after the dash is true.
 
 - **Showcase demos.** Polished scenes per capability (movement, demolition, firing range, squad AI, arena) built only on the public packages — the site's demos look like a game, not a lab.
-- **Agent guides for every system.** ALS first, then Cascade, Warden, Relay and Armory: a mental model, units, the input contract, tested recipes and symptom-indexed gotchas, plus a skill — an agent can do a common task from the guide alone.
-- **Remote players animate correctly.** Remote ALS bodies walk and run instead of gliding — a test measures gait and foot slide.
+- **Agent guides for the remaining systems.** Cascade, Warden, Relay and Armory get what ALS now has: a mental model, units, the input contract, tested recipes and symptom-indexed gotchas, plus a skill — an agent can do a common task from the guide alone.
 - **Touch controls for the player templates.** `fpp`, `tpp` and `mp` playable on a phone — the same check Cascade walk mode already passes.
 - **Measurement.** Pick reference devices (a desktop and an iPhone/Android pair), a benchmark harness that runs headless and writes JSON, and a frame-time breakdown per system — every demo reports where its frame time goes.
 
