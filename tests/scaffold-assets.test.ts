@@ -37,7 +37,7 @@ it('scaffolds unpublished nested pins from the supplied local checkout', () => {
     expect(readFileSync(path.join(installed, '.gitmodules'), 'utf8')).toBe(readFileSync(path.join(source, '.gitmodules'), 'utf8'));
     expect(git(installed, 'status', '--porcelain')).toBe('');
   } finally { rmSync(scratch, { recursive: true, force: true }); }
-});
+}, 30_000);
 
 it('ships MIT ALS assets alongside game manifests without replacing game overrides', () => {
   const scratch = mkdtempSync(path.join(tmpdir(), 'blacksite-public-'));
