@@ -1,4 +1,0 @@
-interface:
-  display_name: "Setup Project"
-  short_description: "Setup Project in Blacksite"
-  default_prompt: "Use $setup-project for this Blacksite task."

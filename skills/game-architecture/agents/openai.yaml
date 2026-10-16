@@ -1,4 +1,0 @@
-interface:
-  display_name: "Game Architecture"
-  short_description: "Game Architecture in Blacksite"
-  default_prompt: "Use $game-architecture for this Blacksite task."

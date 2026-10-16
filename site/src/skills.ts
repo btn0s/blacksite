@@ -1,9 +1,10 @@
 import sources from 'virtual:blacksite-skills'
-import { invocationOf, parseFrontmatter, phases, references, type Skill } from './skill-meta'
+import { invocationOf, parseFrontmatter, summarizeReference, type Reference, type Skill } from './skill-meta'
 
-export { invocationLabel } from './skill-meta'
+export { invocationLabel, referenceGroups, workflow } from './skill-meta'
 
-export const skills: Skill[] = Object.entries(sources).map(([folder, source]) => {
+export const skills: Skill[] = Object.entries(sources).filter(([file]) => file.endsWith('/SKILL.md')).map(([file, source]) => {
+  const folder = file.split('/')[0]!
   const fields = parseFrontmatter(source)
   const description = fields.description ?? ''
   return {
@@ -12,9 +13,12 @@ export const skills: Skill[] = Object.entries(sources).map(([folder, source]) =>
     summary: description.split(/(?<=\.)\s+(?=Use )/)[0]!,
     invocation: invocationOf(fields),
     argument: fields['argument-hint'],
-    path: `skills/${folder}/SKILL.md`,
+    path: `skills/${file}`,
   }
-}).sort((a, b) => {
-  const rank = (skill: Skill) => { const phase = phases.indexOf(skill.name); return phase >= 0 ? phase : 100 + references.indexOf(skill.name) }
-  return rank(a) - rank(b)
 })
+
+export const references: Reference[] = Object.entries(sources).filter(([file]) => file.includes('/references/')).map(([file, source]) => ({
+  name: file.split('/').pop()!.replace(/\.md$/, ''),
+  ...summarizeReference(source),
+  path: `skills/${file}`,
+}))

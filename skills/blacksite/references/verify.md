@@ -96,4 +96,4 @@ Then read the pictures, critically:
 
 - Desktop and phone `blacksite check` runs with every line `pass`.
 - Every PNG read at 1×, and every 4× sheet zoomed.
-- Ten minutes of your own play in a headless capture sequence is not play. Hand the user a URL (`bb connect expose <port>` when available) and say what you measured and what only they can confirm on a real device: 120 fps on a 120 Hz display, GPU-bound frames, touch feel on a phone, audio in headphones.
+- A headless capture run isn't play. Hand the user a URL (`bb connect expose <port>` when available) and say what you measured and what only they can confirm on a real device: 120 fps on a 120 Hz display, GPU-bound frames, touch feel on a phone, audio in headphones.

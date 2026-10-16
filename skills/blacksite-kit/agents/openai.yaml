@@ -1,4 +1,0 @@
-interface:
-  display_name: "Blacksite Kit"
-  short_description: "Blacksite Kit in Blacksite"
-  default_prompt: "Use $blacksite-kit for this Blacksite task."

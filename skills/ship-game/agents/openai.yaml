@@ -1,4 +1,0 @@
-interface:
-  display_name: "Ship Game"
-  short_description: "Ship Game in Blacksite"
-  default_prompt: "Use $ship-game for this Blacksite task."

@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { resolveLegacy, tools } from './content'
 import { githubUrl, linkFor, rewriteHref } from './docs'
-import { invocationOf, parseFrontmatter } from './skill-meta'
+import { invocationOf, parseFrontmatter, referenceGroups, summarizeReference } from './skill-meta'
 import { showcases } from './showcases/registry'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -50,10 +50,18 @@ describe('skills', () => {
     const skills = Object.fromEntries(readdirSync(resolve(root, 'skills'))
       .filter(name => existsSync(resolve(root, 'skills', name, 'SKILL.md')))
       .map(name => [name, invocationOf(parseFrontmatter(readFileSync(resolve(root, 'skills', name, 'SKILL.md'), 'utf8')))]))
-    expect(skills.start).toBe('user')
-    expect(skills['make-game']).toBe('both')
-    expect(skills['design-game']).toBe('model')
-    expect(skills['game-architecture']).toBe('reference')
+    expect(skills).toEqual({ blacksite: 'both' })
+  })
+
+  it('places every reference in one group and summarizes it', () => {
+    const directory = resolve(root, 'skills', 'blacksite', 'references')
+    const names = readdirSync(directory).filter(name => name.endsWith('.md')).map(name => name.replace(/\.md$/, '')).sort()
+    expect(referenceGroups.flatMap(group => group.names).sort()).toEqual(names)
+    for (const name of names) {
+      const { title, summary } = summarizeReference(readFileSync(resolve(directory, `${name}.md`), 'utf8'))
+      expect(title, name).not.toBe('')
+      expect(summary.length, name).toBeGreaterThan(20)
+    }
   })
 })
 

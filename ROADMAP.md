@@ -20,7 +20,7 @@ Blacksite is skills and building blocks that let game-dev agents build seriously
 | Destruction | Cascade: structural collapse in a worker, walk mode with tools | Experimental |
 | AI | Warden: squad AI and tactical simulation | Experimental |
 | Input | Keyboard, mouse, gamepad, touch | Usable |
-| Agent tooling | `blacksite` CLI, `/blacksite:make-game`, phase skills, budgets, owned-asset sync | Usable |
+| Agent tooling | `blacksite` CLI, the `blacksite` skill, `blacksite check`, budgets, owned-asset sync | Usable |
 | Docs and demos | [Site](https://blacksite-sable.vercel.app) with live demos and a performance overlay | Usable |
 
 ## Now
@@ -73,4 +73,4 @@ To keep the Rust path open now: the sim stays headless, data-oriented and determ
 - Single-player first person → `fpp`. Nobody sees your body, so there is no ALS body.
 - Single-player third person → `tpp`.
 - Multiplayer → `mp`: other players need a full animated body. Networked by default.
-- Start multiplayer on **Colyseus** (2–64 players per room). Move to **Durable Objects/PartyKit** for edge-hosted rooms without servers, **WebRTC** for a few peers where latency matters most, **lockstep** for RTS unit counts, or your own server for custom ticks and sharding. Relay keeps that switch inside the network layer. The [game architecture skill](skills/game-architecture/SKILL.md) covers the details.
+- Start multiplayer on **Colyseus** (2–64 players per room). Move to **Durable Objects/PartyKit** for edge-hosted rooms without servers, **WebRTC** for a few peers where latency matters most, **lockstep** for RTS unit counts, or your own server for custom ticks and sharding. Relay keeps that switch inside the network layer. The [game architecture reference](skills/blacksite/references/architecture.md) covers the details.

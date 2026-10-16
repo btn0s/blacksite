@@ -1,14 +1,46 @@
 [
   {
     "query": "Make a top-down twin-stick arena game with short rounds and procedural enemies.",
-    "expected_behavior": ["Asks one design question at a time", "Writes docs/game-design.md and budget.config.json after user approval", "Scaffolds one game shell", "Builds independent movement and enemy prototypes", "Promotes the proven loop and runs pnpm check"]
+    "expected_behavior": [
+      "Asks one design question at a time",
+      "Sizes the request and proposes a Slice",
+      "Writes src/game/model.ts with real numbers before gameplay code",
+      "Writes a parts list with minimum counts into docs/game-design.md after user approval",
+      "Scaffolds one game shell",
+      "Builds independent movement and enemy prototypes",
+      "Promotes the proven loop and runs pnpm check and blacksite check"
+    ]
   },
   {
     "query": "Build an FPS gun range where I can test recoil and reload feel.",
-    "expected_behavior": ["Uses the fpp scaffold shortcut", "Creates an isolated gunplay prototype under src/prototypes", "Records Koota traits, XState events, and Effect services in its contract", "Makes the mode reachable from the developer menu", "Runs the budget gate"]
+    "expected_behavior": [
+      "Uses the fpp scaffold shortcut",
+      "Creates an isolated gunplay prototype under src/prototypes",
+      "Builds the solved version: recoil the view recovers from, viewmodel kick, one tracer in three, impact decals and sound",
+      "Records Koota traits, XState events, and Effect services in its contract",
+      "Makes the mode reachable from the developer menu",
+      "Runs blacksite check --only feel,perf and the budget gate"
+    ]
   },
   {
     "query": "I want an ALS parkour course for testing traversal and camera comfort.",
-    "expected_behavior": ["Uses the tpp scaffold shortcut", "Builds a traversal prototype with a specific play question", "Keeps product choices with the user", "Uses the game-architecture ownership model", "Exposes a playable link after the gate passes"]
+    "expected_behavior": [
+      "Uses the tpp scaffold shortcut",
+      "Builds a traversal prototype with a specific play question",
+      "Keeps product choices with the user",
+      "Reads the als and architecture references before wiring the character",
+      "Exposes the check contract and passes blacksite check feel",
+      "Exposes a playable link after the gate passes"
+    ]
+  },
+  {
+    "query": "Make me a forest I can walk through at night with a flashlight.",
+    "expected_behavior": [
+      "Loads the blacksite skill without the user naming it",
+      "Builds the solved forest: several species, clusters and clearings, undergrowth, instancing, layered fog, wind",
+      "Builds the solved flashlight: cookie, lag behind the view, the only shadow caster near the player",
+      "Adds an ambience bed and footsteps by surface with no back-to-back repeats",
+      "Reads the critic captures and fixes what they show before handing over"
+    ]
   }
 ]
