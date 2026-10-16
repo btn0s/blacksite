@@ -2,7 +2,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type React
 import { Canvas, useFrame, type RootState } from '@react-three/fiber'
 import { Physics, CuboidCollider, RigidBody, useRapier } from '@react-three/rapier'
 import { Vector3 } from 'three'
-import { Character } from 'als-ue5-r3f/app/Character'
+import { Character, type CharacterProps } from 'als-ue5-r3f/app/Character'
 import { AlsCamera } from 'als-ue5-r3f/app/AlsCamera'
 import { AlsRemoteActor, type AlsRagdollHandle } from 'als-ue5-r3f/app/AlsRemoteActor'
 import { AlsSnapshotBuffer } from 'als-ue5-r3f/als/AlsSnapshotBuffer'
@@ -61,6 +61,7 @@ export interface MultiplayerSceneProps {
   initialSpawn?: readonly [number, number, number]
   onArmsPresentation?: (presentation: ArmsPresentation | null) => void
   input?: 'dom' | 'external'
+  gaitSpeedOverrides?: CharacterProps['gaitSpeedOverrides']
   footsteps?: Pick<AlsFootstepAudioRuntime, 'PlayFootstepSound' | 'SetListenerTransform'>
   children?: ReactNode
   onReplica?: (replica: MultiplayerReplica | null) => void
@@ -169,7 +170,7 @@ export function MultiplayerScene(props: MultiplayerSceneProps) {
   return replica ? <Suspense fallback={null}><ReplicatedScene {...props} subject={subject} replica={replica} /></Suspense> : null
 }
 
-function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics, onShot, physicsProbe, onArmsPresentation, input = 'dom', footsteps, children, subject, replica }: MultiplayerSceneProps & { subject: SubjectState; replica: MultiplayerReplica }) {
+function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics, onShot, physicsProbe, onArmsPresentation, input = 'dom', gaitSpeedOverrides, footsteps, children, subject, replica }: MultiplayerSceneProps & { subject: SubjectState; replica: MultiplayerReplica }) {
   const inputSource = useMemo(() => createSubjectInputSource(subject), [subject])
   const controlRotationSource = useMemo(() => () => ({ yaw: subject.player.command.yaw, pitch: subject.player.command.pitch }), [subject])
   const arms = useMemo(createArmsState, [])
@@ -287,7 +288,7 @@ function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics,
   const ignoreSize = useCallback(() => {}, [])
   return <>
     <Suspense fallback={null}><Physics gravity={[0, -9.8, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
-      <group visible={view === 'third-person'}><Character showDebugControls={false} key={spawn.revision} initialPosition={spawn.position} poseSample={subject.player.pose} worldTime={worldTime} footstepSoundSink={audio} onSizeChange={ignoreSize} onOverlayModeBridgeChange={ignoreSize} inputEnabled={false} ragdollInputEnabled={false} ragdollRef={ragdoll} inputSource={inputSource} onSnapshot={publishSnapshot} snapshotRateHz={SNAPSHOT_RATE_HZ} /></group>
+      <group visible={view === 'third-person'}><Character showDebugControls={false} key={spawn.revision} initialPosition={spawn.position} poseSample={subject.player.pose} worldTime={worldTime} footstepSoundSink={audio} onSizeChange={ignoreSize} onOverlayModeBridgeChange={ignoreSize} inputEnabled={false} ragdollInputEnabled={false} ragdollRef={ragdoll} inputSource={inputSource} gaitSpeedOverrides={gaitSpeedOverrides} onSnapshot={publishSnapshot} snapshotRateHz={SNAPSHOT_RATE_HZ} /></group>
       <AlsCamera poseSample={subject.player.pose} worldTime={worldTime} footstepAudioRuntime={audio} toggleViewModeKey={null} controlRotationSource={controlRotationSource} />
       <WeaponDriver subject={subject} replica={replica} weapon={weapon} arms={arms} alive={alive} onShot={onShot} />
       {physicsProbe}

@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState, type ComponentType } from
 import { createRoot } from 'react-dom/client'
 import { GameFrame } from '@blacksite/ui/game-frame'
 import { Button } from '@blacksite/ui/components/button'
-import { MENU, InputProvider, useActionEvents, useInputContext } from '@blacksite/input'
+import { MENU, InputProvider, useActionEvents, useConsoleNavigation, useInputContext } from '@blacksite/input'
 import { registerWarmup, runWarmup } from '../scripts/warmup'
 import { createSession } from './architecture'
 import { clearPresses, input } from './game/input'
@@ -23,7 +23,14 @@ function Shell() {
   const [back, setBack] = useState<Screen>('menu')
   const [mode, setMode] = useState<string | null>(null)
   const [audio, setAudio] = useState(true)
+  const [aspect, setAspect] = useState(() => innerWidth / Math.max(innerHeight, 1))
+  const navigation = useConsoleNavigation()
   const playing = screen === 'play'
+  useEffect(() => {
+    const resize = () => setAspect(innerWidth / Math.max(innerHeight, 1))
+    addEventListener('resize', resize)
+    return () => removeEventListener('resize', resize)
+  }, [])
   useInputContext(MENU, !playing)
   useEffect(() => session.start(), [session])
   useEffect(() => {
@@ -55,12 +62,12 @@ function Shell() {
   const settings = (from: Screen) => { setBack(from); setScreen('settings') }
   const chosen = prototypes.find(item => item.name === mode)
   const Active = chosen?.Component || Game
-  return <GameFrame className="game-frame"><div className="game-shell">
+  return <GameFrame className="game-frame" ratio={aspect}><div className="game-shell">
     {(screen === 'play' || screen === 'pause') && <div className="scene"><Suspense fallback={<main className="panel"><h1>Loading…</h1></main>}>{Active ? <Active key={mode ?? 'game'} /> : <main className="panel"><h1>No game mode</h1><p>Add src/game/mode.tsx.</p></main>}</Suspense></div>}
-    {screen === 'menu' && <main className="panel"><h1>New game</h1><p>Play the game or open a prototype.</p><Button onClick={() => { setMode(null); setScreen('play') }}>Play</Button><Button variant="outline" onClick={() => settings('menu')}>Settings</Button><h2>Prototypes</h2>{prototypes.length ? prototypes.map(item => <Button key={item.name} variant="secondary" onClick={() => { setMode(item.name); setScreen('play') }}>{item.name}</Button>) : <p>No prototypes yet.</p>}</main>}
+    {screen === 'menu' && <main ref={navigation.root} className="panel"><h1>New game</h1><p>Play the game or open a prototype.</p><Button onClick={() => { setMode(null); setScreen('play') }}>Play</Button><Button variant="outline" onClick={() => settings('menu')}>Settings</Button><h2>Prototypes</h2>{prototypes.length ? prototypes.map(item => <Button key={item.name} variant="secondary" onClick={() => { setMode(item.name); setScreen('play') }}>{item.name}</Button>) : <p>No prototypes yet.</p>}</main>}
     {screen === 'play' && <Button className="pause-button" onClick={() => setScreen('pause')}>Pause</Button>}
-    {screen === 'pause' && <main className="panel"><h1>Paused</h1><Button onClick={() => setScreen('play')}>Resume</Button><Button variant="outline" onClick={() => settings('pause')}>Settings</Button><Button variant="outline" onClick={() => setScreen('menu')}>Main menu</Button></main>}
-    {screen === 'settings' && <main className="panel"><h1>Settings</h1><label><input type="checkbox" checked={audio} onChange={event => setAudio(event.target.checked)} /> Audio</label><Button onClick={() => setScreen(back)}>Back</Button></main>}
+    {screen === 'pause' && <main ref={navigation.root} className="panel"><h1>Paused</h1><Button onClick={() => setScreen('play')}>Resume</Button><Button variant="outline" onClick={() => settings('pause')}>Settings</Button><Button variant="outline" onClick={() => setScreen('menu')}>Main menu</Button></main>}
+    {screen === 'settings' && <main ref={navigation.root} className="panel"><h1>Settings</h1><label><input type="checkbox" checked={audio} onChange={event => setAudio(event.target.checked)} /> Audio</label><Button onClick={() => setScreen(back)}>Back</Button></main>}
   </div></GameFrame>
 }
 

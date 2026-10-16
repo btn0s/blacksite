@@ -1,4 +1,4 @@
-import { Suspense, useMemo, type ReactNode } from 'react'
+import { Suspense, useMemo, useState, type ReactNode } from 'react'
 import { useFrame, type RootState } from '@react-three/fiber'
 import { Character } from 'als-ue5-r3f/app/Character'
 import { AlsCamera } from 'als-ue5-r3f/app/AlsCamera'
@@ -10,14 +10,12 @@ import { CheckProbe } from '../../game-shell/src/game/check'
 import { footsteps } from '../../game-shell/src/game/footsteps'
 import { PlayHud } from '../../game-shell/src/game/hud'
 import { held, take, value } from '../../game-shell/src/game/input'
-import { FEEL } from '../../game-shell/src/game/model'
+import { CHARACTER_FEEL, GAIT_SPEEDS } from '../../game-shell/src/game/model'
 import { sound } from '../../game-shell/src/game/sound'
 import { Stage, surfacesReady, useSurfaces } from '../../game-shell/src/game/stage'
 import { yard } from '../../game-shell/src/game/yard'
 
 const DEGREES = 180 / Math.PI
-const feel = { moveSpeed: FEEL.moveSpeed, sprintSpeed: FEEL.sprintSpeed, jumpApex: FEEL.jumpApex, tolerance: 0.12 }
-
 
 function createControl() {
   const control = { yaw: 0, pitch: 0, jumpSequence: 0 }
@@ -58,7 +56,7 @@ function Player({ pose }: { pose: { current: CharacterPoseSample } }) {
   return <>
     <Look control={drive.control} />
     <Suspense fallback={null}>
-      <Character onSizeChange={() => {}} onOverlayModeBridgeChange={() => {}} poseSample={pose} worldTime={time} footstepSoundSink={footsteps} inputEnabled={false} inputSource={drive.source} toggleRotationModeKey={null} showDebugControls={false} initialPosition={yard.spawn} />
+      <Character onSizeChange={() => {}} onOverlayModeBridgeChange={() => {}} poseSample={pose} worldTime={time} footstepSoundSink={footsteps} inputEnabled={false} inputSource={drive.source} gaitSpeedOverrides={GAIT_SPEEDS} toggleRotationModeKey={null} showDebugControls={false} initialPosition={yard.spawn} />
     </Suspense>
     <AlsCamera poseSample={pose} worldTime={time} footstepAudioRuntime={footsteps} toggleViewModeKey={null} gamepadEnabled={false} controlRotationSource={drive.rotation} />
   </>
@@ -66,13 +64,15 @@ function Player({ pose }: { pose: { current: CharacterPoseSample } }) {
 
 export default function Mode({ onCreated, physicsProbe }: { onCreated?: (state: RootState) => void; physicsProbe?: ReactNode } = {}) {
   const pose = useMemo(() => ({ current: createCharacterPoseSample() }), [])
+  const [life, setLife] = useState(0)
   const ready = useSurfaces()
   return <>
     <Stage physicsPriority={ALS_FRAME_PRIORITY.Physics} onCreated={onCreated}>
-      <Player pose={pose} />
+      <Player key={life} pose={pose} />
       <CheckProbe
         priority={ALS_FRAME_PRIORITY.Camera + 0.05}
-        feel={feel}
+        feel={CHARACTER_FEEL}
+        reset={() => setLife(value => value + 1)}
         ready={() => surfacesReady() && pose.current.ready}
         player={() => {
           const body = pose.current.ownerRigidBody

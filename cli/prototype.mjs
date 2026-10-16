@@ -34,6 +34,13 @@ async function ensureKitPackages(project, kit, prototypeName) {
     const config = JSON.parse(await readFile(configFile, 'utf8'))
     config.include = [...new Set([...(config.include || ['src']), 'vendor/blacksite/vendor/als-web/src/app/globals.d.ts'])]
     await writeFile(configFile, `${JSON.stringify(config, null, 2)}\n`)
+    const budgetFile = path.join(project, 'budget.config.json')
+    if (existsSync(budgetFile)) {
+      const budget = JSON.parse(await readFile(budgetFile, 'utf8'))
+      const textures = (await readdir(path.join(packagesRoot, 'subject-fpp/assets/materials'))).filter(file => file.endsWith('.webp')).map(file => `assets/${file.replace(/\.webp$/, '')}-*.webp`)
+      budget.legacyAssetPaths = [...new Set([...(budget.legacyAssetPaths || []), ...textures])]
+      await writeFile(budgetFile, `${JSON.stringify(budget, null, 2)}\n`)
+    }
   }
   if (multiplayer && !workspace.includes('msgpackr-extract: false')) { workspace = workspace.replace('  esbuild: true', '  esbuild: true\n  msgpackr-extract: false'); changed = true }
   const seen = new Set()

@@ -8,13 +8,12 @@ import { CheckProbe } from '../../game-shell/src/game/check'
 import { footsteps } from '../../game-shell/src/game/footsteps'
 import { PlayHud } from '../../game-shell/src/game/hud'
 import { held, take, value } from '../../game-shell/src/game/input'
-import { FEEL } from '../../game-shell/src/game/model'
+import { CHARACTER_FEEL, GAIT_SPEEDS } from '../../game-shell/src/game/model'
 import { sound } from '../../game-shell/src/game/sound'
 import { Stage, Yard, surfacesReady, useSurfaces } from '../../game-shell/src/game/stage'
 import { yard } from '../../game-shell/src/game/yard'
 
 const DEGREES = 180 / Math.PI
-const feel = { moveSpeed: FEEL.moveSpeed, sprintSpeed: FEEL.sprintSpeed, jumpApex: FEEL.jumpApex, tolerance: 0.12 }
 const relay = import.meta.env.VITE_RELAY_URL || (import.meta.env.DEV ? `${location.origin}/relay` : '')
 
 function useConnection() {
@@ -59,11 +58,12 @@ export default function Mode({ onCreated, physicsProbe }: { onCreated?: (state: 
   return <>
     <Stage physics={false} overlay={arms} onCreated={onCreated}>
       <Drive subject={subject} />
-      {joined && <MultiplayerScene key={joined.connection.id} connection={joined.connection} offline={!joined.online} subject={subject} input="external" footsteps={footsteps} onArmsPresentation={setArms} onStatus={setStatus} onShot={shot} physicsProbe={physicsProbe}>
+      {joined && <MultiplayerScene key={joined.connection.id} connection={joined.connection} offline={!joined.online} subject={subject} input="external" gaitSpeedOverrides={GAIT_SPEEDS} footsteps={footsteps} onArmsPresentation={setArms} onStatus={setStatus} onShot={shot} physicsProbe={physicsProbe}>
         <Yard />
       </MultiplayerScene>}
       <CheckProbe
-        feel={feel}
+        feel={CHARACTER_FEEL}
+        reset={() => subject.respawn(yard.spawn, 0)}
         priority={-0.2}
         ready={() => surfacesReady() && subject.frame.ready}
         player={() => subject.frame.ready ? { position: [subject.frame.position.x, subject.frame.position.y, subject.frame.position.z], velocity: [subject.frame.velocity.x, subject.frame.velocity.y, subject.frame.velocity.z], grounded: subject.frame.grounded } : null} />

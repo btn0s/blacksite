@@ -247,7 +247,7 @@ export function makeActionHub() {
         reset()
       }
     },
-    tick(pad: Gamepad | null, now: number) {
+    tick(pad: Gamepad | null, now: number, gameplayReady = true) {
       if (pad?.index !== previousPad) {
         previousPad = pad?.index
         evaluate = createEvaluator()
@@ -259,6 +259,7 @@ export function makeActionHub() {
       mouseDelta.x = mouseDelta.y = touchLook.x = touchLook.y = 0
       const dt = lastTick === null ? 0 : Math.min(0.1, Math.max(0, (now - lastTick) / 1000))
       lastTick = now
+      const padEnabled = gameplayReady || [...contexts.values()].some(context => context.exclusive)
       const read = (control: Control): Vec2 => {
         if (control.device === "mouse")
           return "delta" in control ? { ...frameMouse } : { x: Number(mouseButtons.has(control.button)), y: 0 }
@@ -269,6 +270,7 @@ export function makeActionHub() {
         }
         if (control.device === "keyboard") return { x: Number(held.has(control.key)), y: 0 }
         if (control.device === "gamepad") {
+          if (!padEnabled) return ZERO
           if ("stick" in control) {
             const axis = control.stick === "left" ? 0 : 2
             return { x: pad?.axes[axis] ?? 0, y: pad?.axes[axis + 1] ?? 0 }

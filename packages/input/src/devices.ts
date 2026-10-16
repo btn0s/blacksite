@@ -182,7 +182,7 @@ export function makeInputDevices() {
       )
         update({ gameplayReady: true })
       const selectedPad = focused && pad?.mapping === "standard" ? pad : null
-      actions.tick(selectedPad, now)
+      actions.tick(selectedPad, now, gameplay && snapshot.gameplayReady)
       for (const listener of frames) listener(gameplay && snapshot.gameplayReady ? selectedPad : null, now)
       frame = requestAnimationFrame(tick)
     }

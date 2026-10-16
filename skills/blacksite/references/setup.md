@@ -10,11 +10,11 @@ Create the game project from the approved design and prove it runs.
 
 ## What every profile starts with
 
-The game boots straight into play, with a "Click to play" prompt that takes pointer lock. Escape or the pad's Start opens Pause; Main menu, Settings and the developer list of prototypes hang off Pause. `src/game/mode.tsx` is the profile's game: a walker in the starter yard (`blank`), arms and a rifle (`fpp`), the ALS body and camera (`tpp`), or Relay with the offline loopback (`mp`). The same kit is also listed as `src/prototypes/controller-<profile>`.
+The game boots straight into play and fills the viewport, including portrait phones, with a "Click to play" prompt that takes pointer lock. Escape or the pad's Start opens Pause; Main menu, Settings and the developer list of prototypes hang off Pause and support controller navigation. `src/game/mode.tsx` is the profile's game: a walker in the starter yard (`blank`), arms and a rifle (`fpp`), the ALS body and camera (`tpp`), or Relay with the offline loopback (`mp`). The same kit is also listed as `src/prototypes/controller-<profile>`.
 
 | File | What it is | Change it when |
 |---|---|---|
-| `src/game/model.ts` | `FEEL`, `BUDGET`, `FIXED_STEP` and the motor rule (acceleration, coyote time, jump buffer, jump velocity from apex). The walker and the check both read it. | You tune anything. Never hard-code a number in a component. |
+| `src/game/model.ts` | `FEEL`, `BUDGET`, `FIXED_STEP` and the motor rule (acceleration, coyote time, jump buffer, jump velocity from apex). Walker movement, ALS gait overrides and the check read it. ALS acceleration is measured by the check; the walker's time to top speed is also asserted. | You tune anything. Never hard-code a number in a component. |
 | `src/game/input.ts` | The `play` context for `@blacksite/input`: keyboard, mouse, gamepad and touch bound to `move`, `look`, `jump`, `sprint`, `crouch`, `walk`, `fire`, `aim`, `reload`, `view`, `rifle`, `pistol` and `pause`. `value()`, `held()` and `take()` read it. | You add a verb. Bind every device to it in the same place. |
 | `src/game/stage.tsx` | The canvas, `<Look atmosphere="zone">` with `autoQuality()`, sun and fill, fixed-step physics and the yard. It mounts the input runtime and the `play` context. | You change the level, the atmosphere or the lights. |
 | `src/game/yard.ts` | A starter yard from `@blacksite/look/world`, `surfaceAt()` for footsteps, and the check bookmarks. | You build the real level. Keep a bookmark on every area that matters. |
@@ -25,7 +25,7 @@ The game boots straight into play, with a "Click to play" prompt that takes poin
 | `src/game/hud.tsx` | Hints, the prompt and the touch pad (stick, look zone and buttons, all feeding the same actions). | Touch needs another button. |
 | `src/architecture.ts` | The one Koota world, the life and phase machines and the Effect event service. | You add game state. Extend it; don't add another store. |
 
-The shell's Settings audio toggle drives the master bus. The world kit's WebP textures are allowed through `legacyAssetPaths` in `budget.config.json` until they are converted to KTX2; any texture you add must be KTX2.
+The shell's Settings audio toggle drives the master bus. Bundled world and Subject arm WebP textures are listed by filename in `legacyAssetPaths` in `budget.config.json` until they are converted to KTX2; any texture you add must be KTX2.
 
 ## Done when
 

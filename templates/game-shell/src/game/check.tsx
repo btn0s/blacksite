@@ -17,6 +17,7 @@ export function CheckProbe({ player, ready, reset, feel = checkFeel, priority = 
   const camera = useThree(state => state.camera)
   const size = useThree(state => state.size)
   const override = useRef<CameraPose | null>(null)
+  const rendered = useRef(false)
   const latest = useRef({ player, ready, reset })
   latest.current = { player, ready, reset }
   const check = useMemo(() => exposeCheck({
@@ -33,7 +34,10 @@ export function CheckProbe({ player, ready, reset, feel = checkFeel, priority = 
   }), [camera, feel])
   useEffect(() => check.dispose, [check])
   useFrame(() => {
-    if (!check.probe.ready && latest.current.ready()) check.ready()
+    if (!check.probe.ready && latest.current.ready()) {
+      if (rendered.current) check.ready()
+      rendered.current = true
+    }
     if (override.current) applyCameraPose(camera as Parameters<typeof applyCameraPose>[0], override.current, size)
   }, priority)
   return null

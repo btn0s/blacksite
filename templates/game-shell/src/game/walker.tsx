@@ -30,6 +30,7 @@ export function createWalker(): Walker {
       walker.motor = createMotor()
       walker.yaw = 0
       walker.pitch = 0
+      walker.stride = 0
     },
   }
   return walker
@@ -56,9 +57,11 @@ export function WalkerBody({ walker, view = 'eye' }: { walker: Walker; view?: 'e
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05)
     const { collider, controller } = parts
-    const center = collider.translation()
-    if (Math.abs(center.x - walker.position.x) + Math.abs(center.z - walker.position.z) + Math.abs(center.y - FEEL.capsuleHeight / 2 - walker.position.y) > 0.01)
+    let center = collider.translation()
+    if (Math.abs(center.x - walker.position.x) + Math.abs(center.z - walker.position.z) + Math.abs(center.y - FEEL.capsuleHeight / 2 - walker.position.y) > 0.01) {
       collider.setTranslation({ x: walker.position.x, y: walker.position.y + FEEL.capsuleHeight / 2, z: walker.position.z })
+      center = collider.translation()
+    }
     const look = value('look')
     walker.yaw += look.x
     walker.pitch = THREE.MathUtils.clamp(walker.pitch - look.y, -FEEL.pitchLimit, FEEL.pitchLimit)

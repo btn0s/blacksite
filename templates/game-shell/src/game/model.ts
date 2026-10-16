@@ -23,6 +23,23 @@ export const FEEL = {
   tolerance: 0.1,
 } as const
 
+export const CHARACTER_FEEL = {
+  moveSpeed: FEEL.moveSpeed,
+  sprintSpeed: FEEL.sprintSpeed,
+  jumpApex: FEEL.jumpApex,
+  tolerance: FEEL.tolerance,
+} as const
+
+export const GAIT_SPEEDS = {
+  Standing: {
+    walkForwardSpeed: FEEL.walkSpeed,
+    walkBackwardSpeed: FEEL.walkSpeed,
+    runForwardSpeed: FEEL.moveSpeed,
+    runBackwardSpeed: FEEL.moveSpeed,
+    sprintSpeed: FEEL.sprintSpeed,
+  },
+} as const
+
 export const BUDGET = {
   frameMs: 8.3,
   phoneFrameMs: 16.7,
