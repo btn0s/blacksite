@@ -11,6 +11,7 @@ const allowedHosts = ['.getbb.app', '.ts.net', ...(process.env.VITE_ALLOWED_HOST
 export default defineConfig({
   plugins: [react(), tailwindcss(), ...(dependencies['als-ue5-r3f'] ? [blacksiteAssets()] : [])],
   resolve: { dedupe: ['react', 'react-dom', 'three', '@react-three/fiber', '@dimforge/rapier3d-compat'] },
+  optimizeDeps: { entries: ['index.html'], include: ['@react-three/rapier > @dimforge/rapier3d-compat'] },
   server: {
     host: '0.0.0.0',
     allowedHosts,

@@ -1,10 +1,11 @@
-import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Canvas, useFrame, type RootState } from '@react-three/fiber'
 import { Physics, CuboidCollider, RigidBody } from '@react-three/rapier'
 import { Character } from 'als-ue5-r3f/app/Character'
 import { AlsCamera } from 'als-ue5-r3f/app/AlsCamera'
 import { AlsRemoteActor } from 'als-ue5-r3f/app/AlsRemoteActor'
 import { AlsSnapshotBuffer } from 'als-ue5-r3f/als/AlsSnapshotBuffer'
+import type { AlsCharacterSnapshot } from 'als-ue5-r3f/als/AlsCharacterSnapshot'
 import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { AlsFootstepAudioRuntime } from 'als-ue5-r3f/engine/alsAudioBridge'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
@@ -17,6 +18,7 @@ import { createReplica, createLoopbackRoom } from '@blacksite/relay'
 import { createSubjectInputSource, type CameraMode } from './controller'
 import { useSubjectSpawn } from './spawn'
 import { createMultiplayerSession } from './multiplayer-session'
+import { createPawnMoveMessage, toAlsRemoteSnapshot } from './remote-snapshot'
 
 const Controller = trait({ pawn: '' })
 const Pawn = trait({ owner: '', x: 0, y: 0, z: 0 })
@@ -46,14 +48,7 @@ type Diagnostics = {
 
 function RemotePawn({ state, onClock }: { state: PawnState; onClock: (id: string, clock: AnimationClock) => void }) {
   const buffer = useMemo(() => new AlsSnapshotBuffer({ interpolationDelayMs: 100 }), [])
-  useEffect(() => { buffer.push({
-    t: state.t, pos: [state.position.x, state.position.y + 0.9, state.position.z],
-    vel: [state.velocity.x, state.velocity.y, state.velocity.z],
-    actorYaw: state.yaw, viewYaw: state.yaw, viewPitch: state.pitch,
-    gait: Math.hypot(state.velocity.x, state.velocity.z) > 4 ? 'sprinting' : 'running',
-    stance: 'standing', rotationMode: 'viewDirection', locomotionMode: 'grounded',
-    action: 'none', actionSeq: 0, overlay: state.weapon === 'pistol' ? 'pistol' : 'rifle', aiming: state.aiming ?? false, seq: state.seq,
-  }) }, [buffer, state])
+  useEffect(() => { buffer.push(toAlsRemoteSnapshot(state)) }, [buffer, state])
   return <Suspense fallback={null}><AlsRemoteActor snapshots={buffer} now={Date.now} onAnimationClock={clock => onClock(`remote:${state.id}`, clock)} /></Suspense>
 }
 
@@ -175,24 +170,22 @@ function ReplicatedScene({ connection, offline, onStatus, onDiagnostics, physics
     arms.speed = Math.hypot(frame.velocity.x, frame.velocity.z)
     arms.sprinting = frame.sprinting
   }, -0.01)
-  const next = useMemo(() => ({ seq: 0, last: 0 }), [])
-  useFrame(() => {
-    if (!subject.frame.ready || performance.now() - next.last < 50) return
-    next.last = performance.now()
-    const frame = subject.frame
-    const position = { x: frame.position.x, y: frame.position.y, z: frame.position.z }
-    const velocity = { x: frame.velocity.x, y: frame.velocity.y, z: frame.velocity.z }
-    pawn.set(Pawn, { owner: connection.id, ...position })
+  const next = useMemo(() => ({ seq: 0, jumpSequence: 0 }), [])
+  const publishSnapshot = useCallback((snapshot: AlsCharacterSnapshot) => {
+    if (!subject.frame.ready) return
     const command = subject.player.command
-    const intent = { forward: command.forward, right: command.right, jump: false, yaw: command.yaw, pitch: command.pitch, aiming: command.aim }
-    pawn.set(Intent, { forward: intent.forward, right: intent.right, jump: intent.jump })
+    const intent = { forward: command.forward, right: command.right, jump: command.jumpSequence !== next.jumpSequence, yaw: command.yaw, pitch: command.pitch, aiming: command.aim }
+    next.jumpSequence = command.jumpSequence
     if (controller.get(Controller)?.pawn !== connection.id) return
-    replica.send({ type: 'move', seq: ++next.seq, position, velocity, intent })
-  })
+    const message = createPawnMoveMessage(snapshot, intent, ++next.seq)
+    pawn.set(Pawn, { owner: connection.id, ...message.position })
+    pawn.set(Intent, { forward: intent.forward, right: intent.right, jump: intent.jump })
+    replica.send(message)
+  }, [subject, next, controller, connection.id, pawn, replica])
   return <>
     <ambientLight intensity={1.5} /><directionalLight position={[5, 12, 4]} intensity={2.5} />
     <Suspense fallback={null}><Physics gravity={[0, -9.8, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
-      <group visible={view === 'third-person'}><Character showDebugControls={false} key={spawn.revision} initialPosition={spawn.position} poseSample={subject.player.pose} worldTime={worldTime} footstepSoundSink={audio} onSizeChange={() => {}} onOverlayModeBridgeChange={() => {}} inputEnabled={false} inputSource={inputSource} /></group>
+      <group visible={view === 'third-person'}><Character showDebugControls={false} key={spawn.revision} initialPosition={spawn.position} poseSample={subject.player.pose} worldTime={worldTime} footstepSoundSink={audio} onSizeChange={() => {}} onOverlayModeBridgeChange={() => {}} inputEnabled={false} inputSource={inputSource} onSnapshot={publishSnapshot} snapshotRateHz={20} /></group>
       <AlsCamera poseSample={subject.player.pose} worldTime={worldTime} footstepAudioRuntime={audio} toggleViewModeKey={null} controlRotationSource={controlRotationSource} />
       <RigidBody type="fixed" colliders={false}><CuboidCollider args={[30, 0.1, 30]} position={[0, -0.1, 0]} /></RigidBody>
       {physicsProbe}

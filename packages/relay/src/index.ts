@@ -2,9 +2,9 @@ import { createWorld, trait } from 'koota'
 import { ALS_WEAPONS, createWeaponRuntime } from '@blacksite/armory'
 import type { WeaponRuntime, RayQuery, WeaponEvent } from '@blacksite/armory'
 import { isClientMessage } from '@blacksite/protocol'
-import type { ClientMessage, ServerMessage, PawnState, Vec3, WeaponId } from '@blacksite/protocol'
+import type { ClientMessage, ServerMessage, PawnState, PawnLocomotion, Vec3, WeaponId } from '@blacksite/protocol'
 
-export type { ClientMessage, ServerMessage, PawnState, PawnIntent } from '@blacksite/protocol'
+export type { ClientMessage, ServerMessage, PawnState, PawnIntent, PawnLocomotion } from '@blacksite/protocol'
 export const Ownership = trait({ owner: '', authority: 'server' as 'server' | 'owner' })
 export const ReplicatedPosition = trait({ x: 0, y: 0, z: 0, seq: 0 })
 export const ReplicatedHealth = trait({ value: 100 })
@@ -23,6 +23,12 @@ const distance = (a: Vec3, b: Vec3) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.
 const dot = (a: Vec3, b: Vec3) => a.x * b.x + a.y * b.y + a.z * b.z
 const subtract = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z })
 const add = (a: Vec3, b: Vec3, scale: number): Vec3 => ({ x: a.x + b.x * scale, y: a.y + b.y * scale, z: a.z + b.z * scale })
+const copyLocomotion = (value: PawnLocomotion | undefined): PawnLocomotion | undefined => value && { ...value, relativeAcceleration: { ...value.relativeAcceleration } }
+const applyMovement = (state: PawnState, message: Extract<ClientMessage, { type: 'move' }>): PawnState => ({
+  ...state, seq: message.seq, position: { ...message.position }, velocity: { ...message.velocity },
+  yaw: message.intent.yaw, pitch: message.intent.pitch, aiming: message.intent.aiming ?? false,
+  locomotion: copyLocomotion(message.locomotion),
+})
 
 export function createMatch({ now = Date.now }: { now?: () => number } = {}) {
   const world = createWorld()
@@ -106,7 +112,7 @@ export function createMatch({ now = Date.now }: { now?: () => number } = {}) {
       if (raw.seq <= previous.seq || raw.seq > previous.seq + 10000 || distance(raw.position, previous.position) > Math.max(1, Math.min(5, (clock() - previous.t) * 0.02)) || distance(raw.velocity, { x: 0, y: 0, z: 0 }) > 15 || Math.abs(raw.intent.forward) > 1 || Math.abs(raw.intent.right) > 1 || Math.abs(raw.intent.pitch) > 90) {
         peers.get(id)?.({ type: 'rejected', reason: 'invalid movement' }); return
       }
-      const state = { ...states.get(id)!, seq: raw.seq, t: clock(), position: { ...raw.position }, velocity: { ...raw.velocity }, yaw: raw.intent.yaw, pitch: raw.intent.pitch, aiming: raw.intent.aiming ?? false }
+      const state = { ...applyMovement(states.get(id)!, raw), t: clock() }
       states.set(id, state)
       entities.get(id)?.set(ReplicatedPosition, { ...state.position, seq: state.seq })
       broadcast({ type: 'state', state })
@@ -155,7 +161,15 @@ export function interpolate(a: PawnState, b: PawnState, time: number): PawnState
   if (a.id !== b.id) throw new Error('Cannot interpolate different pawns')
   const alpha = Math.max(0, Math.min(1, (time - a.t) / Math.max(1, b.t - a.t)))
   const blend = (x: number, y: number) => x + (y - x) * alpha
-  return { ...b, position: { x: blend(a.position.x, b.position.x), y: blend(a.position.y, b.position.y), z: blend(a.position.z, b.position.z) }, velocity: { x: blend(a.velocity.x, b.velocity.x), y: blend(a.velocity.y, b.velocity.y), z: blend(a.velocity.z, b.velocity.z) }, yaw: blend(a.yaw, b.yaw), pitch: blend(a.pitch, b.pitch) }
+  const blendYaw = (x: number, y: number) => x + (((y - x + 180) % 360 + 360) % 360 - 180) * alpha
+  const locomotion = a.locomotion && b.locomotion ? {
+    ...b.locomotion,
+    actorYaw: blendYaw(a.locomotion.actorYaw, b.locomotion.actorYaw),
+    inputYaw: blendYaw(a.locomotion.inputYaw, b.locomotion.inputYaw),
+    targetYaw: blendYaw(a.locomotion.targetYaw, b.locomotion.targetYaw),
+    relativeAcceleration: { x: blend(a.locomotion.relativeAcceleration.x, b.locomotion.relativeAcceleration.x), y: blend(a.locomotion.relativeAcceleration.y, b.locomotion.relativeAcceleration.y) },
+  } : copyLocomotion(b.locomotion)
+  return { ...b, position: { x: blend(a.position.x, b.position.x), y: blend(a.position.y, b.position.y), z: blend(a.position.z, b.position.z) }, velocity: { x: blend(a.velocity.x, b.velocity.x), y: blend(a.velocity.y, b.velocity.y), z: blend(a.velocity.z, b.velocity.z) }, yaw: blendYaw(a.yaw, b.yaw), pitch: blend(a.pitch, b.pitch), locomotion }
 }
 
 export function createReplica(connection: Connection, reconcile?: (authoritative: PawnState, pending: ClientMessage[]) => void, { closeConnection = true }: { closeConnection?: boolean } = {}) {
@@ -182,7 +196,7 @@ export function createReplica(connection: Connection, reconcile?: (authoritative
         reconcile?.(message.state, [...pending])
         const latest = pending.at(-1)
         if (latest?.type === 'move') {
-          states.set(connection.id, { ...message.state, position: latest.position, velocity: latest.velocity, seq: latest.seq })
+          states.set(connection.id, applyMovement(message.state, latest))
           entities.get(connection.id)?.set(ReplicatedPosition, { ...latest.position, seq: latest.seq })
         }
       }
@@ -194,7 +208,7 @@ export function createReplica(connection: Connection, reconcile?: (authoritative
     if (message.type === 'move') {
       pending.push(message)
       const previous = states.get(connection.id)
-      if (previous) { states.set(connection.id, { ...previous, position: message.position, velocity: message.velocity, seq: message.seq }); entities.get(connection.id)?.set(ReplicatedPosition, { ...message.position, seq: message.seq }) }
+      if (previous) { states.set(connection.id, applyMovement(previous, message)); entities.get(connection.id)?.set(ReplicatedPosition, { ...message.position, seq: message.seq }) }
     }
     connection.send(message)
   }, sample(id: string, time: number) { const pair = history.get(id); return pair ? interpolate(pair[0], pair[1], time) : states.get(id) }, onMessage(listener: (message: ServerMessage) => void) { listeners.add(listener); return () => { listeners.delete(listener) } }, close() { if (closed) return; closed = true; unsubscribe(); if (closeConnection) connection.close(); world.destroy() } }
