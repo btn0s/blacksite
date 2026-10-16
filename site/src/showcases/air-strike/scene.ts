@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { DestructionRenderer, DestructionSession, FIXED_DT_30HZ, FragmentState, type FragmentDef, type FragmentSurface } from '@blacksite/cascade'
 import { attachPerfProbe, reportActiveBodies } from '@blacksite/ui/perf-overlay'
+import { createLook, type Look } from '@blacksite/look'
 import { createAtmosphere, internalPixelRatio, isTouchDevice, meterSurface, preloadSurfaces } from '../../look/look'
 import { BLOCK, BLOCK_HEIGHT, BLOCK_LENGTH, createBlock } from './block'
 import { STRIKE, StrikeEffects } from './fx'
@@ -78,6 +79,7 @@ class OrbitRig {
 
 export class AirStrikeScene {
   readonly renderer: THREE.WebGLRenderer
+  private readonly look: Look
   readonly scene = new THREE.Scene()
   readonly camera = new THREE.PerspectiveCamera(42, 1, 0.3, 900)
   readonly rig = new OrbitRig(this.camera)
@@ -104,13 +106,15 @@ export class AirStrikeScene {
   onState: (state: AirStrikeState) => void = () => {}
 
   constructor(readonly host: HTMLElement) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' })
     this.renderer.setPixelRatio(internalPixelRatio())
     this.renderer.shadowMap.autoUpdate = false
+    this.renderer.domElement.style.filter = 'none'
     host.prepend(this.renderer.domElement)
     attachPerfProbe(this.renderer)
     const atmosphere = createAtmosphere(this.scene, this.renderer, { fog: '#8a8b7e', density: 0.0068, sunDirection: [-0.62, 0.42, 0.5], sunIntensity: 2.4, ambient: 0.95, shadowSize: 44, shadowMap: isTouchDevice() ? 1024 : 2048, exposure: 1.02 })
     atmosphere.follow(new THREE.Vector3(0, 0, 4))
+    this.look = createLook(this.renderer, this.scene, this.camera, { atmosphere: 'zone', sky: false, fog: false })
     this.reticle.visible = false
     this.reticle.renderOrder = 10
     this.beam.visible = false
@@ -178,7 +182,7 @@ export class AirStrikeScene {
   private resize = () => {
     const width = this.host.clientWidth || innerWidth
     const height = this.host.clientHeight || innerHeight
-    this.renderer.setSize(width, height)
+    this.look.setSize(width, height)
     this.camera.aspect = width / height
     this.camera.fov = width < height ? Math.min(80, THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(22)) * height / width))) : 42
     this.camera.updateProjectionMatrix()
@@ -255,7 +259,7 @@ export class AirStrikeScene {
     this.fx.warm(this.camera, this.rig.target.clone(), () => {
       this.reticle.visible = this.beam.visible = true
       this.reticle.position.copy(this.rig.target)
-      this.renderer.render(this.scene, this.camera)
+      this.look.render(0)
       this.reticle.visible = this.beam.visible = false
     })
   }
@@ -308,7 +312,7 @@ export class AirStrikeScene {
       }
     }
     if (this.state.phase === 'loading') this.renderer.shadowMap.needsUpdate = true
-    this.renderer.render(this.scene, this.camera)
+    this.look.render(dt)
   }
 
   dispose() {
@@ -318,6 +322,7 @@ export class AirStrikeScene {
     this.view?.dispose()
     void this.session?.dispose()
     this.fx.clear()
+    this.look.dispose()
     this.renderer.dispose()
     this.renderer.domElement.remove()
   }
