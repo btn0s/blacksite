@@ -68,6 +68,7 @@ Every profile, prototype kit, system, package and command in Blacksite, generate
 | @blacksite/destruction-testkit | destruction testkit |
 | @blacksite/input | Keyboard, gamepad and touch input |
 | @blacksite/look | Post stack, atmosphere and the ruins world kit |
+| @blacksite/materials | materials |
 | @blacksite/protocol | Shared room messages |
 | @blacksite/relay | Colyseus and loopback replication |
 | @blacksite/server | server |

@@ -1,0 +1,235 @@
+{
+  "name": "wood-planks",
+  "title": "Weathered wood planks",
+  "description": "150 mm sawn boards gone silver-grey, open end joints, raised grain and dark gaps.",
+  "size": 2.4,
+  "depth": 0.008,
+  "seed": 11,
+  "orientation": "wall",
+  "nodes": {
+    "boards": {
+      "op": "planks",
+      "tile": [
+        1.2,
+        0.15
+      ],
+      "gap": 0.005,
+      "bevel": 0.0025,
+      "jitter": 0.3,
+      "seed": 6710408
+    },
+    "boardId": {
+      "op": "planks",
+      "tile": [
+        1.2,
+        0.15
+      ],
+      "gap": 0.005,
+      "bevel": 0.0025,
+      "output": "random",
+      "seed": 6710408
+    },
+    "boardMask": {
+      "op": "planks",
+      "tile": [
+        1.2,
+        0.15
+      ],
+      "gap": 0.005,
+      "bevel": 0.0025,
+      "output": "mask",
+      "seed": 6710408
+    },
+    "boardId2": {
+      "op": "levels",
+      "input": "boardId",
+      "in": [
+        1,
+        0
+      ]
+    },
+    "grain": {
+      "op": "ridged",
+      "cell": [
+        0.8,
+        0.006
+      ],
+      "octaves": 4,
+      "sharpness": 3
+    },
+    "rings": {
+      "op": "fbm",
+      "cell": [
+        0.5,
+        0.03
+      ],
+      "octaves": 3
+    },
+    "grainS": {
+      "op": "warp",
+      "input": "grainA",
+      "by": "boardId",
+      "byY": "boardId2",
+      "amount": 0.4
+    },
+    "ringsS": {
+      "op": "warp",
+      "input": "rings",
+      "by": "boardId",
+      "byY": "boardId2",
+      "amount": 0.4
+    },
+    "ringLines": {
+      "op": "levels",
+      "input": "ringsS",
+      "in": [
+        0.45,
+        0.6
+      ]
+    },
+    "figure": {
+      "op": "blend",
+      "a": "grainS",
+      "b": "ringLines",
+      "mode": "overlay",
+      "opacity": 0.4
+    },
+    "knotsD": {
+      "op": "scatter",
+      "cell": 0.5,
+      "radius": 0.02,
+      "density": 0.5,
+      "shape": "blob",
+      "stretch": 0.6
+    },
+    "relief": {
+      "op": "blend",
+      "a": "boards",
+      "b": "figure2",
+      "mode": "overlay",
+      "opacity": 0.4
+    },
+    "height": {
+      "op": "blend",
+      "a": "relief",
+      "b": "knotsD",
+      "mode": "subtract",
+      "opacity": 0.25
+    },
+    "tone": {
+      "op": "blend",
+      "a": "boardId",
+      "b": "figure2",
+      "mode": "mix",
+      "opacity": 0.55
+    },
+    "wood": {
+      "op": "ramp",
+      "input": "tone",
+      "stops": [
+        [
+          0,
+          "#4f4b44"
+        ],
+        [
+          0.35,
+          "#6a655c"
+        ],
+        [
+          0.6,
+          "#7f796e"
+        ],
+        [
+          0.85,
+          "#938c80"
+        ],
+        [
+          1,
+          "#a29a8c"
+        ]
+      ]
+    },
+    "wood2": {
+      "op": "blend",
+      "a": "wood",
+      "b": "#2d2924",
+      "mode": "mix",
+      "mask": "knotsD",
+      "opacity": 0.6
+    },
+    "color": {
+      "op": "blend",
+      "a": "#161412",
+      "b": "wood3",
+      "mode": "mix",
+      "mask": "boardMask"
+    },
+    "roughness": {
+      "op": "levels",
+      "input": "grainS",
+      "out": [
+        0.82,
+        0.95
+      ]
+    },
+    "grainFine": {
+      "op": "fbm",
+      "cell": [
+        0.3,
+        0.0025
+      ],
+      "octaves": 3
+    },
+    "grainA": {
+      "op": "warp",
+      "input": "grain",
+      "by": "rings",
+      "amount": 0.004
+    },
+    "figure2": {
+      "op": "blend",
+      "a": "figure",
+      "b": "grainFine",
+      "mode": "overlay",
+      "opacity": 0.4
+    },
+    "nails": {
+      "op": "rivets",
+      "spacing": [
+        0.6,
+        0.15
+      ],
+      "radius": 0.003,
+      "offset": [
+        0.46,
+        0.0
+      ],
+      "output": "mask"
+    },
+    "wood3": {
+      "op": "blend",
+      "a": "wood2",
+      "b": "#1f1a16",
+      "mode": "mix",
+      "mask": "nails",
+      "opacity": 0.85
+    }
+  },
+  "outputs": {
+    "color": "color",
+    "height": "height",
+    "roughness": "roughness",
+    "metalness": 0
+  },
+  "finish": {
+    "normal": 1,
+    "ao": {
+      "radius": 0.015,
+      "strength": 0.9
+    }
+  },
+  "weather": {
+    "age": 0.5,
+    "dirt": 0.25
+  }
+}

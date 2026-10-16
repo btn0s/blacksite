@@ -70,10 +70,46 @@ export function patchGroundAO(material: THREE.MeshStandardMaterial, ao: GroundAO
   return material
 }
 
-const materials = new Map<string, THREE.MeshStandardMaterial>()
+export type SurfaceMaps = { readonly map: THREE.Texture; readonly normalMap: THREE.Texture; readonly roughnessMap?: THREE.Texture; readonly metalnessMap?: THREE.Texture; readonly aoMap?: THREE.Texture }
+export type SurfaceSource = { readonly name: string; readonly tile: number; readonly maps: SurfaceMaps; readonly normalScale?: number; readonly roughness?: number; readonly metalness?: number }
+export type SurfaceOptions = { color?: string; scale?: number; ao?: GroundAO | false; side?: THREE.Side }
 
-export function surface(name: SurfaceName, options: { color?: string; scale?: number; ao?: GroundAO | false; side?: THREE.Side } = {}) {
-  const key = `${name}|${options.color ?? ''}|${options.scale ?? 1}|${options.ao === false ? 'noao' : JSON.stringify(options.ao ?? '')}|${options.side ?? 0}`
+const materials = new Map<string, THREE.MeshStandardMaterial>()
+const sourced = new WeakMap<SurfaceSource, Map<string, THREE.MeshStandardMaterial>>()
+
+function sourceSurface(source: SurfaceSource, key: string, options: SurfaceOptions) {
+  const cache = sourced.get(source) ?? new Map<string, THREE.MeshStandardMaterial>()
+  sourced.set(source, cache)
+  const cached = cache.get(key)
+  if (cached) return cached
+  const normal = source.normalScale ?? 1
+  const material = new THREE.MeshStandardMaterial({
+    name: `look-${source.name}`,
+    ...source.maps,
+    normalScale: new THREE.Vector2(normal, normal),
+    color: options.color ?? '#ffffff',
+    roughness: source.roughness ?? 1,
+    metalness: source.metalness ?? (source.maps.metalnessMap ? 1 : 0),
+    side: options.side ?? THREE.FrontSide,
+    envMapIntensity: 0.55,
+  })
+  material.userData.tile = source.tile * (options.scale ?? 1)
+  if (options.ao !== false) patchGroundAO(material, options.ao || undefined)
+  cache.set(key, material)
+  material.addEventListener('dispose', () => cache.delete(key))
+  return material
+}
+
+export function releaseSurface(source: SurfaceSource) {
+  const cache = sourced.get(source)
+  if (!cache) return
+  for (const material of cache.values()) material.dispose()
+  sourced.delete(source)
+}
+
+export function surface(name: SurfaceName | SurfaceSource, options: SurfaceOptions = {}) {
+  const key = `${typeof name === 'string' ? name : 'source'}|${options.color ?? ''}|${options.scale ?? 1}|${options.ao === false ? 'noao' : JSON.stringify(options.ao ?? '')}|${options.side ?? 0}`
+  if (typeof name !== 'string') return sourceSurface(name, key, options)
   const cached = materials.get(key)
   if (cached) return cached
   const spec = SURFACES[name]
@@ -94,17 +130,19 @@ export function surface(name: SurfaceName, options: { color?: string; scale?: nu
   return material
 }
 
-export function meterSurface(name: SurfaceName, options: { color?: string; scale?: number; ao?: GroundAO | false; roughness?: number } = {}) {
+export function meterSurface(name: SurfaceName | SurfaceSource, options: { color?: string; scale?: number; ao?: GroundAO | false; roughness?: number } = {}) {
   const base = surface(name, options)
   const material = base.clone()
   material.onBeforeCompile = base.onBeforeCompile
   material.customProgramCacheKey = base.customProgramCacheKey
   if (options.roughness !== undefined) material.roughness = options.roughness
   const repeat = 1 / (base.userData.tile as number)
-  for (const key of ['map', 'normalMap'] as const) {
+  const clones = new Map<THREE.Texture, THREE.Texture>()
+  for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap'] as const) {
     const map = base[key]
     if (!map) continue
-    const scaled = map.clone()
+    const scaled = clones.get(map) ?? map.clone()
+    clones.set(map, scaled)
     scaled.repeat.set(repeat, repeat)
     scaled.needsUpdate = true
     material[key] = scaled

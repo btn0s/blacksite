@@ -1,0 +1,75 @@
+{
+  "name": "wood-planks-image",
+  "title": "wood-planks (from image)",
+  "description": "Generated photograph made tileable and turned into a PBR set. Source: images/wood-planks.json (gemini-3.1-flash-image).",
+  "size": 2,
+  "depth": 0.008,
+  "seed": 1,
+  "orientation": "wall",
+  "nodes": {
+    "photo": {
+      "op": "image",
+      "src": "../images/wood-planks.webp"
+    },
+    "tiled": {
+      "op": "seamless",
+      "input": "photo",
+      "width": 0.2
+    },
+    "albedo": {
+      "op": "delight",
+      "input": "tiled",
+      "radius": 0.4,
+      "strength": 0.85
+    },
+    "luma": {
+      "op": "channel",
+      "input": "tiled",
+      "channel": "luma"
+    },
+    "detail": {
+      "op": "highpass",
+      "input": "luma",
+      "radius": 0.05
+    },
+    "soft": {
+      "op": "blur",
+      "input": "detail",
+      "radius": 0.001
+    },
+    "relief": {
+      "op": "levels",
+      "input": "soft",
+      "in": [
+        0.38,
+        0.62
+      ]
+    },
+    "roughness": {
+      "op": "levels",
+      "input": "luma",
+      "out": [
+        0.95,
+        0.8
+      ]
+    }
+  },
+  "outputs": {
+    "color": "albedo",
+    "height": "relief",
+    "roughness": "roughness",
+    "metalness": 0
+  },
+  "finish": {
+    "normal": 1.0,
+    "ao": {
+      "radius": 0.03,
+      "strength": 0.8
+    }
+  },
+  "source": {
+    "image": "../images/wood-planks.webp",
+    "model": "gemini-3.1-flash-image",
+    "prompt": "Flat orthographic straight-on photograph of exactly 2 m x 2 m of weathered grey wooden planks, laid horizontally, each board 15 cm wide, with narrow dark gaps between boards, face-on, filling the entire frame edge to edge. Silvery grey weathered grain, cracks, a few knots. Muted desaturated Soviet industrial ruin, physically plausible colours. Even overcast diffuse daylight, no cast shadows, no directional light, no vignette, no lighting gradient, no perspective, no objects, no text, no watermark. Uniform exposure across the whole image."
+  }
+}
