@@ -24,6 +24,9 @@ importers:
       '@blacksite/input':
         specifier: workspace:*
         version: link:packages/input
+      '@blacksite/look':
+        specifier: workspace:*
+        version: link:packages/look
       '@blacksite/relay':
         specifier: workspace:*
         version: link:packages/relay
@@ -498,6 +501,15 @@ importers:
         version: link:../destruction-domain
 
   packages/input: {}
+
+  packages/look:
+    dependencies:
+      n8ao:
+        specifier: ^2.0.1
+        version: 2.0.1(postprocessing@6.39.5(three@0.186.1))(three@0.186.1)
+      postprocessing:
+        specifier: ^6.39.5
+        version: 6.39.5(three@0.186.1)
 
   packages/protocol: {}
 

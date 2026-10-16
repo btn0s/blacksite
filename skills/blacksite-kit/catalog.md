@@ -73,6 +73,7 @@ Generated from `blacksite catalog --json` on release.
 | @blacksite/destruction-server | destruction server |
 | @blacksite/destruction-testkit | destruction testkit |
 | @blacksite/input | input |
+| @blacksite/look | look |
 | @blacksite/protocol | Shared room messages |
 | @blacksite/relay | Colyseus and loopback replication |
 | @blacksite/server | server |
