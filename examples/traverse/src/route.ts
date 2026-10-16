@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { Surface } from '@blacksite/soundscape'
 import { LevelBuilder, apartmentBlock, deadTree, groundMaterial, lada, puddleMaterial, shed, worldPlaneGeometry, type SurfaceName } from '@blacksite/look/world'
 import { feet } from './model'
@@ -238,17 +239,22 @@ export function buildRoute() {
 
   const puddles = puddleMaterial()
   const puddleSpots = [[17, 4, 2.6, 1.4, 0.3], [30.5, -1.2, 3.4, 1.8, -0.2], [64, 2, 4.2, 2.4, 0.6], [80, 4, 2.2, 1.3, 1.2], [146, 2, 3, 1.5, 0.1], [152, -6, 3.6, 2, 0.4]] as const
+  const pools: THREE.BufferGeometry[] = []
+  const place = new THREE.Object3D()
   for (const [x, z, w, d, r] of puddleSpots) {
     for (const [ox, oz, k] of [[0, 0, 1], [w * 0.32, d * 0.18, 0.62], [-w * 0.28, -d * 0.12, 0.55]] as const) {
-      const puddle = new THREE.Mesh(new THREE.CircleGeometry(0.5, 18), puddles)
-      puddle.rotation.set(-Math.PI / 2, 0, r + k)
-      puddle.scale.set(w * k, d * k, 1)
-      puddle.position.set(x + ox, 0.03, z + oz)
-      puddle.receiveShadow = true
-      puddle.renderOrder = 2
-      level.mesh(puddle)
+      place.rotation.set(-Math.PI / 2, 0, r + k)
+      place.scale.set(w * k, d * k, 1)
+      place.position.set(x + ox, 0.03, z + oz)
+      place.updateMatrix()
+      pools.push(new THREE.CircleGeometry(0.5, 18).applyMatrix4(place.matrix))
     }
   }
+  const puddle = new THREE.Mesh(mergeGeometries(pools), puddles)
+  pools.forEach(pool => pool.dispose())
+  puddle.receiveShadow = true
+  puddle.renderOrder = 2
+  level.mesh(puddle)
 
   const gates: Gate[] = [
     { name: 'Start', at: [9.5, 1.5, 0], half: [0.6, 2, 2.4], yaw: 0 },
