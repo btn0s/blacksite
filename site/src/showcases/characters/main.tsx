@@ -11,6 +11,7 @@ import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { AlsFootstepAudioRuntime } from 'als-ue5-r3f/engine/alsAudioBridge'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
+import { Look } from '@blacksite/look/r3f'
 import { createAtmosphere, internalPixelRatio, texturesReady } from '../../look/look'
 import { Hints, Loading, Prompt, Screen, TitleCard, TouchPad, useTouch } from '../../look/hud'
 import { buildCheckpoint } from './checkpoint'
@@ -58,6 +59,7 @@ function Scene({ onFirstPerson }: { onFirstPerson: (value: boolean) => void }) {
   }, ALS_FRAME_PRIORITY.Camera + 0.04)
   return <>
     <Atmosphere />
+    <Look atmosphere="zone" sky={false} fog={false} />
     <Physics gravity={[0, -9.81, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <Character onSizeChange={() => {}} poseSample={pose} worldTime={time} onOverlayModeBridgeChange={() => {}} footstepSoundSink={audio} toggleRotationModeKey={null} showDebugControls={false} initialPosition={level.spawn} />
       <AlsCamera poseSample={pose} worldTime={time} footstepAudioRuntime={audio} toggleViewModeKey="KeyV" />
@@ -104,7 +106,7 @@ function App() {
     return () => { cancelled = true; document.removeEventListener('pointerlockchange', onLock) }
   }, [])
   return <Screen>
-    <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 70, near: 0.05, far: 600, position: [-4, 2, 0] }} gl={{ antialias: true, powerPreference: 'high-performance' }} onCreated={state => attachPerfProbe(state.gl)}>
+    <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 70, near: 0.05, far: 600, position: [-4, 2, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }} onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
       {ready && <Scene onFirstPerson={setFirstPerson} />}
     </Canvas>
     <TitleCard title="ALS Web · Checkpoint" />
