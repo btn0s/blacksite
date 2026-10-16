@@ -503,8 +503,21 @@ export interface ReplayLog {
   simulationVersion?: string;
   version: 1;
 }
+export interface RestPolicy {
+  speed: number;
+  spin: number;
+  seconds: number;
+  forceAfterSeconds?: number;
+  forceSpeed?: number;
+  forceSpin?: number;
+}
+export const restVersionSuffix = (rest?: Partial<RestPolicy>): string => {
+  if (!rest) return '';
+  const parts = [rest.speed, rest.spin, rest.seconds, rest.forceAfterSeconds, rest.forceSpeed, rest.forceSpin];
+  return parts.some(part => part !== undefined) ? `-rest${parts.map(part => part ?? '').join(',')}` : '';
+};
 export type WorkerRequest =
-  | { manifest: DestructibleManifest; timestep?: number; type: 'init' }
+  | { manifest: DestructibleManifest; rest?: Partial<RestPolicy>; timestep?: number; type: 'init' }
   | { command: DestructionCommand; type: 'command' }
   | {
       clearanceBoxes?: Array<CollisionBox>;

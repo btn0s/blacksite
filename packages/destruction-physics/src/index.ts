@@ -22,6 +22,8 @@ import {
   FIXED_DT,
   isSupportedTimestep,
   simulationVersionFor,
+  restVersionSuffix,
+  type RestPolicy,
   physicsOperationsVersionFor,
   BondState,
   FragmentState,
@@ -96,6 +98,7 @@ interface Island {
   primaries: Map<number, RAPIER.Collider>;
   settled: boolean;
   stableTicks: number;
+  restTicks?: number;
   transformState?: FragmentState;
 }
 interface SecondaryBody {
@@ -109,6 +112,7 @@ interface SecondaryBody {
   fragment: SecondaryFragmentDef;
   settled: boolean;
   stableTicks: number;
+  restTicks?: number;
   velocity: V;
 }
 interface VisualRetirement {
@@ -256,6 +260,7 @@ export interface DestructionSimulationOptions {
   timestep?: number;
   /** Blast pressure impulse, N·s/m² per unit command strength. */
   pressureImpulse?: number;
+  rest?: Partial<RestPolicy>;
 }
 
 export interface DestructionHostPhysics {
@@ -777,6 +782,9 @@ export class DestructionSimulation {
   /** How many 60 Hz ticks one step covers; scales the per-tick work budgets. */
   private readonly tickScale: number;
   private readonly settleTicks: number;
+  private readonly rest: RestPolicy;
+  private readonly restSuffix: string;
+  private readonly forceRestTicks: number;
   /** Bumped whenever a body is created, removed or changes type, to invalidate `dynamicCount`. */
   private bodyRevision = 0;
   private dynamicCount = { count: 0, revision: -1 };
@@ -990,7 +998,15 @@ export class DestructionSimulation {
     }
     this.dt = dt;
     this.tickScale = Math.max(1, Math.round(dt / FIXED_DT));
-    this.settleTicks = Math.max(1, this.ticks(SETTLE_SECONDS));
+    this.rest = { speed: SETTLE_SPEED, spin: SETTLE_SPIN, seconds: SETTLE_SECONDS, ...options.rest };
+    this.rest.forceSpeed ??= this.rest.speed * SETTLE_HOLD;
+    this.rest.forceSpin ??= this.rest.spin * SETTLE_HOLD;
+    for (const value of [this.rest.speed, this.rest.spin, this.rest.seconds, this.rest.forceAfterSeconds ?? 1, this.rest.forceSpeed, this.rest.forceSpin]) {
+      if (!Number.isFinite(value) || value <= 0) throw new Error("Rest policy values must be finite and positive.");
+    }
+    this.restSuffix = restVersionSuffix(options.rest);
+    this.settleTicks = Math.max(1, this.ticks(this.rest.seconds));
+    this.forceRestTicks = this.rest.forceAfterSeconds === undefined ? Infinity : Math.max(this.settleTicks, this.ticks(this.rest.forceAfterSeconds));
     this.budget = new StepBudget(dt * 1000);
     this.crushBudget = MAX_CRUSHED_PER_TICK * this.tickScale;
     this.rapier = host?.rapier ?? engine!;
@@ -6631,14 +6647,24 @@ export class DestructionSimulation {
   private countStable(item: {
     body: RAPIER.RigidBody;
     stableTicks: number;
+    restTicks?: number;
   }): void {
-    const linear = squared(item.body.linvel()) / SETTLE_SPEED ** 2,
-      angular = squared(item.body.angvel()) / SETTLE_SPIN ** 2;
+    const linvel = squared(item.body.linvel()),
+      angvel = squared(item.body.angvel()),
+      linear = linvel / this.rest.speed ** 2,
+      angular = angvel / this.rest.spin ** 2;
     if (linear < 1 && angular < 1) {
       item.stableTicks++;
     } else if (linear > SETTLE_HOLD ** 2 || angular > SETTLE_HOLD ** 2) {
       item.stableTicks = 0;
     }
+    if (this.forceRestTicks === Infinity) return;
+    item.restTicks = linvel < this.rest.forceSpeed! ** 2 && angvel < this.rest.forceSpin! ** 2 ? (item.restTicks ?? 0) + 1 : 0;
+  }
+
+  private forceRest(item: { body: RAPIER.RigidBody; restTicks?: number }): void {
+    if ((item.restTicks ?? 0) < this.forceRestTicks) return;
+    if (item.body.isDynamic() && !item.body.isSleeping() && !this.bearingSupports.has(item.body)) item.body.sleep();
   }
 
   /** What an island carries once baked: its contact wrenches are frozen and it counts as settled. */
@@ -7396,6 +7422,11 @@ export class DestructionSimulation {
       this.impactTopologyDirty = true;
       this.releaseDependents(support.body.handle);
     }
+    if (support.pending && this.forceRestTicks !== Infinity && support.body.isDynamic()) {
+      this.releaseBearingSupport(support.body);
+      (support.island ?? support.child)!.stableTicks = 0;
+      return;
+    }
     // At the live-body cap the broken record remains retryable on the next prepare pass.
     if (support.island) this.wakeIsland(support.island);
     else if (support.child) this.wakeChild(support.child);
@@ -7739,6 +7770,7 @@ export class DestructionSimulation {
     island.body.wakeUp();
     island.settled = false;
     island.stableTicks = 0;
+    island.restTicks = 0;
     return true;
   }
 
@@ -7754,6 +7786,7 @@ export class DestructionSimulation {
     child.body.wakeUp();
     child.settled = false;
     child.stableTicks = 0;
+    child.restTicks = 0;
     return true;
   }
 
@@ -8021,6 +8054,7 @@ export class DestructionSimulation {
     for (const island of this.islands.values()) {
       if (!island.settled) {
         this.countStable(island);
+        this.forceRest(island);
         if (this.restingOn.size) {
           this.checkSupport(island.body);
         }
@@ -8062,6 +8096,7 @@ export class DestructionSimulation {
       }
       if (!child.settled) {
         this.countStable(child);
+        this.forceRest(child);
         if (this.restingOn.size) {
           this.checkSupport(child.body);
         }
@@ -8312,11 +8347,11 @@ export class DestructionSimulation {
   }
 
   get simulationVersion(): string {
-    return simulationVersionFor(this.dt) + flavourSuffix();
+    return simulationVersionFor(this.dt) + flavourSuffix() + this.restSuffix;
   }
 
   get physicsOperationsVersion(): string {
-    return physicsOperationsVersionFor(this.dt) + flavourSuffix();
+    return physicsOperationsVersionFor(this.dt) + flavourSuffix() + this.restSuffix;
   }
 
   /** Converts a duration in seconds to whole ticks of this simulation's step. */

@@ -21,6 +21,7 @@ import type {
   SimulationFrame,
   WorkerResponse,
   ReplayLog,
+  RestPolicy,
   SimulationStats,
   Vec3,
   DestructionEvent,
@@ -66,6 +67,7 @@ export class DestructionSession {
   private bonds: Array<BondDef> | undefined;
   private snapshotPeriod = 1000 / 30;
   private readonly timestep: number | undefined;
+  private readonly rest: Partial<RestPolicy> | undefined;
   private rateSample = { at: 0, frames: 0, tick: 0 };
   private managed: ReturnType<typeof createWorkerRuntime>;
   private worker: WorkerPort | null = null;
@@ -99,9 +101,10 @@ export class DestructionSession {
   constructor(
     readonly manifest: DestructibleManifest,
     readonly hooks: RuntimeHooks = {},
-    options: { timestep?: number; workerFactory?: () => WorkerPort } = {},
+    options: { rest?: Partial<RestPolicy>; timestep?: number; workerFactory?: () => WorkerPort } = {},
   ) {
     this.timestep = options.timestep;
+    this.rest = options.rest;
     this.managed = createWorkerRuntime(options.workerFactory ?? createDestructionWorker);
     this.mirror = new PresentationWorld(manifest);
     this.actor.subscribe((s) => {
@@ -119,7 +122,7 @@ export class DestructionSession {
       this.worker = worker;
       worker.onmessage = (e) => this.receive(e.data as WorkerResponse);
       worker.onerror = (e) => this.fail(e.message || 'Physics worker stopped unexpectedly');
-      worker.postMessage({ manifest: this.manifest, timestep: this.timestep, type: 'init' });
+      worker.postMessage({ manifest: this.manifest, ...(this.rest ? { rest: this.rest } : {}), timestep: this.timestep, type: 'init' });
     } catch (error) {
       this.fail(String(error));
     }
