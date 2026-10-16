@@ -10,7 +10,8 @@
 
 ## Standard use
 
-- One `makeInputDevices()` per client, provided with `<InputProvider runtime={…}>`, or `inputDevicesLayer` in an Effect app.
+- One `makeInputDevices()` per client, provided with `<InputProvider runtime={…}>`, or `inputDevicesLayer` from `@blacksite/input/effect` in an Effect 3 app.
+- Move and look through `actions.value(action)`: sticks, mouse delta (only under pointer lock), touch joystick (`setTouchStick`) and touch drag (`addTouchLook`) are summed with their modifiers. Scale mouse and touch look per pixel; scale the right stick with `scaleByDeltaTime`.
 - Gameplay bindings with `createGameplayContext([...GAMEPLAY.bindings, …])`, switched with `useInputContext(play, inGame)` and `useInputContext(MENU, !inGame)`.
 - `useActionEvents` for edges and `useActionHeld` for held state; `useInputSource()` for glyphs.
 - Touch: `TouchPad` from `@blacksite/ui/hud` for a stick and look zone, `TouchControls` for buttons.
@@ -28,11 +29,10 @@
 
 ## What isn't there yet
 
-- No game or showcase uses the runtime yet; the showcases drive characters with synthetic key events from `TouchPad`, `keySubject` or `StandaloneTouch`.
-- Analog controls are typed but never read: sticks, mouse deltas and touch drags evaluate to zero in the action hub. Move and look can't flow through actions yet.
+- The showcases still drive characters with synthetic key events from `TouchPad`, `keySubject` or `StandaloneTouch`. Every scaffolded game uses the runtime (`src/game/input.ts`).
 - No rebinding UI or saved bindings; settings aren't consumed.
 - Aim assist needs a target-candidate builder that doesn't exist.
-- `TouchPad` has no dead zone; add 0.1–0.15 for movement.
+- `TouchPad` has no dead zone; put 0.1–0.15 on the binding with a `deadZone` modifier.
 
 ## Rules
 

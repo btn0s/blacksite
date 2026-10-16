@@ -34,7 +34,7 @@ Read the numbers the way they were measured:
 
 ## The contract
 
-A game is checkable when it sets `window.__blacksite` once its first playable frame is on screen. The types and two helpers come from `@blacksite/check`:
+A game is checkable when it sets `window.__blacksite` once its first playable frame is on screen. A scaffolded game has it in `src/game/check.tsx`, reading `src/game/model.ts`, so a fresh scaffold passes. The types and two helpers come from `@blacksite/check`:
 
 ```ts
 import { applyCameraPose, exposeCheck, type Bookmark } from '@blacksite/check'

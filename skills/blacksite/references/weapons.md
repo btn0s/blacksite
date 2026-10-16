@@ -32,7 +32,7 @@ Armory (`@blacksite/armory`) is a deterministic weapon simulation: fire modes, c
 - No melee, grenades or throwables.
 - No recoil pattern or bloom: spread is a fixed cone and recoil is random per shot. Aiming changes nothing in Armory; the Firing Range scales kick by 0.7 and narrows the FOV in game code.
 - The arms animate the rifle and pistol only. The bow's projectile path is untested in a shipped scene.
-- The `fpp` template stubs collision queries, so a new game hits nothing until it adds them.
+- The `fpp` template answers Armory's queries with Rapier rays (a sphere sweep is approximated by its centre ray), excluding the player's capsule. Give targets their own colliders and map `colliderId` to them.
 - No lag compensation on the server (`multiplayer.md`).
 
 Build the missing ones the way shipped shooters did: a learnable recoil pattern, spread that grows with sustained fire and movement, headshots at 2× or more, and falloff past an effective range.
