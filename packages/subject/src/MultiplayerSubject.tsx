@@ -60,6 +60,7 @@ export interface MultiplayerSceneProps {
   subject?: SubjectState
   initialSpawn?: readonly [number, number, number]
   onArmsPresentation?: (presentation: ArmsPresentation | null) => void
+  input?: 'dom' | 'external'
   children?: ReactNode
   onReplica?: (replica: MultiplayerReplica | null) => void
   onStatus?: (status: MultiplayerStatus) => void
@@ -167,7 +168,7 @@ export function MultiplayerScene(props: MultiplayerSceneProps) {
   return replica ? <Suspense fallback={null}><ReplicatedScene {...props} subject={subject} replica={replica} /></Suspense> : null
 }
 
-function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics, onShot, physicsProbe, onArmsPresentation, children, subject, replica }: MultiplayerSceneProps & { subject: SubjectState; replica: MultiplayerReplica }) {
+function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics, onShot, physicsProbe, onArmsPresentation, input = 'dom', children, subject, replica }: MultiplayerSceneProps & { subject: SubjectState; replica: MultiplayerReplica }) {
   const inputSource = useMemo(() => createSubjectInputSource(subject), [subject])
   const controlRotationSource = useMemo(() => () => ({ yaw: subject.player.command.yaw, pitch: subject.player.command.pitch }), [subject])
   const arms = useMemo(createArmsState, [])
@@ -292,7 +293,7 @@ function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics,
       {children}
       {remotes.map(key => { const [id, life] = key.split('#'); return <RemotePawn key={key} id={id!} life={Number(life)} replica={replica} onClock={telemetry.record} /> })}
     </Physics></Suspense>
-    <Subject controller={subject} /><Suspense fallback={null}><ArmsViewmodel state={arms} visible={view === 'first-person'} render={onArmsPresentation ? 'external' : 'composite'} onPresentation={onArmsPresentation} /></Suspense>
+    <Subject controller={subject} input={input} /><Suspense fallback={null}><ArmsViewmodel state={arms} visible={view === 'first-person'} render={onArmsPresentation ? 'external' : 'composite'} onPresentation={onArmsPresentation} /></Suspense>
   </>
 }
 

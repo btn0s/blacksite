@@ -253,6 +253,41 @@ export function updateFpsMovementInput(controller: SubjectState): void {
     && forward > 0 && (keys.has('ShiftLeft') || keys.has('ShiftRight'))
 }
 
+export interface SubjectIntent {
+  forward: number
+  right: number
+  sprint: boolean
+  crouch: boolean
+  walk: boolean
+  fire: boolean
+  aim: boolean
+}
+
+export function driveSubject(controller: SubjectState, intent: SubjectIntent): void {
+  if (!controller.enabled) { resetFpsInput(controller); return }
+  const { player, input } = controller
+  const length = Math.hypot(intent.right, intent.forward)
+  const scale = length > 1 ? 1 / length : 1
+  player.command.active = true
+  player.command.right = intent.right * scale
+  player.command.forward = intent.forward * scale
+  player.command.crouch = intent.crouch
+  player.command.aim = input.aim = intent.aim
+  input.fire = intent.fire
+  input.walk = intent.walk
+  player.command.sprint = intent.sprint && !intent.aim && !intent.crouch && intent.forward > 0
+}
+
+export type SubjectPress = 'jump' | 'reload' | 'view' | FpsWeapon
+
+export function pressSubject(controller: SubjectState, press: SubjectPress): void {
+  if (!controller.enabled) return
+  if (press === 'jump') controller.player.command.jumpSequence++
+  else if (press === 'reload') controller.input.reloadSequence++
+  else if (press === 'view') { if (controller.options.cameraMode === 'switchable') controller.setView(controller.view === 'first-person' ? 'third-person' : 'first-person') }
+  else controller.setWeapon(press)
+}
+
 /** Focus/lock loss cannot leave firing, aiming or movement latched. */
 export function resetFpsInput(controller: SubjectState): void {
   controller.keys.clear()

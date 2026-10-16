@@ -1,6 +1,5 @@
 import { makeActionHub } from "./actionHub"
 import type { InputDevice as InputSourceDevice } from "./actions"
-import { Context, Effect, Layer } from "effect"
 export type InputDeviceFamily = "keyboardMouse" | "xbox" | "playstation" | "generic"
 export interface InputSnapshot {
   device: InputDeviceFamily
@@ -244,45 +243,19 @@ export function makeInputDevices() {
       actions.reset()
       update({ gameplayReady: false })
     },
-    rumble: (
-      duration: number,
-      strongMagnitude: number,
-      weakMagnitude: number
-    ) =>
-      Effect.sync(() => {
-        if (
-          !rumbleEnabled ||
-          !focused ||
-          !gameplay ||
-          snapshot.device === "keyboardMouse"
-        )
-          return
-        const actuator = activePad()?.vibrationActuator
-        if (actuator?.playEffect)
-          void actuator
-            .playEffect("dual-rumble", {
-              duration,
-              startDelay: 0,
-              strongMagnitude,
-              weakMagnitude,
-            })
-            .catch(() => {})
-      }),
+    rumble: (duration: number, strongMagnitude: number, weakMagnitude: number) => {
+      if (!rumbleEnabled || !focused || !gameplay || snapshot.device === "keyboardMouse") return
+      const actuator = activePad()?.vibrationActuator
+      if (actuator?.playEffect)
+        void actuator
+          .playEffect("dual-rumble", { duration, startDelay: 0, strongMagnitude, weakMagnitude })
+          .catch(() => {})
+    },
     mount: () => {
       start()
       return () => {
         if (--users === 0) stop()
       }
     },
-    listen: Effect.acquireRelease(Effect.sync(() => {
-      start()
-    }), () => Effect.sync(() => {
-      if (--users === 0) stop()
-    })).pipe(Effect.flatMap(() => Effect.never)),
   }
 }
-export class InputDevices extends Context.Tag("@blacksite/input/InputDevices")<
-  InputDevices,
-  ReturnType<typeof makeInputDevices>
->() {}
-export const inputDevicesLayer = Layer.sync(InputDevices, makeInputDevices)

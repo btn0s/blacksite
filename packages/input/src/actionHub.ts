@@ -8,6 +8,9 @@ import type {
 } from "./actions"
 import { createEvaluator, winningBindings, type Impulse } from "./evaluate"
 
+const ZERO: Vec2 = Object.freeze({ x: 0, y: 0 })
+const isDown = (value: Vec2 | undefined) => Boolean(value && (value.x || value.y))
+
 export function makeActionHub() {
   const contexts = new Map<symbol, InputContext>()
   const listeners = new Set<(event: ActionEvent) => void>()
@@ -16,6 +19,13 @@ export function makeActionHub() {
   const touchButtons = new Set<string>()
   const impulses = new Set<string>()
   const gestures = new Map<PointerGesture, Impulse>()
+  const mouseButtons = new Set<number>()
+  const touchSticks = new Map<string, Vec2>()
+  const mouseDelta = { x: 0, y: 0 }
+  const touchLook = { x: 0, y: 0 }
+  const frameMouse = { x: 0, y: 0 }
+  const frameTouch = { x: 0, y: 0 }
+  let lastTick: number | null = null
   let values: ReadonlyMap<string, Vec2> = new Map()
   let evaluate = createEvaluator()
   let any: Impulse | null = null
@@ -27,6 +37,11 @@ export function makeActionHub() {
     touchButtons.clear()
     impulses.clear()
     gestures.clear()
+    mouseButtons.clear()
+    touchSticks.clear()
+    mouseDelta.x = mouseDelta.y = touchLook.x = touchLook.y = 0
+    frameMouse.x = frameMouse.y = frameTouch.x = frameTouch.y = 0
+    lastTick = null
     evaluate = createEvaluator()
     values = new Map()
     for (const listener of heldListeners) listener()
@@ -53,11 +68,20 @@ export function makeActionHub() {
         heldListeners.delete(listener)
       }
     },
-    isHeld: (action: string) => Boolean(values.get(action)?.x),
+    isHeld: (action: string) => isDown(values.get(action)),
+    value: (action: string): Vec2 => values.get(action) ?? ZERO,
     reset,
     setTouchButton(button: string, pressed: boolean) {
       if (pressed) touchButtons.add(button)
       else touchButtons.delete(button)
+    },
+    setTouchStick(stick: string, x: number, y: number) {
+      if (x || y) touchSticks.set(stick, { x, y })
+      else touchSticks.delete(stick)
+    },
+    addTouchLook(dx: number, dy: number) {
+      touchLook.x += dx
+      touchLook.y += dy
     },
     attach(changeSource: (source: InputDevice) => void) {
       const touches = new Map<number, { x: number; y: number; at: number }>()
@@ -103,6 +127,23 @@ export function makeActionHub() {
       }
       const keyUp = (event: KeyboardEvent) => {
         held.delete(event.code)
+      }
+      const mouseDown = (event: MouseEvent) => {
+        if (pointerSource === "touch" || !document.pointerLockElement) return
+        mouseButtons.add(event.button)
+      }
+      const mouseUp = (event: MouseEvent) => {
+        mouseButtons.delete(event.button)
+      }
+      const mouseMove = (event: MouseEvent) => {
+        if (!document.pointerLockElement) return
+        mouseDelta.x += event.movementX
+        mouseDelta.y += event.movementY
+      }
+      const lockChange = () => {
+        if (document.pointerLockElement) return
+        mouseButtons.clear()
+        mouseDelta.x = mouseDelta.y = 0
       }
       const pointerDown = (event: PointerEvent) => {
         const device =
@@ -185,6 +226,10 @@ export function makeActionHub() {
       window.addEventListener("pointerup", pointerUp, true)
       window.addEventListener("click", click, true)
       window.addEventListener("pointercancel", pointerCancel)
+      window.addEventListener("mousedown", mouseDown, true)
+      window.addEventListener("mouseup", mouseUp, true)
+      window.addEventListener("mousemove", mouseMove, true)
+      document.addEventListener("pointerlockchange", lockChange)
       window.addEventListener("blur", blur)
       return () => {
         window.removeEventListener("keydown", keyDown, true)
@@ -194,6 +239,10 @@ export function makeActionHub() {
         window.removeEventListener("pointerup", pointerUp, true)
         window.removeEventListener("click", click, true)
         window.removeEventListener("pointercancel", pointerCancel)
+        window.removeEventListener("mousedown", mouseDown, true)
+        window.removeEventListener("mouseup", mouseUp, true)
+        window.removeEventListener("mousemove", mouseMove, true)
+        document.removeEventListener("pointerlockchange", lockChange)
         window.removeEventListener("blur", blur)
         reset()
       }
@@ -203,19 +252,34 @@ export function makeActionHub() {
         previousPad = pad?.index
         evaluate = createEvaluator()
       }
+      frameMouse.x = mouseDelta.x
+      frameMouse.y = mouseDelta.y
+      frameTouch.x = touchLook.x
+      frameTouch.y = touchLook.y
+      mouseDelta.x = mouseDelta.y = touchLook.x = touchLook.y = 0
+      const dt = lastTick === null ? 0 : Math.min(0.1, Math.max(0, (now - lastTick) / 1000))
+      lastTick = now
       const read = (control: Control): Vec2 => {
-        let down = false
-        if (control.device === "keyboard") down = held.has(control.key)
-        if (control.device === "touch" && "button" in control) down = touchButtons.has(control.button)
-        if (control.device === "gamepad") {
-          if ("button" in control)
-            down = Boolean(pad?.buttons[control.button]?.pressed)
-          if ("axis" in control)
-            down =
-              (pad?.axes[control.axis] ?? 0) * control.direction >
-              control.threshold
+        if (control.device === "mouse")
+          return "delta" in control ? { ...frameMouse } : { x: Number(mouseButtons.has(control.button)), y: 0 }
+        if (control.device === "touch") {
+          if ("joystick" in control) return touchSticks.get(control.joystick) ?? ZERO
+          if ("drag" in control) return { ...frameTouch }
+          return { x: Number(touchButtons.has(control.button)), y: 0 }
         }
-        return { x: Number(down), y: 0 }
+        if (control.device === "keyboard") return { x: Number(held.has(control.key)), y: 0 }
+        if (control.device === "gamepad") {
+          if ("stick" in control) {
+            const axis = control.stick === "left" ? 0 : 2
+            return { x: pad?.axes[axis] ?? 0, y: pad?.axes[axis + 1] ?? 0 }
+          }
+          if ("button" in control) {
+            const button = pad?.buttons[control.button]
+            return { x: button?.pressed ? button.value || 1 : 0, y: 0 }
+          }
+          return { x: Number((pad?.axes[control.axis] ?? 0) * control.direction > control.threshold), y: 0 }
+        }
+        return ZERO
       }
       const impulse = (control: Control): Impulse | null => {
         if (control.device === "any") return any
@@ -240,14 +304,13 @@ export function makeActionHub() {
                   : "keyboard",
         },
         now / 1000,
-        0
+        dt
       )
       const changed = [
         ...new Set([...values.keys(), ...result.values.keys()]),
       ].some(
         (action) =>
-          Boolean(values.get(action)?.x) !==
-          Boolean(result.values.get(action)?.x)
+          isDown(values.get(action)) !== isDown(result.values.get(action))
       )
       values = result.values
       impulses.clear()

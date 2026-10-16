@@ -15,11 +15,17 @@
     "./touch-walk": "./src/touch-walk.ts",
     "./observations": "./src/observations.ts",
     "./settings": "./src/settings.ts",
-    "./aim-assist": "./src/aimAssist.ts"
+    "./aim-assist": "./src/aimAssist.ts",
+    "./effect": "./src/effect.ts"
   },
   "peerDependencies": {
     "effect": "^3.19.0",
     "react": "^19.2.0"
   },
-  "license": "FSL-1.1-ALv2"
+  "license": "FSL-1.1-ALv2",
+  "peerDependenciesMeta": {
+    "effect": {
+      "optional": true
+    }
+  }
 }
