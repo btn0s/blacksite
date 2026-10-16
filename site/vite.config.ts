@@ -5,7 +5,7 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 import { resolve } from 'node:path'
 import { blacksiteAssets } from '../cli/serve-assets.mjs'
 
-const base = process.env.SITE_BASE || '/blacksite/'
+const base = process.env.SITE_BASE || '/'
 
 export default defineConfig({
   root: resolve(import.meta.dirname),
