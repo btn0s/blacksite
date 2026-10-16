@@ -18,11 +18,12 @@ const scans = JSON.parse(await readFile(path.join(here, '../scans/scans.json'), 
 const light = [-0.5, 0.6, 0.62]
 const norm = Math.hypot(...light)
 
-function render(color: Img, normal: Img | null, ao: Img | null, size: number, metres: number, lit: boolean, mode: 'color' | 'lit' | 'channel', channel = 0) {
+function render(color: Img, normal: Img | null, ao: Img | null, size: number | readonly [number, number], metres: number, lit: boolean, mode: 'color' | 'lit' | 'channel', channel = 0) {
+  const [width, height] = typeof size === 'number' ? [size, size] : size
   const bytes = Buffer.alloc(view * view * 3)
   for (let y = 0; y < view; y++) for (let x = 0; x < view; x++) {
-    const u = ((x + 0.5) / view * metres / size) % 1
-    const v = (1 - (y + 0.5) / view) * metres / size % 1
+    const u = ((x + 0.5) / view * metres / width) % 1
+    const v = (1 - (y + 0.5) / view) * metres / height % 1
     const sx = Math.min(color.w - 1, Math.floor(u * color.w)), sy = Math.min(color.h - 1, Math.floor(v * color.h))
     const i = (sy * color.w + sx) * 4
     let shade = 1
@@ -60,7 +61,7 @@ for (const file of args) {
     const normal = await readImage(path.join(dir, 'normal.webp'))
     let ao: Img | null = null
     try { ao = await readImage(path.join(dir, 'ao.webp')) } catch { ao = null }
-    tiles.push(await render(color, normal, ao, scan.size[0], window, true, 'lit'))
+    tiles.push(await render(color, normal, ao, scan.size, window, true, 'lit'))
   }
   const composite = sharp({ create: { width: view * tiles.length + 8 * (tiles.length - 1), height: view, channels: 3, background: '#111' } })
     .composite(tiles.map((input, i) => ({ input, left: i * (view + 8), top: 0 })))
