@@ -10,12 +10,11 @@ import { createCharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
 import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { AlsFootstepAudioRuntime } from 'als-ue5-r3f/engine/alsAudioBridge'
-import { ArmsViewmodel, createArmsState } from '@blacksite/subject-fpp/arms'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
 import { createAtmosphere, internalPixelRatio, texturesReady } from '../../look/look'
 import { Hints, Loading, Prompt, Screen, TitleCard, TouchPad, useTouch } from '../../look/hud'
 import { buildCheckpoint } from './checkpoint'
-import { outfit } from './outfit'
+import { outfit, showHead } from './outfit'
 
 const level = buildCheckpoint()
 
@@ -47,19 +46,15 @@ function Scene({ onFirstPerson }: { onFirstPerson: (value: boolean) => void }) {
   const pose = useMemo(() => ({ current: createCharacterPoseSample() }), [])
   const time = useMemo(createWorldTimeState, [])
   const audio = useMemo(() => new AlsFootstepAudioRuntime({ AutoInstallUserGestureUnlock: true }), [])
-  const arms = useMemo(createArmsState, [])
-  const [firstPerson, setFirstPerson] = useState(false)
   const view = useRef('ThirdPerson')
   useFrame(() => {
     const character = pose.current.character
     if (!character) return
     if (character.viewMode !== view.current) {
       view.current = character.viewMode
-      setFirstPerson(character.viewMode === 'FirstPerson')
+      showHead(character.viewMode !== 'FirstPerson')
       onFirstPerson(character.viewMode === 'FirstPerson')
     }
-    arms.speed = Math.hypot(character.movement.velocity.x, character.movement.velocity.y)
-    arms.sprinting = character.gait === 'Sprinting'
   }, ALS_FRAME_PRIORITY.Camera + 0.04)
   return <>
     <Atmosphere />
@@ -68,7 +63,6 @@ function Scene({ onFirstPerson }: { onFirstPerson: (value: boolean) => void }) {
       <AlsCamera poseSample={pose} worldTime={time} footstepAudioRuntime={audio} toggleViewModeKey="KeyV" />
       <Level />
     </Physics>
-    {firstPerson && <ArmsViewmodel state={arms} />}
   </>
 }
 

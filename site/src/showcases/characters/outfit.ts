@@ -21,12 +21,22 @@ const slots: Record<string, { color: string; roughness: number; emissive?: strin
   Eyes_MAT: { color: '#141410', roughness: 0.3, emissive: '#d8902c', emissiveIntensity: 0.6 },
 }
 
+const head: THREE.Material[] = []
+
+export function showHead(visible: boolean) {
+  for (const material of head) {
+    material.colorWrite = visible
+    material.depthWrite = visible
+  }
+}
+
 export function outfit(gltf: GLTF) {
   gltf.scene.traverse(object => {
     if (!(object instanceof THREE.Mesh)) return
     for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
       const slot = slots[material.name]
       if (!slot || !(material instanceof THREE.MeshStandardMaterial)) continue
+      if ((material.name === 'Head_MAT' || material.name === 'Eyes_MAT') && !head.includes(material)) head.push(material)
       material.color.set(slot.color)
       material.roughness = slot.roughness
       if (slot.emissive) { material.emissive.set(slot.emissive); material.emissiveIntensity = slot.emissiveIntensity ?? 1 }
