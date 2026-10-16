@@ -9,5 +9,5 @@ export default defineConfig({
   plugins: [tsconfigPaths({ root: resolve(import.meta.dirname, '..') })],
   resolve: { dedupe: ['three'] },
   build: { outDir: resolve(import.meta.dirname, '.build-site'), emptyOutDir: true, target: 'es2022' },
-  server: { host: '0.0.0.0' },
+  server: { host: '0.0.0.0', allowedHosts: ['.getbb.app'] },
 })
