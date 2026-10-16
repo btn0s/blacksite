@@ -42,7 +42,7 @@ Rejected sources, with the clause that rules them out:
 
 | Source | Why |
 | --- | --- |
-| Fab Standard License listings, Megascans, Unreal Marketplace | Platform EULA; engine-only content; no standalone redistribution |
+| Fab Standard License listings, Megascans and other marketplace content | Platform EULA; engine-only content; no standalone redistribution |
 | Mixamo | Raw character and animation files may not be distributed |
 | Sonniss GDC bundles | May not supply the sounds "as sound effects… as part of… an asset pack" |
 | Pixabay | No standalone distribution; bans systematic copying |

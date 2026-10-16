@@ -2888,7 +2888,7 @@
       "author": "Scott Petrovic (Mesh2Motion)",
       "licence": "CC0-1.0",
       "attribution": "\"Mesh2Motion human add-on animations\" by Scott Petrovic (https://github.com/Mesh2Motion/mesh2motion-app), CC0 1.0",
-      "use": "75 hand-keyed clips on a 66-bone UE-style rig: deaths, ladders, ledge hang, stealth walk and run, strafes, crawl, dodges, hurt idles.",
+      "use": "75 hand-keyed clips on a 66-bone humanoid rig: deaths, ladders, ledge hang, stealth walk and run, strafes, crawl, dodges, hurt idles.",
       "files": [
         {
           "name": "human-addon-animations.glb",
@@ -4506,7 +4506,7 @@
       },
       "author": "J. Job, Rocky Mountain National Park (National Park Service)",
       "licence": "Public-Domain",
-      "attribution": "\"Wind Soundscape from Gem Lake\" by J. Job, Rocky Mountain National Park (National Park Service) (https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm), CC0 1.0",
+      "attribution": "\"Wind Soundscape from Gem Lake\" by J. Job, Rocky Mountain National Park (National Park Service) (https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm), public domain",
       "use": "Cold exterior wind bed.",
       "files": [
         {
@@ -4532,7 +4532,7 @@
       },
       "author": "Rocky Mountain National Park (National Park Service)",
       "licence": "Public-Domain",
-      "attribution": "\"Stream Soundscape from the Black Canyon Trail\" by Rocky Mountain National Park (National Park Service) (https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm), CC0 1.0",
+      "attribution": "\"Stream Soundscape from the Black Canyon Trail\" by Rocky Mountain National Park (National Park Service) (https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm), public domain",
       "use": "Steady stream bed; loops cleanly.",
       "files": [
         {

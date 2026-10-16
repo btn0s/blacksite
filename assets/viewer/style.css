@@ -17,6 +17,7 @@ main { padding: 0 24px 48px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
 .card img, .card canvas { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #0b0c0a; }
 .card .wide { aspect-ratio: 2; }
+.clips { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; padding: 18px; text-align: center; font-size: 12px; color: var(--dim); background: #0b0c0a; }
 .maps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
 .maps img { aspect-ratio: 1; }
 .body { padding: 10px 12px 12px; display: grid; gap: 4px; }

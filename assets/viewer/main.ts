@@ -172,7 +172,8 @@ async function layout() {
   let x = 0
   const placed: THREE.Object3D[] = []
   for (const { asset, model, clips } of loaded) {
-    const box = new THREE.Box3().setFromObject(model)
+    model.updateMatrixWorld(true)
+    const box = new THREE.Box3().setFromObject(model, true)
     const width = Math.max(box.max.x - box.min.x, 0.4)
     model.position.set(x + width / 2 - (box.max.x + box.min.x) / 2, -box.min.y, 1.5 - (box.max.z + box.min.z) / 2)
     x += width + 0.6
@@ -189,7 +190,8 @@ async function applyFloor() {
 }
 
 function thumbFrame(object: THREE.Object3D, angle = 0.7) {
-  const box = new THREE.Box3().setFromObject(object)
+  object.updateMatrixWorld(true)
+  const box = new THREE.Box3().setFromObject(object, true)
   const sphere = box.getBoundingSphere(new THREE.Sphere())
   const distance = sphere.radius / Math.sin(THREE.MathUtils.degToRad(thumbCamera.fov / 2)) * 1.05
   thumbCamera.position.set(sphere.center.x + Math.sin(angle) * distance, sphere.center.y + distance * 0.32, sphere.center.z + Math.cos(angle) * distance)
@@ -220,7 +222,11 @@ async function materialThumb(asset: Asset) {
 }
 
 async function modelThumb(asset: Asset) {
-  const model = cloneSkinned((await loadModel(asset)).scene)
+  const loaded = await loadModel(asset)
+  let meshes = 0
+  loaded.scene.traverse(child => { if ((child as THREE.Mesh).isMesh) meshes++ })
+  if (!meshes) return el('div', 'clips', loaded.clips.map(clip => clip.name).join(' · '))
+  const model = cloneSkinned(loaded.scene)
   thumbFrame(model)
   return snapshot(model)
 }
@@ -239,7 +245,7 @@ function meta(asset: Asset) {
   const parts = [`${SOUNDS.includes(asset.category) && b.variations && b.variations.length > 1 ? 'largest take ' : ''}${kb(b.bytes)} of ${kb(b.budget)}`]
   if (b.ktx2Bytes) parts.push(`KTX2 1K ${kb(b.ktx2Bytes)}`)
   if (b.triangles) parts.push(`${b.triangles.toLocaleString()} tris`)
-  if (b.size) parts.push(`${b.size.map(v => v.toFixed(2)).join(' × ')} m`)
+  if (b.size?.every(Number.isFinite)) parts.push(`${b.size.map(v => v.toFixed(2)).join(' × ')} m`)
   if (b.animations) parts.push(`${b.animations.length} clips`)
   if (b.variations) parts.push(`${b.variations.length} take${b.variations.length > 1 ? 's' : ''}, ${b.variations.reduce((s, v) => s + v.seconds, 0).toFixed(1)} s`)
   parts.push(`source ${kb(asset.sourceBytes)}`)
@@ -324,7 +330,9 @@ function summary() {
   const shown = assets.filter(inPack)
   const bytes = shown.reduce((sum, asset) => sum + asset.build.ship.reduce((s, file) => s + (asset.build.files[file] ?? 0), 0), 0)
   const over = shown.filter(asset => !asset.build.withinBudget).length
-  $('#summary').textContent = `${shown.length} assets · ${kb(bytes)} shipped at 1K WebP / Opus · ${over ? `${over} over budget` : 'all within budget'} · built ${new Date(index.generated).toLocaleString()}`
+  const pack = index.packs[$<HTMLSelectElement>('#pack').value]
+  const manual = pack ? pack.assets.length - shown.length : 0
+  $('#summary').textContent = `${shown.length} assets${manual > 0 ? ` built, ${manual} more need a manual download` : ''} · ${kb(bytes)} shipped at 1K WebP / Opus · ${over ? `${over} over budget` : 'all within budget'} · built ${new Date(index.generated).toLocaleString()}`
 }
 
 function resize() {

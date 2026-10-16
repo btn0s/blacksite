@@ -309,7 +309,8 @@ async function model(entry, source, out, options) {
   await io.write(target, document)
   if (converted) await rm(converted, { force: true })
   const animations = document.getRoot().listAnimations().map(animation => animation.getName())
-  const size = skinned ? undefined : bounds.max.map((v, i) => Number((v - bounds.min[i]).toFixed(3)))
+  const extent = bounds.max.map((v, i) => Number((v - bounds.min[i]).toFixed(3)))
+  const size = skinned || !extent.every(Number.isFinite) ? undefined : extent
   return { outputs: [target], ship: ['model.glb'], meta: { triangles: Math.round(triangles), size, ...(rescaled ? { rescaled } : {}), animations: animations.length ? animations : undefined, skinned } }
 }
 
