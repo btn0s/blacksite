@@ -51,12 +51,13 @@ export type ScenarioDefinition = {
   initialHealth: (team: string, index: number) => number;
   map: TacticalMap;
 };
-type Anchor = {
+export type TacticalAnchor = {
   id: string;
   kind: TacticalNode['kind'];
   x: number;
   z: number;
 };
+type Anchor = TacticalAnchor;
 type Layout = {
   alphaZ: number;
   anchors: Array<Anchor>;
@@ -444,10 +445,17 @@ const layouts: Record<ScenarioId, () => Layout> = {
   'low-ammo': warehouse,
   search,
 };
+export type TacticalBakeOptions = {
+  spacing?: number;
+};
 export function bakeTacticalNodes(
   map: TacticalMap,
-  anchors: Array<Anchor> = [],
+  anchors: Array<TacticalAnchor> = [],
+  options: TacticalBakeOptions = {},
 ): Array<TacticalNode> {
+  const spacing = Math.max(1, options.spacing ?? 3),
+    reachX = Math.floor((map.width / 2 - 3) / spacing) * spacing,
+    reachZ = Math.floor((map.depth / 2 - 3) / spacing) * spacing;
   const nodes: Array<TacticalNode> = [],
     coordinates = new Set<string>();
   const add = (id: string, position: Vec3, kind?: TacticalNode['kind']) => {
@@ -494,8 +502,8 @@ export function bakeTacticalNodes(
   for (const team of ['alpha', 'bravo'] as const) {
     map.spawns[team].forEach((position, i) => add(`rally:${team}:${i}`, { ...position }, 'rally'));
   }
-  for (let x = -21; x <= 21; x += 3) {
-    for (let z = -15; z <= 15; z += 3) {
+  for (let x = -reachX; x <= reachX; x += spacing) {
+    for (let z = -reachZ; z <= reachZ; z += spacing) {
       add(`slot:${x}:${z}`, point(x, z));
     }
   }

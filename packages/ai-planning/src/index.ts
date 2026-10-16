@@ -7,10 +7,20 @@ import type {
   SkillId,
   Vec3,
 } from '@blacksite/ai-schema';
-import { distance } from '@blacksite/ai-nav';
+import { distance, hasSuppressionLane } from '@blacksite/ai-nav';
 import { assignmentWatch } from './watch-sector';
 export { assignmentWatch } from './watch-sector';
-type Fact = 'safe' | 'loaded' | 'at-slot' | 'threat' | 'engaged' | 'searched' | 'held';
+type Fact =
+  | 'safe'
+  | 'loaded'
+  | 'at-slot'
+  | 'threat'
+  | 'engaged'
+  | 'suppressing'
+  | 'searched'
+  | 'held';
+const SUPPRESSIVE_MANEUVERS = new Set(['bound', 'flank', 'clear', 'breach', 'crossfire', 'suppress', 'revive']);
+const SUPPRESS_MEMORY_TICKS = 150;
 export type ActionDef = {
   baseCost: number;
   effects: Array<Fact>;
@@ -43,6 +53,13 @@ export const ACTIONS: ReadonlyArray<ActionDef> = [
   },
   {
     baseCost: 1,
+    effects: ['suppressing'],
+    executionSkill: 'suppress',
+    id: 'SuppressLastKnown',
+    preconditions: ['loaded'],
+  },
+  {
+    baseCost: 1,
     effects: ['searched'],
     executionSkill: 'search',
     id: 'SearchRegion',
@@ -72,6 +89,19 @@ export function planIndividual(
         tick - t.lastObservedAt < 18,
     )
     .sort((a, b) => b.confidence - a.confidence || a.id.localeCompare(b.id))[0];
+  const eye = { ...self.position, y: self.position.y + (self.stance === 'stand' ? 1.5 : 0.93) };
+  const suppressTrack = [...beliefs]
+    .filter(
+      (t) =>
+        t.classification === 'enemy' &&
+        t.confidence > 0.3 &&
+        t.expiresAt > tick &&
+        tick - t.lastObservedAt > 18 &&
+        tick - t.lastObservedAt <= SUPPRESS_MEMORY_TICKS &&
+        distance(self.position, t.meanPosition) < 45 &&
+        hasSuppressionLane(snapshot.map, eye, { ...t.meanPosition, y: 1 }),
+    )
+    .sort((a, b) => b.lastObservedAt - a.lastObservedAt || a.id.localeCompare(b.id))[0];
   const legalSlots = snapshot.candidates.filter((c) => c.applicable && c.score !== undefined);
   const best = legalSlots[0];
   const roleSlot = assignment ? legalSlots.find((c) => c.nodeId === assignment.slotId) : best;
@@ -86,6 +116,12 @@ export function planIndividual(
     assignment?.role !== 'support' &&
     assignment?.role !== 'overwatch';
   const roleBlocked = blockedByContract && !watch;
+  const suppressor =
+    !!maneuver &&
+    SUPPRESSIVE_MANEUVERS.has(maneuver.kind) &&
+    (assignment?.role === 'support' ||
+      assignment?.role === 'overwatch' ||
+      maneuver.kind === 'suppress');
   type Method = {
     allowed: Array<string>;
     applicable: boolean;
@@ -122,6 +158,21 @@ export function planIndividual(
       rejectReason: 'no-confirmed-recent-threat-or-ammo',
       score: 7 + (threat?.confidence ?? 0) * 3,
       terms: { confidence: (threat?.confidence ?? 0) * 3, urgency: 7 },
+    },
+    {
+      allowed: ['SuppressLastKnown'],
+      applicable:
+        suppressor &&
+        !threat &&
+        !!suppressTrack &&
+        self.ammo >= 8 &&
+        danger < 0.45 &&
+        (assignedDistance <= 2.5 || !roleSlot),
+      goal: 'suppressing',
+      id: 'suppress',
+      rejectReason: 'not-support-or-no-recent-contact-lane',
+      score: 7.5 + (suppressTrack?.confidence ?? 0),
+      terms: { coordination: 7.5, confidence: suppressTrack?.confidence ?? 0 },
     },
     {
       allowed: ['MoveToSlot'],
@@ -259,6 +310,8 @@ export function planIndividual(
       const durationTicks =
         action.executionSkill === 'reload'
           ? 75
+          : action.executionSkill === 'suppress'
+            ? 60
           : action.executionSkill === 'move' || action.executionSkill === 'fallback'
             ? Math.max(
                 45,
@@ -278,7 +331,7 @@ export function planIndividual(
                 : movementSlot?.nodeId
               : undefined,
         skill: action.executionSkill,
-        targetTrackId: threat?.id,
+        targetTrackId: action.executionSkill === 'suppress' ? suppressTrack?.id : threat?.id,
       };
     },
   );

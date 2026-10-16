@@ -10,7 +10,13 @@ export {
   type ObservationGeneratorOptions,
   type ObservationLineOfSightContext,
 } from '@blacksite/sim-core';
-export { createScenario, bakeTacticalNodes, SCENARIOS } from '@blacksite/ai-scenarios';
+export {
+  createScenario,
+  bakeTacticalNodes,
+  SCENARIOS,
+  type TacticalAnchor,
+  type TacticalBakeOptions,
+} from '@blacksite/ai-scenarios';
 export { BeliefStore, RadioNetwork } from '@blacksite/ai-belief';
 export { SquadCoordinator, chooseStrategicOrder } from '@blacksite/ai-squad';
 export { planIndividual } from '@blacksite/ai-planning';

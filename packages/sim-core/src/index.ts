@@ -9,6 +9,7 @@ import {
   type RuntimeConfig,
   type SelfState,
   type SimEvent,
+  type SimulationRules,
   type Stance,
   type TacticalMap,
   type TeamId,
@@ -63,6 +64,7 @@ export const RULES = {
 } as const;
 export type SimulationSetup = {
   config: RuntimeConfig;
+  rules?: SimulationRules;
   initialAmmo?: number;
   initialHealth?: (team: TeamId, index: number) => number;
   map: TacticalMap;
@@ -126,6 +128,7 @@ const approach = (value: number, target: number) =>
 export class AuthoritativeSimulation {
   readonly map: TacticalMap;
   readonly config: RuntimeConfig;
+  private readonly rules: Required<SimulationRules>;
   private readonly world = createWorld();
   private readonly entities = new Map<string, Entity>();
   private readonly observations: ObservationGenerator;
@@ -143,6 +146,11 @@ export class AuthoritativeSimulation {
   constructor(setup: SimulationSetup) {
     this.map = setup.map;
     this.config = setup.config;
+    this.rules = {
+      damage: setup.rules?.damage ?? RULES.damage,
+      spread: setup.rules?.spread ?? 0.002,
+      suppressedSpread: setup.rules?.suppressedSpread ?? 0,
+    };
     this.observations = new ObservationGenerator({ map: this.map, seed: this.config.seed });
     this.objective = { position: { ...this.map.objectives[0]!.position }, progress: 0 };
     for (const team of ['alpha', 'bravo'] as const) {
@@ -342,7 +350,10 @@ export class AuthoritativeSimulation {
   private fire(shooter: SelfState, states: Array<SelfState>, events: Array<SimEvent>): void {
     const entity = this.entities.get(shooter.id)!;
     const weapon = entity.get(Weapon)!;
-    const spread = 0.002 + Math.hypot(shooter.velocity.x, shooter.velocity.z) * 0.0008;
+    const spread =
+      this.rules.spread +
+      Math.hypot(shooter.velocity.x, shooter.velocity.z) * 0.0008 +
+      shooter.suppression * this.rules.suppressedSpread;
     const yaw =
       shooter.yaw +
       (randomAt(this.config.seed, `${shooter.id}:weapon-spread`, this.tick, 0) - 0.5) * spread;
@@ -415,7 +426,7 @@ export class AuthoritativeSimulation {
     if (victim) {
       const target = this.entities.get(victim.id)!;
       const body = target.get(Body)!;
-      const health = Math.max(0, body.health - RULES.damage);
+      const health = Math.max(0, body.health - this.rules.damage);
       target.set(Body, { ...body, health, suppression: Math.min(1, body.suppression + 0.35) });
       this.observations.recordDamage(victim.id, shooter.position, this.tick);
       if (health === 0 && body.health > 0) {

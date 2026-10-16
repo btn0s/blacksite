@@ -82,7 +82,7 @@ const runtime = new TacticalRuntime(DEFAULT_CONFIG, world);
 // Or: useWarden({ world, config: { agentsPerTeam: 5 } })
 ```
 
-Author a `TacticalMap` with bounds, obstacle rectangles, region topology, tactical nodes, objectives and exactly `agentsPerTeam` spawn points for each team. Positions use metres and Y-up coordinates; movement occurs on the X/Z plane. `bakeTacticalNodes` is available for generating tactical annotations. Maps and references are validated before authority starts. Custom worlds are embedded in exported replays so verification uses the same authored content. Give changed maps a new version.
+Author a `TacticalMap` with bounds, obstacle rectangles, region topology, tactical nodes, objectives and exactly `agentsPerTeam` spawn points for each team. Positions use metres and Y-up coordinates; movement occurs on the X/Z plane. `bakeTacticalNodes` is available for generating tactical annotations. Maps and references are validated before authority starts. Custom worlds are embedded in exported replays so verification uses the same authored content. Give changed maps a new version. `bakeTacticalNodes(map, anchors, { spacing })` derives its grid from the map's bounds, so it works for any map size. A world may set `rules: { damage, spread, suppressedSpread }` to tune lethality and accuracy under suppression; those rules travel with the world into replays.
 
 The default authority runs the included planar reference simulation. To integrate an existing game, supply a `TacticalAuthority` adapter to `TacticalRuntime`: it exposes self status, generates legal observations, and applies normalized `AgentCommand`s through the same controller interface as players. Warden runs the hierarchy, beliefs, planning, execution and motors. For elevated levels, use the included navigation builder and tactical baker below and pass their `spatial` queries to the runtime. Your existing ECS, controller, physics and weapons remain authoritative; hidden enemy state never enters planning snapshots.
 
@@ -98,7 +98,7 @@ Vite production builds are tested, including relocated nonstandard `lib` aliases
 
 For Next.js or other SSR frameworks, use the React entry from a client component. The core can execute headlessly on a compatible server runtime. The optional demo is for local inspection, not a secure competitive multiplayer client.
 
-`createWardenSession` is also available without React. Subscribe to its state, issue controls, export a replay, and dispose it when done. See the installed TypeScript types for method signatures and the injectable worker interface.
+`createWardenSession` is also available without React. Subscribe to its state, issue controls, export a replay, and dispose it when done. For game presentation, pass `detail: 'render'` to `createWardenSession` or `useWarden`. Snapshots then drop the full decision trace, keep a short belief provenance and the top tactical candidates, and send the map once instead of on every tick. See the installed TypeScript types for method signatures and the injectable worker interface.
 
 ## Effect and model boundary
 

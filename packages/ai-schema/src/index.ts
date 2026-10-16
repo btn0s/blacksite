@@ -52,7 +52,7 @@ export const VERSIONS = {
   featureSchema: 'belief-1',
   map: 'tactical-layouts-2',
   model: 'symbolic-fallback',
-  planner: 'symbolic-5',
+  planner: 'symbolic-6',
   simulation: 'sim-1',
 } as const;
 export const Buttons = {
@@ -199,10 +199,16 @@ export type TacticalMap = {
   version: string;
   width: number;
 };
+export type SimulationRules = {
+  damage?: number;
+  spread?: number;
+  suppressedSpread?: number;
+};
 export type RuntimeWorld = {
   initialAmmo?: number;
   initialHealth?: Record<EntityId, number>;
   map: TacticalMap;
+  rules?: SimulationRules;
 };
 export { validateRuntimeWorld } from './world';
 export type Reservation = {
@@ -364,6 +370,7 @@ export type MotorGoal = {
   reload: boolean;
   speed: number;
   stance: Stance;
+  suppress?: boolean;
   targetConfidence: number;
   targetTrackId?: string;
   watchSector?: WatchSector;
@@ -463,9 +470,11 @@ export type ReplayFile = {
   versions: ContentVersions;
   world?: RuntimeWorld;
 };
+export type SnapshotDetail = 'full' | 'render';
 export type WorkerRequest =
   | {
       config: RuntimeConfig;
+      detail?: SnapshotDetail;
       type: 'init';
       world?: RuntimeWorld;
     }
@@ -492,7 +501,7 @@ export type WorkerRequest =
     };
 export type WorkerResponse =
   | {
-      map: TacticalMap;
+      map?: TacticalMap;
       snapshot: RenderSnapshot;
       type: 'snapshot';
     }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
-import type { RuntimeConfig, RuntimeWorld } from '../../ai-schema/src';
+import type { RuntimeConfig, RuntimeWorld, SnapshotDetail } from '../../ai-schema/src';
 import { createWardenSession, resolveWardenConfig, type WardenConfig, type WardenWorkerFactory } from './session';
 
 export type UseWardenOptions = {
@@ -9,11 +9,12 @@ export type UseWardenOptions = {
   world?: RuntimeWorld;
   /** Keep this function stable (module scope or useCallback). Changing it starts a fresh session. */
   workerFactory?: WardenWorkerFactory;
+  detail?: SnapshotDetail;
 };
 
 /** A local, paused-on-start worker session. Render never creates a worker. */
-export function useWarden({ config, world, workerFactory }: UseWardenOptions = {}) {
-  const session = useMemo(() => createWardenSession({ workerFactory }), [workerFactory]);
+export function useWarden({ config, world, workerFactory, detail }: UseWardenOptions = {}) {
+  const session = useMemo(() => createWardenSession({ workerFactory, detail }), [workerFactory, detail]);
   // Compare serializable content, so ordinary inline option objects do not reset every render.
   const configKey = JSON.stringify(resolveWardenConfig(config));
   const worldKey = world === undefined ? '' : JSON.stringify(world);

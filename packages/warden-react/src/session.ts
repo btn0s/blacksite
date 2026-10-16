@@ -6,6 +6,7 @@ import {
   type RuntimeConfig,
   type RuntimeWorld,
   type SkillProfile,
+  type SnapshotDetail,
   type TacticalMap,
   type WorkerRequest,
   type WorkerResponse,
@@ -32,6 +33,7 @@ export type WardenSessionOptions = {
   workerFactory?: WardenWorkerFactory;
   /** A transport timeout, never a simulation clock. */
   exportTimeoutMs?: number;
+  detail?: SnapshotDetail;
 };
 
 export function resolveWardenConfig(config: WardenConfig = {}): RuntimeConfig {
@@ -104,7 +106,7 @@ export function createWardenSession(options: WardenSessionOptions = {}) {
         const response = event.data;
         if (response.type === 'snapshot') {
           publish({
-            map: response.map,
+            map: response.map ?? state.map,
             snapshot: response.snapshot,
             status: response.snapshot.status === 'complete' ? 'complete' : state.status === 'running' ? 'running' : 'paused',
           });
@@ -115,7 +117,7 @@ export function createWardenSession(options: WardenSessionOptions = {}) {
         } else if (response.type === 'error') fail(response.message);
       };
       active.onerror = event => { if (worker === active) fail(event.message || 'Simulation worker failed'); };
-      active.postMessage({ type: 'init', config, ...(world ? { world } : {}) });
+      active.postMessage({ type: 'init', config, ...(options.detail ? { detail: options.detail } : {}), ...(world ? { world } : {}) });
     } catch (error) {
       stopWorker('Session initialization failed');
       fail(error);

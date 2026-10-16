@@ -14,6 +14,7 @@ import {
   distanceToSegment,
   canTraverse,
   hasLineOfSight,
+  hasSuppressionLane,
   isWalkable,
   navigationClearance,
 } from '@blacksite/ai-nav';
@@ -506,7 +507,38 @@ export class MotorController {
     if (attendingTarget) {
       buttons += Buttons.aim;
     }
-    if (goal.fire) {
+    if (goal.fire && goal.suppress) {
+      const track = snapshot.beliefs.find((t) => t.id === goal.targetTrackId);
+      if (!self.alive) {
+        fireGate = 'not-alive';
+      } else if (self.ammo <= 0 || self.reloadingUntil > tick) {
+        fireGate = 'weapon-unavailable';
+      } else if (!attendingTarget) {
+        fireGate = 'target-not-attended';
+      } else if (
+        !track ||
+        track.classification !== 'enemy' ||
+        track.provenance.length === 0 ||
+        track.confidence < 0.3
+      ) {
+        fireGate = 'unconfirmed-target';
+      } else if (track.expiresAt <= tick || tick - track.lastObservedAt > 150) {
+        fireGate = 'stale-observation';
+      } else if (yawError > 0.05 || pitchError > 0.06) {
+        fireGate = 'motor-settling';
+      } else if (!hasSuppressionLane(snapshot.map, eye, attention)) {
+        fireGate = 'occluded';
+      } else if (
+        friendlyFireBlocked(eye, dir, Math.max(1, horizontal + 1), snapshot.friends, self.id)
+      ) {
+        fireGate = 'friendly-swept-volume';
+      } else if ((tick + (this.phase % 23)) % 30 > 9) {
+        fireGate = 'burst-recovery';
+      } else {
+        buttons += Buttons.fire;
+        fireGate = 'suppressing';
+      }
+    } else if (goal.fire) {
       const track = snapshot.beliefs.find((t) => t.id === goal.targetTrackId);
       if (!self.alive) {
         fireGate = 'not-alive';
