@@ -8,3 +8,5 @@ artifacts/
 __pycache__/
 *.pyc
 .venv/
+assets/.build/
+assets/.build-site/
