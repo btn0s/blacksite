@@ -19,5 +19,17 @@ export default defineConfig({
   worker: { format: 'es', plugins: () => [tsconfigPaths({ root })] },
   server: { host: '0.0.0.0', allowedHosts: true, fs: { allow: [root] } },
   optimizeDeps: { entries: ['index.html'], include: ['@react-three/rapier > @dimforge/rapier3d-compat'] },
-  build: { target: 'es2022' },
+  build: {
+    target: 'es2022',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('rapier')) return 'rapier'
+          if (id.includes('node_modules/three/')) return 'three'
+          if (id.includes('/packages/als') || id.includes('als-')) return 'als'
+          if (id.includes('node_modules/react') || id.includes('node_modules/scheduler') || id.includes('@react-three')) return 'react'
+        },
+      },
+    },
+  },
 })

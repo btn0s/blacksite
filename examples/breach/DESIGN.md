@@ -8,36 +8,39 @@ The one idea: **every shot is answered, and every enemy says what it is about to
 
 All numbers live in `src/model.ts` and drive the game. Metres, seconds and degrees.
 
-### Movement (Half-Life 2 / Source, 1 unit = 1 inch = 0.0254 m)
+### Movement (feel.md, ALS movement settings)
 
 | Number | Value | Source |
 | --- | --- | --- |
-| Eye height | 1.63 m (64 u) | HL2 `VEC_VIEW` |
-| Crouched eye | 1.17 m (46 u) | Source `VEC_DUCK_VIEW` (CS:GO) |
-| Body radius | 0.41 m (16 u) | Source player hull 32 u wide |
-| Step height | 0.46 m (18 u) | Source `sv_stepsize 18` |
-| Walk / run / sprint | 3.81 / 4.83 / 8.13 m/s (150 / 190 / 320 u/s) | HL2 `hl2_walkspeed`, `hl2_normspeed`, `hl2_sprintspeed` |
-| Crouch speed | 1.61 m/s (one third of run) | Source duck speed multiplier 0.333 |
-| Ground acceleration | 10 | Source `sv_accelerate 10`: reaches full run in about 0.1 s |
-| Friction / stop speed | 4 / 2.54 m/s | Source `sv_friction 4`, `sv_stopspeed 100` |
-| Aim-down-sights move scale | 0.55 | Tuned; HL2 has no ADS. Close to the ADS walk of modern military shooters |
+| Walk / run / sprint | 1.75 / 3.75 / 6.5 m/s | ALS movement settings |
+| Crouch / aiming | 2.0 / 1.65 m/s | ALS crouched run and aiming walk |
+| Acceleration | 20 m/s² from rest, falling to 7.5 at sprint | ALS; 90% of run speed in 0.2 s |
+| Braking | 15, then 12.5 at run, then 5 at sprint | ALS |
+| Air control | 25% | Tuned |
+| Jump | 4.2 m/s at 9.8 m/s², a 0.9 m apex | ALS |
+| Coyote time / jump buffer | 0.1 s / 0.1 s | feel.md |
+| Capsule | radius 0.3 m, height 1.8 m standing, 1.12 m crouched; 0.45 m step | ALS |
+| Eye height | 1.63 m standing, 1.0 m crouched, smoothed at exp(−20·dt) | feel.md |
+| Landing dip | 6 cm | Tuned |
 | Sprint-out time | 0.22 s | Tuned; the delay before a sprinting player can fire |
+
+The body is our own: a capsule that slides on the level's boxes with exact ballistic gravity (the standalone first-person subject has no gravity or collision).
 
 ### View
 
 | Number | Value | Source |
 | --- | --- | --- |
-| World FOV | 74° vertical | CS:GO `fov 90` horizontal at 4:3 is 73.7° vertical |
-| Viewmodel FOV | 56° | Subject FPP default (HL2 `viewmodel_fov 54`) |
+| World FOV | 75° vertical, blended at 14/s | feel.md |
+| Viewmodel FOV | 56° | Subject FPP default |
 | Shot camera kick | 0.18°, decays at 9/s | Tuned visual punch on top of the pattern climb |
 | Damage camera punch | 1.4° | Tuned |
 
 ### Weapons (Armory definitions built by `armoryDefinitions()`)
 
-| Number | AK-74 | PM pistol | Source |
+| Number | Rifle | Pistol | Source |
 | --- | --- | --- | --- |
-| Rate | 10 rounds/s (600 rpm) | 5 rounds/s cap, semi | CS:GO AK-47 `cycletime 0.1`; AK-74 cyclic 600–650 rpm |
-| Magazine / reserve | 30 / 150 | 8 / 40 | AK-74 30-round magazine; Makarov PM 8-round magazine |
+| Rate | 10 rounds/s (600 rpm) | 5 rounds/s cap, semi | CS:GO AK-47 `cycletime 0.1` |
+| Magazine / reserve | 30 / 150 | 8 / 40 | Standard rifle and Makarov magazines |
 | Reload | 2.43 s | 1.6 s | CS:GO AK-47 reload 2.43 s; PM tuned |
 | Equip | 0.5 s | 0.35 s | Tuned |
 | Damage / range | 36 / 120 m | 28 / 60 m | CS:GO AK-47 36 base damage |
@@ -75,13 +78,16 @@ Health 100. Regenerates at 25 per second after 5 s without damage (the regenerat
 
 | Room | Size | α | RT60 | Pre-delay |
 | --- | --- | --- | --- | --- |
-| Yard | outdoors | – | 0.6 s slap | 120 ms off the facade |
+| Yard and exfil | outdoors | – | 0.6 s slap | 120 ms off the facade, 90 ms at exfil |
 | Lobby | 10 × 8 × 3.2 m | 0.10 | 1.5 s | 18 ms |
 | Corridor | 2.4 × 7 × 3 m | 0.12 | 0.75 s | 7 ms |
+| Store room | 3.5 × 6.5 × 3 m | 0.20 | 0.53 s | 8 ms |
 | Machine hall | 14 × 12 × 5 m | 0.08 | 2.8 s | 30 ms |
 | Records office | 9 × 8 × 3 m | 0.22 | 0.6 s | 14 ms |
 
-Gunshot tails come from impulse responses generated at these RT60s; the reverb crossfades when the listener crosses a room boundary.
+Gunshot tails come from impulse responses generated at these RT60s; the reverb crossfades over 0.35 s when the listener crosses a room boundary.
+
+All sound sits behind one module, `src/audio.ts` (`createBreachAudio`), whose interface is cues (`shot`, `impact`, `crack`, `bark`, `footstep`, `sting` and so on) plus `setListener(position, room)`. Everything is synthesised; there are no sample files. When the Soundscape package lands, only that file changes. Every cue has four variants and never plays the same one twice in a row; voices are capped at 28 with priorities so shots and barks win; sound is delayed by distance at 343 m/s.
 
 ### Footsteps
 
@@ -94,7 +100,7 @@ Interval 0.4 s walking, 0.3 s running (Source `m_flStepSoundTime` 400 / 300 ms),
 | Frame, firefight, desktop | never over 16 ms; target 8.3 ms (120 fps) |
 | Frame, phone | 16.7 ms (60 fps) |
 | Draw calls | 260 desktop, 160 phone |
-| Point lights | 5 high, 4 medium, 2 low |
+| Point lights | constant count per quality tier, never toggled (a toggle recompiles every lit shader) |
 | Audio voices | 28 |
 | Decals | 256 pooled |
 | First playable | under 5 s |
@@ -105,47 +111,61 @@ Every shot gets: shot sound with room tail, muzzle flash and light, camera kick,
 
 ## Parts list
 
-### Set dressing (counts are minimums)
+Minimums from `craft.md`: each interior room has a key from a window or roof hole and 2 practicals, 4 materials and 8 prop types; the yard has 3 practicals, 5 materials and 12 prop types. Every wall at eye height carries a decal, fixture or prop; props sit in clusters of 3–7.
 
-- **Kit pieces (60):** exterior walls with door and window openings, interior partitions, door frames, 6 concrete pillars, ceiling slabs with two roof holes, an overhead crane beam, a stair core, broken window sills, a blown breach in the office wall.
-- **Trims (40):** skirting and kick plates, door and window frames, ceiling beams, cable trays, pipe runs, radiator under each window.
-- **Decals (30):** water stains, soot over the fire barrel, cracks, peeling paint patches, painted room numbers, an arrow stencil, oil on the hall floor, puddles in the yard.
-- **Props (70):** two lathes and a drill press, workbenches, steel shelving, 8 oil drums, crates, a burning barrel, an overturned reception desk, chairs, a sofa, filing cabinets, desks with typewriters and paper, partitions, a safe, rubble piles, fallen slab pieces, rebar, a mattress, a Lada and an APC in the yards, sandbags, apartment blocks on the skyline, dead trees.
+### Set dressing
+
+- **Kit:** exterior walls with door and window openings, interior partitions, door frames, concrete pillars, a ceiling with roof holes, an overhead crane beam, broken window sills, a blown breach in the office wall, a perimeter wall with closed rust gates.
+- **Materials (5+):** cast concrete, brick, rusted metal, wood, packed dirt and rubble, standing water.
+- **Props:** lathes, workbenches, steel shelving, oil drums, crates, a burning barrel, an overturned reception desk, chairs, filing cabinets, desks, a safe, rubble piles, fallen slab pieces, sandbags, a wrecked Lada and an APC in the yards, apartment blocks on the skyline.
+- **Decals:** water stains, soot, cracks, peeling paint, painted room numbers, oil on the hall floor, puddles in the yard; bullet holes, scuffs and blood from play (256 pooled).
 
 ### Lighting
 
-- **Key:** overcast sun with shadows, through the window openings and roof holes.
-- **Fill:** sky hemisphere from Look.
-- **Bounce:** two warm, unshadowed point lights under the roof holes.
-- **Practicals (4, all emissive meshes):** a bare bulb in the lobby, a flickering fluorescent tube in the hall, the burning barrel's flicker, a red emergency lamp in the office.
+- **Key:** overcast sun with shadows from the key only, through the window openings and roof holes; the shadow frustum follows the player, texel-snapped, refreshed every other frame.
+- **Fill:** sky hemisphere from Look at about a third of the key.
+- **Practicals:** a bare bulb in the lobby, a flickering fluorescent tube in the hall, the burning barrel, a red emergency lamp in the office, plus the yard's lamps.
 
-### Atmosphere
+### Motion
 
-Look `zone` fog pulled in for interiors; dust motes in the light shafts (instanced, 300); three additive light-shaft cards under the roof holes; smoke from the burning barrel; impact dust from Cascade's effects.
+Dust motes in the light shafts, additive light-shaft cards under the roof holes, the barrel's flicker and smoke, the flickering tube, idle animation on every soldier, impact dust and Cascade chips.
 
 ### Audio
 
-- **Beds (2):** wind outside, a low room tone indoors.
-- **Spot emitters (4):** fluorescent buzz, fire crackle, a dripping pipe, a distant radio in the office.
-- **One-shots:** shots, tails, impacts per surface, casings, footsteps per surface, reload and equip foley, flesh hits, enemy fire with distance and occlusion, near-miss cracks, barks.
-- **Reverb zones (5):** yard, lobby, corridor, hall and office.
+- **Beds (2):** wind outside with slow gusts, low room tone indoors; they crossfade at the facade.
+- **Spot sources (3):** fluorescent hum in the hall, fire crackle at the barrel, radio static in the office. Each is panned and attenuated by distance and muffled through walls.
+- **Events:** shots with room tails, impacts per surface, casings per floor, footsteps per surface, reload and equip foley, flesh hits and markers, enemy fire with distance and occlusion, near-miss cracks, barks, room-clear, exfil and death stings, and structural creaks indoors.
+- **Reverb zones (7):** yard, lobby, corridor, store room, hall, office and exfil.
+
+### Enemy behaviours
+
+Warden intents, each barked 0.8 s before it happens with a subtitle: advance, flank, take cover, engage, suppress, reload, fall back, search and hold. Attack tokens limit fire to 2 soldiers at once.
 
 ## Camera bookmarks (critic captures)
 
 | Name | Position (x, y, z) | Look at | What it shows |
 | --- | --- | --- | --- |
-| `yard` | 0, 1.63, 20 | 0, 1.6, 10 | The facade, the Lada and APC, the skyline: the 10-second look |
+| `yard` | 0, 1.63, 20 | 0, 1.6, 10 | Spawn: the facade, the Lada and the APC, the skyline: the 10-second look |
+| `door` | -1.6, 1.63, 13.2 | 0.4, 1.4, 8 | Contact at the lobby door |
 | `lobby` | 3.6, 1.63, 9.2 | -2, 1.2, 3 | Pillars, the overturned desk, the bulb and the roof-hole shaft |
-| `corridor` | 0, 1.63, 1.6 | 0, 1.5, -6 | The tight corridor and the side-passage opening |
+| `corridor` | 0, 1.63, 1.4 | 0, 1.5, -6 | The tight corridor and the store-room opening |
 | `hall` | 0, 1.63, -5.8 | -1, 1.5, -15 | Lathes, shafts, the burning barrel and the fluorescent tube |
-| `office` | -1, 1.63, -18 | -5, 1.2, -23 | Desks, cabinets, the red lamp and the blown breach |
-| `exfil` | 1.2, 1.63, -21 | 9, 1.4, -22 | The breach out to the APC |
+| `hall-north` | 5.4, 1.63, -16.2 | -4, 1.4, -7 | The longest sightline, back across the hall |
+| `office` | -1, 1.63, -18 | -5, 1.2, -23 | Desks, cabinets, the red lamp |
+| `exfil` | -0.6, 1.63, -21.2 | 9, 1.4, -22 | The breach out to the APC |
+
+## Architecture
+
+- `src/model.ts` holds every number above; `check.tsx` hands `FEEL` and the budgets to the check contract.
+- The squad runs in a module worker (`squad.worker.ts`): one Warden `TacticalRuntime` per encounter at 30 Hz with our own `BreachAuthority`. A fight wakes when the player enters its trigger or shoots one of its soldiers. The worker posts soldier views and events (fire, flinch, intent, died, alert); the main thread draws the soldiers 110 ms behind with the ALS snapshot buffer and plays every event as sound, effects and subtitles.
+- Player shots are traced on the main thread against soldier hit zones and then the level; hits go to the worker as damage.
+- Soldiers are ALS bodies with animation LOD, drawn only in rooms the player can see. Shaders are compiled before the game reports ready.
 
 ## Flow
 
 1. **Yard:** start at the gate. A hint shows the controls. No enemies.
 2. **Lobby (2 soldiers):** one behind a pillar, one behind the desk. Contact at the door.
-3. **Corridor:** the hall squad hears the lobby fight and sets up.
-4. **Machine hall (4 soldiers):** support holds the north end, point covers the corridor door, the flanker goes round the side passage and calls it first.
+3. **Corridor and store room:** the store room is the flank route into the hall.
+4. **Machine hall (4 soldiers):** support holds the north end, point covers the corridor door, the flanker goes round through the store room and calls it first.
 5. **Records office (3 soldiers):** two hold behind desks; one comes through the breach.
-6. **Exfil:** the APC's engine turns over; walk into the marker.
+6. **Exfil:** walk into the marker by the APC. The run ends with time, accuracy and kills, then restarts.

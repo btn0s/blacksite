@@ -1,5 +1,5 @@
 import { createAudioLog } from '@blacksite/check'
-import type { Footing, Hit } from './layout'
+import { PRACTICALS, type Footing, type Hit } from './layout'
 import { ACOUSTICS, AI, BUDGET, SPEED_OF_SOUND, sabine, type RoomId } from './model'
 
 export type Listener = { x: number; y: number; z: number; yaw: number }
@@ -33,6 +33,7 @@ type Voice = { bus: GainNode; nodes: AudioNode[]; pending: number; done: boolean
 type Send = { input: GainNode; linked: boolean; idle: number }
 type Cue = { at?: Point; send?: number; gain?: number; cutoff?: number; priority?: Priority }
 type Bed = { gain: GainNode; level: number }
+type Spot = { at: Point; room: RoomId; gain: GainNode; panner: StereoPannerNode; level: number; flutter: number }
 
 const ROOM_IDS = Object.keys(ACOUSTICS) as RoomId[]
 const VARIANTS = 4
@@ -81,6 +82,7 @@ export function createBreachAudio(): BreachAudio {
   let wetBus: GainNode
   let noises: AudioBuffer[] = []
   let beds: { indoor: Bed; outdoor: Bed } | null = null
+  const spots: Spot[] = []
   const sends = {} as Record<RoomId, Send>
   const voices = new Set<Voice>()
   const last = new Map<string, number>()
@@ -91,7 +93,7 @@ export function createBreachAudio(): BreachAudio {
   let creakIn = 8
 
   const now = () => context!.currentTime
-  const bedVoices = () => beds ? (bedFade > 0 ? 2 : 1) : 0
+  const bedVoices = () => (beds ? (bedFade > 0 ? 2 : 1) : 0) + spots.length
 
   const place = (at: Point) => {
     const dx = at.x - listener.x, dy = at.y - listener.y, dz = at.z - listener.z
@@ -375,6 +377,42 @@ export function createBreachAudio(): BreachAudio {
     }
     beds = { indoor: bed('lowpass', 160, 0.7, 0.3, false), outdoor: bed('bandpass', 420, 0.6, 0.22, true) }
     setBeds()
+    const spot = (at: Point, id: RoomId, level: number, flutter: number, sources: AudioNode[]) => {
+      const gain = audio.createGain()
+      gain.gain.value = 0
+      const panner = audio.createStereoPanner()
+      for (const source of sources) source.connect(gain)
+      gain.connect(panner).connect(master)
+      spots.push({ at, room: id, gain, panner, level, flutter })
+    }
+    const loop = (buffer: AudioBuffer, type: BiquadFilterType, frequency: number, q: number) => {
+      const source = audio.createBufferSource()
+      source.buffer = buffer
+      source.loop = true
+      source.start(0, Math.random())
+      const shape = audio.createBiquadFilter()
+      shape.type = type
+      shape.frequency.value = frequency
+      shape.Q.value = q
+      source.connect(shape)
+      return shape
+    }
+    const hum = (frequency: number, type: OscillatorType, level: number) => {
+      const oscillator = audio.createOscillator()
+      oscillator.type = type
+      oscillator.frequency.value = frequency
+      oscillator.start()
+      const gain = audio.createGain()
+      gain.gain.value = level
+      oscillator.connect(gain)
+      return gain
+    }
+    for (const practical of PRACTICALS) {
+      const at = { x: practical.at[0], y: practical.at[1], z: practical.at[2] }
+      if (practical.kind === 'tube') spot(at, practical.room, 0.05, 0, [hum(100, 'sawtooth', 0.5), hum(200, 'square', 0.12), loop(noises[1]!, 'bandpass', 4200, 6)])
+      if (practical.kind === 'fire') spot(at, practical.room, 0.16, 1, [loop(noises[0]!, 'bandpass', 1500, 0.7), loop(brown, 'lowpass', 240, 0.7)])
+      if (practical.kind === 'emergency') spot({ x: -5.2, y: 1.1, z: -23.4 }, practical.room, 0.06, 0.4, [loop(noises[2]!, 'bandpass', 1900, 3), hum(330, 'square', 0.08)])
+    }
   }
 
   return {
@@ -646,6 +684,13 @@ export function createBreachAudio(): BreachAudio {
         if (send.idle > 0.6) { wetBus.disconnect(send.input); send.linked = false }
       }
       if (bedFade > 0) bedFade -= dt
+      for (const spot of spots) {
+        const at = place(spot.at)
+        const through = spot.room === room ? 1 : 0.2
+        const flicker = spot.flutter ? 1 - spot.flutter * 0.6 * Math.random() : 1
+        spot.gain.gain.setTargetAtTime(spot.level * at.gain * through * flicker, now(), 0.05)
+        spot.panner.pan.setTargetAtTime(at.pan, now(), 0.05)
+      }
       if (!outdoor(room)) {
         creakIn -= dt
         if (creakIn <= 0) { creakIn = 9 + Math.random() * 14; creak() }
