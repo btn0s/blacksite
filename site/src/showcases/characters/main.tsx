@@ -9,7 +9,6 @@ import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import { createCharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
 import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
-import { AlsFootstepAudioRuntime } from 'als-ue5-r3f/engine/alsAudioBridge'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
 import { Look } from '@blacksite/look/r3f'
 import { createAtmosphere, internalPixelRatio, texturesReady } from '@blacksite/look/world'
@@ -17,6 +16,7 @@ import { Hints, Loading, Prompt, Screen, TitleCard, TouchPad, useTouch } from '@
 import { buildCheckpoint } from './checkpoint'
 import { outfit, showHead } from './outfit'
 import { CheckProbe } from './check'
+import { createCheckpointAudio, type CheckpointAudio } from './audio'
 
 const level = buildCheckpoint()
 
@@ -44,12 +44,16 @@ function Atmosphere() {
   return null
 }
 
-function Scene({ onFirstPerson }: { onFirstPerson: (value: boolean) => void }) {
+function Scene({ onFirstPerson, audio }: { onFirstPerson: (value: boolean) => void; audio: CheckpointAudio }) {
   const pose = useMemo(() => ({ current: createCharacterPoseSample() }), [])
   const time = useMemo(createWorldTimeState, [])
-  const audio = useMemo(() => new AlsFootstepAudioRuntime({ AutoInstallUserGestureUnlock: true }), [])
   const view = useRef('ThirdPerson')
   useFrame(() => {
+    const velocity = pose.current.ownerRigidBody?.linvel()
+    if (velocity) audio.captureVerticalSpeed(velocity.y)
+  }, ALS_FRAME_PRIORITY.PosePublication + 0.1)
+  useFrame((_, delta) => {
+    audio.update(delta)
     const character = pose.current.character
     if (!character) return
     if (character.viewMode !== view.current) {
@@ -66,7 +70,7 @@ function Scene({ onFirstPerson }: { onFirstPerson: (value: boolean) => void }) {
       <AlsCamera poseSample={pose} worldTime={time} footstepAudioRuntime={audio} toggleViewModeKey="KeyV" />
       <Level />
     </Physics>
-    <CheckProbe pose={pose} />
+    <CheckProbe pose={pose} audio={audio} />
   </>
 }
 
@@ -96,20 +100,23 @@ function Touch() {
 
 function App() {
   const touch = useTouch()
+  const audio = useMemo(() => createCheckpointAudio(touch ? 'phone' : 'desktop'), [touch])
   const [ready, setReady] = useState(false)
   const [progress, setProgress] = useState(0.05)
   const [locked, setLocked] = useState(false)
   const [, setFirstPerson] = useState(false)
   useEffect(() => {
     let cancelled = false
-    void Promise.all([preloadAlsCharacterGltf(undefined, { onProgress: value => { if (!cancelled && value !== undefined) setProgress(0.05 + value * 0.85) } }).then(outfit), texturesReady()]).then(() => { if (!cancelled) { setProgress(1); setReady(true) } })
+    setReady(false)
+    const audioReady = Promise.resolve().then(() => audio.prepare())
+    void Promise.all([preloadAlsCharacterGltf(undefined, { onProgress: value => { if (!cancelled && value !== undefined) setProgress(0.05 + value * 0.85) } }).then(outfit), texturesReady(), audioReady]).then(() => { if (!cancelled) { setProgress(1); setReady(true) } })
     const onLock = () => setLocked(document.pointerLockElement !== null)
     document.addEventListener('pointerlockchange', onLock)
-    return () => { cancelled = true; document.removeEventListener('pointerlockchange', onLock) }
-  }, [])
+    return () => { cancelled = true; document.removeEventListener('pointerlockchange', onLock); audio.dispose() }
+  }, [audio])
   return <Screen>
     <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 70, near: 0.05, far: 600, position: [-4, 2, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }} onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
-      {ready && <Scene onFirstPerson={setFirstPerson} />}
+      {ready && <Scene onFirstPerson={setFirstPerson} audio={audio} />}
     </Canvas>
     <TitleCard title="ALS Web · Checkpoint" />
     <Hints visible={!touch} items={[['WASD', 'Move'], ['Shift', 'Sprint'], ['Space', 'Mantle'], ['V', 'View'], ['X', 'Ragdoll']]} />
