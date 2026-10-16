@@ -27,6 +27,7 @@ export interface SubjectOptions {
 export interface FpsInput {
   fire: boolean
   aim: boolean
+  walk: boolean
   reloadSequence: number
   weaponSequence: number
 }
@@ -71,7 +72,9 @@ export interface SubjectState {
   view: FpsView
   weapon: FpsWeapon
   enabled: boolean
+  virtual: boolean
   setEnabled(enabled: boolean): void
+  setVirtual(virtual: boolean): void
   respawn(position?: readonly [number, number, number], yawDegrees?: number): void
   setView(view: FpsView): void
   setWeapon(weapon: FpsWeapon): void
@@ -105,8 +108,8 @@ export function createSubject(options: SubjectOptions = {}): SubjectState {
       sensitivity: clamp(finite(options.sensitivity, 0.0022), 0.0001, 0.02),
       fov: clamp(finite(options.fov, 75), 35, 110), aimFov: clamp(finite(options.aimFov, 58), 25, 100),
     },
-    input: { fire: false, aim: false, reloadSequence: 0, weaponSequence: 0 },
-    keys: new Set(), view: initialView, weapon: options.initialWeapon ?? 'rifle', enabled: true,
+    input: { fire: false, aim: false, walk: false, reloadSequence: 0, weaponSequence: 0 },
+    keys: new Set(), view: initialView, weapon: options.initialWeapon ?? 'rifle', enabled: true, virtual: false,
     frame: {
       ready: false, locked: false, view: initialView, aiming: false,
       grounded: false, crouching: false, sprinting: false, action: null,
@@ -125,7 +128,13 @@ export function createSubject(options: SubjectOptions = {}): SubjectState {
     setEnabled(enabled) {
       state.enabled = enabled
       if (!enabled) resetFpsInput(state)
-      player.command.active = enabled && state.frame.locked
+      player.command.active = enabled && hasControl(state)
+      state.publish()
+    },
+    setVirtual(virtual) {
+      if (state.virtual === virtual) return
+      state.virtual = virtual
+      resetFpsInput(state)
       state.publish()
     },
     respawn(position, yawDegrees = state.options.yaw) {
@@ -174,6 +183,8 @@ export function createSubject(options: SubjectOptions = {}): SubjectState {
   return state
 }
 
+export function hasControl(controller: SubjectState): boolean { return controller.frame.locked || controller.virtual }
+
 export function wrapYaw(degrees: number): number { return ((degrees + 180) % 360 + 360) % 360 - 180 }
 
 export function createSubjectInputSource(controller: SubjectState): AlsCharacterInputSource {
@@ -189,7 +200,7 @@ export function createSubjectInputSource(controller: SubjectState): AlsCharacter
         x: forward * Math.cos(yaw) - right * Math.sin(yaw),
         z: forward * Math.sin(yaw) + right * Math.cos(yaw),
       },
-      desiredGait: command.sprint ? 'Sprinting' : 'Running',
+      desiredGait: command.sprint ? 'Sprinting' : controller.input.walk ? 'Walking' : 'Running',
       desiredStance: command.crouch ? 'Crouching' : 'Standing',
       desiredRotationMode: 'ViewDirection',
       viewYawAngle: command.yaw,
@@ -211,7 +222,7 @@ export function lookSubject(controller: SubjectState, movementX: number, movemen
 /** Press/release reducer shared by the DOM adapter and tests. Auto-repeat never creates action edges. */
 export function keySubject(controller: SubjectState, code: string, pressed: boolean, repeat = false): boolean {
   if (!controller.enabled) return false
-  const relevant = /^(Key[WASDRV]|Space|ShiftLeft|ShiftRight|ControlLeft|ControlRight|Digit[123])$/.test(code)
+  const relevant = /^(Key[WASDRV]|Space|ShiftLeft|ShiftRight|ControlLeft|ControlRight|AltLeft|AltRight|Digit[123])$/.test(code)
   if (!relevant) return false
   if (!pressed) { controller.keys.delete(code); return true }
   if (repeat || controller.keys.has(code)) return true
@@ -224,26 +235,28 @@ export function keySubject(controller: SubjectState, code: string, pressed: bool
 }
 
 export function updateFpsMovementInput(controller: SubjectState): void {
-  const { keys, player, input, frame } = controller
+  const { keys, player, input } = controller
   if (!controller.enabled) { resetFpsInput(controller); return }
-  player.command.active = frame.locked
+  const live = hasControl(controller)
+  player.command.active = live
   let right = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0)
   let forward = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0)
   const length = Math.hypot(right, forward)
   if (length > 1) { right /= length; forward /= length }
-  player.command.right = frame.locked ? right : 0
-  player.command.forward = frame.locked ? forward : 0
-  player.command.crouch = frame.locked && (keys.has('ControlLeft') || keys.has('ControlRight'))
-  player.command.aim = frame.locked && input.aim
+  player.command.right = live ? right : 0
+  player.command.forward = live ? forward : 0
+  player.command.crouch = live && (keys.has('ControlLeft') || keys.has('ControlRight'))
+  player.command.aim = live && input.aim
+  input.walk = live && (keys.has('AltLeft') || keys.has('AltRight'))
   // Classic hold sprint: no tap action or roll binding, and aiming retains accurate locomotion.
-  player.command.sprint = frame.locked && !input.aim && !player.command.crouch
+  player.command.sprint = live && !input.aim && !player.command.crouch
     && forward > 0 && (keys.has('ShiftLeft') || keys.has('ShiftRight'))
 }
 
 /** Focus/lock loss cannot leave firing, aiming or movement latched. */
 export function resetFpsInput(controller: SubjectState): void {
   controller.keys.clear()
-  controller.input.fire = controller.input.aim = false
+  controller.input.fire = controller.input.aim = controller.input.walk = false
   controller.player.command.right = controller.player.command.forward = 0
   controller.player.command.sprint = controller.player.command.crouch = controller.player.command.aim = false
   controller.player.command.active = false

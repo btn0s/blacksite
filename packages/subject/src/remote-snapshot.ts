@@ -20,6 +20,9 @@ export function createPawnMoveMessage(snapshot: AlsCharacterSnapshot, intent: Pa
         x: Math.max(-1, Math.min(1, acceleration?.x ?? 0)),
         y: Math.max(-1, Math.min(1, acceleration?.y ?? 0)),
       },
+      action: snapshot.action, actionSeq: snapshot.actionSeq,
+      mantle: animation?.mantle && { ...animation.mantle },
+      rolling: animation?.rolling && { ...animation.rolling },
     },
   }
 }
@@ -35,10 +38,12 @@ export function toAlsRemoteSnapshot(state: PawnState): AlsCharacterSnapshot {
     stance: locomotion?.stance ?? 'standing',
     rotationMode: locomotion?.rotationMode ?? (state.aiming ? 'aiming' : 'viewDirection'),
     locomotionMode: locomotion?.mode ?? 'grounded',
-    action: 'none', actionSeq: 0, overlay: state.weapon === 'pistol' ? 'pistol' : 'rifle', aiming: state.aiming ?? false, seq: state.seq,
+    action: locomotion?.action ?? 'none', actionSeq: locomotion?.actionSeq ?? 0, overlay: state.weapon === 'pistol' ? 'pistol' : 'rifle', aiming: state.aiming ?? false, seq: state.seq,
     animation: locomotion ? {
       hasInput: locomotion.hasInput, inputYaw: locomotion.inputYaw, targetYaw: locomotion.targetYaw,
       relativeAcceleration: { ...locomotion.relativeAcceleration },
+      mantle: locomotion.mantle && { ...locomotion.mantle },
+      rolling: locomotion.rolling && { ...locomotion.rolling },
     } : undefined,
   }
 }

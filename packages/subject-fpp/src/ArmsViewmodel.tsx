@@ -1,6 +1,6 @@
 import { Suspense, use, useEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { AmbientLight, DirectionalLight, PerspectiveCamera, Scene } from 'three'
+import { ACESFilmicToneMapping, AmbientLight, DirectionalLight, PerspectiveCamera, Scene } from 'three'
 import { preloadArmsAssets } from './arms/manifest'
 import { createArmsRuntime, measureArmsAttachment } from './arms/runtime'
 import type { ArmsState } from './arms/state'
@@ -13,13 +13,16 @@ export interface ArmsViewmodelProps {
   state: ArmsState
   visible?: boolean
   manifestUrl?: string
+  overlay?: boolean
 }
+
+const NARROWEST_ASPECT = 4 / 3
 
 export function ArmsViewmodel(props: ArmsViewmodelProps) {
   return <Suspense fallback={null}><LoadedArmsViewmodel {...props} /></Suspense>
 }
 
-function LoadedArmsViewmodel({ state, visible = true, manifestUrl }: ArmsViewmodelProps) {
+function LoadedArmsViewmodel({ state, visible = true, manifestUrl, overlay = false }: ArmsViewmodelProps) {
   const renderer = useThree(state => state.gl)
   const assets = use(preloadArmsAssets(manifestUrl, renderer))
   const runtime = useMemo(() => createArmsRuntime(assets, state), [assets, state])
@@ -40,20 +43,31 @@ function LoadedArmsViewmodel({ state, visible = true, manifestUrl }: ArmsViewmod
     const view = presentation.camera
     camera.getWorldPosition(view.position)
     camera.getWorldQuaternion(view.quaternion)
-    if (view.aspect !== size.width / size.height) { view.aspect = size.width / size.height; view.updateProjectionMatrix() }
+    const aspect = size.width / size.height
+    if (view.aspect !== aspect) {
+      const fov = assets.manifest.fov ?? 70
+      view.aspect = aspect
+      view.fov = aspect >= NARROWEST_ASPECT ? fov : 2 * Math.atan(Math.tan(fov * Math.PI / 360) * NARROWEST_ASPECT / aspect) * 180 / Math.PI
+      view.updateProjectionMatrix()
+    }
     view.updateWorldMatrix(true, true)
     const error = measureArmsAttachment(camera, runtime.root)
     state.debug.cameraRelativeError = error
     state.debug.maxCameraRelativeError = Math.max(state.debug.maxCameraRelativeError, error)
     const autoClear = gl.autoClear
-    gl.autoClear = true
-    gl.render(scene, camera)
+    if (!overlay) {
+      gl.autoClear = true
+      gl.render(scene, camera)
+    }
     if (visible) {
+      const toneMapping = gl.toneMapping
+      if (overlay) gl.toneMapping = ACESFilmicToneMapping
       gl.autoClear = false
       gl.clearDepth()
       gl.render(presentation.scene, view)
+      gl.toneMapping = toneMapping
     }
     gl.autoClear = autoClear
-  }, 0.5)
+  }, overlay ? 2 : 0.5)
   return null
 }

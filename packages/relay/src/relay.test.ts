@@ -276,3 +276,70 @@ test('predicted and unacknowledged moves keep their own locomotion and view stat
   expect(replica.states.get('a')).toMatchObject({ seq: 2, yaw: -155, pitch: 30, aiming: false, locomotion: second.locomotion })
   replica.close()
 })
+
+test('spawns, cover and respawn follow the match options', () => {
+  let time = 0
+  const match = createMatch({ now: () => time, spawns: [{ position: { x: -10, y: 0, z: 0 }, yaw: 0 }, { position: { x: 10, y: 0, z: 0 }, yaw: 180 }], obstacles: [{ min: { x: -1, y: 0, z: -2 }, max: { x: 1, y: 3, z: 2 } }], respawnMs: 500 })
+  const messages: ServerMessage[] = []
+  match.join('a', message => messages.push(message))
+  match.join('b', () => {})
+  expect(match.states.get('a')!.position.x).toBe(-10)
+  expect(match.states.get('b')!.position).toEqual({ x: 10, y: 0, z: 0 })
+  expect(match.states.get('b')!.yaw).toBe(180)
+  match.receive('a', { type: 'fire', seq: 0, direction: { x: 1, y: 0, z: 0 } })
+  time = 17
+  match.advance()
+  expect(match.states.get('b')!.health).toBe(100)
+  expect(messages.some(message => message.type === 'shot' && message.shooter === 'a')).toBe(true)
+  time = 300
+  match.receive('b', { type: 'move', seq: 1, position: { x: 10, y: 0, z: 3 }, velocity: { x: 0, y: 0, z: 0 }, intent: { forward: 0, right: 0, jump: false, yaw: 0, pitch: 0 } })
+  match.receive('a', { type: 'move', seq: 1, position: { x: -10, y: 0, z: 3 }, velocity: { x: 0, y: 0, z: 0 }, intent: { forward: 0, right: 0, jump: false, yaw: 0, pitch: 0 } })
+  for (let shot = 1; shot <= 5; shot++) {
+    match.receive('a', { type: 'fire', seq: shot, direction: { x: 1, y: 0, z: 0 } })
+    time += 120
+    match.advance()
+  }
+  expect(match.states.get('b')!.health).toBe(0)
+  const kill = messages.filter(message => message.type === 'hit').at(-1) as Extract<ServerMessage, { type: 'hit' }>
+  expect(kill.point!.x).toBeGreaterThan(9)
+  expect(kill.direction!.x).toBeGreaterThan(0.99)
+  match.receive('b', { type: 'move', seq: 2, position: { x: 10, y: 0, z: 3.2 }, velocity: { x: 0, y: 0, z: 0 }, intent: { forward: 0, right: 0, jump: false, yaw: 0, pitch: 0 } })
+  expect(match.states.get('b')!.position.z).toBe(3)
+  time += 600
+  match.advance()
+  const revived = match.states.get('b')!
+  expect(revived.health).toBe(100)
+  expect(revived.life).toBe(1)
+  expect(revived.position.x).toBe(10)
+})
+
+test('weapon switches keep the movement timestamp so remotes never step back', () => {
+  let time = 0
+  const match = createMatch({ now: () => time })
+  const states: PawnState[] = []
+  match.join('a', () => {})
+  match.join('b', message => { if (message.type === 'state' && message.state.id === 'a') states.push(message.state) })
+  time = 50
+  match.receive('a', { type: 'move', seq: 1, position: { x: 0.5, y: 0, z: 0 }, velocity: { x: 10, y: 0, z: 0 }, intent: { forward: 1, right: 0, jump: false, yaw: 0, pitch: 0 } })
+  match.receive('a', { type: 'weapon', seq: 0, weapon: 'pistol', reload: false })
+  time = 80
+  match.advance()
+  const switched = states.at(-1)!
+  expect(switched.weapon).toBe('pistol')
+  expect(switched.t).toBe(50)
+})
+
+test('mantle and roll presentation survive the wire and malformed actions are rejected', () => {
+  const locomotion: PawnLocomotion = { gait: 'running', stance: 'standing', mode: 'grounded', actorYaw: 0, rotationMode: 'viewDirection', hasInput: true, inputYaw: 0, targetYaw: 0, relativeAcceleration: { x: 0, y: 0 }, action: 'mantle', actionSeq: 3, mantle: { settings: 'High', position: 0.4 } }
+  const move = { type: 'move', seq: 1, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, intent: { forward: 0, right: 0, jump: false, yaw: 0, pitch: 0 }, locomotion }
+  expect(isClientMessage(move)).toBe(true)
+  expect(isClientMessage({ ...move, locomotion: { ...locomotion, action: 'teleport' } })).toBe(false)
+  expect(isClientMessage({ ...move, locomotion: { ...locomotion, actionSeq: -1 } })).toBe(false)
+  expect(isClientMessage({ ...move, locomotion: { ...locomotion, mantle: { settings: 'x'.repeat(65), position: 0 } } })).toBe(false)
+  const match = createMatch()
+  match.join('a', () => {})
+  match.receive('a', move)
+  locomotion.mantle!.position = 0.9
+  expect(match.states.get('a')!.locomotion!.mantle).toEqual({ settings: 'High', position: 0.4 })
+  expect(match.states.get('a')!.locomotion!.actionSeq).toBe(3)
+})
