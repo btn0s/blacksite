@@ -199,6 +199,18 @@ export function validateRuntimeWorld(
       agentIds.add(id);
     }
   }
+  if (world.rules !== undefined) {
+    const rules = object(world.rules, 'rules');
+    if (rules.damage !== undefined) {
+      number(rules.damage, 'rules.damage', 1, 100);
+    }
+    if (rules.spread !== undefined) {
+      number(rules.spread, 'rules.spread', 0, 0.5);
+    }
+    if (rules.suppressedSpread !== undefined) {
+      number(rules.suppressedSpread, 'rules.suppressedSpread', 0, 0.5);
+    }
+  }
   if (world.initialAmmo !== undefined) {
     integer(world.initialAmmo, 'initialAmmo', 0, 24);
   }

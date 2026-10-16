@@ -1,6 +1,13 @@
 import { Effect } from 'effect';
 import { AuthorityService, createAuthority, type ManagedAuthority } from '@blacksite/ai-services';
-import { TICK_RATE, type AgentCommand, type WorkerResponse } from '@blacksite/ai-schema';
+import {
+  TICK_RATE,
+  type AgentCommand,
+  type BeliefTrack,
+  type RenderSnapshot,
+  type SnapshotDetail,
+  type WorkerResponse,
+} from '@blacksite/ai-schema';
 import { parseRequest } from './validation';
 type WorkerBoundary = {
   close(): void;
@@ -13,10 +20,40 @@ let playing = false;
 let speed = 1;
 let credit = 0;
 let currentTick = 0;
+let detail: SnapshotDetail = 'full';
+let mapSent = false;
 let chain = Promise.resolve();
 let timerQueued = false;
 const commands = new Map<number, Map<string, AgentCommand>>();
 const post = (message: WorkerResponse) => worker.postMessage(message);
+const RENDER_TACTICAL_CANDIDATES = 4;
+const lean = (track: BeliefTrack): BeliefTrack => ({
+  ...track,
+  provenance: track.provenance.slice(-1),
+});
+function forRender(snapshot: RenderSnapshot): RenderSnapshot {
+  return {
+    ...snapshot,
+    agents: snapshot.agents.map((agent) => ({
+      ...agent,
+      beliefs: agent.beliefs.map(lean),
+      trace: agent.trace && {
+        ...agent.trace,
+        candidates: [
+          ...agent.trace.candidates.filter((candidate) => !('nodeId' in candidate)),
+          ...agent.trace.candidates
+            .filter((candidate) => 'nodeId' in candidate && candidate.applicable)
+            .slice(0, RENDER_TACTICAL_CANDIDATES),
+        ],
+        observationProvenance: [],
+      },
+    })),
+    sharedBeliefs: {
+      alpha: snapshot.sharedBeliefs.alpha.map(lean),
+      bravo: snapshot.sharedBeliefs.bravo.map(lean),
+    },
+  };
+}
 const fail = (error: unknown) => {
   playing = false;
   post({ message: error instanceof Error ? error.message : String(error), type: 'error' });
@@ -38,7 +75,12 @@ async function publish(stepCount = 0) {
       if (snapshot.status === 'complete') {
         playing = false;
       }
-      post({ map: service.map, snapshot, type: 'snapshot' });
+      if (detail === 'full' || !mapSent) {
+        mapSent = true;
+        post({ map: service.map, snapshot: detail === 'full' ? snapshot : forRender(snapshot), type: 'snapshot' });
+      } else {
+        post({ snapshot: forRender(snapshot), type: 'snapshot' });
+      }
     }),
   );
 }
@@ -52,6 +94,8 @@ worker.onmessage = (event) => {
           credit = 0;
           commands.clear();
           currentTick = 0;
+          detail = request.detail ?? 'full';
+          mapSent = false;
           await authority?.dispose();
           authority = createAuthority(request.config, request.world);
           await publish();

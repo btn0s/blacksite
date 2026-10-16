@@ -283,6 +283,13 @@ export class SkillExecutor {
       this.fail('observation-invalidated');
       return { goal: idle, view: this.view(tick) };
     }
+    if (
+      action.skill === 'suppress' &&
+      (!track || track.classification !== 'enemy' || tick - track.lastObservedAt > 150)
+    ) {
+      this.fail('observation-invalidated');
+      return { goal: idle, view: this.view(tick) };
+    }
     const fire = action.skill === 'engage' || action.skill === 'suppress';
     const goal: MotorGoal = {
       destination: action.destination,
@@ -292,7 +299,8 @@ export class SkillExecutor {
         : snapshot.order?.objective,
       reload: action.skill === 'reload',
       speed: action.skill === 'fallback' ? 1 : action.destination ? 0.8 : 0,
-      stance: action.skill === 'hold' || action.skill === 'suppress' ? 'crouch' : 'stand',
+      stance: action.skill === 'hold' ? 'crouch' : 'stand',
+      suppress: action.skill === 'suppress' || undefined,
       targetConfidence: track?.confidence ?? 0,
       targetTrackId: track?.id,
       watchSector,

@@ -61,6 +61,26 @@ export function segmentIntersectsRect(from: Vec3, to: Vec3, rect: Rect, clearanc
   }
   return hi >= 0 && lo <= 1;
 }
+function obstacleBlocks(map: Readonly<TacticalMap>, from: Vec3, to: Vec3, clearance: number) {
+  const minX = Math.min(from.x, to.x) - clearance,
+    maxX = Math.max(from.x, to.x) + clearance,
+    minZ = Math.min(from.z, to.z) - clearance,
+    maxZ = Math.max(from.z, to.z) + clearance;
+  for (const r of map.obstacles) {
+    if (
+      r.x + r.width / 2 < minX ||
+      r.x - r.width / 2 > maxX ||
+      r.z + r.depth / 2 < minZ ||
+      r.z - r.depth / 2 > maxZ
+    ) {
+      continue;
+    }
+    if (segmentIntersectsRect(from, to, r, clearance)) {
+      return true;
+    }
+  }
+  return false;
+}
 export function segmentBlocked(
   map: Readonly<TacticalMap>,
   from: Vec3,
@@ -70,10 +90,27 @@ export function segmentBlocked(
   const spatial = hostSpatialQueries.get(map);
   return spatial
     ? !spatial.hasLineOfSight(from, to, clearance)
-    : map.obstacles.some((r) => segmentIntersectsRect(from, to, r, clearance));
+    : obstacleBlocks(map, from, to, clearance);
 }
 export const hasLineOfSight = (map: Readonly<TacticalMap>, from: Vec3, to: Vec3, clearance = 0) =>
   !segmentBlocked(map, from, to, clearance);
+export function hasSuppressionLane(
+  map: Readonly<TacticalMap>,
+  from: Vec3,
+  to: Vec3,
+  reach = 3,
+): boolean {
+  const length = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z);
+  if (length <= reach) {
+    return true;
+  }
+  const k = (length - reach) / length;
+  return !segmentBlocked(map, from, {
+    x: from.x + (to.x - from.x) * k,
+    y: from.y + (to.y - from.y) * k,
+    z: from.z + (to.z - from.z) * k,
+  });
+}
 export function isWalkable(map: Readonly<TacticalMap>, point: Vec3, clearance = 0.38): boolean {
   const spatial = hostSpatialQueries.get(map);
   if (spatial) {
@@ -209,6 +246,63 @@ function navigationGraph(map: Readonly<TacticalMap>, clearance: number): NavGrap
   variants.set(clearance, graph);
   return graph;
 }
+class MinHeap {
+  private costs: Array<number> = [];
+  private indices: Array<number> = [];
+  get size(): number {
+    return this.costs.length;
+  }
+  private less(a: number, b: number): boolean {
+    return (
+      this.costs[a]! < this.costs[b]! ||
+      (this.costs[a] === this.costs[b] && this.indices[a]! < this.indices[b]!)
+    );
+  }
+  private swap(a: number, b: number): void {
+    [this.costs[a], this.costs[b]] = [this.costs[b]!, this.costs[a]!];
+    [this.indices[a], this.indices[b]] = [this.indices[b]!, this.indices[a]!];
+  }
+  push(cost: number, index: number): void {
+    this.costs.push(cost);
+    this.indices.push(index);
+    let i = this.costs.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (!this.less(i, parent)) {
+        break;
+      }
+      this.swap(i, parent);
+      i = parent;
+    }
+  }
+  pop(): [number, number] {
+    const top: [number, number] = [this.costs[0]!, this.indices[0]!];
+    const lastCost = this.costs.pop()!,
+      lastIndex = this.indices.pop()!;
+    if (this.costs.length) {
+      this.costs[0] = lastCost;
+      this.indices[0] = lastIndex;
+      let i = 0;
+      for (;;) {
+        const left = i * 2 + 1,
+          right = left + 1;
+        let smallest = i;
+        if (left < this.costs.length && this.less(left, smallest)) {
+          smallest = left;
+        }
+        if (right < this.costs.length && this.less(right, smallest)) {
+          smallest = right;
+        }
+        if (smallest === i) {
+          break;
+        }
+        this.swap(i, smallest);
+        i = smallest;
+      }
+    }
+    return top;
+  }
+}
 function costsFrom(
   map: Readonly<TacticalMap>,
   start: Vec3,
@@ -238,13 +332,21 @@ function costsFrom(
       costs[i] = recoveryCost + distance(from, graph.points[i]!);
     }
   }
+  const heap = new MinHeap();
+  for (let i = 0; i < n; i++) {
+    if (costs[i]! < Infinity) {
+      heap.push(costs[i]!, i);
+    }
+  }
   for (let expansion = 0; expansion < Math.min(n, 512); expansion++) {
     let current = -1,
       best = Infinity;
-    for (let i = 0; i < n; i++) {
-      if (!closed[i] && costs[i]! < best) {
-        current = i;
-        best = costs[i]!;
+    while (heap.size) {
+      const [cost, index] = heap.pop();
+      if (!closed[index] && cost === costs[index]) {
+        current = index;
+        best = cost;
+        break;
       }
     }
     if (current < 0) {
@@ -255,6 +357,7 @@ function costsFrom(
       if (!closed[edge.to] && best + edge.cost < costs[edge.to]!) {
         costs[edge.to] = best + edge.cost;
         previous[edge.to] = current;
+        heap.push(costs[edge.to]!, edge.to);
       }
     }
   }

@@ -133,6 +133,7 @@ function worldSetup(config: RuntimeConfig, world?: RuntimeWorld) {
     initialHealth: (team: TeamId, index: number) =>
       world.initialHealth?.[`${team}-${index + 1}`] ?? 100,
     map: world.map,
+    rules: world.rules,
   };
 }
 const createTeam = (id: TeamId): TeamCognition => ({
@@ -191,6 +192,7 @@ export class TacticalRuntime {
         initialAmmo: scenario.initialAmmo,
         initialHealth: scenario.initialHealth,
         map: this.map,
+        rules: 'rules' in scenario ? scenario.rules : undefined,
       });
     this.controlledAgentIds = new Set(options.controlledAgentIds);
     const initialStates = structuredClone(this.sim.states);
@@ -931,6 +933,7 @@ export function verifyReplay(replay: ReplayFile): ReplayVerification {
     initialAmmo: scenario.initialAmmo,
     initialHealth: scenario.initialHealth,
     map: scenario.map,
+    rules: 'rules' in scenario ? scenario.rules : undefined,
   });
   let checkedTicks = 0;
   try {

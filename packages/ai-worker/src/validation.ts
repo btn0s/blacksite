@@ -65,8 +65,12 @@ export function parseRequest(value: unknown): WorkerRequest {
   switch (value.type) {
     case 'init':
       if (isConfig(value.config)) {
+        if (value.detail !== undefined && value.detail !== 'full' && value.detail !== 'render') {
+          break;
+        }
         return {
           config: structuredClone(value.config),
+          ...(value.detail === undefined ? {} : { detail: value.detail }),
           type: 'init',
           ...(value.world === undefined
             ? {}
