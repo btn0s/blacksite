@@ -16,6 +16,15 @@ export interface WeaponDefinition {
   /** Half-angle of the uniform solid-angle spread cone, in radians. */
   readonly spreadRadians: number;
   readonly recoil: { readonly pitchMin: number; readonly pitchMax: number; readonly yawMax: number };
+  /** A learnable spray: shot n of a string kicks by kicks[n] (radians, pitch up and yaw right), holding the
+   * last entry past the end. The string restarts after resetSeconds without a shot. Replaces the random recoil. */
+  readonly pattern?: { readonly kicks: readonly { readonly pitch: number; readonly yaw: number }[]; readonly resetSeconds: number; readonly jitter?: number };
+  /** Half-angle cone by stance, in radians. Replaces spreadRadians when set. Bloom grows per shot and
+   * recovers linearly from bloomMax to zero over recoverySeconds. crouch multiplies the stance cone. */
+  readonly spread?: {
+    readonly hip: number; readonly aim: number; readonly move: number; readonly crouch?: number;
+    readonly bloomPerShot: number; readonly bloomMax: number; readonly recoverySeconds: number;
+  };
   readonly ballistics:
     | { readonly kind: 'hitscan' }
     | {
@@ -38,6 +47,8 @@ export interface WeaponCommand {
   readonly muzzle: Vec3;
   /** The owner ID is always excluded, plus these host-physics collider IDs. */
   readonly excludedColliderIds?: readonly string[];
+  /** Stance for definitions with spread: aiming down sights, movement 0..1 of full speed, crouched. */
+  readonly stance?: { readonly aiming?: boolean; readonly moving?: number; readonly crouched?: boolean };
 }
 
 export interface QueryFilter {
@@ -100,6 +111,10 @@ export interface WeaponSnapshot {
   readonly nextTick: number;
   readonly equippedWeaponId: string;
   readonly status: WeaponStatus;
+  /** Current half-angle of the equipped weapon's cone for the last stance, in radians, for a crosshair. */
+  readonly spread: number;
+  /** Shots in the equipped weapon's current spray string. */
+  readonly patternIndex: number;
   readonly weapons: readonly {
     readonly id: string;
     readonly magazine: number;
@@ -114,6 +129,10 @@ export type WeaponEvent =
       readonly type: 'shot'; readonly shotId: string; readonly kind: 'hitscan' | 'projectile';
       readonly origin: Vec3; readonly direction: Vec3; readonly end: Vec3;
       readonly recoil: { readonly pitch: number; readonly yaw: number };
+      /** Position in the current spray string, from zero. */
+      readonly patternIndex: number;
+      /** Half-angle of the cone this shot was drawn from, in radians. */
+      readonly spread: number;
       readonly projectileId?: string;
     })
   | (EventBase & { readonly type: 'impact'; readonly shotId: string; readonly projectileId?: string; readonly hit: QueryHit })

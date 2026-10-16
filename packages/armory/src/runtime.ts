@@ -4,7 +4,7 @@ import type {
   WeaponQueries, WeaponRuntime, WeaponRuntimeOptions, WeaponSnapshot, WeaponStatus,
 } from './types';
 
-interface Ammo { magazine: number; reserve: number; nextFireTick: number }
+interface Ammo { magazine: number; reserve: number; nextFireTick: number; bloom: number; patternIndex: number; lastShotTick: number }
 interface Projectile {
   id: string; shotId: string; definition: WeaponDefinition & { ballistics: { kind: 'projectile'; speed: number; gravity: Vec3; radius: number; lifetimeSeconds: number } };
   position: Vec3; velocity: Vec3; ageSeconds: number; distance: number; excludedColliderIds: readonly string[];
@@ -16,6 +16,8 @@ const finite = (value: number, min: number, max: number): boolean => Number.isFi
 const assert = (condition: boolean, message: string): void => { if (!condition) throw new Error(`Weapon system: ${message}`); };
 const copyDefinition = (definition: WeaponDefinition): WeaponDefinition => ({
   ...definition, recoil: { ...definition.recoil },
+  ...(definition.pattern ? { pattern: { ...definition.pattern, kicks: definition.pattern.kicks.map(kick => ({ ...kick })) } } : {}),
+  ...(definition.spread ? { spread: { ...definition.spread } } : {}),
   ballistics: definition.ballistics.kind === 'hitscan'
     ? { kind: 'hitscan' }
     : { ...definition.ballistics, gravity: clone(definition.ballistics.gravity) },
@@ -43,6 +45,15 @@ export function createWeaponRuntime(options: WeaponRuntimeOptions): WeaponRuntim
     assert(finite(definition.spreadRadians, 0, Math.PI / 4), `${definition.id}: invalid spread angle`);
     assert(!!definition.recoil && finite(definition.recoil.pitchMin, 0, Math.PI / 2) && finite(definition.recoil.pitchMax, definition.recoil.pitchMin, Math.PI / 2) && finite(definition.recoil.yawMax, 0, Math.PI / 2), `${definition.id}: invalid recoil`);
     assert(!!definition.ballistics && ['hitscan', 'projectile'].includes(definition.ballistics.kind), `${definition.id}: invalid ballistics`);
+    if (definition.pattern) {
+      const pattern = definition.pattern;
+      assert(Array.isArray(pattern.kicks) && pattern.kicks.length > 0 && pattern.kicks.length <= 1024 && pattern.kicks.every(kick => finite(kick.pitch, -Math.PI / 2, Math.PI / 2) && finite(kick.yaw, -Math.PI / 2, Math.PI / 2)), `${definition.id}: invalid recoil pattern`);
+      assert(finite(pattern.resetSeconds, 0, 60) && (pattern.jitter === undefined || finite(pattern.jitter, 0, Math.PI / 8)), `${definition.id}: invalid recoil pattern timing`);
+    }
+    if (definition.spread) {
+      const spread = definition.spread;
+      assert([spread.hip, spread.aim, spread.move, spread.bloomPerShot, spread.bloomMax].every(value => finite(value, 0, Math.PI / 4)) && finite(spread.recoverySeconds, 0, 60) && (spread.crouch === undefined || finite(spread.crouch, 0, 4)), `${definition.id}: invalid spread`);
+    }
     if (definition.ballistics.kind === 'projectile') {
       const ballistic = definition.ballistics;
       assert(finite(ballistic.speed, 0.001, 100_000) && finite(ballistic.radius, 0.0001, 100) && finite(ballistic.lifetimeSeconds, dt / substeps, 300), `${definition.id}: invalid projectile bounds`);
@@ -67,6 +78,15 @@ export function createWeaponRuntime(options: WeaponRuntimeOptions): WeaponRuntim
   let disposed = false;
   const ammunition = new Map<string, Ammo>();
   let projectiles: Projectile[] = [];
+  let stance: NonNullable<WeaponCommand['stance']> = {};
+
+  function cone(definition: WeaponDefinition, ammo: Ammo): number {
+    const spread = definition.spread;
+    if (!spread) return definition.spreadRadians;
+    const moving = Math.min(1, Math.max(0, stance.moving ?? 0));
+    const base = (stance.aiming ? spread.aim : spread.hip) + spread.move * moving;
+    return Math.min(Math.PI / 4, base * (stance.crouched ? spread.crouch ?? 1 : 1) + ammo.bloom);
+  }
 
   function initialize(seed: number): void {
     assert(integer(seed, 0, 0xffffffff), 'seed must be an unsigned 32-bit integer');
@@ -84,8 +104,9 @@ export function createWeaponRuntime(options: WeaponRuntimeOptions): WeaponRuntim
     projectiles = [];
     ammunition.clear();
     for (const definition of definitions.values()) ammunition.set(definition.id, {
-      magazine: definition.magazineSize, reserve: definition.initialReserve, nextFireTick: 0,
+      magazine: definition.magazineSize, reserve: definition.initialReserve, nextFireTick: 0, bloom: 0, patternIndex: 0, lastShotTick: -Infinity,
     });
+    stance = {};
   }
 
   // Mulberry32 has a useful zero seed, unlike uncorrected xorshift32.
@@ -103,8 +124,10 @@ export function createWeaponRuntime(options: WeaponRuntimeOptions): WeaponRuntim
       : reloadUntil !== null ? { kind: 'reloading', untilTick: reloadUntil }
       : nextTick < nextFireTick - EPSILON ? { kind: 'cooldown', untilTick: Math.ceil(nextFireTick - EPSILON) }
       : { kind: 'ready' };
+    const ammo = ammunition.get(currentWeapon)!;
     return {
       tick: nextTick - 1, nextTick, equippedWeaponId: currentWeapon, status,
+      spread: cone(definitions.get(currentWeapon)!, ammo), patternIndex: ammo.patternIndex,
       weapons: [...ammunition].map(([id, ammo]) => ({ id, magazine: ammo.magazine, reserve: ammo.reserve })),
       projectiles: projectiles.map((projectile): ProjectileSnapshot => ({
         id: projectile.id, weaponId: projectile.definition.id, ownerId,
@@ -125,9 +148,16 @@ export function createWeaponRuntime(options: WeaponRuntimeOptions): WeaponRuntim
     assert(length(command.aim.direction) > EPSILON && length(command.aim.direction) < 1e9 && length(command.aim.origin) < 1e9 && length(command.muzzle) < 1e9, 'invalid aim/muzzle magnitude');
     assert(command.excludedColliderIds === undefined || (Array.isArray(command.excludedColliderIds) && command.excludedColliderIds.length <= 1024 && command.excludedColliderIds.every(id => typeof id === 'string' && id.length > 0)), 'invalid collider exclusions');
     assert(!!queries && typeof queries.castRay === 'function' && typeof queries.sweepSphere === 'function', 'provide ray and sphere-sweep queries');
+    assert(command.stance === undefined || (typeof command.stance === 'object' && (command.stance.moving === undefined || finite(command.stance.moving, 0, 1))), 'stance movement must be 0..1');
 
     const tick = command.tick;
     const events: WeaponEvent[] = [];
+    stance = { ...command.stance };
+    for (const [id, state] of ammunition) {
+      const owner = definitions.get(id)!;
+      if (owner.spread && state.bloom > 0) state.bloom = owner.spread.recoverySeconds > 0 ? Math.max(0, state.bloom - owner.spread.bloomMax * dt / owner.spread.recoverySeconds) : 0;
+      if (owner.pattern && state.patternIndex > 0 && (tick - state.lastShotTick) * dt >= owner.pattern.resetSeconds - EPSILON) state.patternIndex = 0;
+    }
     const exclusions = [...(command.excludedColliderIds ?? [])];
     const base = (weaponId = currentWeapon) => ({ tick, ownerId, weaponId });
     const checkedHit = (hit: QueryHit | null, maximumDistance: number, excluded: readonly string[], query: 'aim' | 'muzzle' | 'projectile', weaponId: string): CheckedHit => {
@@ -243,7 +273,8 @@ export function createWeaponRuntime(options: WeaponRuntimeOptions): WeaponRuntim
         blockedReason = reason;
         burstRemaining = 0;
       } else {
-        const direction = spreadDirection(command.aim.direction, definition.spreadRadians, random(), random());
+        const shotCone = cone(definition, ammo);
+        const direction = spreadDirection(command.aim.direction, shotCone, random(), random());
         const aimResult = checkedHit(queries.castRay({ ownerId, excludedColliderIds: exclusions, origin: clone(command.aim.origin), direction, maxDistance: definition.range, solid: true }), definition.range, exclusions, 'aim', currentWeapon);
         if (aimResult.valid) {
           const aimPoint = aimResult.hit?.point ?? add(command.aim.origin, scale(direction, definition.range));
@@ -276,8 +307,19 @@ export function createWeaponRuntime(options: WeaponRuntimeOptions): WeaponRuntim
             blockedReason = null;
             shotSequence++;
             const end = muzzleResult.hit?.point ?? add(command.muzzle, scale(muzzleDirection, shotRange));
+            const patternIndex = ammo.patternIndex;
+            const kick = definition.pattern ? definition.pattern.kicks[Math.min(patternIndex, definition.pattern.kicks.length - 1)]! : null;
+            const jitter = definition.pattern?.jitter ?? 0;
+            const pitchDraw = random();
+            const yawDraw = random();
+            const recoil = kick
+              ? { pitch: kick.pitch + (pitchDraw * 2 - 1) * jitter * 0.5, yaw: kick.yaw + (yawDraw * 2 - 1) * jitter }
+              : { pitch: definition.recoil.pitchMin + pitchDraw * (definition.recoil.pitchMax - definition.recoil.pitchMin), yaw: (yawDraw * 2 - 1) * definition.recoil.yawMax };
+            ammo.patternIndex++;
+            ammo.lastShotTick = tick;
+            if (definition.spread) ammo.bloom = Math.min(definition.spread.bloomMax, ammo.bloom + definition.spread.bloomPerShot);
             events.push({ ...base(), type: 'shot', shotId, kind: definition.ballistics.kind, origin: clone(command.muzzle), direction: muzzleDirection, end,
-              recoil: { pitch: definition.recoil.pitchMin + random() * (definition.recoil.pitchMax - definition.recoil.pitchMin), yaw: (random() * 2 - 1) * definition.recoil.yawMax },
+              recoil, patternIndex, spread: shotCone,
               ...(projectileId ? { projectileId } : {}),
             });
             if (muzzleResult.hit) impact(definition, shotId, muzzleResult.hit, muzzleDirection, projectileId);
