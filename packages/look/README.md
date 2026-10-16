@@ -25,6 +25,29 @@ look.dispose()
 
 `createLook` returns `{ composer, grade, sky, atmosphere, quality, render(dt), setSize(w, h, updateStyle?), setAtmosphere(atmosphere | name), setQuality(tier), setAberration(extra), addOverlay(scene, camera), dispose() }`. Options: `atmosphere` (default `'zone'`), `quality` (default `autoQuality()`), `sky` (default true; adds the dome to the scene), `environment` (default false; PMREM-bakes the sky into `scene.environment`), `fog` (default true), `sun` (a `DirectionalLight` to drive) and `fill` (a `HemisphereLight` to drive).
 
+## Broad textured surfaces
+
+Use `applyStochasticTiling` by default on broad unstructured surfaces such as mud, concrete, asphalt, rust, plaster and forest floor. Repeating one photographed patch over a large floor produces an obvious grid even when the source is seamless. Keep the source's metre scale and break its repetition with transformed patches:
+
+```ts
+import { applyStochasticTiling } from '@blacksite/look'
+
+const ground = new MeshStandardMaterial({ map: colour, normalMap: normal, roughnessMap: orm, metalnessMap: orm, aoMap: orm })
+const removeStochasticTiling = applyStochasticTiling(ground)
+```
+
+All maps must use `RepeatWrapping`, the same UV channel and the same repeat/offset/rotation transform. Set those transforms before applying the helper. Colour uses the usual sRGB texture setting; normal and ORM use no colour space. The material keeps its physical texture scale. Three fixed patches blend on a triangular grid, with the same offsets, rotations and weights for colour, tangent-space normal and ORM. Each sampled normal's tangent XY is inverse-rotated after applying `normalScale`, including signed or unequal scales. Explicit rotated derivatives retain mip selection and anisotropic filtering across patch edges. Nothing changes over time.
+
+`tileSpan` defaults to 1 source repeat per lattice edge; `blendSharpness` defaults to 4 to keep one patch dominant and limit blending softness; `seed` defaults to 0. `rotation` defaults to `'quarter-turn'` for irregular surfaces; `'half-turn'` permits only 0°/180°, and `'none'` uses offsets alone. Use `'none'` or `'half-turn'` on directional bark or grain so it never turns sideways. This is a lightweight three-patch blend, not histogram-preserving synthesis: transition regions can still soften high-contrast detail. Use `tileSpan` 0.5–2 and avoid excessive sharpness, which exposes patch edges. No additional texture files or dependencies are needed. Colour + normal + packed ORM costs 9 texture reads per fragment, versus 5 for the stock material; shared ORM sources with matching sampling settings are sampled once. Separate ORM sources cost up to 15 reads. Use it on broad surfaces where repetition is visible and retain ordinary sampling on small props and material swatches.
+
+Keep authored brick, tile, paver, plank, corrugated sheet and grate patterns ordered. The directional modes preserve course orientation, but random offsets can still break joints. For continuous authored joints, keep ordinary sampling and break repetition through material variants, macro wear or decals. The asset viewer enables **Reduce tiling** by default for unstructured floors and disables it for ordered surfaces; the switch supports a comparison at the same camera position.
+
+The helper supports `MeshStandardMaterial` with colour, tangent normal and ORM maps in `WebGLRenderer`. Separate bump, displacement, alpha and emissive maps are rejected because their features would lose alignment. It chains existing `onBeforeCompile` and cache hooks, accepts already-expanded stock sampling chunks, and returns an idempotent removal function. Hooks are not copied by Three's material cloning; apply the helper after cloning and after installing other hooks. Reapply after changing the material's map layout. Existing hooks must retain standard map UV/sampler names and the normal mapping expressions; unsupported replacements fail explicitly.
+
+Float colour textures from `liveMaterial` use `DECODE_VIDEO_TEXTURE` to decode stored sRGB in the shader. The helper detects that define: it decodes each sampled colour before blending, then re-encodes the blend for the existing decode stage. This preserves both linear-light blending and the existing material hook's effect. Hardware-decoded sRGB textures use the cheaper ordinary path. If an older/custom hook decodes `sampledDiffuseColor` without that define, pass `{ shaderDecodesSRGB: true }`; this option describes an existing decode stage and does not add one. Every rotation/decode variant and the previous hook's cache identifier contribute to `customProgramCacheKey`.
+
+The sampling layout follows the three-patch construction described by [Heitz and Neyret](https://eheitzresearch.wordpress.com/722-2/); the full histogram-preserving method and its preprocessing are described by [Deliot and Heitz](https://eheitzresearch.wordpress.com/738-2/). Shader integration uses Three's documented [material compilation and cache hooks](https://threejs.org/docs/pages/Material.html).
+
 ## Overlays
 
 `addOverlay(scene, camera)` draws a second scene over the world, for a first-person viewmodel or held props. It runs after ambient occlusion and before bloom, so the overlay gets the same bloom, grade, vignette and grain as the world but no world AO. Depth is cleared first, so the overlay never clips into walls, and the overlay scene's background is ignored. It returns a function that removes the pass. Several overlays draw in the order they were added. Keep the overlay's lights in the overlay scene, and update its camera's aspect yourself.
