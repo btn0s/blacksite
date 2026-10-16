@@ -4783,6 +4783,208 @@
       ]
     },
     {
+      "id": "kit-psx-soviet-blocks",
+      "title": "PSX Soviet Block Kit Free",
+      "category": "prop",
+      "tags": [
+        "soviet",
+        "building",
+        "modular",
+        "psx",
+        "ai-assisted"
+      ],
+      "source": {
+        "site": "itch",
+        "url": "https://heyheythere.itch.io/psx-soviet-block-kit-free"
+      },
+      "author": "heyheythere (itch.io)",
+      "licence": "CC-BY-4.0",
+      "attribution": "\"PSX Soviet Block Kit Free\" by heyheythere (https://heyheythere.itch.io/psx-soviet-block-kit-free), CC BY 4.0",
+      "use": "15 modular panel-block pieces at real scale; low-res PSX texturing. The page discloses AI-assisted work.",
+      "acquire": "manual",
+      "licenceEvidence": {
+        "page": "\"CC BY 4.0 : use them in any game, commercial or…\"",
+        "file": "LICENSE.txt: \"…is licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0)\""
+      },
+      "files": [
+        {
+          "url": "https://heyheythere.itch.io/psx-soviet-block-kit-free",
+          "name": "psx-soviet-block-kit-free.zip",
+          "extract": true
+        }
+      ],
+      "process": {
+        "file": "\\.glb$"
+      }
+    },
+    {
+      "id": "props-psx-soviet-apartment",
+      "title": "PSX Soviet Apartment Props",
+      "category": "prop",
+      "tags": [
+        "soviet",
+        "interior",
+        "psx",
+        "ai-assisted"
+      ],
+      "source": {
+        "site": "itch",
+        "url": "https://flipperside.itch.io/psx-soviet-apartment-props"
+      },
+      "author": "Flipperside (itch.io)",
+      "licence": "CC0-1.0",
+      "attribution": "\"PSX Soviet Apartment Props\" by Flipperside (https://flipperside.itch.io/psx-soviet-apartment-props), CC0 1.0",
+      "use": "Ten Soviet apartment props, including a building and a trolley; low-res PSX texturing. The page discloses AI-assisted graphics.",
+      "acquire": "manual",
+      "licenceEvidence": {
+        "page": "\"CC0 1.0 Universal\"; asset licence field CC0",
+        "file": "LICENSE.txt: \"SPDX-License-Identifier: CC0-1.0 … dedicated to the public domain under CC0 1.0 Universal\""
+      },
+      "files": [
+        {
+          "url": "https://flipperside.itch.io/psx-soviet-apartment-props",
+          "name": "PSXgraphics-SovietApartment-CC0-v1.1.zip",
+          "extract": true
+        }
+      ],
+      "process": {
+        "file": "\\.glb$"
+      }
+    },
+    {
+      "id": "step-heyheythere",
+      "title": "Footsteps SFX Free",
+      "category": "footstep",
+      "tags": [
+        "concrete",
+        "metal",
+        "grate",
+        "wood",
+        "ai-assisted"
+      ],
+      "source": {
+        "site": "itch",
+        "url": "https://heyheythere.itch.io/footsteps-sfx-free"
+      },
+      "author": "heyheythere (itch.io)",
+      "licence": "CC-BY-4.0",
+      "attribution": "\"Footsteps SFX Free\" by heyheythere (https://heyheythere.itch.io/footsteps-sfx-free), CC BY 4.0",
+      "use": "30 steps on concrete, metal, grate and wood at 48 kHz. The page discloses AI-assisted work.",
+      "acquire": "manual",
+      "licenceEvidence": {
+        "page": "\"CC BY 4.0 : use it in any game, commercial or not,\"",
+        "file": "LICENSE.txt: \"…licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0)\""
+      },
+      "files": [
+        {
+          "url": "https://heyheythere.itch.io/footsteps-sfx-free",
+          "name": "footsteps-sfx-free.zip",
+          "extract": true
+        }
+      ],
+      "process": {
+        "take": "\\.wav$",
+        "limit": 30
+      }
+    },
+    {
+      "id": "sfx-psx-horror",
+      "title": "PSX Horror SFX Free",
+      "category": "sound",
+      "tags": [
+        "gunshot",
+        "pistol",
+        "shotgun",
+        "reload",
+        "psx",
+        "ai-assisted"
+      ],
+      "source": {
+        "site": "itch",
+        "url": "https://heyheythere.itch.io/psx-horror-sfx-free"
+      },
+      "author": "heyheythere (itch.io)",
+      "licence": "CC-BY-4.0",
+      "attribution": "\"PSX Horror SFX Free\" by heyheythere (https://heyheythere.itch.io/psx-horror-sfx-free), CC BY 4.0",
+      "use": "Muffled PS1-style 9 mm pistol, pump shotgun and magazine in and out; a stand-in until realistic gunfire is sourced. The page discloses AI-assisted work.",
+      "acquire": "manual",
+      "licenceEvidence": {
+        "page": "\"CC BY 4.0 : use it in any game, commercial or not,\"",
+        "file": "LICENSE.txt: \"…(CC BY 4.0)\""
+      },
+      "files": [
+        {
+          "url": "https://heyheythere.itch.io/psx-horror-sfx-free",
+          "name": "psx-horror-sfx-free.zip",
+          "extract": true
+        }
+      ],
+      "process": {
+        "take": "(shot|mag|pump|reload).*\\.wav$"
+      }
+    },
+    {
+      "id": "bed-horror-obsydianx",
+      "title": "Horror SFX Volume 1",
+      "category": "ambience",
+      "tags": [
+        "drone",
+        "horror",
+        "stinger"
+      ],
+      "source": {
+        "site": "itch",
+        "url": "https://obsydianx.itch.io/horror-sfx-volume-1"
+      },
+      "author": "ObsydianX (itch.io)",
+      "licence": "CC-BY-4.0",
+      "attribution": "\"Horror SFX Volume 1\" by ObsydianX (https://obsydianx.itch.io/horror-sfx-volume-1), CC BY 4.0",
+      "use": "Horror drones and stingers for interiors.",
+      "acquire": "manual",
+      "licenceEvidence": {
+        "page": "\"These are CC 4.0 licensed.\" with the CC BY 4.0 link; licence field \"Creative Commons Attribution v4.0 International\"",
+        "file": "README.txt: \"License: CC 4.0 https://creativecommons.org/licenses/by/4.0/\""
+      },
+      "files": [
+        {
+          "url": "https://obsydianx.itch.io/horror-sfx-volume-1",
+          "name": "horror-sfx-volume-1-free.zip",
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "bed-nox-essentials",
+      "title": "Essentials Series SFX",
+      "category": "ambience",
+      "tags": [
+        "ambience",
+        "nature",
+        "vehicles",
+        "large"
+      ],
+      "source": {
+        "site": "itch",
+        "url": "https://nox-sound-design.itch.io/essentials-series-sfx-nox-sound"
+      },
+      "author": "Nox_Sound_Design (itch.io)",
+      "licence": "CC0-1.0",
+      "attribution": "\"Essentials Series SFX\" by Nox_Sound_Design (https://nox-sound-design.itch.io/essentials-series-sfx-nox-sound), CC0 1.0",
+      "use": "1,644 WAVs of ambience, nature and vehicles (1.04 GB); pick takes with process.take.",
+      "acquire": "manual",
+      "licenceEvidence": {
+        "page": "\"All sounds are released under CC0, allowing you to use them freely without attribution or restrictions.\"",
+        "file": "Essentials_Series_README.pdf: \"All these sounds are under CC0 license.\""
+      },
+      "files": [
+        {
+          "url": "https://nox-sound-design.itch.io/essentials-series-sfx-nox-sound",
+          "name": "essentials-series.zip",
+          "extract": true
+        }
+      ]
+    },
+    {
       "id": "terrain-ridge-valley",
       "title": "USGS 3DEP 1/3 arc-second n41w079",
       "category": "terrain",
