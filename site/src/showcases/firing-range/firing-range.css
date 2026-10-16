@@ -1,0 +1,26 @@
+.range-pips { position: absolute; z-index: 5; top: calc(66px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 5px; pointer-events: none; }
+.range-pip { width: 7px; height: 7px; border: 1px solid #f0ecdb80; transform: rotate(45deg); background: #0c0e0b80; transition: background 120ms ease, border-color 120ms ease; }
+.range-pip--on { background: #e2a23b; border-color: #e2a23b; }
+.range-pips span { margin-left: 8px; font: 500 10.5px 'IBM Plex Mono', monospace; letter-spacing: 0.16em; text-transform: uppercase; color: #d8d4c1; text-shadow: 0 1px 8px #000c; }
+.range-reticle { position: absolute; z-index: 4; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; transition: opacity 120ms ease; }
+.range-reticle i { position: absolute; background: #f0ecdbd0; box-shadow: 0 0 2px #000a; }
+.range-reticle i:nth-child(1), .range-reticle i:nth-child(2) { width: 7px; height: 1.5px; top: -0.75px; }
+.range-reticle i:nth-child(3), .range-reticle i:nth-child(4) { width: 1.5px; height: 7px; left: -0.75px; }
+.range-reticle i:nth-child(1) { left: -13px; }
+.range-reticle i:nth-child(2) { left: 6px; }
+.range-reticle i:nth-child(3) { top: -13px; }
+.range-reticle i:nth-child(4) { top: 6px; }
+.range-reticle b { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; opacity: 0; background: linear-gradient(45deg, transparent 46%, #ffe0a8 46%, #ffe0a8 54%, transparent 54%), linear-gradient(-45deg, transparent 46%, #ffe0a8 46%, #ffe0a8 54%, transparent 54%); transition: opacity 80ms ease; }
+.range-reticle--aim i { opacity: 0; }
+.range-reticle--hit b { opacity: 1; transition: none; }
+.range-ammo { position: absolute; z-index: 5; right: calc(20px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); display: grid; justify-items: end; pointer-events: none; text-shadow: 0 1px 10px #000c; }
+.range-ammo span { font: 500 10.5px 'IBM Plex Mono', monospace; letter-spacing: 0.18em; text-transform: uppercase; color: #a9b57e; }
+.range-ammo strong { font: 600 38px/1 'Barlow Condensed', sans-serif; letter-spacing: 0.04em; color: #f0ecdb; font-variant-numeric: tabular-nums; }
+.range-ammo small { font-size: 18px; color: #8d8b78; }
+.range-ammo .range-ammo--empty { color: #ff6a4a; }
+.range-ammo--touch { bottom: calc(150px + env(safe-area-inset-bottom)); }
+.range-ammo--touch strong { font-size: 28px; }
+@media (max-width: 640px) {
+  .range-hud .hud-status { top: calc(40px + env(safe-area-inset-top)); bottom: auto; }
+  .range-pips { top: calc(86px + env(safe-area-inset-top)); bottom: auto; }
+}

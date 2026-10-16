@@ -59,6 +59,16 @@ The default ALS rifle calibration is:
 
 The viewmodel keeps all 68 physical bones while rendering only forearms and hands. Its default pose bank uses the native raised aiming posture for first-person visibility; aiming blends that posture and aligns the physical sights. The native third-person relaxed pose remains available to full-body characters.
 
+## Dress
+
+The default mannequin and ALS weapons are dressed at load with CC0 materials from `packages/subject-fpp/assets/materials`: an olive sleeve, leather gloves, gunmetal, worn olive paint, polymer and brass. Rifle and pistol triangles are regrouped by skinning bone and position into those finishes. Each weapon gets a muzzle flash and light on its `muzzle` bone, driven by `fireSequence`. A manifest `characterUrl` or weapon `meshUrl` keeps that asset's own materials.
+
+## Composition
+
+By default the viewmodel renders the arms itself after the world. With a post stack such as `@blacksite/look`, pass `render="external"` and `onPresentation`, then add a `RenderPass(presentation.scene, presentation.camera)` to the composer with `clearPass.color = false`, `clearPass.depth = true` and `ignoreBackground = true`. Inserted before bloom and the grade, the arms share the world's grade and environment light. `portraitFov(fov, aspect)` widens vertical FOV below a 0.8 aspect so portrait phones keep the weapon in frame; the viewmodel applies it to its own camera.
+
+`StandaloneSubject` also accepts `touch` (`createStandaloneTouch()`: move, look deltas and fire), `recoil` (`createStandaloneRecoil()`: add Armory shot recoil; part climbs, part kicks back) and `sensitivity` (scale look while aiming).
+
 ## Owned-pack upgrade
 
 Discover the user's licensed pack through indexed metadata:

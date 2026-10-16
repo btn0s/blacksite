@@ -6,6 +6,7 @@ import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 import basisJsUrl from 'three/examples/jsm/libs/basis/basis_transcoder.js?url'
 import basisWasmUrl from 'three/examples/jsm/libs/basis/basis_transcoder.wasm?url'
+import { loadArmsDress, type ArmsDress } from './dress'
 import type { ArmsAction, ArmsWeapon } from './state'
 
 export interface ArmsWeaponManifest {
@@ -71,7 +72,8 @@ export function preloadArmsAssets(manifestUrl = '/assets/arms.json', renderer?: 
   return assets
 }
 
-async function loadArmsAssets(manifestUrl: string, renderer?: WebGLRenderer) {
+async function loadArmsAssets(manifestUrl: string, renderer?: WebGLRenderer): Promise<ArmsAssets> {
+  const dressing = loadArmsDress()
   const response = await fetch(manifestUrl)
   let manifest: ArmsManifest = { version: 1 }
   if (response.ok && !(response.headers.get('content-type') ?? '').includes('text/html')) manifest = validateArmsManifest(await response.json())
@@ -93,7 +95,19 @@ async function loadArmsAssets(manifestUrl: string, renderer?: WebGLRenderer) {
     return [weapon, mesh.scene] as const
   }))
   ktx?.dispose()
-  return { manifest, character, animations, weapons: { rifle: meshes[0][1], pistol: meshes[1][1] } }
+  const dress = await dressing
+  return {
+    manifest, character, animations, weapons: { rifle: meshes[0][1], pistol: meshes[1][1] },
+    dress, dressed: { arms: !manifest.characterUrl, rifle: !manifest.weapons?.rifle?.meshUrl, pistol: !manifest.weapons?.pistol?.meshUrl },
+  }
 }
 
-export type ArmsAssets = Awaited<ReturnType<typeof loadArmsAssets>>
+export interface ArmsAssets {
+  manifest: ArmsManifest
+  character: { scene: Object3D; animations: AnimationClip[] }
+  animations: AnimationClip[]
+  weapons: Record<ArmsWeapon, Object3D>
+  dress?: ArmsDress
+  dressed?: { arms: boolean } & Record<ArmsWeapon, boolean>
+}
+
