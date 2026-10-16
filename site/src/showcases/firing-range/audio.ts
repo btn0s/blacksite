@@ -1,3 +1,6 @@
+import type { AudioSample } from '@blacksite/check'
+import { RANGE_BUDGET } from './model'
+import type { ClipEvent } from '@blacksite/subject-fpp/arms'
 import type { Surface } from './hits'
 
 type Weapon = 'rifle' | 'pistol'
@@ -7,6 +10,15 @@ export function createRangeAudio() {
   let master: GainNode
   let wet: GainNode
   let noise: AudioBuffer
+  const voices: Array<{ source: AudioScheduledSourceNode; start: number; end: number; reload: boolean }> = []
+  let schedulingReload = false
+  let plays: NonNullable<AudioSample['plays']> = []
+  const prune = () => { const now = context?.currentTime ?? 0; for (let index = voices.length - 1; index >= 0; index--) if (voices[index].end <= now) voices.splice(index, 1) }
+  const track = (source: AudioScheduledSourceNode, at: number, end: number) => {
+    prune()
+    while (voices.length >= RANGE_BUDGET.voices) voices.shift()!.source.stop()
+    voices.push({ source, start: at, end, reload: schedulingReload })
+  }
 
   const start = () => {
     if (context) { if (context.state === 'suspended') void context.resume(); return }
@@ -59,7 +71,10 @@ export function createRangeAudio() {
     source.connect(shape).connect(gain).connect(panner)
     panner.connect(master)
     if (send) { const sendGain = audio.createGain(); sendGain.gain.value = send; panner.connect(sendGain).connect(wet) }
-    source.start(at, Math.random() * 0.5, duration)
+    const offset = Math.random() * 0.5
+    source.start(at, offset, duration)
+    track(source, at, at + duration / source.playbackRate.value)
+    plays.push({ cue: `${filter}:${frequency}`, sample: `${offset.toFixed(6)}:${source.playbackRate.value.toFixed(6)}` })
   }
 
   const tone = (at: number, frequency: number, end: number, level: number, decay: number, type: OscillatorType = 'sine', send = 0.2, pan = 0) => {
@@ -79,12 +94,17 @@ export function createRangeAudio() {
     if (send) { const sendGain = audio.createGain(); sendGain.gain.value = send; panner.connect(sendGain).connect(wet) }
     oscillator.start(at)
     oscillator.stop(at + decay + 0.05)
+    track(oscillator, at, at + decay + 0.05)
   }
 
   const click = (at: number, frequency: number, level: number) => burst(at, 0.03, 'bandpass', frequency, 3, level, 0.025, 0.1)
 
   return {
     start,
+    cancelReload() {
+      for (let index = voices.length - 1; index >= 0; index--) if (voices[index].reload) { voices[index].source.stop(); voices.splice(index, 1) }
+    },
+    sample(): AudioSample { prune(); const now = context?.currentTime ?? 0; const drained = plays; plays = []; return { voices: voices.filter(voice => voice.start <= now).length, plays: drained } },
     shot(weapon: Weapon) {
       if (!context) return
       const now = context.currentTime
@@ -123,16 +143,28 @@ export function createRangeAudio() {
       const level = Math.min(0.22, 0.5 / Math.max(1, distance))
       for (let index = 0; index < 3; index++) tone(now + index * (0.05 + Math.random() * 0.05), 4200 + Math.random() * 2600, 4000, level * (1 - index * 0.3), 0.06, 'sine', 0.05)
     },
-    reload(weapon: Weapon, seconds: number) {
+    reload(weapon: Weapon, events: readonly (readonly [number, ClipEvent])[]) {
+      if (!context) return
+      schedulingReload = true
+      const now = context.currentTime
+      const pitch = weapon === 'rifle' ? 1 : 1.25
+      burst(now, 0.2, 'bandpass', 1200, 0.8, 0.12, 0.18, 0.05)
+      for (const [time, event] of events) {
+        const at = now + time
+        if (event === 'grab') burst(at, 0.1, 'bandpass', 900, 1.2, 0.14, 0.08, 0.04)
+        if (event === 'magazineOut') { click(at, 1800 * pitch, 0.45); burst(at + 0.02, 0.12, 'bandpass', 900, 1.2, 0.18, 0.1, 0.05) }
+        if (event === 'magazineIn') { click(at, 1500 * pitch, 0.6); click(at + 0.02, 2400 * pitch, 0.35) }
+        if (event === 'rackBack') click(at, 1300 * pitch, 0.55)
+        if (event === 'rackForward') { click(at, 2100 * pitch, 0.6); click(at + 0.012, 3200 * pitch, 0.25) }
+      }
+      schedulingReload = false
+    },
+    land(speed: number) {
       if (!context) return
       const now = context.currentTime
-      burst(now, 0.2, 'bandpass', 1200, 0.8, 0.12, 0.18, 0.05)
-      click(now + seconds * 0.22, 1800, 0.45)
-      burst(now + seconds * 0.24, 0.12, 'bandpass', 900, 1.2, 0.18, 0.1, 0.05)
-      click(now + seconds * 0.58, 1500, 0.6)
-      click(now + seconds * 0.6, 2400, 0.35)
-      if (weapon === 'rifle') { click(now + seconds * 0.8, 1300, 0.55); click(now + seconds * 0.86, 2100, 0.5) }
-      else click(now + seconds * 0.82, 2000, 0.55)
+      const level = Math.min(1, speed / 6)
+      burst(now, 0.12, 'lowpass', 260, 0.7, 0.5 * level, 0.1, 0.004)
+      burst(now + 0.015, 0.09, 'bandpass', 1400, 1.4, 0.12 * level, 0.07, 0.004)
     },
     equip() {
       if (!context) return

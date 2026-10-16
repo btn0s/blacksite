@@ -100,7 +100,7 @@ it('serves and builds site assets under its base path from an explicit engine ch
       const server = createServer((request,response)=>middleware(request,response,()=>{response.statusCode=418;response.end()}));
       await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
       try {
-        for (const [name,expected] of [['skm-als.glb','MIT mannequin'],['LICENSE-Blacksite-Arms.md','MIT actions'],['LICENSE-Blacksite-Viewmodel.md','Viewmodel attribution and modifications'],['viewmodel-licenses/CC0-1.0.txt','CC0 legal text']]) {
+        for (const [name,expected] of [['skm-als.glb','MIT mannequin'],['LICENSE-Blacksite-Arms.md','MIT actions'],['viewmodel/CREDITS.md','Viewmodel attribution and modifications'],['viewmodel/licenses/CC0-1.0.txt','CC0 legal text']]) {
           const response = await fetch('http://127.0.0.1:'+server.address().port+'/blacksite/assets/'+name, {headers:{Connection:'close'}});
           if (!response.ok || await response.text() !== expected) throw new Error('Missing base-path asset '+name);
         }
@@ -111,7 +111,7 @@ it('serves and builds site assets under its base path from an explicit engine ch
     `, site, engine]);
     expect(readFileSync(path.join(site, 'dist/assets/skm-als.glb'), 'utf8')).toBe('MIT mannequin');
     expect(readFileSync(path.join(site, 'dist/assets/LICENSE-Blacksite-Arms.md'), 'utf8')).toBe('MIT actions');
-    expect(readFileSync(path.join(site, 'dist/assets/LICENSE-Blacksite-Viewmodel.md'), 'utf8')).toBe('Viewmodel attribution and modifications');
-    expect(readFileSync(path.join(site, 'dist/assets/viewmodel-licenses/CC0-1.0.txt'), 'utf8')).toBe('CC0 legal text');
+    expect(readFileSync(path.join(site, 'dist/assets/viewmodel/CREDITS.md'), 'utf8')).toBe('Viewmodel attribution and modifications');
+    expect(readFileSync(path.join(site, 'dist/assets/viewmodel/licenses/CC0-1.0.txt'), 'utf8')).toBe('CC0 legal text');
   } finally { rmSync(scratch, { recursive: true, force: true }); }
 });

@@ -1,0 +1,70 @@
+[
+  {
+    "checked": "2026-10-16",
+    "model": "9mm Pistol | First Person Animations",
+    "author": "1Matzh",
+    "authorUrl": "https://sketchfab.com/1Matzh",
+    "source": "https://sketchfab.com/3d-models/9mm-pistol-first-person-animations-c26d7f5aa72f4b01a6da4578caa8f07f",
+    "api": "https://api.sketchfab.com/v3/models/c26d7f5aa72f4b01a6da4578caa8f07f",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloadable": true
+  },
+  {
+    "checked": "2026-10-16",
+    "model": "9mm Pistol",
+    "author": "Urpo",
+    "authorUrl": "https://sketchfab.com/Urpo",
+    "source": "https://sketchfab.com/3d-models/9mm-pistol-30222f9a59104426ba526a6b20cd7532",
+    "api": "https://api.sketchfab.com/v3/models/30222f9a59104426ba526a6b20cd7532",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloadable": true
+  },
+  {
+    "checked": "2026-10-16",
+    "model": "Modern Soldier",
+    "author": "Blue Spirit",
+    "authorUrl": "https://sketchfab.com/Blue-Spirit",
+    "source": "https://sketchfab.com/3d-models/modern-soldier-358b4fb07f0146cb9b9063342db5897a",
+    "api": "https://api.sketchfab.com/v3/models/358b4fb07f0146cb9b9063342db5897a",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloadable": true
+  },
+  {
+    "checked": "2026-10-16",
+    "model": "sky dome demo",
+    "author": "fangzhangmnm",
+    "authorUrl": "https://sketchfab.com/fangzhangmnm",
+    "source": "https://sketchfab.com/3d-models/sky-dome-demo-a5778d3c90e644e2be1062895ccd44aa",
+    "api": "https://api.sketchfab.com/v3/models/a5778d3c90e644e2be1062895ccd44aa",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloadable": true
+  }
+]

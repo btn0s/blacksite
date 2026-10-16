@@ -6,10 +6,13 @@ import { Vector3 } from 'three'
 import { StandaloneSubject } from '@blacksite/subject-fpp'
 import type { StandaloneIntent } from '@blacksite/subject-fpp'
 import { ALS_WEAPONS, createWeaponRuntime } from '@blacksite/armory'
-import { ArmsViewmodel, createArmsState } from '@blacksite/subject-fpp/arms'
+import { ArmsViewmodel, createArmsState, switchSeconds, VIEWMODEL_CLIPS } from '@blacksite/subject-fpp/arms'
 
 const Position = trait({ x: 0, y: 1.63, z: 0 })
 const Intent = trait({ forward: 0, right: 0, jump: false })
+const definitions = ALS_WEAPONS.map(weapon => weapon.id === 'rifle' || weapon.id === 'pistol'
+  ? { ...weapon, reloadSeconds: VIEWMODEL_CLIPS[weapon.id].reload.duration, equipSeconds: Math.max(switchSeconds(weapon.id, 'rifle'), switchSeconds(weapon.id, 'pistol')) }
+  : weapon)
 const noHits = { castRay: () => null, sweepSphere: () => null }
 
 function Scene({ onShot, physicsProbe }: { onShot: () => void; physicsProbe?: ReactNode }) {
@@ -18,7 +21,7 @@ function Scene({ onShot, physicsProbe }: { onShot: () => void; physicsProbe?: Re
   const controls = useRef({ sprinting: false, weapon: 'rifle' as 'rifle' | 'pistol' })
   const world = useMemo(createWorld, [])
   const pawn = useMemo(() => world.spawn(Position, Intent), [world])
-  const weapon = useMemo(() => createWeaponRuntime({ ownerId: 'local', seed: 1, definitions: ALS_WEAPONS }), [])
+  const weapon = useMemo(() => createWeaponRuntime({ ownerId: 'local', seed: 1, definitions }), [])
   const firing = useRef(false)
   const reload = useRef(false)
   const aim = useRef({ origin: new Vector3(), direction: new Vector3(0, 0, -1) })
@@ -63,6 +66,7 @@ function Scene({ onShot, physicsProbe }: { onShot: () => void; physicsProbe?: Re
       aim.current.origin.copy(pawn.get(Position)!)
       const events = weapon.step({ tick: weapon.snapshot().nextTick, trigger: firing.current, reload: reload.current, selectWeaponId: controls.current.weapon, aim: { origin: aim.current.origin, direction: aim.current.direction }, muzzle: aim.current.origin }, noHits)
       reload.current = false
+      arms.empty = weapon.snapshot().weapons.find(entry => entry.id === arms.debug.weapon)?.magazine === 0
       for (const event of events) {
         if (event.type === 'shot') { arms.fireSequence++; onShot() }
         if (event.type === 'reload-started') arms.reloadSequence++

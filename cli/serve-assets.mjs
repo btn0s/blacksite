@@ -8,7 +8,7 @@ export function blacksiteAssets({ blacksiteRoot } = {}) {
   let licenses
   let viewmodelLicenses
   let base
-  const viewmodelLicensePrefix = 'assets/viewmodel-licenses/'
+  const viewmodelLicensePrefix = 'assets/viewmodel/licenses/'
   return {
     name: 'blacksite-assets',
     configResolved(next) {
@@ -18,7 +18,7 @@ export function blacksiteAssets({ blacksiteRoot } = {}) {
       const armsAssets = path.join(root, 'packages/subject-fpp/assets')
       licenses = new Map([
         ['assets/LICENSE-Blacksite-Arms.md', path.join(armsAssets, 'LICENSE')],
-        ['assets/LICENSE-Blacksite-Viewmodel.md', path.join(armsAssets, 'arms/CREDITS.md')],
+        ['assets/viewmodel/CREDITS.md', path.join(armsAssets, 'arms/CREDITS.md')],
       ])
       viewmodelLicenses = path.join(armsAssets, 'arms/licenses')
       base = new URL(config.base ?? '/', 'http://localhost').pathname.replace(/\/$/, '')
@@ -34,7 +34,7 @@ export function blacksiteAssets({ blacksiteRoot } = {}) {
         const license = licenses.get(relative)
         const viewmodelLicense = relative.startsWith(viewmodelLicensePrefix)
         const file = license ?? (viewmodelLicense ? path.resolve(viewmodelLicenses, relative.slice(viewmodelLicensePrefix.length)) : path.resolve(source, relative))
-        if (viewmodelLicense && (!file.startsWith(`${viewmodelLicenses}${path.sep}`) || !['.md', '.txt'].includes(path.extname(file)))) return next()
+        if (viewmodelLicense && (!file.startsWith(`${viewmodelLicenses}${path.sep}`) || !['.md', '.txt', '.json'].includes(path.extname(file)))) return next()
         if (!license && !viewmodelLicense && (!file.startsWith(`${source}${path.sep}`) || config.publicDir && existsSync(path.resolve(config.publicDir, relative)))) return next()
         const info = await stat(file).catch(() => undefined)
         if (!info?.isFile()) return next()
@@ -50,7 +50,7 @@ export function blacksiteAssets({ blacksiteRoot } = {}) {
       if (existsSync(source)) await cp(source, output, { recursive: true, force: false, errorOnExist: false })
       for (const [relative, file] of licenses) {
         if (!existsSync(file)) continue
-        await mkdir(path.join(output, 'assets'), { recursive: true })
+        await mkdir(path.dirname(path.join(output, relative)), { recursive: true })
         await cp(file, path.join(output, relative))
       }
       if (existsSync(viewmodelLicenses)) await cp(viewmodelLicenses, path.join(output, viewmodelLicensePrefix), { recursive: true })

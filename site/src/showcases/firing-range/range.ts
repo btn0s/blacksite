@@ -20,7 +20,7 @@ function random(seed: number) {
   return () => { state = (state * 1664525 + 1013904223) >>> 0; return state / 4294967296 }
 }
 
-export const BOUNDS = { minX: -9.2, maxX: 9.2, minZ: -0.55, maxZ: 6.4 }
+export const BOUNDS = { minX: -9.2, maxX: 9.2, minZ: -34, maxZ: 6.4, lineZ: -0.55, laneMinX: 8.1 }
 
 export function buildRange() {
   const level = new LevelBuilder()
@@ -64,8 +64,8 @@ export function buildRange() {
   level.plane(21, 1.2, { name: 'cast', ao: false }, { at: [0, 0.025, -2.0] })
   box([21, 0.12, 0.3], { name: 'cast' }, { at: [0, 0.06, -1.55], shadow: false })
 
-  kit([18.6, 0.07, 0.72], 'planks', { at: [0, 0.98, -1.12] })
-  for (const x of [-8.8, -5, -2.5, 0, 2.5, 5, 8.8]) box([0.5, 0.94, 0.5], { name: 'cast', color: '#a29d8d' }, { at: [x, 0.47, -1.12] })
+  kit([16.8, 0.07, 0.72], 'planks', { at: [-0.9, 0.98, -1.12] })
+  for (const x of [-8.8, -5, -2.5, 0, 2.5, 5, 7.1]) box([0.5, 0.94, 0.5], { name: 'cast', color: '#a29d8d' }, { at: [x, 0.47, -1.12] })
   for (const x of [-7.5, -2.5, 2.5, 7.5]) {
     kit([0.05, 1.5, 1.25], 'osb', { at: [x, 1.85, -0.92], collide: false, shadow: false })
     box([0.08, 2.1, 0.08], { name: 'metal', color: '#3e4038' }, { at: [x, 2.05, -0.3], collide: false, shadow: false })
@@ -87,8 +87,11 @@ export function buildRange() {
   }
 
   const bag = (x: number, y: number, z: number, yaw: number) => kit([0.62 + rand() * 0.08, 0.17, 0.34], 'canvas', { at: [x, y, z], rotate: [rand() * 0.05 - 0.025, yaw + rand() * 0.12 - 0.06, rand() * 0.06 - 0.03], collide: false, shadow: y < 0.2 })
-  for (let layer = 0; layer < 3; layer++) for (let x = -10; x <= 10; x += 0.66) bag(x + (layer % 2) * 0.33, 0.09 + layer * 0.17, -2.15, 0)
-  solids.push(staticSolid('sandbags-front', 'canvas', 'box', [10.4, 0.26, 0.18], [0, 0.26, -2.15], [0, 0, 0]))
+  for (let layer = 0; layer < 3; layer++) for (let x = -10; x <= 7.5; x += 0.66) bag(x + (layer % 2) * 0.33, 0.09 + layer * 0.17, -2.15, 0)
+  solids.push(staticSolid('sandbags-front', 'canvas', 'box', [9.05, 0.26, 0.18], [-1.35, 0.26, -2.15], [0, 0, 0]))
+
+  level.plane(1.25, 34.5, { name: 'slab', ao: false }, { at: [8.65, 0.025, -16.75] })
+  for (const z of [-4, -10, -16, -22, -28, -34]) box([0.12, 0.65, 0.12], { name: 'cast', color: '#9a9585' }, { at: [7.8, 0.325, z] })
 
   for (const side of [-1, 1]) {
     box([6, 3.2, 66], { name: 'dirt', color: '#6f6b58' }, { at: [side * 16, 1.1, -34], rotate: [0, 0, side * 0.5], collide: true })
