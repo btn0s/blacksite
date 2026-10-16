@@ -137,7 +137,7 @@ class Side {
       tiled.onBeforeCompile = material.onBeforeCompile
       tiled.customProgramCacheKey = material.customProgramCacheKey
       try {
-        uninstall = applyStochasticTiling(tiled, { seed: 17, tileSpan: 1, blendSharpness: 4 })
+        uninstall = applyStochasticTiling(tiled, { seed: 17, tileSpan: 1, blendSharpness: 4, rotation: state.id === 'bark' ? 'none' : 'quarter-turn' })
       } catch (error) {
         tiled.dispose()
         release()
