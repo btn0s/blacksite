@@ -577,7 +577,6 @@ export class TacticalRuntime {
     this.performance.record(performance.now() - started);
     return this.snapshot();
   }
-  /** Agents that hold an attack token on a team, in the order they took it. */
   attackTokenHolders(team: TeamId): Array<string> {
     this.assertActive();
     return [...this.agents]

@@ -140,7 +140,7 @@ export function createArmsRuntime(assets: ArmsAssets, state: ArmsState) {
         previousRotations.set(pose.rotations)
       } else previousRotations = pose.rotations.slice()
       for (const entry of weapons) { entry.object.visible = entry.weapon === state.weapon; entry.flash?.update(delta) }
-      aimAmount += ((state.aiming ? 1 : 0) - aimAmount) * (1 - Math.exp(-16 * delta))
+      aimAmount += ((state.aiming ? 1 : 0) - aimAmount) * (1 - Math.exp(-(state.aimSeconds ? 3 / state.aimSeconds : 16) * delta))
       movementAmount += ((input.moving ? 1 : 0) - movementAmount) * (1 - Math.exp(-12 * delta))
       sprintAmount += ((state.sprinting && !state.aiming ? 1 : 0) - sprintAmount) * (1 - Math.exp(-10 * delta))
       const bob = Math.sin(phase * Math.PI * 2) * movementAmount * (state.sprinting ? 0.012 : 0.006) * (1 - aimAmount * 0.8)

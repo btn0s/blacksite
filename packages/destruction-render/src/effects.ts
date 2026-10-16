@@ -115,6 +115,11 @@ export class DestructionEffects {
     for (const [key, tick] of this.seen) if (tick < frame.tick - 300) this.seen.delete(key);
   }
 
+  emit(event: PhysicalEvent, time: number): void {
+    this.spawn(event, time);
+    if (event.type === 'heavyImpact' || event.type === 'cannonballImpact' || event.type === 'explosiveDetonated') this.shake.add(event, time);
+  }
+
   private spawn(event: PhysicalEvent, time: number): void {
     const mass = Math.max(0, event.mass ?? 0);
     const impulse = Math.max(0, event.impulse ?? (mass > 0 ? Math.sqrt(2 * mass * Math.max(0, event.energy)) : 0));

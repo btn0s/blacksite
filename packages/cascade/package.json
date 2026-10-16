@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./chips": "./src/chips.ts",
     "./render-profile": "./src/render-profile.ts",
     "./session": "./src/session.ts",
     "./showcase-frame": "./src/showcase-frame.ts",

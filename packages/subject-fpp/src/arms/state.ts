@@ -4,6 +4,7 @@ export type ArmsAction = 'fire' | 'reload' | 'equip'
 export interface ArmsState {
   weapon: ArmsWeapon
   aiming: boolean
+  aimSeconds?: number
   speed: number
   sprinting: boolean
   fireSequence: number

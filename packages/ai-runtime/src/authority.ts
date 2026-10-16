@@ -31,9 +31,7 @@ export interface TacticalAuthority {
   readonly winner?: TeamId | 'draw';
 }
 export type TacticalRuntimeOptions = {
-  /** Limit how many AI agents per team may fire at once; the rest aim and wait with fireGate 'attack-token'. */
   attackTokens?: AttackTokenRules;
-  /** Emit an 'intent' event when an AI agent's activity changes, and hold new moves for leadTicks. */
   intents?: IntentRules;
   authority?: TacticalAuthority;
   controlledAgentIds?: ReadonlyArray<string>;
