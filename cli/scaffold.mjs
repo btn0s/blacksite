@@ -129,6 +129,7 @@ async function main() {
   await initializeSubmodule(root, localRef || blacksiteUrl, 'vendor/blacksite', localRef ? null : options['blacksite-ref'])
   emit(options.json, 'submodules', 'done', 'Recursive Blacksite submodule initialized')
   const packageIds = [...requested].map(id => id === 'subject' && profile === 'fpp' ? 'subject-fpp' : id)
+  if (profile === 'mp') packageIds.push('subject-fpp')
   const needsAls = profile === 'tpp' || packageIds.includes('subject') || packageIds.includes('subject-fpp')
   const base = ['ui', 'look', 'input', 'check', 'soundscape']
   const closure = await packageClosure(path.join(root, 'vendor/blacksite'), [...base, ...packageIds])
