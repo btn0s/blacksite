@@ -21,6 +21,7 @@ ALS authored data uses UE centimetres, cm/s, degrees and axes +X forward/+Y righ
 - Camera sawtooth or jittery arms: one look owner; pass Subject's yaw/pitch to Character and `AlsCamera.controlRotationSource`.
 - One-frame camera/attachment lag: Physics priority, pose, camera, then attachment transforms.
 - Remote glide or wrong animation: forward recorded gait, stance, body/view angles and animation intent in metre/m/s snapshots; retain anchor conversion.
+- Remote pose cost: pass camera significance to `AlsRemoteActor.animationLod`; `focused` and actions run at full rate.
 - Missing spawn after loading: subscribe after React commit and clean up on unmount; Suspense may abandon a render.
 
 ## Recipe routing
