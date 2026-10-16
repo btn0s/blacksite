@@ -1,0 +1,115 @@
+import { useEffect, useMemo, useRef, type MutableRefObject } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
+import { Effect } from 'effect'
+import { useActionEvents, useInputContext, useInputRuntime } from '@blacksite/input'
+import { Character, type AlsRagdollHandle } from 'als-ue5-r3f/app/Character'
+import { AlsCamera } from 'als-ue5-r3f/app/AlsCamera'
+import type { CharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
+import type { WorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
+import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
+import type { AlsFootstepAudioRuntime } from 'als-ue5-r3f/engine/alsAudioBridge'
+import { TRAVERSE_INPUT, codeInput, look, stickCurve, type Command } from './controls'
+import { input as tuning } from './model'
+
+export type Spawn = { revision: number; position: [number, number, number]; yaw: number }
+
+export type PlayerProps = {
+  command: Command
+  pose: MutableRefObject<CharacterPoseSample>
+  time: Readonly<WorldTimeState>
+  audio: AlsFootstepAudioRuntime
+  spawn: Spawn
+  scripted: MutableRefObject<boolean>
+  touchLook: MutableRefObject<{ x: number; y: number }>
+  touchMove: MutableRefObject<{ forward: number; right: number }>
+  onAction: (action: string) => void
+}
+
+export function Player({ command, pose, time, audio, spawn, scripted, touchLook, touchMove, onAction }: PlayerProps) {
+  const runtime = useInputRuntime()
+  const hub = runtime.actions
+  const { gl } = useThree()
+  const ragdoll = useRef<AlsRagdollHandle | null>(null)
+  const shift = useRef<{ down: boolean; at: number }>({ down: false, at: 0 })
+  useInputContext(TRAVERSE_INPUT)
+
+  useEffect(() => {
+    runtime.setGameplay(true)
+    return () => runtime.setGameplay(false)
+  }, [runtime])
+
+  useActionEvents(event => {
+    if (scripted.current) return
+    if (event.action === 'jump') command.jumpSequence++
+    else if (event.action === 'roll') command.rollSequence++
+    else if (event.action === 'crouch') command.crouch = !command.crouch
+    else if (event.action === 'walk') command.walk = !command.walk
+    else if (event.action === 'ragdoll') command.ragdollSequence++
+    else if (event.action === 'shoulder') command.rightShoulder = !command.rightShoulder
+    else onAction(event.action)
+    if (event.device === 'gamepad' && (event.action === 'ragdoll' || event.action === 'roll')) Effect.runSync(runtime.rumble(140, 0.5, 0.3))
+  })
+
+  useEffect(() => {
+    const canvas = gl.domElement
+    const lock = () => { if (document.pointerLockElement !== canvas) void canvas.requestPointerLock()?.catch?.(() => {}) }
+    const move = (event: PointerEvent) => {
+      if (scripted.current || document.pointerLockElement !== canvas) return
+      look(command, event.movementX * tuning.mouseDegreesPerPixel, event.movementY * tuning.mouseDegreesPerPixel)
+    }
+    const blur = () => { command.forward = command.right = 0; command.sprint = false }
+    canvas.addEventListener('click', lock)
+    document.addEventListener('pointermove', move)
+    window.addEventListener('blur', blur)
+    const offFrame = runtime.onFrame(pad => {
+      if (scripted.current || !pad) return
+      const dt = 1 / 60
+      look(command, stickCurve(pad.axes[2] ?? 0) * tuning.padYawRate * dt, stickCurve(pad.axes[3] ?? 0) * tuning.padPitchRate * dt)
+    })
+    return () => {
+      canvas.removeEventListener('click', lock)
+      document.removeEventListener('pointermove', move)
+      window.removeEventListener('blur', blur)
+      offFrame()
+    }
+  }, [command, gl, runtime, scripted])
+
+  useFrame(() => {
+    if (scripted.current) return
+    const pad = runtime.snapshot().gameplayReady ? runtime.activePad() : null
+    const keyForward = (hub.isHeld('forward') ? 1 : 0) - (hub.isHeld('back') ? 1 : 0)
+    const keyRight = (hub.isHeld('right') ? 1 : 0) - (hub.isHeld('left') ? 1 : 0)
+    const padRight = pad ? stickCurve(pad.axes[0] ?? 0) : 0
+    const padForward = pad ? -stickCurve(pad.axes[1] ?? 0) : 0
+    const touch = touchLook.current
+    if (touch.x || touch.y) {
+      look(command, touch.x * tuning.touchDegreesPerPixel, touch.y * tuning.touchDegreesPerPixel)
+      touch.x = touch.y = 0
+    }
+    command.forward = Math.max(-1, Math.min(1, keyForward + padForward + touchMove.current.forward))
+    command.right = Math.max(-1, Math.min(1, keyRight + padRight + touchMove.current.right))
+    const held = hub.isHeld('sprint')
+    const now = performance.now() / 1000
+    if (held && !shift.current.down) shift.current = { down: true, at: now }
+    if (!held && shift.current.down) {
+      shift.current.down = false
+      if (now - shift.current.at < tuning.rollTapSeconds) command.rollSequence++
+    }
+    command.sprint = held && now - shift.current.at >= tuning.rollTapSeconds * 0.5
+  }, ALS_FRAME_PRIORITY.ControlRotation - 0.2)
+
+  const inputSource = useMemo(() => () => codeInput(command), [command])
+  const rotation = useMemo(() => () => ({ yaw: command.yaw, pitch: command.pitch }), [command])
+  const shoulder = useMemo(() => () => command.rightShoulder, [command])
+
+  return <>
+    <Character key={spawn.revision} initialPosition={spawn.position} inputEnabled={false} inputSource={inputSource}
+      poseSample={pose} worldTime={time} footstepSoundSink={audio} ragdollRef={ragdoll}
+      onSizeChange={noop} onOverlayModeBridgeChange={noop} toggleRotationModeKey={null}
+      showDebugControls={false} exposeDebugGlobals={false} gamepadEnabled={false} />
+    <AlsCamera poseSample={pose} worldTime={time} footstepAudioRuntime={audio} toggleViewModeKey={null}
+      controlRotationSource={rotation} rightShoulder={shoulder} aspectRatioAxisConstraint="MajorAxisFOV" gamepadEnabled={false} />
+  </>
+}
+
+const noop = () => {}

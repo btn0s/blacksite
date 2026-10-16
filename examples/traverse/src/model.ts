@@ -38,6 +38,18 @@ export const camera = {
   easeOutSeconds: 0.4,
 } as const
 
+export const input = {
+  mouseDegreesPerPixel: 0.11,
+  touchDegreesPerPixel: 0.32,
+  padYawRate: 220,
+  padPitchRate: 140,
+  pitchMin: -70,
+  pitchMax: 55,
+  walkStick: 0.5,
+  stickDeadZone: 0.16,
+  rollTapSeconds: 0.25,
+} as const
+
 export const route = {
   checkpoints: 7,
   parSeconds: 75,
@@ -45,6 +57,12 @@ export const route = {
   ghostHz: 20,
   ghostMsPerFrame: 0.15,
   ghostBytesPerMinute: 1_000_000,
+} as const
+
+export const look = {
+  atmosphere: { fog: '#858a7e', density: 0.017, shadowSize: 30, sunIntensity: 2.3, ambient: 0.9, sunDirection: [0.5, 0.42, -0.6] as [number, number, number] },
+  ash: 1400,
+  ashRadius: 22,
 } as const
 
 export const frame = {
