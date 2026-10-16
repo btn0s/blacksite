@@ -35,7 +35,7 @@ export const showcase: Showcase = {
 
 - `tool` is the tool slug: `characters`, `destruction`, `weapons`, `multiplayer`, `ai` or `input`.
 - `keyboard` and `touch` fill the "?" panel in the corner of the canvas. Keep the in-canvas `Hints` to five keys or fewer.
-- `thumbnail` is a 1600×900 WebP in `site/public/thumbs/`. A tool appears in the home grid once one of its showcases has a thumbnail.
+- `thumbnail` is a 1600×900 WebP in `site/public/thumbs/`. A tool appears in the home grid once one of its showcases has a thumbnail. When you add or change a thumbnail, run `pnpm meta:images` to rebuild the 1200×630 share images in `site/public/og/`. The site tests fail until you do.
 - `order` sorts several showcases on one tool page. Each one gets a full-width stage and a name line.
 
 Registered showcases replace the old demos listed in `content.ts` for that tool.

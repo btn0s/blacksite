@@ -15,6 +15,7 @@ import { SkillsPage } from './pages/SkillsPage'
 import { GuidePage } from './pages/GuidePage'
 import { GetStartedPage } from './pages/GetStartedPage'
 import { base, link } from './links'
+import { applyMeta, metaFor, pages, siteName } from './seo'
 
 function currentRoute() {
   const path = location.pathname
@@ -76,11 +77,7 @@ function Footer() {
 function App() {
   const route = useRoute()
   useEffect(() => {
-    const [section, slug] = route.split('/')
-    const tool = section === 'tools' && slug ? toolBySlug(slug) : undefined
-    const doc = section === 'guides' && slug ? docBySlug(slug) : section === 'roadmap' ? docBySlug('roadmap') : undefined
-    const title = tool ? `${tool.name} · Blacksite` : doc ? `${doc.title} · Blacksite` : section === 'skills' ? 'Skills · Blacksite' : section === 'get-started' ? 'Get started · Blacksite' : 'Blacksite · Skills and building blocks for game-dev agents'
-    document.title = title
+    applyMeta(metaFor(route) ?? { ...pages[0]!, route, title: `Nothing here — ${siteName}` })
     if (!location.hash) window.scrollTo(0, 0)
   }, [route])
   return <div className="shell"><Nav route={route} /><main className="main"><Page route={route} /></main><Footer /></div>

@@ -4,14 +4,18 @@ import mdx from '@mdx-js/rollup'
 import remarkGfm from 'remark-gfm'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { resolve } from 'node:path'
-import { readdirSync, readFileSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { blacksiteAssets } from '../cli/serve-assets.mjs'
+import { defaultSiteUrl, pages, renderPage, robots, sitemap } from './src/seo'
 
 const base = process.env.SITE_BASE || '/'
+const siteUrl = process.env.SITE_URL || defaultSiteUrl
+const outDir = resolve(import.meta.dirname, '../dist/site')
 
 export default defineConfig({
   root: resolve(import.meta.dirname),
   base,
+  define: { 'import.meta.env.SITE_URL': JSON.stringify(siteUrl) },
   resolve: {
     alias: {
       '@react-three/fiber': resolve(import.meta.dirname, '../node_modules/@react-three/fiber'),
@@ -41,6 +45,21 @@ export default defineConfig({
     tsconfigPaths({ root: resolve(import.meta.dirname, '..') }),
     blacksiteAssets({ blacksiteRoot: resolve(import.meta.dirname, '..') }),
     {
+      name: 'blacksite-route-pages',
+      apply: 'build',
+      closeBundle() {
+        const shell = readFileSync(resolve(outDir, 'index.html'), 'utf8')
+        for (const page of pages) {
+          const dir = resolve(outDir, page.route)
+          mkdirSync(dir, { recursive: true })
+          writeFileSync(resolve(dir, 'index.html'), renderPage(shell, page, siteUrl, base))
+        }
+        writeFileSync(resolve(outDir, '404.html'), renderPage(shell, pages[0]!, siteUrl, base, { canonical: false, noindex: true }))
+        writeFileSync(resolve(outDir, 'sitemap.xml'), sitemap(siteUrl, base))
+        writeFileSync(resolve(outDir, 'robots.txt'), robots(siteUrl, base))
+      },
+    },
+    {
       name: 'blacksite-pages-assets',
       enforce: 'pre',
       transform(source, id) {
@@ -54,7 +73,7 @@ export default defineConfig({
   optimizeDeps: { include: ['@dimforge/rapier3d-compat', '@dimforge/rapier3d-simd-compat'] },
   build: {
     target: 'es2022',
-    outDir: resolve(import.meta.dirname, '../dist/site'),
+    outDir,
     emptyOutDir: true,
     rollupOptions: { input: {
       main: resolve(import.meta.dirname, 'index.html'),

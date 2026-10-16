@@ -1,19 +1,22 @@
 import type { ComponentType } from 'react'
 import { alsRepo, repo } from './content'
+import { docList, type DocEntry } from './doc-list'
 
 type Loader = () => Promise<{ default: ComponentType<{ components?: Record<string, unknown> }> }>
-export type Doc = { slug: string; title: string; path: string; tool?: string; load: Loader }
+export type Doc = DocEntry & { load: Loader }
 
-export const docs: Doc[] = [
-  { slug: 'roadmap', title: 'Roadmap', path: 'ROADMAP.md', load: () => import('../../ROADMAP.md') },
-  { slug: 'als', title: 'ALS agent guide', path: 'vendor/als-web/docs/guide/overview.md', tool: 'characters', load: () => import('../../vendor/als-web/docs/guide/overview.md') },
-  { slug: 'player-templates', title: 'Player templates', path: 'docs/player-templates.md', tool: 'multiplayer', load: () => import('../../docs/player-templates.md') },
-  { slug: 'cascade', title: 'Cascade guide', path: 'docs/cascade.md', tool: 'destruction', load: () => import('../../docs/cascade.md') },
-  { slug: 'arms', title: 'First-person arms', path: 'docs/arms.md', tool: 'weapons', load: () => import('../../docs/arms.md') },
-  { slug: 'warden', title: 'Warden guide', path: 'docs/warden.md', tool: 'ai', load: () => import('../../docs/warden.md') },
-  { slug: 'input', title: 'Input guide', path: 'packages/input/README.md', tool: 'input', load: () => import('../../packages/input/README.md') },
-  { slug: 'ui', title: 'UI guide', path: 'packages/ui/README.md', tool: 'input', load: () => import('../../packages/ui/README.md') },
-]
+const loaders: Record<string, Loader> = {
+  roadmap: () => import('../../ROADMAP.md'),
+  als: () => import('../../vendor/als-web/docs/guide/overview.md'),
+  'player-templates': () => import('../../docs/player-templates.md'),
+  cascade: () => import('../../docs/cascade.md'),
+  arms: () => import('../../docs/arms.md'),
+  warden: () => import('../../docs/warden.md'),
+  input: () => import('../../packages/input/README.md'),
+  ui: () => import('../../packages/ui/README.md'),
+}
+
+export const docs: Doc[] = docList.map(doc => ({ ...doc, load: loaders[doc.slug]! }))
 
 export const docBySlug = (slug: string) => docs.find(doc => doc.slug === slug)
 export const docByPath = (path: string) => docs.find(doc => doc.path === path)

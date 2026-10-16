@@ -1,0 +1,14 @@
+{
+  "name": "Blacksite",
+  "short_name": "Blacksite",
+  "description": "Skills and building blocks for game-dev agents.",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#0c0e0b",
+  "theme_color": "#0c0e0b",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "/apple-touch-icon.png", "type": "image/png", "sizes": "180x180" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ]
+}
