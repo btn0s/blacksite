@@ -149,7 +149,7 @@ export class AirStrikeScene {
     this.session = new DestructionSession(manifest, {
       frame: frame => this.fx.ingest(frame),
       ready: () => { this.warm(); this.set({ phase: 'ready', progress: 1 }) },
-    }, { timestep: FIXED_DT_30HZ })
+    }, { timestep: FIXED_DT_30HZ, rest: { forceAfterSeconds: 2.5, forceSpeed: 0.5, forceSpin: 0.9 } })
     this.view = new DestructionRenderer(manifest, { materialFor: this.materialFor, cameraShake: 1, effects: false, secondaryAddsPerUpdate: 12, edgeFacesPerUpdate: 64 })
     this.scene.add(this.view.group)
     this.session.subscribe(() => { const error = this.session?.getSnapshot().error; if (error && error !== this.state.error) this.set({ error }) })

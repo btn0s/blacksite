@@ -1,6 +1,7 @@
 import {
   FIXED_DT,
   simulationVersionFor,
+  restVersionSuffix,
   physicsOperationsVersionFor,
   MAX_REPLAY_COMMANDS,
   MAX_REPLAY_TICKS,
@@ -12,6 +13,7 @@ import {
   type DestructionCommand,
   type DestructionEvent,
   type ReplayLog,
+  type RestPolicy,
   type SimulationFrame,
   type WorkerRequest,
   type WorkerResponse,
@@ -30,6 +32,7 @@ let manifest: DestructibleManifest | undefined;
 let paused = false;
 let speed = 1;
 let dt = FIXED_DT;
+let rest: Partial<RestPolicy> | undefined;
 let accumulator = 0;
 let lastTime = performance.now();
 let snapshotDeadline = 0;
@@ -146,7 +149,7 @@ function advance(): void {
 
 async function replace(nextManifest: DestructibleManifest, timestep = dt): Promise<void> {
   paused = true;
-  const next = await DestructionSimulation.create(nextManifest, { timestep });
+  const next = await DestructionSimulation.create(nextManifest, { timestep, ...(rest ? { rest } : {}) });
   dt = timestep;
   simulation?.dispose();
   sentPieces.clear();
@@ -162,15 +165,15 @@ async function replace(nextManifest: DestructibleManifest, timestep = dt): Promi
 
 function checkedReplay(log: ReplayLog): ReplayLog {
   if (
-    log?.simulationVersion !== simulationVersionFor(dt) + flavourSuffix() &&
-    log?.simulationVersion !== physicsOperationsVersionFor(dt) + flavourSuffix()
+    log?.simulationVersion !== simulationVersionFor(dt) + flavourSuffix() + restVersionSuffix(rest) &&
+    log?.simulationVersion !== physicsOperationsVersionFor(dt) + flavourSuffix() + restVersionSuffix(rest)
   ) {
     throw new Error('Replay requires a different simulation version.');
   }
   if (
     Array.isArray(log?.physicsOperations) &&
     log.physicsOperations.length > 0 &&
-    log.simulationVersion !== physicsOperationsVersionFor(dt) + flavourSuffix()
+    log.simulationVersion !== physicsOperationsVersionFor(dt) + flavourSuffix() + restVersionSuffix(rest)
   ) {
     throw new Error('Replay physics operations require their simulation version marker.');
   }
@@ -215,6 +218,7 @@ async function handle(message: WorkerRequest): Promise<void> {
   }
   switch (message.type) {
     case 'init':
+      rest = message.rest;
       await replace(message.manifest, message.timestep ?? FIXED_DT);
       paused = false;
       scope.postMessage({ type: 'ready' });
