@@ -1,6 +1,6 @@
 import { Suspense, use, useEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { ACESFilmicToneMapping, DirectionalLight, HemisphereLight, PerspectiveCamera, Scene } from 'three'
+import { DirectionalLight, HemisphereLight, PerspectiveCamera, Scene } from 'three'
 import { preloadArmsAssets } from './arms/manifest'
 import { createArmsRuntime, measureArmsAttachment } from './arms/runtime'
 import type { ArmsState } from './arms/state'
@@ -25,7 +25,6 @@ export interface ArmsViewmodelProps {
   manifestUrl?: string
   render?: 'composite' | 'external'
   onPresentation?: (presentation: ArmsPresentation | null) => void
-  overlay?: boolean
 }
 
 const NARROWEST_ASPECT = 4 / 3
@@ -34,7 +33,7 @@ export function ArmsViewmodel(props: ArmsViewmodelProps) {
   return <Suspense fallback={null}><LoadedArmsViewmodel {...props} /></Suspense>
 }
 
-function LoadedArmsViewmodel({ state, visible = true, manifestUrl, render = 'composite', onPresentation, overlay = false }: ArmsViewmodelProps) {
+function LoadedArmsViewmodel({ state, visible = true, manifestUrl, render = 'composite', onPresentation }: ArmsViewmodelProps) {
   const renderer = useThree(state => state.gl)
   const assets = use(preloadArmsAssets(manifestUrl, renderer))
   const runtime = useMemo(() => createArmsRuntime(assets, state), [assets, state])
@@ -73,19 +72,14 @@ function LoadedArmsViewmodel({ state, visible = true, manifestUrl, render = 'com
     state.debug.maxCameraRelativeError = Math.max(state.debug.maxCameraRelativeError, error)
     if (render === 'external') return
     const autoClear = gl.autoClear
-    if (!overlay) {
-      gl.autoClear = true
-      gl.render(scene, camera)
-    }
+    gl.autoClear = true
+    gl.render(scene, camera)
     if (visible) {
-      const toneMapping = gl.toneMapping
-      if (overlay) gl.toneMapping = ACESFilmicToneMapping
       gl.autoClear = false
       gl.clearDepth()
       gl.render(presentation.scene, view)
-      gl.toneMapping = toneMapping
     }
     gl.autoClear = autoClear
-  }, overlay ? 2 : 0.5)
+  }, 0.5)
   return null
 }

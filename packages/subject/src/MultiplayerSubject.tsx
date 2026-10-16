@@ -10,7 +10,7 @@ import type { AlsCharacterSnapshot } from 'als-ue5-r3f/als/AlsCharacterSnapshot'
 import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { AlsFootstepAudioRuntime } from 'als-ue5-r3f/engine/alsAudioBridge'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
-import { ArmsViewmodel, createArmsState, type ArmsState } from '@blacksite/subject-fpp/arms'
+import { ArmsViewmodel, createArmsState, type ArmsPresentation, type ArmsState } from '@blacksite/subject-fpp/arms'
 import { ALS_WEAPONS, createWeaponRuntime, type WeaponRuntime } from '@blacksite/armory'
 import { createWorld, trait } from 'koota'
 import { Subject, createSubject } from './index'
@@ -59,7 +59,7 @@ export interface MultiplayerSceneProps {
   cameraMode?: CameraMode
   subject?: SubjectState
   initialSpawn?: readonly [number, number, number]
-  armsOverlay?: boolean
+  onArmsPresentation?: (presentation: ArmsPresentation | null) => void
   children?: ReactNode
   onReplica?: (replica: MultiplayerReplica | null) => void
   onStatus?: (status: MultiplayerStatus) => void
@@ -167,7 +167,7 @@ export function MultiplayerScene(props: MultiplayerSceneProps) {
   return replica ? <Suspense fallback={null}><ReplicatedScene {...props} subject={subject} replica={replica} /></Suspense> : null
 }
 
-function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics, onShot, physicsProbe, armsOverlay = false, children, subject, replica }: MultiplayerSceneProps & { subject: SubjectState; replica: MultiplayerReplica }) {
+function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics, onShot, physicsProbe, onArmsPresentation, children, subject, replica }: MultiplayerSceneProps & { subject: SubjectState; replica: MultiplayerReplica }) {
   const inputSource = useMemo(() => createSubjectInputSource(subject), [subject])
   const controlRotationSource = useMemo(() => () => ({ yaw: subject.player.command.yaw, pitch: subject.player.command.pitch }), [subject])
   const arms = useMemo(createArmsState, [])
@@ -292,7 +292,7 @@ function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics,
       {children}
       {remotes.map(key => { const [id, life] = key.split('#'); return <RemotePawn key={key} id={id!} life={Number(life)} replica={replica} onClock={telemetry.record} /> })}
     </Physics></Suspense>
-    <Subject controller={subject} /><Suspense fallback={null}><ArmsViewmodel state={arms} visible={view === 'first-person'} overlay={armsOverlay} /></Suspense>
+    <Subject controller={subject} /><Suspense fallback={null}><ArmsViewmodel state={arms} visible={view === 'first-person'} render={onArmsPresentation ? 'external' : 'composite'} onPresentation={onArmsPresentation} /></Suspense>
   </>
 }
 

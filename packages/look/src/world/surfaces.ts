@@ -176,7 +176,7 @@ export function contactShadow(width: number, depth: number, opacity = 0.55, spre
   return mesh
 }
 
-export type AtmosphereOptions = { ambient?: number; horizon?: number; fog?: string; density?: number; sunDirection?: [number, number, number]; sunIntensity?: number; skyIntensity?: number; shadowSize?: number; shadowRadius?: number; shadowMap?: number; exposure?: number }
+export type AtmosphereOptions = { ambient?: number; horizon?: number; fog?: string; density?: number; sunDirection?: [number, number, number]; sunIntensity?: number; skyIntensity?: number; shadowSize?: number; shadowRadius?: number; shadowMap?: number }
 
 const skyVertex = `
 varying vec3 vDirection;
@@ -203,8 +203,6 @@ export function createAtmosphere(scene: THREE.Scene, renderer: THREE.WebGLRender
   const fogColor = new THREE.Color(options.fog ?? '#8c8e80')
   scene.fog = new THREE.FogExp2(fogColor, options.density ?? 0.016)
   scene.background = fogColor
-  renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = options.exposure ?? 1.05
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFShadowMap
