@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { CuboidCollider, CylinderCollider, RigidBody } from '@react-three/rapier'
@@ -20,13 +20,24 @@ export function Level({ route }: { route: Route }) {
 
 export function Atmosphere() {
   const { scene, gl, camera } = useThree()
-  const atmosphere = useMemo(() => createAtmosphere(scene, gl, lookModel.atmosphere), [scene, gl])
+  const atmosphere = useRef<ReturnType<typeof createAtmosphere> | null>(null)
+  useLayoutEffect(() => {
+    const created = createAtmosphere(scene, gl, lookModel.atmosphere)
+    atmosphere.current = created
+    return () => {
+      atmosphere.current = null
+      scene.remove(created.sun, created.sun.target, created.hemisphere, created.dome)
+      created.sun.shadow.dispose()
+      created.dome.geometry.dispose()
+    }
+  }, [scene, gl])
   const focus = useRef(new THREE.Vector3())
   useFrame(() => {
+    if (!atmosphere.current) return
     camera.getWorldDirection(focus.current)
     focus.current.multiplyScalar(12).add(camera.position)
     focus.current.y = 0
-    atmosphere.follow(focus.current)
+    atmosphere.current.follow(focus.current)
   })
   return null
 }

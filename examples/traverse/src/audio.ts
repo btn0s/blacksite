@@ -9,34 +9,51 @@ const reverbFor: Record<Zone['kind'] | 'open', number> = { open: 0.08, arch: 0.3
 
 const jitterGain = () => Math.pow(10, (Math.random() * 2 - 1) * 2 / 20)
 
-function noiseBuffer(context: BaseAudioContext, seconds: number, shape: (t: number, white: number) => number, start = 1234567) {
-  const length = Math.floor(context.sampleRate * seconds)
-  const buffer = context.createBuffer(1, length, context.sampleRate)
-  const data = buffer.getChannelData(0)
+const rate = 24000
+
+type Pcm = Float32Array<ArrayBuffer>[]
+
+function noiseBuffer(seconds: number, shape: (t: number, white: number) => number, start = 1234567): Pcm {
+  const length = Math.floor(rate * seconds)
+  const data = new Float32Array(length)
   let seed = start
   for (let i = 0; i < length; i++) {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff
-    data[i] = shape(i / context.sampleRate, seed / 0x3fffffff - 1)
+    data[i] = shape(i / rate, seed / 0x3fffffff - 1)
   }
-  return buffer
+  return [data]
 }
 
-function impulse(context: BaseAudioContext, seconds: number) {
-  const length = Math.floor(context.sampleRate * seconds)
-  const buffer = context.createBuffer(2, length, context.sampleRate)
-  for (let channel = 0; channel < 2; channel++) {
-    const data = buffer.getChannelData(channel)
+function impulse(seconds: number): Pcm {
+  const length = Math.floor(rate * seconds)
+  return [0, 1].map(() => {
+    const data = new Float32Array(length)
     for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 3.2)
-  }
+    return data
+  })
+}
+
+function toBuffer(context: BaseAudioContext, pcm: Pcm) {
+  const buffer = context.createBuffer(pcm.length, pcm[0]!.length, rate)
+  pcm.forEach((data, channel) => buffer.copyToChannel(data, channel))
   return buffer
 }
 
-function crackle(context: BaseAudioContext) {
+const oneShots = ['land', 'mantle', 'roll', 'ragdoll'] as const
+
+function oneShot(cue: (typeof oneShots)[number], variant: number) {
+  const spread = 1 + (variant - 1.5) * 0.08
+  const length = cue === 'roll' ? 0.5 : cue === 'mantle' ? 0.35 : 0.22
+  const decay = (cue === 'roll' ? 8 : cue === 'mantle' ? 12 : 26) * spread
+  return noiseBuffer(length, (t, white) => white * Math.exp(-t * decay), 1234567 + variant * 7919)
+}
+
+function crackle() {
   const pops: number[] = []
   for (let t = 0; t < 4; t += 0.02 + Math.random() * 0.16) pops.push(t)
   let last = 0
   let low = 0
-  return noiseBuffer(context, 4, (t, white) => {
+  return noiseBuffer(4, (t, white) => {
     while (pops.length > 1 && pops[1]! <= t) pops.shift()
     const since = t - pops[0]!
     const pop = since >= 0 ? Math.exp(-since * 260) * (0.5 + 0.5 * Math.sin(pops[0]! * 999)) : 0
@@ -46,9 +63,9 @@ function crackle(context: BaseAudioContext) {
   })
 }
 
-function drip(context: BaseAudioContext, index = 0) {
+function drip(index = 0) {
   const drops = [0.3, 1.45, 2.2, 3.6].map((at, drop) => at + ((index * 7 + drop * 3) % 5) * 0.11)
-  return noiseBuffer(context, 4.4, t => {
+  return noiseBuffer(4.4, t => {
     let value = 0
     for (const at of drops) {
       const since = t - at
@@ -59,9 +76,9 @@ function drip(context: BaseAudioContext, index = 0) {
   })
 }
 
-function tarp(context: BaseAudioContext, index = 0) {
+function tarp(index = 0) {
   let low = 0
-  return noiseBuffer(context, 6, (t, white) => {
+  return noiseBuffer(6, (t, white) => {
     low += (white - low) * 0.12
     const gust = Math.max(0, Math.sin(t * 1.3 + index * 2.1) * Math.sin(t * 0.47 + 1 + index) * 1.4)
     const flap = Math.pow(Math.max(0, Math.sin(t * 2 * Math.PI * (5 + 3 * Math.sin(t)))), 6)
@@ -83,13 +100,31 @@ export class Soundscape {
   private readonly log = createAudioLog()
   private readonly last = new Map<string, number>()
 
+  private bank: { reverb: Pcm; wind: Pcm; emitters: Map<string, Pcm>; shots: Map<string, Pcm> } | null = null
+
   constructor(route: Route) {
     this.zones = route.zones
     this.emitters = route.emitters
   }
 
+  prepare() {
+    if (this.bank) return
+    let pink = 0
+    const emitters = new Map<string, Pcm>()
+    const seen = new Map<string, number>()
+    for (const emitter of this.emitters) {
+      const index = seen.get(emitter.kind) ?? 0
+      seen.set(emitter.kind, index + 1)
+      if (emitter.kind !== 'buzz') emitters.set(`${emitter.kind}-${index}`, emitter.kind === 'fire' ? crackle() : emitter.kind === 'drip' ? drip(index) : tarp(index))
+    }
+    const shots = new Map<string, Pcm>()
+    for (const cue of oneShots) for (let variant = 0; variant < 4; variant++) shots.set(`${cue}-${variant}`, oneShot(cue, variant))
+    this.bank = { reverb: impulse(1.7), wind: noiseBuffer(6, (_, white) => (pink = pink * 0.97 + white * 0.03) * 6), emitters, shots }
+  }
+
   unlock() {
     if (this.context) { if (this.context.state === 'suspended') void this.context.resume(); return }
+    this.prepare()
     const AudioContextClass = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (!AudioContextClass) return
     const context = new AudioContextClass()
@@ -105,15 +140,14 @@ export class Soundscape {
     bus.connect(master)
     this.bus = bus
     const reverb = context.createConvolver()
-    reverb.buffer = impulse(context, 1.7)
+    reverb.buffer = toBuffer(context, this.bank!.reverb)
     const wet = context.createGain()
     wet.gain.value = reverbFor.open
     bus.connect(wet).connect(reverb).connect(master)
     this.wet = wet
 
     const windSource = context.createBufferSource()
-    let pink = 0
-    windSource.buffer = noiseBuffer(context, 6, (_, white) => (pink = pink * 0.97 + white * 0.03) * 6)
+    windSource.buffer = toBuffer(context, this.bank!.wind)
     windSource.loop = true
     const windFilter = context.createBiquadFilter()
     windFilter.type = 'bandpass'
@@ -184,7 +218,7 @@ export class Soundscape {
       filter.connect(gain)
     } else {
       gain.gain.value = kind === 'fire' ? 0.55 : kind === 'drip' ? 0.5 : 0.4
-      const buffer = (kind === 'fire' ? crackle : kind === 'drip' ? drip : tarp)(context, index)
+      const buffer = toBuffer(context, this.bank!.emitters.get(`${kind}-${index}`)!)
       const source = context.createBufferSource()
       source.buffer = buffer
       source.loop = true
@@ -273,10 +307,9 @@ export class Soundscape {
     const variant = this.variant(cue, 4)
     const spread = 1 + (variant - 1.5) * 0.08
     const length = cue === 'roll' ? 0.5 : cue === 'mantle' ? 0.35 : 0.22
-    const decay = (cue === 'roll' ? 8 : cue === 'mantle' ? 12 : 26) * spread
     this.voice(cue, `${cue}-${variant}`, length)
     const key = `${cue}-${variant}`
-    const buffer = this.buffers.get(key) ?? noiseBuffer(context, length, (t, white) => white * Math.exp(-t * decay), 1234567 + variant * 7919)
+    const buffer = this.buffers.get(key) ?? toBuffer(context, this.bank!.shots.get(key)!)
     this.buffers.set(key, buffer)
     const source = context.createBufferSource()
     source.buffer = buffer

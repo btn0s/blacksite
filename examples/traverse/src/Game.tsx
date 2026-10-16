@@ -162,6 +162,7 @@ export function Game() {
     void Promise.all([
       preloadAlsCharacterGltf(undefined, { onProgress: value => { if (!cancelled && value !== undefined) setProgress(0.05 + value * 0.85) } }).then(outfit),
       texturesReady(),
+      new Promise<void>(resolve => setTimeout(() => { shared.sound.prepare(); resolve() }, 0)),
     ]).then(() => { if (!cancelled) { setProgress(1); setReady(true) } })
     const onLock = () => setLocked(document.pointerLockElement !== null)
     document.addEventListener('pointerlockchange', onLock)

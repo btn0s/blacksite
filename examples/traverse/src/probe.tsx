@@ -20,7 +20,7 @@ export type ProbeApi = {
 type Waiter = { at: number; resolve: () => void }
 type Recording = { left: FootSample[]; right: FootSample[]; clipFrames: number; frames: number; cameraLocal: THREE.Vector3[]; times: number[] }
 
-const checkNames = ['feet-flat', 'stairs', 'slope', 'mantle-ladder', 'camera-wall', 'shoulder', 'route'] as const
+const checkNames = ['start', 'feet-flat', 'stairs', 'slope', 'mantle-ladder', 'camera-wall', 'shoulder', 'route'] as const
 export type CheckName = (typeof checkNames)[number]
 
 const toDegrees = (radians: number) => radians * 180 / Math.PI
@@ -195,6 +195,35 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         const m = slide(stop())
         const limits = { driftP95: model.feet.flatDriftP95, excursionP95: model.feet.excursionP95, clipFrames: model.camera.clipFrames }
         return result('feet-flat', m, limits, m.contacts > 12 && m.driftP95 <= limits.driftP95 && m.excursionP95 <= limits.excursionP95 && m.clipFrames <= limits.clipFrames, [`ankle ${(ankle.current ?? 0).toFixed(3)} m`])
+      },
+      async start() {
+        await place(feelLane.start, feelLane.yaw)
+        await wait(0.6)
+        const samples: number[][] = []
+        const began = clock.current
+        command.yaw = toDegrees(feelLane.yaw)
+        shared.scripted.current = false
+        window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', key: 'w' }))
+        await until(() => {
+          const body = shared.pose.current.ownerRigidBody!.translation()
+          const seen = position()
+          samples.push([clock.current - began, body.x, body.z, seen.x, seen.z])
+          return clock.current - began > 1.2
+        }, 2)
+        window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW', key: 'w' }))
+        shared.scripted.current = true
+        idle()
+        const reach = (offset: number) => {
+          for (let index = 1; index < samples.length; index++) {
+            let back = index - 1
+            while (back > 0 && samples[index]![0]! - samples[back]![0]! < 0.05) back--
+            const dt = samples[index]![0]! - samples[back]![0]!
+            const speed = Math.hypot(samples[index]![offset]! - samples[back]![offset]!, samples[index]![offset + 1]! - samples[back]![offset + 1]!) / dt
+            if (speed >= 0.9 * model.locomotion.run) return samples[index]![0]!
+          }
+          return -1
+        }
+        return result('start', { body: reach(1), seen: reach(3), expected: model.feel.timeToTopSpeed }, {}, true)
       },
       async stairs() {
         const flights = route.stairs
@@ -465,7 +494,21 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
       },
       respawn: (position: Vec3, yaw = 0) => api.respawn(position, yaw),
       restart: () => api.restart(),
-      gl: () => ({ calls: gl.info.render.calls, triangles: gl.info.render.triangles, programs: gl.info.programs?.map(program => program.name) ?? [] }),
+      gl: () => {
+        const meshes: Record<string, number> = {}
+        let shadows = 0
+        scene.traverseVisible(object => {
+          if (!(object as THREE.Mesh).isMesh && !(object as THREE.Points).isPoints) return
+          let root = object
+          while (root.parent && root.parent !== scene) root = root.parent
+          const key = root.name || root.type
+          meshes[key] = (meshes[key] ?? 0) + 1
+          if (object.castShadow) shadows++
+        })
+        let suns = 0
+        scene.traverse(object => { if ((object as THREE.DirectionalLight).isDirectionalLight) suns++ })
+        return { calls: gl.info.render.calls, triangles: gl.info.render.triangles, programs: gl.info.programs?.map(program => program.name) ?? [], meshes, shadows, suns }
+      },
       recording: () => last.current && { left: last.current.left, right: last.current.right },
       fog(density: number) { if (scene.fog instanceof THREE.FogExp2) scene.fog.density = density },
     }

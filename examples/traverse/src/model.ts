@@ -79,7 +79,7 @@ export const route = {
 } as const
 
 export const look = {
-  atmosphere: { fog: '#858a7e', density: 0.017, shadowSize: 30, sunIntensity: 2.3, ambient: 0.9, sunDirection: [0.5, 0.42, -0.6] as [number, number, number] },
+  atmosphere: { fog: '#858a7e', density: 0.017, shadowSize: 30, sunIntensity: 3.6, ambient: 1.0, sunDirection: [0.5, 0.42, -0.6] as [number, number, number] },
   ash: 1400,
   phoneDensity: 0.5,
   ashRadius: 22,
