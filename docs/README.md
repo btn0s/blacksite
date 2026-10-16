@@ -1,6 +1,7 @@
 # Documentation
 
-- [Roadmap](../ROADMAP.md): performance targets, capability pipeline, player templates, networking, and phases.
+- [Roadmap](../ROADMAP.md): what works today, what is next, and what comes later.
+- [Player templates](player-templates.md): `fpp`, `tpp`, `mp` and `blank`, multiplayer setup, preview hosts and loopback.
 - [Migration](../MIGRATION.md): old skill, template, and command paths.
 - [Submodule migration](migration-blacksite.md): consume Blacksite packages from a game workspace.
 - [Maintenance](maintenance.md): dependency and engine release gates.

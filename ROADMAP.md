@@ -4,12 +4,10 @@ October 2026.
 
 ## What Blacksite is for
 
-Blacksite lets you prompt a browser game into existence with an agent and get something that looks good and runs fast on desktop and phones from the first build.
+Blacksite is skills and building blocks that let game-dev agents build seriously good browser games. Everything on this page serves two promises:
 
-Two promises shape everything below:
-
-1. **Fast by default.** 120 fps on desktop and a sustained 60 fps on phones, without the agent having to remember to optimise. Engines like Unreal and Unity ship level of detail, streaming, budgets and background threads as defaults; browser games usually start with none of them. Blacksite ships them as defaults.
-2. **Agents use it correctly.** Every system comes with a guide and a skill that tell an agent how it works and how to do common things with it, so agents use it the standard way instead of guessing.
+1. **Agents use the blocks correctly.** Every block has a guide and a skill that tell an agent how it works and how to do common things with it, so it uses the block the standard way instead of guessing.
+2. **Fast by default.** 120 fps on desktop and a sustained 60 fps on phones, without the agent having to remember to optimise. Unreal and Unity turn on detail levels, streaming, budgets and background threads by default; browser games usually start with none of them. Blacksite's blocks do.
 
 ## What works today
 

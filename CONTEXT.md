@@ -1,6 +1,6 @@
-# Blacksite Engine vocabulary
+# Blacksite vocabulary
 
-Blacksite Engine is a composable browser game engine consumed as source packages in a pnpm workspace. The CLI and Claude plugin are both named `blacksite`.
+Blacksite is a system of agent skills and building blocks (source packages in a pnpm workspace) for making browser games. The CLI and Claude plugin are both named `blacksite`.
 
 System names describe gameplay capabilities: Subject owns player input and camera intent, Armory owns weapon rules, Warden owns squad AI, and Cascade owns structural destruction. Subject FPP is the arms-only solo variant. Cascade's `destruction-*` and Warden's `ai-*` packages are descriptive internals, not separate system brands.
 

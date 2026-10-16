@@ -1,8 +1,15 @@
-# Blacksite Engine
+# Blacksite
 
-**A browser game engine for making high-quality, high-performance desktop and mobile games with agents.**
+**Skills and building blocks that let game-dev agents build seriously good browser games.**
 
-Browser games often start without the defaults that larger engines provide: performance budgets, loading stages, character control, combat, AI, and destruction. Blacksite packages these systems with a CLI and agent skills that turn a game idea into small playable prototypes, combine proven mechanics, and keep the result within a budget. Desktop 120 fps and sustained mobile 60 fps are targets; the automatic scaling work that supports them is on the roadmap.
+A coding agent can write a game loop. What it can't do in an afternoon is write a character with hundreds of animations, multiplayer that feels right, buildings that collapse, or squads that flank you, and keep all of it at 120 fps on a desktop and 60 fps on a phone. Blacksite gives the agent two things:
+
+- **Skills** walk the agent from your idea to a playable game: design it with you, set up the project, prototype each risky mechanic, combine what works, then optimise. Every building block also has a guide, so the agent uses it the right way instead of guessing.
+- **Building blocks** are finished game systems the agent snaps together instead of writing from scratch.
+
+You describe the game. The agent builds it with these.
+
+[See the demos](https://blacksite-sable.vercel.app)
 
 ## Quickstart
 
@@ -10,23 +17,21 @@ Browser games often start without the defaults that larger engines provide: perf
 curl -fsSL https://raw.githubusercontent.com/btn0s/blacksite/main/install.sh | sh
 ```
 
-The installer clones this repository into `~/.blacksite`, installs its workspace dependencies, and links `blacksite` on your PATH. Ask your agent to start Blacksite or invoke `/blacksite:start`. It opens with **“What would you like to do?”** You can also invoke `/blacksite:make-game <idea>`. On Windows, run [install.ps1](install.ps1) in PowerShell. An agent can follow [AGENTS.md](AGENTS.md). Owned assets are optional: connect them later in your own terminal with `blacksite assets login fab|itch|all`, then `blacksite assets sync`.
+Then ask your agent to start Blacksite, or run `/blacksite:make-game <your idea>`. The installer clones this repository into `~/.blacksite` and puts `blacksite` on your PATH. On Windows, run [install.ps1](install.ps1) in PowerShell. An agent installing it can follow [AGENTS.md](AGENTS.md).
 
-## What's in the box
+## Skills
 
-| System or platform piece | Purpose | Status |
-| --- | --- | --- |
-| ALS Web / TPP | Animated third-person character and camera | Usable |
-| Subject FPP / Armory | Arms-only first-person input and deterministic weapons | Usable |
-| Warden | Squad AI and tactical simulation | Experimental |
-| Cascade | Structural destruction and effects | Experimental |
-| Input / UI | Device input and a stock neutral game frame | Usable |
-| CLI / skills | Scaffold, prototypes, budgets, assets, agent phases | Usable |
-| Asset pipeline | Owned Fab metadata, fetch, export, meshopt/KTX2 install | Experimental |
-| Relay (`@blacksite/relay`) | Multiplayer rooms: Colyseus, offline loopback, owner movement, server-checked hits | Usable v0 |
-| Scale profiles / significance | Automatic quality and update-rate defaults | Planned |
-
-## How it works
+| Skill | What the agent does with it |
+| --- | --- |
+| `start` | Asks what you want to do and routes to the right skill. |
+| `make-game` | Runs the whole flow below from one idea, picking up where it left off. |
+| `design-game` | Interviews you one question at a time: fantasy, core loop, camera, scope, performance budget. |
+| `setup-project` | Creates the game project from a player template and checks it runs. |
+| `build-prototype` | Builds one risky mechanic on its own, playable from a developer menu. |
+| `combine-prototypes` | Joins the mechanics that worked into one core loop. |
+| `optimize-game` | Measures the game and brings it within its budget. |
+| `ship-game` | Deploys the game, only when you ask. |
+| `als`, `game-architecture`, `game-assets`, `blacksite-kit` | Reference the agent loads when it needs it: how to drive characters, how the game is wired, how to use assets you own, what blocks exist. |
 
 ```mermaid
 flowchart LR
@@ -39,26 +44,40 @@ flowchart LR
   G -. only on request .-> H[ship-game]
 ```
 
-Each phase writes its handoff to the game project and runs a checkable gate. The generated Vite shell includes R3F, Rapier, Koota, XState, Effect, a menu, pause and settings screens, GameFrame, and a developer prototype menu. `blacksite scaffold --profile blank|tpp|fpp|mp --name "My Game" --dir /absolute/path --json --gate` keeps the NDJSON contract. `blacksite prototype new <name> [--with als-tpp|fpp|warden|cascade]`, `list`, and `promote` manage modes under `src/prototypes/` and `src/game/`. `blacksite --help` shows the complete command tree.
+Each step writes a handoff into the game project and ends with a check the agent has to pass, so you can stop and resume anywhere.
 
-## Player templates
+## Building blocks
 
-| Profile | Use when | Current state |
+| Block | What it gives your game | Status |
 | --- | --- | --- |
-| `fpp` | Single-player first person; arms-only `@blacksite/subject-fpp` + Armory, without ALS | Usable |
-| `tpp` | Single-player third person; ALS body and camera | Usable |
-| `mp` | Multiplayer FPP/TPP; local arms, remote ALS bodies, Colyseus and offline loopback | Usable v0 |
-| `blank` | Empty game shell for a custom player | Usable |
+| [Player templates](docs/player-templates.md) | Ready-to-play starting points: `fpp` (first person), `tpp` (third person), `mp` (multiplayer, switch views with V), `blank` | Usable |
+| Characters (ALS Web) | A full animated character: walk, run, sprint, crouch, mantle, roll, ragdoll, aim. A port of ALS Refactored. | Usable |
+| First-person arms | Rigged, animated arms holding a rifle or pistol | Usable |
+| Weapons (Armory) | Firing, reloading, aiming and recoil, with hits the server can check | Usable |
+| Multiplayer (Relay) | Rooms on Colyseus, or in one browser tab for demos and tests; other players animate like the local one | Usable v0 |
+| Destruction (Cascade) | Concrete buildings that crack and collapse, simulated off the main thread | Experimental |
+| AI (Warden) | Squads that take cover, flank and coordinate | Experimental |
+| Input and UI | Keyboard, mouse, gamepad and touch; menus, pause and settings screens | Usable |
+| Assets | Use art you already own from Fab or itch.io, compressed for the web | Experimental |
 
-The CLI scaffolds `mp` with a local Colyseus room under `pnpm dev`; Play joins through the same-origin `/relay` path and Offline uses loopback. Open a second tab to join the online room. The local camera starts in FPP with rigged ALS arms (rifle and pistol; see [arms](docs/arms.md)), and V switches to TPP while the canvas has focus even without pointer lock; set `cameraMode="fpp"` or `cameraMode="tpp"` on `MultiplayerSubject` to lock a game's camera. Remote players always use ALS bodies, and camera choice stays local. Vite accepts `*.getbb.app` and `*.ts.net` preview hosts by default; `VITE_ALLOWED_HOSTS` adds comma-separated hostnames. `VITE_RELAY_URL` overrides the room endpoint for another deployment topology. [Game architecture](skills/game-architecture/SKILL.md) explains the ownership model and transport choices. For a static two-player demo, mount `LoopbackSplitView` from `@blacksite/subject`; it creates two connections through `createLoopbackRoom()` from `@blacksite/relay` and renders both canvases. Relay v0 has full snapshots, owner movement, and Armory-validated hits; see [Relay limits](packages/relay/AGENTS.md).
+Every project also gets the same base: React Three Fiber for rendering, Rapier for physics, Koota for game state, XState for flow, Effect for services, Vite for the dev server.
+
+## Using the CLI directly
+
+Agents call these for you, but you can too:
+
+- `blacksite scaffold --profile fpp|tpp|mp|blank --name "My Game" --dir /absolute/path` creates a game.
+- `blacksite prototype new <name> [--with als-tpp|fpp|warden|cascade]` adds a prototype; `list` and `promote` manage them.
+- `blacksite assets login fab|itch|all`, then `blacksite assets sync`, connects art you own.
+- `blacksite --help` lists everything.
 
 ## Roadmap
 
-Now: showcase demos, agent guides for every system, touch controls for the player templates, and measurement on reference devices. Next: automatic quality tiers, scale profiles, and workers by default. Later: open worlds, destruction tiers, crowds, network scale, and 2.5D/2D. See [ROADMAP.md](ROADMAP.md).
+Now: demos for every block, guides for the remaining blocks, touch controls for the player templates, and measurement on real devices. Next: automatic quality settings, so games hold their frame rate on any device without extra work. Later: open worlds, bigger destruction, crowds, larger multiplayer, and 2.5D/2D. See [ROADMAP.md](ROADMAP.md).
 
 ## Repository layout
 
-`packages/` holds engine systems; `cli/` one-off Node tools; `skills/` agent phases and references; `templates/game-shell/` the generated game; `docs/` integration details; `evals/` agent scenarios.
+`skills/` holds the skills; `packages/` the building blocks; `templates/` the player templates and game shell; `cli/` the `blacksite` command; `site/` the demo site; `docs/` longer guides; `evals/` agent test scenarios.
 
 ## Contributing
 

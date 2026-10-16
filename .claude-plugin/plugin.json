@@ -1,7 +1,7 @@
 {
   "name": "blacksite",
   "version": "0.1.0",
-  "description": "Scaffold and build playable browser games on the Blacksite engine.",
+  "description": "Skills and building blocks that let game-dev agents build browser games.",
   "author": {
     "name": "btn0s"
   }
