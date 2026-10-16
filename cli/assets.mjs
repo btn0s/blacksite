@@ -197,6 +197,14 @@ async function add(ids, project, items, json) {
 }
 export async function runAssets(args) {
   const verb = args[0]
+  if (['library', 'show', 'packs', 'fetch', 'build', 'lock', 'credits'].includes(verb)) return (await import('./library.mjs')).runLibrary(verb, args.slice(1))
+  if (verb === 'add') {
+    const { isLibraryId, runLibrary } = await import('./library.mjs')
+    const ids = args.slice(1).filter((arg, i, list) => !arg.startsWith('--') && list[i - 1] !== '--project')
+    const open = await Promise.all(ids.map(isLibraryId))
+    if (args.includes('--pack') || (ids.length && open.every(Boolean))) return runLibrary('add', args.slice(1))
+    if (open.some(Boolean)) throw new Error('Add open-library assets and owned assets in separate commands')
+  }
   if (verb === 'login') return login(args.slice(1))
   if (verb === 'logout') return logout(args.slice(1))
   if (verb === 'status') return login(['--status'])
