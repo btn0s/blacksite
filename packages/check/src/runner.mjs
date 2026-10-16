@@ -142,14 +142,14 @@ async function contactSheet(page, base, out, tiles, file, { columns = 6, width =
   await writeFile(path.join(out, '_sheet.html'), html)
   await page.goto(`${base}_sheet.html`)
   await page.waitForFunction(() => [...document.images].every(image => image.complete))
-  await page.screenshot({ path: path.join(out, file), fullPage: true })
+  await page.screenshot({ path: path.join(out, file), fullPage: true, timeout: 180000 })
   await rm(path.join(out, '_sheet.html'), { force: true })
 }
 
 async function shoot(page, out, file, hud) {
   await mkdir(path.dirname(path.join(out, file)), { recursive: true })
   if (!hud) await page.evaluate(() => document.documentElement.classList.add('__bs-capture'))
-  await page.screenshot({ path: path.join(out, file), type: file.endsWith('.jpg') ? 'jpeg' : 'png', ...(file.endsWith('.jpg') ? { quality: 88 } : {}) })
+  await page.screenshot({ path: path.join(out, file), type: file.endsWith('.jpg') ? 'jpeg' : 'png', ...(file.endsWith('.jpg') ? { quality: 88 } : {}), timeout: 180000 })
   if (!hud) await page.evaluate(() => document.documentElement.classList.remove('__bs-capture'))
   return file
 }
