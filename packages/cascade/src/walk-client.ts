@@ -16,12 +16,12 @@ export const WALK_TOOLS: readonly WalkTool[] = [
   { id: 'cutter', label: 'Cutter', radius: 0.38, strength: 1, repeatMs: 125 },
 ];
 
-export function walkInput(keys: ReadonlySet<string>, yaw: number, pitch: number, tool: PlayerTool): PlayerInput {
+export function walkInput(keys: ReadonlySet<string>, yaw: number, pitch: number, tool: PlayerTool, move = { forward: 0, right: 0 }, sprint = false): PlayerInput {
   return {
-    forward: Number(keys.has('KeyW')) - Number(keys.has('KeyS')),
-    right: Number(keys.has('KeyD')) - Number(keys.has('KeyA')),
+    forward: Math.max(-1, Math.min(1, Number(keys.has('KeyW')) - Number(keys.has('KeyS')) + move.forward)),
+    right: Math.max(-1, Math.min(1, Number(keys.has('KeyD')) - Number(keys.has('KeyA')) + move.right)),
     jump: keys.has('Space'),
-    sprint: keys.has('ShiftLeft') || keys.has('ShiftRight'),
+    sprint: sprint || keys.has('ShiftLeft') || keys.has('ShiftRight'),
     crouch: keys.has('KeyC') || keys.has('ControlLeft') || keys.has('ControlRight'),
     yaw,
     aim: [-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)],
@@ -75,6 +75,8 @@ export class CascadeWalkClient {
   toolIndex = 0;
   active = false;
   private held = false;
+  private move = { forward: 0, right: 0 };
+  private sprint = false;
   private dragging = false;
   private timer?: ReturnType<typeof setInterval>;
   private repeat?: ReturnType<typeof setInterval>;
@@ -97,7 +99,7 @@ export class CascadeWalkClient {
     this.active = active;
     this.clear();
     this.session.setPlayerEnabled(active);
-    if (active) this.capture();
+    if (active && !matchMedia('(pointer: coarse)').matches) this.capture();
     else if (document.pointerLockElement === this.canvas) document.exitPointerLock();
     this.onChange();
   }
@@ -110,7 +112,35 @@ export class CascadeWalkClient {
   }
   sendInput(): void {
     if (!this.active) return;
-    this.session.playerInput(walkInput(this.keys, this.yaw, this.pitch, this.tool.id));
+    this.session.playerInput(walkInput(this.keys, this.yaw, this.pitch, this.tool.id, this.move, this.sprint));
+  }
+  touchMove(forward: number, right: number): void {
+    this.move = { forward, right };
+    this.sendInput();
+  }
+  touchLook(dx: number, dy: number): void {
+    if (!this.active) return;
+    this.yaw -= dx * 0.004;
+    this.pitch = Math.max(-1.48, Math.min(1.48, this.pitch - dy * 0.004));
+    this.sendInput();
+  }
+  touchAction(action: 'jump' | 'crouch' | 'sprint' | 'cycle' | 'use' | 'respawn' | 'exit', pressed: boolean): void {
+    if (!this.active) return;
+    if (action === 'jump' || action === 'crouch') {
+      const code = action === 'jump' ? 'Space' : 'KeyC';
+      if (pressed) this.keys.add(code); else this.keys.delete(code);
+      this.sendInput();
+    } else if (action === 'sprint' && pressed) { this.sprint = !this.sprint; this.sendInput(); }
+    else if (action === 'cycle' && pressed) this.select(this.toolIndex + 1);
+    else if (action === 'respawn' && pressed) this.session.respawnPlayer();
+    else if (action === 'exit' && pressed) this.setActive(false);
+    else if (action === 'use') {
+      this.held = pressed;
+      if (pressed) {
+        if (this.tool.strike) this.strike.start(this.tool.strike);
+        else { this.fire(); this.stopRepeat(); if (this.tool.repeatMs) this.repeat = setInterval(() => this.fire(), this.tool.repeatMs); }
+      } else this.stopRepeat();
+    }
   }
   dispose(): void {
     this.setActive(false);
@@ -126,7 +156,7 @@ export class CascadeWalkClient {
     this.canvas.removeEventListener('contextmenu', this.onContextMenu);
   }
   private fire(): void {
-    const { aim } = walkInput(this.keys, this.yaw, this.pitch, this.tool.id);
+    const { aim } = walkInput(this.keys, this.yaw, this.pitch, this.tool.id, this.move, this.sprint);
     this.session.playerAction(this.tool.id, aim!, this.tool.radius, this.tool.strength);
     this.canvas.dispatchEvent(new CustomEvent('cascade-walk-fire', { detail: this.tool.id }));
   }
@@ -136,6 +166,8 @@ export class CascadeWalkClient {
   private stopRepeat(): void { clearInterval(this.repeat); this.repeat = undefined; }
   private clear = (): void => {
     this.keys.clear();
+    this.move = { forward: 0, right: 0 };
+    this.sprint = false;
     this.held = this.dragging = false;
     this.strike.cancel();
     this.stopRepeat();

@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { RenderProfile } from './render-profile';
 import { CascadeWalkClient, WALK_TOOLS } from './walk-client';
+import { attachTouchWalkControls } from '@blacksite/input/touch-walk';
 const renderProfile = new RenderProfile();
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createDestructibleBoxes } from '../../destruction-authoring/src/boxes';
@@ -300,12 +301,29 @@ const walk = new CascadeWalkClient(gl.domElement, {
   camera.fov = walk.active ? 74 : 43;
   camera.updateProjectionMatrix();
   button('walk').textContent = walk.active ? 'Orbit view (Tab)' : 'Walk mode (Tab)';
+  document.body.classList.toggle('walk-active', walk.active);
+  button('walk').textContent = walk.active ? 'Exit walk' : 'Walk mode';
   $('walkHud').hidden = !walk.active;
   $('walkTool').textContent = `${walk.toolIndex + 1} / ${walk.tool.label}`;
+  const coarse = matchMedia('(pointer: coarse)').matches;
   $('hint').textContent = walk.active
-    ? 'WASD move · Shift sprint · C crouch · Space jump · 1–4 or wheel tools · Click use · R respawn · Tab orbit · Right drag to look if mouse lock fails'
-    : 'Drag to orbit · Scroll to zoom · Click concrete to place a charge · M toggles airstrike mode · Tab to walk';
+    ? coarse ? 'Left stick move · Right drag look · Use tool · Next tool · Jump · Crouch · Sprint · Exit walk' : 'WASD move · Shift sprint · C crouch · Space jump · 1–4 or wheel tools · Click use · R respawn · Tab orbit · Right drag to look if mouse lock fails'
+    : coarse ? 'One finger orbit · Pinch zoom · Tap concrete to place a charge · Walk mode for touch controls' : 'Drag to orbit · Scroll to zoom · Click concrete to place a charge · M toggles airstrike mode · Tab to walk';
+  $('touchHint').textContent = coarse ? $('hint').textContent : '';
 });
+if (innerWidth <= 900 || innerHeight <= 500) (document.getElementById('hudDetails') as HTMLDetailsElement).open = false;
+const detachTouch = attachTouchWalkControls($('touchWalk'), {
+  move: (forward, right) => walk.touchMove(forward, right),
+  look: (dx, dy) => walk.touchLook(dx, dy),
+  action: (action, pressed) => {
+    walk.touchAction(action, pressed);
+    if (action === 'sprint' && pressed) document.querySelector('[data-touch="sprint"]')?.classList.toggle('on');
+  },
+});
+if (matchMedia('(pointer: coarse)').matches) {
+  $('hint').textContent = 'One finger orbit · Pinch zoom · Tap concrete to place a charge · Walk mode for touch controls';
+  $('touchHint').textContent = $('hint').textContent;
+}
 button('walk').onclick = () => walk.setActive(!walk.active);
 let cameraKick = 0;
 let commandId = 1;
@@ -717,12 +735,18 @@ button("pause").onclick = () => {
 };
 button("reset").onclick = () => reset().catch(fail);
 let down = [0, 0];
+const orbitPointers = new Set<number>();
+let pinched = false;
 gl.domElement.addEventListener("pointerdown", (event) => {
   if (walk.active) return;
+  orbitPointers.add(event.pointerId);
+  if (orbitPointers.size > 1) pinched = true;
   down = [event.clientX, event.clientY];
 });
 gl.domElement.addEventListener("pointerup", (event) => {
   if (walk.active) return;
+  orbitPointers.delete(event.pointerId);
+  if (pinched) { if (!orbitPointers.size) pinched = false; return; }
   if (!ready || !frame || !view || Math.hypot(event.clientX - down[0], event.clientY - down[1]) > 5 || event.button !== 0) return;
   if (missileMode) {
     ray.setFromCamera(new THREE.Vector2(event.clientX / innerWidth * 2 - 1, 1 - event.clientY / innerHeight * 2), camera);
@@ -742,6 +766,7 @@ gl.domElement.addEventListener("pointerup", (event) => {
   const fragmentId = batchId === void 0 ? void 0 : hit.object.userData.fragmentIds?.[batchId];
   enqueue("placeExplosive", hit.point.toArray(), fragmentId);
 });
+gl.domElement.addEventListener('pointercancel', (event) => { orbitPointers.delete(event.pointerId); if (!orbitPointers.size) pinched = false; });
 window.addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
@@ -956,6 +981,7 @@ window.addEventListener("beforeunload", () => {
   longTasks?.disconnect();
   sim?.dispose();
   walk.dispose();
+  detachTouch();
   view?.dispose();
   controls.dispose();
   for (const geometry of toolGeometries) geometry.dispose();

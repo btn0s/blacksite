@@ -22,9 +22,9 @@ function DemoPage({ id }: { id: string }) {
   const demo = demoById(id)
   if (!demo) return <p>Demo not found.</p>
   const Scene = lazy(demo.loader)
-  return <><div className="page-heading"><div><span className="eyebrow">LIVE DEMO · {demo.static ? 'STATIC' : 'LOCAL'}</span><h1>{demo.title}</h1><p>{demo.description}</p></div></div>
+  return <div className="demo-page"><div className="page-heading"><div><span className="eyebrow">LIVE DEMO · {demo.static ? 'STATIC' : 'LOCAL'}</span><h1>{demo.title}</h1><p>{demo.description}</p></div></div>
     {demo.static || import.meta.env.DEV ? <Suspense fallback={<div className="demo-placeholder">Loading scene…</div>}><Scene demo={demo} /></Suspense> : <div className="demo-placeholder"><h2>Run locally</h2><p>This demo needs the Blacksite server. Run <code>pnpm dev:site</code> and open this route locally.</p></div>}
-    <h2 className="section-title">Documentation</h2><Markdown slug={demo.doc} /></>
+    <h2 className="section-title">Documentation</h2><Markdown slug={demo.doc} /></div>
 }
 
 function Home() {

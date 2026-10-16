@@ -33,8 +33,9 @@ export function attachPerfProbe(renderer: WebGLRenderer) {
   }
 }
 
-export function PerfOverlay({ source }: { source?: Window | null }) {
+export function PerfOverlay({ source, corner = 'top-right' }: { source?: Window | null; corner?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' }) {
   const [sample, setSample] = useState<PerfSample>()
+  const [expanded, setExpanded] = useState(false)
   useEffect(() => {
     setSample(undefined)
     const receive = (event: MessageEvent) => {
@@ -44,12 +45,16 @@ export function PerfOverlay({ source }: { source?: Window | null }) {
     addEventListener('message', receive)
     return () => removeEventListener('message', receive)
   }, [source])
-  return <div className="blacksite-perf" aria-label="Performance metrics">
-    <strong>PERFORMANCE</strong>
-    <span>Frame p50 / p95 <b>{sample ? `${sample.p50.toFixed(1)} / ${sample.p95.toFixed(1)} ms` : '—'}</b></span>
-    <span>FPS <b>{sample ? sample.fps.toFixed(0) : '—'}</b></span>
-    <span>Draw calls <b>{sample?.drawCalls ?? '—'}</b></span>
-    <span>Triangles <b>{sample?.triangles.toLocaleString() ?? '—'}</b></span>
-    {sample?.activeBodies !== undefined && <span>Active bodies <b>{sample.activeBodies}</b></span>}
+  return <div className={`blacksite-perf blacksite-perf--${corner}`}>
+    <button type="button" aria-label="Performance metrics" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
+      {sample ? `${sample.fps.toFixed(0)} fps · p95 ${sample.p95.toFixed(1)} ms` : '— fps · p95 — ms'} <span aria-hidden="true">{expanded ? '−' : '+'}</span>
+    </button>
+    {expanded && <div className="blacksite-perf-details">
+      <strong>PERFORMANCE</strong>
+      <span>Frame p50 / p95 <b>{sample ? `${sample.p50.toFixed(1)} / ${sample.p95.toFixed(1)} ms` : '—'}</b></span>
+      <span>Draw calls <b>{sample?.drawCalls ?? '—'}</b></span>
+      <span>Triangles <b>{sample?.triangles.toLocaleString() ?? '—'}</b></span>
+      {sample?.activeBodies !== undefined && <span>Active bodies <b>{sample.activeBodies}</b></span>}
+    </div>}
   </div>
 }

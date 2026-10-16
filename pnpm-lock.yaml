@@ -11,6 +11,9 @@ importers:
       '@blacksite/armory':
         specifier: workspace:*
         version: link:packages/armory
+      '@blacksite/input':
+        specifier: workspace:*
+        version: link:packages/input
       '@blacksite/relay':
         specifier: workspace:*
         version: link:packages/relay
