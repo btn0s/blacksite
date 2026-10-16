@@ -3,3 +3,8 @@ declare module '*.md' {
   const MDXContent: ComponentType<{ components?: Record<string, unknown> }>
   export default MDXContent
 }
+
+declare module 'virtual:blacksite-skills' {
+  const files: Record<string, string>
+  export default files
+}

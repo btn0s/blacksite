@@ -1,8 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import mdx from '@mdx-js/rollup'
+import remarkGfm from 'remark-gfm'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { resolve } from 'node:path'
+import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { blacksiteAssets } from '../cli/serve-assets.mjs'
 
 const base = process.env.SITE_BASE || '/'
@@ -18,7 +20,23 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', 'three', '@react-three/fiber', '@react-three/rapier', '@dimforge/rapier3d-compat'],
   },
   plugins: [
-    mdx(),
+    {
+      name: 'blacksite-skills',
+      resolveId: id => id === 'virtual:blacksite-skills' ? '\0virtual:blacksite-skills' : undefined,
+      load(id) {
+        if (id !== '\0virtual:blacksite-skills') return
+        const root = resolve(import.meta.dirname, '../skills')
+        const files: Record<string, string> = {}
+        for (const name of readdirSync(root)) {
+          const file = resolve(root, name, 'SKILL.md')
+          if (!existsSync(file)) continue
+          this.addWatchFile(file)
+          files[name] = readFileSync(file, 'utf8')
+        }
+        return `export default ${JSON.stringify(files)}`
+      },
+    },
+    mdx({ remarkPlugins: [remarkGfm] }),
     react(),
     tsconfigPaths({ root: resolve(import.meta.dirname, '..') }),
     blacksiteAssets({ blacksiteRoot: resolve(import.meta.dirname, '..') }),
@@ -40,14 +58,10 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: { input: {
       main: resolve(import.meta.dirname, 'index.html'),
-      cascade: resolve(import.meta.dirname, 'frames/large-structure.html'),
-      cascadeWorker: resolve(import.meta.dirname, 'frames/cascade-worker.html'),
+      characters: resolve(import.meta.dirname, 'frames/characters.html'),
       warden: resolve(import.meta.dirname, 'frames/warden.html'),
       fpp: resolve(import.meta.dirname, 'frames/fpp.html'),
-      tpp: resolve(import.meta.dirname, 'frames/tpp.html'),
       mp: resolve(import.meta.dirname, 'frames/mp.html'),
-      movement: resolve(import.meta.dirname, 'frames/movement.html'),
-      demolition: resolve(import.meta.dirname, 'frames/demolition.html'),
     } },
   },
 })

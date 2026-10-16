@@ -6,11 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./render-profile": "./src/render-profile.ts",
-    "./large-structure-demo": "./src/large-structure-demo.ts",
     "./session": "./src/session.ts",
     "./showcase-frame": "./src/showcase-frame.ts",
-    "./walk-client": "./src/walk-client.ts",
-    "./worker-demo": "./src/worker-demo.ts"
+    "./walk-client": "./src/walk-client.ts"
   },
   "dependencies": {
     "@blacksite/destruction-authoring": "workspace:*",

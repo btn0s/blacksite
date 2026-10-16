@@ -1,0 +1,45 @@
+html, body, #root { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #0d0f0c; color: #e6e2cf; font: 14px/1.4 'Barlow', system-ui, sans-serif; overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+* { box-sizing: border-box; }
+canvas { display: block; touch-action: none; image-rendering: pixelated; filter: contrast(1.06) saturate(0.82) sepia(0.1) brightness(1.02); }
+
+.hud-screen { position: fixed; inset: 0; overflow: hidden; }
+.hud-screen > canvas, .hud-screen > div:first-child { position: absolute; inset: 0; }
+.hud-vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 75% 70% at 50% 48%, transparent 55%, #0b0d0a 140%); }
+.hud-grain { position: absolute; inset: -50%; pointer-events: none; opacity: 0.075; mix-blend-mode: overlay; background-size: 160px 160px; animation: hud-grain 0.5s steps(4) infinite; }
+@keyframes hud-grain { 0% { transform: translate(0, 0); } 25% { transform: translate(-37px, 21px); } 50% { transform: translate(18px, -44px); } 75% { transform: translate(-13px, 33px); } 100% { transform: translate(0, 0); } }
+
+.hud-title { position: absolute; z-index: 5; top: calc(18px + env(safe-area-inset-top)); left: calc(20px + env(safe-area-inset-left)); display: grid; gap: 2px; pointer-events: none; text-shadow: 0 1px 10px #000a; }
+.hud-title span { font: 500 10.5px/1.4 'IBM Plex Mono', ui-monospace, monospace; letter-spacing: 0.18em; text-transform: uppercase; color: #e2a23b; }
+.hud-title strong { font: 600 30px/1 'Barlow Condensed', 'Arial Narrow', sans-serif; letter-spacing: 0.04em; text-transform: uppercase; color: #f0ecdb; }
+.hud-title em { font-style: normal; color: #cfcbb8; font-size: 13.5px; max-width: 34ch; }
+
+.hud-hints { position: absolute; z-index: 5; left: calc(20px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap; gap: 6px 14px; max-width: min(760px, calc(100% - 40px)); pointer-events: none; color: #d8d4c1; font-size: 13px; text-shadow: 0 1px 6px #000; }
+.hud-hints span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.hud-hints kbd { padding: 1px 6px; border: 1px solid #ffffff38; border-bottom-width: 2px; border-radius: 3px; background: #0c0e0bb0; font: 500 11px/1.5 'IBM Plex Mono', ui-monospace, monospace; color: #f0ecdb; }
+
+.hud-prompt { position: absolute; z-index: 6; left: 50%; top: 70%; transform: translateX(-50%); padding: 8px 14px; border: 1px solid #e2a23b80; background: #0c0e0bb8; font: 600 14px 'Barlow Condensed', sans-serif; letter-spacing: 0.14em; text-transform: uppercase; color: #f0ecdb; pointer-events: none; transition: opacity 240ms ease; }
+.hud-prompt--hidden { opacity: 0; }
+
+.hud-loading { position: absolute; z-index: 20; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 45%, #1a1e16, #0b0d0a 70%); transition: opacity 600ms ease; }
+.hud-loading--done { opacity: 0; pointer-events: none; }
+.hud-loading > div { display: grid; gap: 10px; width: min(300px, 80vw); }
+.hud-loading-kicker { font: 500 10.5px 'IBM Plex Mono', monospace; letter-spacing: 0.2em; text-transform: uppercase; color: #a9b57e; }
+.hud-loading strong { font: 600 34px/1 'Barlow Condensed', sans-serif; letter-spacing: 0.04em; text-transform: uppercase; color: #f0ecdb; }
+.hud-meter { height: 3px; background: #ffffff18; overflow: hidden; }
+.hud-meter i { display: block; height: 100%; background: #e2a23b; transform-origin: left; transition: transform 300ms ease; }
+.hud-loading-detail { font: 12px 'IBM Plex Mono', monospace; color: #8d8b78; }
+
+.hud-touch { position: absolute; z-index: 8; inset: 0; pointer-events: none; }
+.hud-touch-look { position: absolute; top: 0; right: 0; bottom: 0; left: 40%; pointer-events: auto; touch-action: none; }
+.hud-stick { position: absolute; left: calc(22px + env(safe-area-inset-left)); bottom: calc(28px + env(safe-area-inset-bottom)); width: 124px; height: 124px; border: 1.5px solid #f0ecdb55; border-radius: 50%; background: radial-gradient(circle, #0c0e0b30, #0c0e0b70); pointer-events: auto; touch-action: none; }
+.hud-stick span { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; border-radius: 50%; background: #f0ecdbb0; box-shadow: 0 2px 10px #0008; transform: translate(-50%, -50%); }
+.hud-buttons { position: absolute; right: calc(16px + env(safe-area-inset-right)); bottom: calc(24px + env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(2, 76px); gap: 8px; pointer-events: auto; }
+.hud-buttons button { min-height: 50px; padding: 4px; border: 1px solid #f0ecdb50; border-radius: 4px; background: #0c0e0b99; color: #f0ecdb; font: 600 14px 'Barlow Condensed', sans-serif; letter-spacing: 0.1em; text-transform: uppercase; touch-action: none; -webkit-tap-highlight-color: transparent; }
+.hud-buttons button[data-pressed] { background: #e2a23bcc; color: #1a1307; border-color: #e2a23b; }
+
+@media (max-width: 640px) {
+  .hud-title strong { font-size: 24px; }
+  .hud-title em { display: none; }
+  .hud-hints { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .hud-grain { animation: none; } }

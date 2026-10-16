@@ -1,35 +1,47 @@
 import { useEffect, useRef, useState } from 'react'
 import { PerfOverlay } from '@blacksite/ui/perf-overlay'
-import type { Demo } from './registry'
+import { asset } from './links'
 
-export default function DemoFrame({ demo }: { demo: Demo }) {
-  const ref = useRef<HTMLIFrameElement>(null)
-  const [source, setSource] = useState<Window | null>(null)
-  const [fullscreen, setFullscreen] = useState(false)
+export default function DemoFrame({ frame, title, poster, autoplay }: { frame: string; title: string; poster?: string; autoplay: boolean }) {
+  const iframe = useRef<HTMLIFrameElement>(null)
   const stage = useRef<HTMLDivElement>(null)
+  const [source, setSource] = useState<Window | null>(null)
+  const [started, setStarted] = useState(autoplay)
+  const [fullscreen, setFullscreen] = useState(false)
   useEffect(() => {
-    const sync = () => { if (document.fullscreenElement !== stage.current) setFullscreen(false) }
+    const sync = () => { if (!document.fullscreenElement) setFullscreen(false) }
     document.addEventListener('fullscreenchange', sync)
     return () => document.removeEventListener('fullscreenchange', sync)
   }, [])
   useEffect(() => {
-    document.body.classList.toggle('demo-fullscreen-open', fullscreen)
-    return () => document.body.classList.remove('demo-fullscreen-open')
+    document.body.classList.toggle('stage-fullscreen-open', fullscreen)
+    return () => document.body.classList.remove('stage-fullscreen-open')
   }, [fullscreen])
   const toggleFullscreen = async () => {
     if (fullscreen) {
-      if (document.fullscreenElement) await document.exitFullscreen()
+      if (document.fullscreenElement) await document.exitFullscreen().catch(() => {})
       setFullscreen(false)
-    } else {
-      if (!/iPhone|iPod/.test(navigator.userAgent) && document.fullscreenEnabled) {
-        try { await stage.current?.requestFullscreen(); setFullscreen(true); return } catch {}
-      }
-      setFullscreen(true)
+      return
     }
+    if (document.fullscreenEnabled && stage.current?.requestFullscreen) {
+      try { await stage.current.requestFullscreen(); setFullscreen(true); return } catch {}
+    }
+    setFullscreen(true)
   }
-  return <div ref={stage} className={`demo-stage${fullscreen ? ' demo-stage--fullscreen' : ''}${demo.perfCorner === 'bottom-right' ? ' demo-stage--secondary' : ''}${demo.showcase ? ' demo-stage--showcase' : ''}`}>
-    <iframe ref={ref} title={demo.title} src={`${import.meta.env.BASE_URL}frames/${demo.frame}.html`} onLoad={() => setSource(ref.current?.contentWindow ?? null)} />
-    <button className="demo-fullscreen-button" type="button" onClick={() => void toggleFullscreen()}>{fullscreen ? 'Exit fullscreen' : 'Fullscreen'}</button>
-    <PerfOverlay source={source} corner={demo.perfCorner} />
+  return <div className="demo">
+    <div ref={stage} className={`stage${fullscreen ? ' stage--fullscreen' : ''}`}>
+      {started
+        ? <iframe ref={iframe} title={title} src={asset(`frames/${frame}.html`)} allow="fullscreen; gamepad; autoplay" onLoad={() => setSource(iframe.current?.contentWindow ?? null)} />
+        : <button type="button" className="stage-poster" style={poster ? { backgroundImage: `url(${asset(poster)})` } : undefined} onClick={() => setStarted(true)}><span className="stage-play">Play {title}</span></button>}
+      {started && <PerfOverlay source={source} corner="top-right" />}
+      {fullscreen && <button type="button" className="stage-exit" onClick={() => void toggleFullscreen()}>Exit fullscreen</button>}
+    </div>
+    <div className="stage-bar">
+      <span className="stage-title">{title}</span>
+      <span className="stage-actions">
+        <a href={asset(`frames/${frame}.html`)} target="_blank" rel="noreferrer">Open in new tab</a>
+        <button type="button" onClick={() => void toggleFullscreen()}>{fullscreen ? 'Exit fullscreen' : 'Fullscreen'}</button>
+      </span>
+    </div>
   </div>
 }

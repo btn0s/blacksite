@@ -2,7 +2,7 @@
 
 ## Walk mode
 
-The large structure demo has a Walk mode toggle (`Tab`). In walk mode, use WASD to move, Shift to sprint, C or Ctrl to crouch, Space to jump, R to respawn, and 1–4 or the mouse wheel to select explosive, cannonball, sledge, or cutter. Click to use the selected tool. The sledge lands 300 ms into a 680 ms swing; holding the button chains swings. Hold right mouse to look when pointer lock is unavailable. `Tab` returns to orbit view.
+`@blacksite/cascade/walk-client` gives a game an on-foot mode inside a destructible structure. Its default bindings: WASD to move, Shift to sprint, C or Ctrl to crouch, Space to jump, R to respawn, and 1–4 or the mouse wheel to select explosive, cannonball, sledge, or cutter. Click to use the selected tool. The sledge lands 300 ms into a 680 ms swing; holding the button chains swings. Hold right mouse to look when pointer lock is unavailable. `Tab` toggles walk mode on and off.
 
 Games can import `CascadeWalkClient`, `walkInput`, `StrikeClock`, and `WALK_TOOLS` from `@blacksite/cascade/walk-client`. Pass an adapter for the `CascadeSession` methods `setPlayerEnabled`, `playerInput`, `playerAction`, and `respawnPlayer`; construct the controller with a canvas and call `dispose()` on teardown. Render each frame's `player.eye` with the controller's `yaw` and `pitch`. The worker owns player collision, movement, target queries, and tool action acceptance; the client owns input and presentation.
 
