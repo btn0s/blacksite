@@ -72,6 +72,7 @@ Every profile, prototype kit, system, package and command in Blacksite, generate
 | @blacksite/relay | Colyseus and loopback replication |
 | @blacksite/server | server |
 | @blacksite/sim-core | sim core |
+| @blacksite/soundscape | soundscape |
 | @blacksite/subject | ALS player control |
 | @blacksite/subject-fpp | Arms-only first person input and camera |
 | @blacksite/training | training |

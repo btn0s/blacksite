@@ -1,0 +1,17 @@
+{
+  "name": "@blacksite/soundscape",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Cue-driven Web Audio mixer, spatial sound and ambience for Blacksite games",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./model": "./src/model.ts",
+    "./presets": "./src/presets.ts",
+    "./types": "./src/types.ts"
+  },
+  "dependencies": {
+    "@blacksite/check": "workspace:*"
+  },
+  "license": "FSL-1.1-ALv2"
+}
