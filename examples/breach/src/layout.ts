@@ -144,6 +144,12 @@ function crate(x: number, z: number, size: number, y = 0, color = '#5a5236', yaw
   if (y === 0) box([x, size / 2, z], [size, size, size], { look: 'paint', color, hit: 'wood', render: false })
   dress({ kind: 'box', size: [size, size, size], at: [x, y + size / 2, z], rotate: [0, yaw, 0], look: 'paint', color })
   dress({ kind: 'box', size: [size + 0.02, 0.07, size + 0.02], at: [x, y + size * 0.72, z], rotate: [0, yaw, 0], look: 'metal', color: '#2c2b25', cast: false })
+  dress({ kind: 'box', size: [size + 0.02, 0.07, size + 0.02], at: [x, y + size * 0.2, z], rotate: [0, yaw, 0], look: 'metal', color: '#2c2b25', cast: false })
+  const c = Math.cos(yaw), s = Math.sin(yaw), h = size / 2
+  const local = (lx: number, ly: number, lz: number): Vec3 => [x + lx * c + lz * s, y + ly, z - lx * s + lz * c]
+  for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) dress({ kind: 'box', size: [0.08, size + 0.012, 0.08], at: local(lx * (h - 0.03), size / 2, lz * (h - 0.03)), rotate: [0, yaw, 0], look: 'paint', color: '#3e3a2a', cast: false })
+  dress({ kind: 'box', size: [size + 0.01, 0.025, size * 0.18], at: local(0, size + 0.012, -size * 0.2), rotate: [0, yaw, 0], look: 'paint', color: '#6b5a44', cast: false })
+  dress({ kind: 'box', size: [size * 0.42, size * 0.2, 0.012], at: local(0, size * 0.47, h + 0.008), rotate: [0, yaw, 0], look: 'stained', color: '#c9c0a4', cast: false })
 }
 
 function lathe(x: number, z: number) {
@@ -156,6 +162,15 @@ function lathe(x: number, z: number) {
   dress({ kind: 'box', size: [0.3, 0.32, 0.4], at: [x + 0.7, 1.22, z], look: 'paint', color: '#4e5d53' })
   dress({ kind: 'cylinder', size: [0.03, 1.5, 0.03], at: [x, 1.12, z + 0.25], rotate: [0, 0, Math.PI / 2], look: 'metal', color: '#9a9d92', segments: 6, cast: false })
   dress({ kind: 'box', size: [0.24, 0.3, 0.06], at: [x - 1.0, 1.25, z + 0.36], look: 'metal', color: '#1f201c', cast: false })
+  for (const side of [-0.2, 0.2]) dress({ kind: 'box', size: [2.5, 0.035, 0.07], at: [x + 0.05, 1.085, z + side], look: 'metal', color: '#9a9d92', cast: false })
+  dress({ kind: 'box', size: [0.34, 0.26, 0.4], at: [x + 1.05, 1.2, z], look: 'metal', color: '#4c5450' })
+  dress({ kind: 'cylinder', size: [0.05, 0.3, 0.05], at: [x + 0.78, 1.24, z], rotate: [0, 0, Math.PI / 2], look: 'metal', color: '#707470', segments: 8, cast: false })
+  dress({ kind: 'box', size: [0.3, 0.12, 0.5], at: [x + 0.3, 1.15, z + 0.05], look: 'metal', color: '#3b3f3a' })
+  dress({ kind: 'cylinder', size: [0.11, 0.03, 0.11], at: [x + 0.3, 1.08, z + 0.37], rotate: [Math.PI / 2, 0, 0], look: 'metal', color: '#707470', segments: 10, cast: false })
+  dress({ kind: 'box', size: [1.5, 0.05, 0.62], at: [x, 0.5, z], look: 'rust', color: '#6a5a44', cast: false })
+  dress({ kind: 'box', size: [0.42, 0.32, 0.26], at: [x - 1.0, 0.62, z - 0.46], look: 'paint', color: '#4e5d53' })
+  dress({ kind: 'cylinder', size: [0.02, 0.5, 0.02], at: [x - 0.2, 1.42, z - 0.2], rotate: [0.5, 0, 0.3], look: 'metal', color: '#2a2a26', segments: 4, cast: false })
+  for (const end of [-1.0, 1.0]) dress({ kind: 'box', size: [0.62, 0.06, 0.82], at: [x + end, 0.03, z], look: 'rust', color: '#3f3a30', cast: false })
 }
 
 function desk(x: number, z: number, yaw: 0 | 1 = 0, typewriter = true) {
@@ -169,6 +184,11 @@ function desk(x: number, z: number, yaw: 0 | 1 = 0, typewriter = true) {
     dress({ kind: 'box', size: [0.42, 0.12, 0.34], at: [x + 0.1, 0.84, z + 0.04], rotate: [0, yaw ? 1.4 : 0.1, 0], look: 'metal', color: '#2b2d29' })
     dress({ kind: 'box', size: [0.44, 0.06, 0.08], at: [x + 0.1, 0.94, z - 0.08], rotate: [0, yaw ? 1.4 : 0.1, 0], look: 'metal', color: '#1e1f1c', cast: false })
   }
+  for (const [index, y] of [0.16, 0.38, 0.6].entries()) {
+    dress({ kind: 'box', size: yaw ? [0.012, 0.18, 0.36] : [0.36, 0.18, 0.012], at: yaw ? [x - 0.386, y, z - 0.46] : [x - 0.46, y, z + 0.386], look: 'paint', color: index % 2 ? '#75634b' : '#6b5a44', cast: false })
+    dress({ kind: 'box', size: yaw ? [0.02, 0.025, 0.12] : [0.12, 0.025, 0.02], at: yaw ? [x - 0.396, y + 0.04, z - 0.46] : [x - 0.46, y + 0.04, z + 0.396], look: 'metal', color: '#2b2d29', cast: false })
+  }
+  dress({ kind: 'box', size: yaw ? [0.02, 0.03, size[2] + 0.04] : [size[0] + 0.04, 0.03, 0.02], at: yaw ? [x - size[0] / 2 - 0.02, 0.765, z] : [x, 0.765, z + size[2] / 2 + 0.02], look: 'metal', color: '#2b2d29', cast: false })
   dress({ kind: 'box', size: [0.3, 0.012, 0.22], at: [x - 0.3, 0.785, z + 0.1], rotate: [0, 0.4, 0], look: 'stained', color: '#d6cfb7', cast: false })
   dress({ kind: 'box', size: [0.24, 0.012, 0.32], at: [x - 0.42, 0.79, z - 0.08], rotate: [0, -0.3, 0], look: 'stained', color: '#c9c0a4', cast: false })
 }
@@ -177,6 +197,9 @@ function cabinet(x: number, z: number, along: 'x' | 'z' = 'x') {
   const size: Vec3 = along === 'x' ? [0.5, 1.32, 0.62] : [0.62, 1.32, 0.5]
   box([x, 0.66, z], size, { look: 'metal', color: '#6d7366', render: false })
   dress({ kind: 'box', size, at: [x, 0.66, z], look: 'metal', color: '#6d7366' })
+  dress({ kind: 'box', size: [size[0] + 0.02, 0.025, size[2] + 0.02], at: [x, 1.33, z], look: 'metal', color: '#4c5450', cast: false })
+  dress({ kind: 'box', size: along === 'x' ? [0.48, 0.08, 0.02] : [0.02, 0.08, 0.48], at: along === 'x' ? [x, 0.05, z + 0.315] : [x + 0.315, 0.05, z], look: 'paint', color: '#2e332c', cast: false })
+  for (const y of [0.24, 0.56, 0.88, 1.16]) dress({ kind: 'box', size: along === 'x' ? [0.1, 0.05, 0.012] : [0.012, 0.05, 0.1], at: along === 'x' ? [x - 0.12, y + 0.08, z + 0.316] : [x + 0.316, y + 0.08, z - 0.12], look: 'stained', color: '#d8d0b4', cast: false })
   for (const y of [0.3, 0.62, 0.94, 1.22]) dress({ kind: 'box', size: along === 'x' ? [0.12, 0.03, 0.02] : [0.02, 0.03, 0.12], at: along === 'x' ? [x, y, z + 0.32] : [x + 0.32, y, z], look: 'metal', color: '#2b2c28', cast: false })
 }
 
@@ -221,6 +244,109 @@ function pipe(from: Vec3, to: Vec3, radius = 0.05, color = '#5c5a4c') {
   const length = Math.hypot(dx, dy, dz)
   const rotate: Vec3 = Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > Math.abs(dz) ? [0, 0, 0] : Math.abs(dx) > Math.abs(dz) ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0]
   dress({ kind: 'cylinder', size: [radius, length, radius], at: [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, (from[2] + to[2]) / 2], rotate, look: 'rust', color, segments: 8, cast: false })
+}
+
+function pallet(x: number, z: number, layers = 1, along: 'x' | 'z' = 'x', y = 0, solid = true) {
+  const size: Vec3 = along === 'x' ? [1.2, 0.14 * layers, 0.8] : [0.8, 0.14 * layers, 1.2]
+  if (solid && y === 0) box([x, size[1] / 2, z], size, { look: 'paint', color: '#6b5a44', hit: 'wood', render: false })
+  for (let layer = 0; layer < layers; layer++) {
+    const base = y + layer * 0.14 + (layer % 2 ? 0.02 : 0)
+    const shift = (layer % 3 - 1) * 0.04
+    for (const offset of [-0.34, 0, 0.34]) dress({ kind: 'box', size: along === 'x' ? [1.2, 0.09, 0.1] : [0.1, 0.09, 1.2], at: along === 'x' ? [x + shift, base + 0.045, z + offset] : [x + offset, base + 0.045, z + shift], look: 'paint', color: '#5e4e3a', cast: layer === layers - 1 })
+    for (let slat = 0; slat < 5; slat++) {
+      const offset = -0.5 + slat * 0.25
+      dress({ kind: 'box', size: along === 'x' ? [0.12, 0.025, 0.8] : [0.8, 0.025, 0.12], at: along === 'x' ? [x + shift + offset, base + 0.1, z] : [x + offset, base + 0.1, z + shift], look: 'paint', color: slat % 2 ? '#75634b' : '#6b5a44', cast: false })
+    }
+  }
+}
+
+function dumpster(x: number, z: number) {
+  box([x, 0.62, z], [1.9, 1.25, 1.1], { look: 'metal', color: '#4c5a48', render: false })
+  dress({ kind: 'box', size: [1.9, 0.95, 1.1], at: [x, 0.66, z], look: 'metal', color: '#4c5a48' })
+  dress({ kind: 'box', size: [1.96, 0.1, 1.16], at: [x, 1.13, z], look: 'rust', color: '#5a4a3a', cast: false })
+  dress({ kind: 'box', size: [0.94, 0.05, 1.12], at: [x - 0.47, 1.2, z], rotate: [0, 0, 0.04], look: 'metal', color: '#3c4638' })
+  dress({ kind: 'box', size: [0.94, 0.05, 1.12], at: [x + 0.47, 1.5, z - 0.48], rotate: [1.15, 0, 0], look: 'metal', color: '#3c4638' })
+  for (const side of [-1, 1]) dress({ kind: 'box', size: [0.08, 0.2, 1.16], at: [x + side * 0.99, 0.95, z], look: 'rust', color: '#5a4a3a', cast: false })
+  for (const [dx, dz] of [[-0.75, -0.4], [0.75, -0.4], [-0.75, 0.4], [0.75, 0.4]] as const) dress({ kind: 'cylinder', size: [0.09, 0.06, 0.09], at: [x + dx, 0.1, z + dz], rotate: [Math.PI / 2, 0, 0], look: 'metal', color: '#1d1c19', segments: 8, cast: false })
+  dress({ kind: 'box', size: [1.4, 0.32, 0.012], at: [x, 0.7, z + 0.556], look: 'paint', color: '#a68a3a', cast: false })
+}
+
+function tyres(x: number, z: number, count: number, solid = true) {
+  if (solid) box([x, count * 0.11, z], [0.66, count * 0.22, 0.66], { look: 'rust', color: '#1d1c19', hit: 'dirt', render: false })
+  for (let index = 0; index < count; index++) {
+    dress({ kind: 'cylinder', size: [0.33, 0.21, 0.33], at: [x + (index % 2) * 0.05, 0.105 + index * 0.215, z - (index % 3) * 0.03], rotate: [0.04 * (index % 2), index, 0], look: 'metal', color: '#1d1c19', segments: 12 })
+    dress({ kind: 'cylinder', size: [0.17, 0.215, 0.17], at: [x + (index % 2) * 0.05, 0.105 + index * 0.215, z - (index % 3) * 0.03], look: 'metal', color: '#0f0f0d', segments: 10, cast: false })
+  }
+}
+
+function bench(x: number, z: number, along: 'x' | 'z', broken = false) {
+  box([x, 0.22, z], along === 'x' ? [1.6, 0.45, 0.45] : [0.45, 0.45, 1.6], { look: 'cast', color: '#8f8b7c', render: false })
+  const place = (offset: number, y: number, across: number): Vec3 => along === 'x' ? [x + offset, y, z + across] : [x + across, y, z + offset]
+  const size = (length: number, height: number, depth: number): Vec3 => along === 'x' ? [length, height, depth] : [depth, height, length]
+  for (const end of [-0.62, 0.62]) dress({ kind: 'box', size: size(0.16, 0.42, 0.42), at: place(end, 0.21, 0), look: 'cast', color: '#8f8b7c' })
+  for (const [index, across] of [-0.14, 0, 0.14].entries()) {
+    if (broken && index === 2) continue
+    dress({ kind: 'box', size: size(1.6, 0.04, 0.11), at: place(0, 0.44, across), rotate: broken && index === 1 ? (along === 'x' ? [0, 0, 0.12] : [0.12, 0, 0]) : undefined, look: 'paint', color: '#4f5a46', cast: false })
+  }
+  if (broken) dress({ kind: 'box', size: size(1.2, 0.04, 0.11), at: place(0.3, 0.06, 0.32), rotate: [0, 0.3, 0.05], look: 'paint', color: '#4f5a46', cast: false })
+}
+
+function footings(x: number, z: number, along: 'x' | 'z', layers: number, columns = 2) {
+  const size: Vec3 = along === 'x' ? [2.4, 0.6, 0.6] : [0.6, 0.6, 2.4]
+  const width = columns * 0.62
+  box([x, layers * 0.3, z], along === 'x' ? [2.5, layers * 0.6, width] : [width, layers * 0.6, 2.5], { look: 'cast', color: '#9a9585', render: false })
+  for (let layer = 0; layer < layers; layer++) for (let column = 0; column < columns; column++) {
+    const across = (column - (columns - 1) / 2) * 0.62
+    const shift = ((layer * 3 + column * 5) % 4 - 1.5) * 0.04
+    dress({ kind: 'box', size, at: along === 'x' ? [x + shift, layer * 0.6 + 0.3, z + across] : [x + across, layer * 0.6 + 0.3, z + shift], rotate: [0, ((layer + column) % 3 - 1) * 0.02, 0], look: 'cast', color: (layer + column) % 2 ? '#9a9585' : '#8f8b7c' })
+  }
+}
+
+function container(x: number, z: number, along: 'x' | 'z', color: string) {
+  const size: Vec3 = along === 'x' ? [6.06, 2.6, 2.44] : [2.44, 2.6, 6.06]
+  box([x, 1.3, z], size, { look: 'corrugated', color, hit: 'metal', render: false })
+  dress({ kind: 'box', size, at: [x, 1.3, z], look: 'corrugated', color })
+  for (const end of [-1, 1]) dress({ kind: 'box', size: along === 'x' ? [0.1, 2.64, 2.48] : [2.48, 2.64, 0.1], at: along === 'x' ? [x + end * 3.0, 1.3, z] : [x, 1.3, z + end * 3.0], look: 'rust', color: '#4d4335', cast: false })
+  dress({ kind: 'box', size: along === 'x' ? [6.1, 0.12, 2.5] : [2.5, 0.12, 6.1], at: [x, 2.56, z], look: 'rust', color: '#4d4335', cast: false })
+  dress({ kind: 'box', size: along === 'x' ? [6.1, 0.12, 2.5] : [2.5, 0.12, 6.1], at: [x, 0.06, z], look: 'rust', color: '#4d4335', cast: false })
+}
+
+function spool(x: number, z: number) {
+  box([x, 0.6, z], [0.7, 1.2, 1.2], { look: 'paint', color: '#6b5a44', hit: 'wood', render: false })
+  for (const side of [-0.3, 0.3]) dress({ kind: 'cylinder', size: [0.6, 0.06, 0.6], at: [x + side, 0.6, z], rotate: [0, 0, Math.PI / 2], look: 'paint', color: '#6b5a44', segments: 16 })
+  dress({ kind: 'cylinder', size: [0.3, 0.56, 0.3], at: [x, 0.6, z], rotate: [0, 0, Math.PI / 2], look: 'metal', color: '#2b2d29', segments: 12 })
+}
+
+function booth(x: number, z: number) {
+  box([x, 1.2, z], [1.8, 2.4, 1.8], { look: 'stained', color: '#9aa18e', render: false })
+  dress({ kind: 'box', size: [1.8, 2.3, 1.8], at: [x, 1.15, z], look: 'stained', color: '#9aa18e' })
+  dress({ kind: 'box', size: [2.2, 0.14, 2.2], at: [x, 2.37, z], look: 'rust', color: '#5a4a3a' })
+  dress({ kind: 'box', size: [1.3, 0.6, 0.04], at: [x, 1.55, z + 0.91], look: 'metal', color: '#22231b' })
+  dress({ kind: 'box', size: [0.04, 0.6, 1.1], at: [x + 0.91, 1.55, z], look: 'metal', color: '#16170f' })
+  dress({ kind: 'box', size: [1.4, 0.06, 0.18], at: [x, 1.2, z + 0.98], look: 'paint', color: '#55645a', cast: false })
+  dress({ kind: 'box', size: [0.04, 1.9, 0.8], at: [x - 0.91, 0.95, z + 0.3], look: 'paint', color: '#55645a', cast: false })
+}
+
+function workbench(x: number, z: number, along: 'x' | 'z') {
+  const size: Vec3 = along === 'x' ? [1.6, 0.9, 0.7] : [0.7, 0.9, 1.6]
+  box([x, 0.45, z], size, { look: 'metal', color: '#4c5450', render: false })
+  dress({ kind: 'box', size: [size[0], 0.06, size[2]], at: [x, 0.87, z], look: 'metal', color: '#707470' })
+  dress({ kind: 'box', size: [size[0] - 0.1, 0.03, size[2] - 0.1], at: [x, 0.25, z], look: 'rust', color: '#5a4a3a', cast: false })
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) dress({ kind: 'box', size: [0.06, 0.84, 0.06], at: [x + dx * (size[0] / 2 - 0.05), 0.42, z + dz * (size[2] / 2 - 0.05)], look: 'paint', color: '#4e5d53', cast: false })
+  const end: Vec3 = along === 'x' ? [x + 0.55, 1.0, z + 0.2] : [x + 0.2, 1.0, z + 0.55]
+  dress({ kind: 'box', size: [0.2, 0.16, 0.2], at: end, look: 'paint', color: '#55645a' })
+  dress({ kind: 'cylinder', size: [0.015, 0.3, 0.015], at: [end[0], 1.08, end[2]], rotate: along === 'x' ? [Math.PI / 2, 0, 0] : [0, 0, Math.PI / 2], look: 'metal', color: '#9a9d92', segments: 4, cast: false })
+  dress({ kind: 'box', size: [0.36, 0.14, 0.2], at: along === 'x' ? [x - 0.4, 0.97, z] : [x, 0.97, z - 0.4], rotate: [0, 0.2, 0], look: 'paint', color: '#8a2f24' })
+  dress({ kind: 'box', size: along === 'x' ? [0.3, 0.02, 0.06] : [0.06, 0.02, 0.3], at: along === 'x' ? [x - 0.05, 0.91, z - 0.1] : [x - 0.1, 0.91, z - 0.05], rotate: [0, 0.5, 0], look: 'metal', color: '#2a2a26', cast: false })
+}
+
+function cylinders(x: number, z: number, colors: string[]) {
+  box([x, 0.7, z], [0.3, 1.4, colors.length * 0.3], { look: 'metal', color: colors[0], render: false })
+  colors.forEach((color, index) => {
+    const at: Vec3 = [x + (index % 2) * 0.03, 0.68, z + (index - (colors.length - 1) / 2) * 0.29]
+    dress({ kind: 'cylinder', size: [0.12, 1.3, 0.12], at, rotate: [0.04 * (index % 2 ? 1 : -1), 0, 0.03], look: 'paint', color, segments: 12 })
+    dress({ kind: 'cylinder', size: [0.04, 0.12, 0.04], at: [at[0], 1.38, at[2]], look: 'metal', color: '#707470', segments: 6, cast: false })
+  })
 }
 
 export const WORLD = { width: 35, depth: 56 }
@@ -429,6 +555,36 @@ rubble(12.6, 14.8, 1.2, 71)
 rubble(8.0, -19.0, 0.9, 81)
 standing(-12.5, 25.0, [2.4, 0.6, 1.2], { look: 'cast', color: '#9a9585' })
 standing(13.0, 12.6, [1.2, 1.1, 2.6], { look: 'cast', color: '#8f8b7c' })
+
+dumpster(-7.2, 11.3)
+drum(-5.7, 10.95, '#5d4b36')
+drum(-5.5, 11.9, '#4f5a44', true)
+tyres(-9.0, 11.0, 3)
+pallet(-10.3, 10.9, 1, 'x', 0, false)
+dress({ kind: 'box', size: [1.2, 0.12, 0.8], at: [-11.7, 0.55, 10.62], rotate: [1.35, 0, 0], look: 'paint', color: '#6b5a44' })
+rubble(6.2, 11.4, 1.1, 91, 'panel')
+bench(3.4, 10.95, 'x', true)
+pallet(8.4, 11.15, 3)
+drum(7.8, 12.8, '#3f3a30')
+drum(9.6, 11.05, '#4f5a44')
+drum(9.75, 11.7, '#5d4b36')
+footings(-19.0, 15.5, 'z', 2)
+dress({ kind: 'box', size: [0.6, 0.6, 2.4], at: [-17.9, 0.42, 15.2], rotate: [0.3, 0.08, 0], look: 'cast', color: '#9a9585' })
+container(-18.6, 26.4, 'z', '#5d6552')
+tyres(-16.4, 24.0, 2)
+pallet(-16.2, 28.7, 2, 'z')
+container(18.6, 16.8, 'z', '#6b4e3d')
+footings(18.9, 26.6, 'z', 2)
+spool(16.6, 25.4)
+drum(17.2, 28.6, '#4f5a44')
+drum(16.6, 28.95, '#5d4b36', true)
+booth(-7.4, 27.8)
+tyres(-5.4, 29.3, 2)
+bench(-10.2, 29.4, 'x')
+standing(5.6, 29.4, [0.18, 6.4, 0.18], { look: 'metal', color: '#3a3c30', render: false })
+cylinders(4.75, -0.65, ['#8a2f24', '#4a5a6a'])
+workbench(-6.6, -9.1, 'z')
+standing(-2.8, -5.42, [1.2, 1.9, 0.5], { look: 'paint', color: '#55645a', hit: 'metal', render: false })
 
 export const LEVEL = { blocks, decor, voids }
 
