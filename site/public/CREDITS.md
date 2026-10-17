@@ -85,6 +85,38 @@ The `Built` rifle derives from **LonesomeDucky**'s [AKM](https://opengameart.org
 
 The default **found** arms (the Firing Range's `Found · CC BY` rig) are CC BY 4.0 works from Sketchfab. The rifle is **[AKM Assault Rifle - Animated](https://sketchfab.com/3d-models/akm-assault-rifle-animated-6348dc53e3e249c6b297cb8f3f1e3e9b)** by **[user77](https://sketchfab.com/user77)**, which combines arms and animations from **[fps AK animated](https://sketchfab.com/3d-models/fps-ak-animated-b0b1bae40337449189483f6187cf7af7)** by **[DJMaesen](https://sketchfab.com/bumstrum)** and the **[AKM](https://sketchfab.com/3d-models/akm-fe8b79ae8a8142fb9ba706912c6b9df8)** model by **[Armored Wave](https://sketchfab.com/armoredwave)**. The pistol is **[animated pistol](https://sketchfab.com/3d-models/animated-pistol-bd896167e7ca44f19597d3afe6a8d83f)** by **[DJMaesen](https://sketchfab.com/bumstrum)**. Blacksite re-baked the files, reduced textures to 1024-pixel JPEGs, removed emissive maps and retoned the sleeves olive; keyframes are unchanged. [Full attribution and changes](viewmodel/CREDITS.md); [full licence and warranty disclaimer](viewmodel/CC-BY-4.0.txt). These credits do not imply endorsement. The MakeHuman arms above remain available as the CC0 `Built` rig.
 
+## Valley
+
+The Valley showcase (`examples/valley`) ships these open library assets from `examples/valley/assets/library/`, processed for the web: materials as 1k WebP, sounds as Ogg and M4A, and the terrain cropped and resampled to a 16-bit PNG heightmap. Trees, grass, flowers, litter and leaf textures are procedural code in `@blacksite/landscape` and contain no third-party art.
+
+### CC0 1.0
+
+Licence: https://creativecommons.org/publicdomain/zero/1.0/
+
+| Asset | Category | Author | Source |
+| --- | --- | --- | --- |
+| `bark-pine` Pine Bark | material | Dimitrios Savva (Poly Haven) | [polyhaven.com](https://polyhaven.com/a/pine_bark) |
+| `soil-mud-scanned` Ground 054 | material | Lennart Demes (ambientCG) | [ambientcg.com](https://ambientcg.com/a/Ground054) |
+
+### CC BY 3.0
+
+Licence: https://creativecommons.org/licenses/by/3.0/
+
+| Asset | Category | Author | Source | Attribution |
+| --- | --- | --- | --- | --- |
+| `step-grass-oga` Footsteps on different surfaces: grass | footstep | congusbongus | [opengameart.org](https://opengameart.org/content/footsteps-on-different-surfaces) | "Footsteps on different surfaces: grass" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from "footstep-grass.wav" by swuing (https://freesound.org/s/38874/), CC BY 3.0 |
+
+### Public domain
+
+Works of the U.S. federal government. Licence: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+
+| Asset | Category | Author | Source | Attribution |
+| --- | --- | --- | --- | --- |
+| `bed-wind-alpine` Wind Soundscape from Gem Lake | ambience | J. Job, Rocky Mountain National Park (National Park Service) | [www.nps.gov](https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm) | "Wind Soundscape from Gem Lake" by J. Job, Rocky Mountain National Park (National Park Service), public domain |
+| `terrain-ridge-valley` USGS 3DEP 1/3 arc-second n41w079 | terrain | U.S. Geological Survey | [www.usgs.gov](https://www.usgs.gov/3d-elevation-program) | Elevation data: U.S. Geological Survey 3D Elevation Program (public domain) |
+
+The Valley also reuses the look world kit's `world/grass_*`, `world/dirt_*` and `world/gravel_*` surfaces (ambientCG, CC0), listed under Materials above and credited in `packages/look/assets/world/CREDITS.md`.
+
 ## Fonts (SIL Open Font License)
 
 Barlow and Barlow Condensed by Jeremy Tribby; IBM Plex Mono by IBM. Bundled through Fontsource.

@@ -14,13 +14,17 @@ const body = font('barlow/files/barlow-latin-400-normal.woff')
 const accent = '#e2a23b'
 
 export function thumbnailsFromMeta(): Map<string, string> {
-  const dir = resolve(root, 'site/src/showcases'), found = new Map<string, string>()
+  const dir = resolve(root, 'site/src/showcases'), entries: { id: string; tool: string; thumbnail: string; order: number }[] = []
   for (const name of readdirSync(dir, { withFileTypes: true })) {
     if (!name.isDirectory()) continue
     const source = readFileSync(resolve(dir, name.name, 'meta.ts'), 'utf8')
     const tool = source.match(/tool:\s*'([^']+)'/)?.[1], thumbnail = source.match(/thumbnail:\s*'([^']+)'/)?.[1]
-    if (tool && thumbnail && !found.has(tool)) found.set(tool, thumbnail)
+    const order = Number(source.match(/order:\s*(-?[\d.]+)/)?.[1] ?? 0)
+    if (tool && thumbnail) entries.push({ id: name.name, tool, thumbnail, order })
   }
+  entries.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+  const found = new Map<string, string>()
+  for (const entry of entries) if (!found.has(entry.tool)) found.set(entry.tool, entry.thumbnail)
   return found
 }
 
