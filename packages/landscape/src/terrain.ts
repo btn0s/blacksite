@@ -130,6 +130,7 @@ export interface TerrainOptions {
   readonly rangeFactor?: number
   readonly detailDistance?: number
   readonly shadowDistance?: number
+  readonly coverShade?: { readonly distance: number; readonly strength: number }
 }
 
 export interface Terrain {
@@ -204,7 +205,24 @@ uniform vec3 terrainViewer;
 uniform vec4 canopyParams;
 uniform vec3 canopyColor;
 uniform vec3 canopyShade;
+vec4 bsCrowns(vec2 p, uint salt) {
+  vec2 cell = floor(p);
+  vec2 local = p - cell;
+  float top = -1.0;
+  vec4 result = vec4(0.0, 0.0, -1.0, 0.5);
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    ivec2 id = ivec2(cell) + ivec2(i, j);
+    vec2 centre = vec2(float(i), float(j)) + 0.2 + 0.6 * vec2(bsHash(id, salt), bsHash(id, salt + 2u));
+    float radius = 0.46 + 0.36 * bsHash(id, salt + 4u);
+    vec2 r = local - centre;
+    float d2 = dot(r, r) / (radius * radius);
+    float h = sqrt(max(1.0 - d2, 0.0)) * radius + bsHash(id, salt + 6u) * 0.35;
+    if (d2 < 1.0 && h > top) { top = h; result = vec4(normalize(vec3(r / radius, sqrt(max(1.0 - d2, 0.02)))), bsHash(id, salt + 8u)); }
+  }
+  return result;
+}
 uniform float terrainDetail;
+uniform vec2 terrainCoverShade;
 varying vec3 vTerrainWorld;
 varying float vTerrainCanopy;
 `
@@ -252,33 +270,30 @@ if (bsDetailFade > 0.0) {
 bsAlbedo *= 0.82 + bsMacro * 0.36;
 float bsDry = smoothstep(0.45, 0.85, bsNoise(vTerrainWorld.xz * 0.018, 31u) * 0.7 + bsNoise(vTerrainWorld.xz * 0.09, 37u) * 0.3);
 bsAlbedo = mix(bsAlbedo, bsAlbedo * vec3(1.3, 1.04, 0.6), bsDry * bsWeights.x * 0.7);
+bsAlbedo *= 1.0 - terrainCoverShade.y * bsWeights.x * (1.0 - smoothstep(terrainCoverShade.x * 0.55, terrainCoverShade.x, bsDist));
 vec3 bsT = normalize(cross(bsBase, vec3(0.0, 0.0, 1.0)));
 vec3 bsB = cross(bsT, bsBase);
 vec3 bsWorldNormal = normalize(bsT * bsDetailNormal.x - bsB * bsDetailNormal.y + bsBase * bsDetailNormal.z);
 if (vTerrainCanopy > 0.001) {
   float footprint = length(fwidth(vTerrainWorld.xz));
-  float lumpFade = 1.0 - smoothstep(canopyParams.w * 0.25, canopyParams.w * 0.9, footprint);
-  vec2 p = vTerrainWorld.xz / canopyParams.w;
-  vec2 cell = floor(p);
-  vec2 local = p - cell;
-  float top = -1.0;
-  vec3 dome = vec3(0.0, 1.0, 0.0);
-  float tone = 0.5;
-  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-    ivec2 id = ivec2(cell) + ivec2(i, j);
-    vec2 centre = vec2(float(i), float(j)) + 0.2 + 0.6 * vec2(bsHash(id, 51u), bsHash(id, 53u));
-    float radius = 0.5 + 0.45 * bsHash(id, 55u);
-    vec2 r = local - centre;
-    float d2 = dot(r, r) / (radius * radius);
-    float h = sqrt(max(1.0 - d2, 0.0)) * radius + bsHash(id, 57u) * 0.35;
-    if (d2 < 1.0 && h > top) { top = h; dome = normalize(vec3(r / radius, sqrt(max(1.0 - d2, 0.02)))); tone = bsHash(id, 59u); }
-  }
-  float covered = step(0.0, top);
+  float level = log2(footprint / (canopyParams.w * 0.3));
+  float lumpFade = 1.0 - smoothstep(3.2, 4.2, level);
+  level = clamp(level, 0.0, 3.0);
+  float l0 = min(floor(level), 2.0);
+  float lf = level - l0;
+  float s0 = canopyParams.w * exp2(l0);
+  vec4 c0 = bsCrowns(vTerrainWorld.xz / s0, 61u + uint(l0) * 13u);
+  vec4 c1 = bsCrowns(vTerrainWorld.xz / (s0 * 2.0), 74u + uint(l0) * 13u);
+  vec3 dome = normalize(mix(c0.z < 0.0 ? vec3(0.0, 0.0, 1.0) : c0.xyz, c1.z < 0.0 ? vec3(0.0, 0.0, 1.0) : c1.xyz, lf));
+  float top = mix(c0.z, c1.z, lf);
+  float tone = mix(fract(c0.w), fract(c1.w), lf);
+  float covered = smoothstep(-0.6, 0.2, top);
+  float relief = 1.0 / (1.0 + level * 0.55);
   vec3 lump = normalize(vec3(dome.x, dome.z * 0.9, dome.y));
-  vec3 canopyNormal = normalize(mix(bsBase, lump, 0.4 * lumpFade * covered + 0.15));
-  float crownAo = mix(0.58, 0.72 + 0.28 * dome.z, covered);
-  vec3 cellAlbedo = mix(canopyShade, canopyColor * (0.78 + tone * 0.44), crownAo);
-  vec3 meanAlbedo = mix(canopyShade, canopyColor, 0.62);
+  vec3 canopyNormal = normalize(mix(bsBase, lump, (0.5 * covered + 0.15) * lumpFade * relief + 0.1));
+  float crownAo = mix(0.82 - 0.55 * relief, 0.5 + 0.5 * dome.z, covered);
+  vec3 cellAlbedo = mix(canopyShade, canopyColor * (0.62 + tone * 0.76), crownAo);
+  vec3 meanAlbedo = mix(canopyShade, canopyColor * 0.95, 0.76);
   vec3 canopyAlbedo = mix(meanAlbedo, cellAlbedo, lumpFade);
   canopyAlbedo *= 0.85 + bsMacro * 0.3;
   bsAlbedo = mix(bsAlbedo, canopyAlbedo, vTerrainCanopy);
@@ -363,6 +378,7 @@ export function createTerrain(options: TerrainOptions): Terrain {
     canopyColor: { value: new Vector3(...canopy.color) },
     canopyShade: { value: new Vector3(...canopy.shade) },
     terrainDetail: { value: options.detailDistance ?? 260 },
+    terrainCoverShade: { value: new Vector2(options.coverShade?.distance ?? 0, options.coverShade?.strength ?? 0) },
   }
 
   const material = new MeshStandardMaterial({ name: 'world-terrain', color: new Color(1, 1, 1), roughness: 1, metalness: 0, envMapIntensity: 0.55 })

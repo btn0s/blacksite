@@ -297,7 +297,7 @@ const CLOUD_GLSL = `
     for (int i = 0; i < CLOUD_OCTAVES; i++) {
       if (i >= octaves) break;
       float n = cloudNoise(q);
-      if (i >= 1) n = mix(n, abs(n) * 2.0 - 0.38, 0.75);
+      if (i >= 1) n = mix(n, abs(n) * 2.0 - 0.38, 0.3);
       sum += amplitude * n * (1.0 - smoothstep(0.18, 0.45, footprint * frequency));
       q = mat2(0.8, 0.6, -0.6, 0.8) * q * 2.03 + vec2(13.1, 7.7);
       frequency *= 2.03;
@@ -314,7 +314,7 @@ const CLOUD_GLSL = `
   }
 
   float cloudSoft(float footprint) {
-    return 0.38 + min(footprint * 0.65 * cloudScale, 1.0) * 0.3;
+    return 0.62 + min(footprint * 0.65 * cloudScale, 1.0) * 0.3;
   }
 
   float cloudAmount(vec2 q, float footprint, int octaves) {
@@ -348,12 +348,12 @@ const CLOUD_GLSL = `
     float phase = mix(atPhaseHg(c, 0.75), atPhaseHg(c, -0.2), 0.25);
     float forward = smoothstep(-0.2, 0.7, c);
     vec3 single = sun * shadow * phase * mix(alpha * 0.55, tau * exp(-tau) * 2.2, forward) * 3.0;
-    float rim = clamp((d - s1) * 2.5, 0.0, 1.0);
+    float rim = smoothstep(0.0, 1.0, clamp((d - s1) * 1.2, 0.0, 1.0));
     float side = 1.0 - smoothstep(0.05, 0.45, mu);
     float rise = clamp((d - cloudAmount(q + along * 0.12, footprint, CLOUD_OCTAVES - 1) * fade) * 3.0 + 0.5, 0.0, 1.0);
-    single *= mix(1.0, (0.55 + 1.2 * rim) * mix(0.55, 1.45, rise), side * 0.85);
-    vec3 multiple = sun * (0.025 + 0.22 * rim + 0.1 * rise * side) * mix(1.0, shadow, 0.5) * alpha * (0.25 + 0.75 * smoothstep(-0.3, 0.9, c));
-    vec3 ambient = (atSky(normalize(vec3(direction.x, 0.03, direction.z))) * 0.26 + atSky(vec3(0.0, 1.0, 0.0)) * 0.42) * alpha * (1.0 - 0.35 * d) * mix(1.0, mix(0.75, 1.2, rise), side);
+    single *= mix(1.0, (0.75 + 0.6 * rim) * mix(0.8, 1.2, rise), side * 0.6);
+    vec3 multiple = sun * (0.06 + 0.08 * rim + 0.04 * rise * side) * mix(1.0, shadow, 0.5) * alpha * (0.25 + 0.75 * smoothstep(-0.3, 0.9, c));
+    vec3 ambient = (atSky(normalize(vec3(direction.x, 0.03, direction.z))) * 0.26 + atSky(vec3(0.0, 1.0, 0.0)) * 0.42) * alpha * (1.0 - 0.35 * d) * mix(1.0, mix(0.9, 1.1, rise), side);
     vec4 result = vec4(single + multiple + ambient, alpha);
     result *= smoothstep(0.0, aa * 1.5 + 1e-6, edge);
     float haze = exp(-t * 0.02);

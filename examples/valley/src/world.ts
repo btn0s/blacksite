@@ -1,4 +1,4 @@
-import { createHeightfield, decodeGrey16Png, fbm, heightAt, loadLayerImages, ridged, smoothstep, surfaceTexture, terrainHeightAt, valueNoise, type Heightfield, type LayerImages, type TerrainSources } from '@blacksite/landscape'
+import { createHeightfield, decodeGrey16Png, fbm, heightAt, slopeAt, loadLayerImages, ridged, smoothstep, surfaceTexture, terrainHeightAt, valueNoise, type Heightfield, type LayerImages, type TerrainSources } from '@blacksite/landscape'
 import { site, type Tier } from './model'
 
 const library = import.meta.glob<string>('../assets/library/*/**/*.{png,webp,json,ogg,m4a}', { eager: true, query: '?url&no-inline', import: 'default' })
@@ -167,11 +167,13 @@ export async function buildValley(tier: Tier, onProgress: (value: number) => voi
     const wobble = (fbm(x / 140, z / 140, 3, 501) - 0.5) * 190
     const meadow = 1 - smoothstep(site.meadowRadius - 50, site.meadowRadius + 70, Math.hypot(x - site.meadowCentre[0], z - site.meadowCentre[1]) + wobble)
     const h = heightAt(far, x, z)
-    const relief = 1 - smoothstep(pathTop - 20, pathTop + 70, h)
+    const local = 1 - smoothstep(900, 1400, Math.hypot(x, z))
+    const relief = 1 - smoothstep(pathTop - 20, pathTop + 70, h) * local
     const patches = fbm(x / 260, z / 260, 3, 503)
-    let density = smoothstep(0.3, 0.52, patches * 0.7 + relief * 0.35 + 0.08)
+    let density = smoothstep(0.3, 0.46, patches * 0.6 + relief * 0.35 + 0.12)
     density *= 1 - meadow
-    density *= 1 - smoothstep(site.treeline - 80, site.treeline, h)
+    density *= 1 - smoothstep(site.treeline - 220, site.treeline, h)
+    density *= 1 - smoothstep(34, 46, slopeAt(far, x, z))
     const grove = smoothstep(0.8, 0.88, valueNoise(x / 34, z / 34, 507)) * meadow * (1 - smoothstep(site.meadowRadius * 0.45, site.meadowRadius * 0.7, Math.hypot(x, z)) * 0)
     density = Math.max(density, grove * 0.9)
     const lane = pathDistance(x, z)

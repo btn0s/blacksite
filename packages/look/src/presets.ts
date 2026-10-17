@@ -50,10 +50,10 @@ export const NATURE: Atmosphere = {
     ozone: 1,
     illuminance: 5.5,
     elevation: 400,
-    aerial: 9,
+    aerial: 3,
     disk: 1,
-    heightFog: { density: 0.0009, base: 120, falloff: 70, tint: [1, 0.98, 0.95] },
-    clouds: { coverage: 0.46, altitude: 2.2, density: 2.2, scale: 1.4, wind: 1 },
+    heightFog: { density: 0.00028, base: 120, falloff: 60, tint: [1, 0.97, 0.9] },
+    clouds: { coverage: 0.37, altitude: 2.2, density: 1.05, scale: 1.4, wind: 1 },
   },
 };
 
