@@ -12,7 +12,7 @@ The source includes the weathered PBR textures. Blacksite reorients the model, a
 
 `pistol.glb` derives from `Blends/Pistol.blend` in **Animated Guns Pack** by **Quaternius**, CC0. [Author's pack page](https://quaternius.com/packs/animatedguns.html), [author's OpenGameArt release](https://opengameart.org/content/low-poly-animated-guns), [downloaded archive](https://opengameart.org/sites/default/files/FPS%20Pack_0.zip).
 
-Blacksite resets the pose, changes scale and orientation, renames part bones, adds a muzzle marker and replaces the flat source materials at runtime with ambientCG maps. Those maps are **Metal046B** and **Plastic012B**, by **ambientCG / Lennart Demes**, [CC0](https://docs.ambientcg.com/license/); [Metal046B](https://ambientcg.com/view?id=Metal046B), [Plastic012B](https://ambientcg.com/view?id=Plastic012B). No original action clips are included.
+Blacksite resets the pose, changes scale and orientation, renames part bones, gives slide/trigger/magazine vertices full weight on their moving part, adds a muzzle marker and replaces the flat source materials at runtime with ambientCG maps. Those maps are **Metal046B** and **Plastic012B**, by **ambientCG / Lennart Demes**, [CC0](https://docs.ambientcg.com/license/); [Metal046B](https://ambientcg.com/view?id=Metal046B), [Plastic012B](https://ambientcg.com/view?id=Plastic012B). No original action clips are included.
 
 ## Reproduction
 

@@ -40,7 +40,7 @@ const definitions = ALS_WEAPONS.map(weapon =>
 )
 ```
 
-Apply these definitions on the authoritative simulation as well as the client. A multiplayer game retaining the older timings can keep `rig="als"` until both sides migrate together.
+Apply these definitions on the authoritative simulation as well as the client. Servers can import the same values from `@blacksite/subject-fpp/arms/model`, which has no renderer or asset-loader imports. A multiplayer game retaining the older timings can keep `rig="als"` until both sides migrate together.
 
 | Layer | What moves |
 | --- | --- |

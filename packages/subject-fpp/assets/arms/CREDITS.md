@@ -36,7 +36,7 @@ The CC0 dedication applies to the animation and grip data. The TypeScript sample
 - [Author's OpenGameArt release and download](https://opengameart.org/content/low-poly-animated-guns).
 - [Source archive](https://opengameart.org/sites/default/files/FPS%20Pack_0.zip), using `Blends/Pistol.blend`.
 
-Blacksite adapts the pistol's scale, orientation, bone names and materials, adds a muzzle marker, and applies ambientCG surfaces at runtime. The source pistol has `Control`, `Slide`, `Trigger` and `Magazine` bones. The retained conversion script is `packages/subject-fpp/scripts/build-weapons.py`. Blacksite's authored movement curves and grip poses are independent of the source pack's fire/reload clips; no original weapon action is exported in the default GLBs.
+Blacksite adapts the pistol's scale, orientation, bone names and materials, makes the slide, trigger and magazine vertex weights rigid, adds a muzzle marker, and applies ambientCG surfaces at runtime. The source pistol has `Control`, `Slide`, `Trigger` and `Magazine` bones. The retained conversion script is `packages/subject-fpp/scripts/build-weapons.py`. Blacksite's authored movement curves and grip poses are independent of the source pack's fire/reload clips; no original weapon action is exported in the default GLBs.
 
 ## Surface materials
 

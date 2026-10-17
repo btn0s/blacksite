@@ -18,6 +18,7 @@ Armory (`@blacksite/armory`) is a deterministic weapon simulation: fire modes, c
 - Map events to presentation: `shot` to recoil, flash, tracer, sound and `arms.fireSequence++`; `reload-started` to `arms.reloadSequence++`; `switch-started` to `arms.weapon` and `arms.equipSequence++`; `trigger-blocked` (empty) to a dry fire; `impact` to decals and dust.
 - Draw the arms with `<ArmsViewmodel state={arms} render="external" onPresentation={…} />` and pass the presentation to `<Look overlay>`. The default has finger-rigged arms, procedural motion and weapon-part-driven clips. Select `rig="als"` when local arms should match the remote body.
 - For the default viewmodel, import `VIEWMODEL_CLIPS`, `VIEWMODEL_WEAPONS` and `switchSeconds` from `@blacksite/subject-fpp/arms`. Set Armory reload/equip durations from those same timings; drive reload foley from clip events. Set `arms.empty` from the magazine, increment `inspectSequence` for inspect, and send landing speed with `landSequence`.
+- Authoritative servers import the same model from `@blacksite/subject-fpp/arms/model`; this entry point has no renderer or asset-loader imports.
 
 ## Presets
 
@@ -56,4 +57,5 @@ Build the missing ones the way shipped shooters did: a learnable recoil pattern,
 - **Round-trip authored values.** A requested 4 m charge core was stored as radius ÷ 3. Assert that authored values reach the moment they act unchanged.
 
 - **A correct wrist is not a correct hand.** The first MakeHuman viewmodel held its wrist target within hundredths of a millimetre while its fingers still formed stretched tubes. Verify skinned vertices and finger flexion, then read close-ups of every grip.
+- **A moving bone is not a moving part.** A pistol magazine retained half its weight on the weapon root, so its geometry moved half as far as the hand following its bone. Give rigid weapon parts full weights and measure hand contact against the animated mesh, including the replacement-magazine handoff.
 - **One action clock.** A reload sound timed independently of the magazine animation can click before the magazine seats. Use the clip event times for foley and the same duration for Armory.

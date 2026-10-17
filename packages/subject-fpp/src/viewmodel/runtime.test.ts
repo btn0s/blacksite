@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { Bone, Euler, Matrix4, Quaternion, SkinnedMesh, Vector3 } from 'three'
+import { Bone, Euler, Matrix4, Quaternion, SkinnedMesh, Triangle, Vector3 } from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { createArmsState, type ArmsWeapon } from '../arms/state'
 import { createViewmodelRuntime } from './runtime'
@@ -67,6 +67,36 @@ describe('authored viewmodel assets', () => {
     })
     expect(checked).toBe(16)
   })
+
+  it('moves the pistol slide geometry through its full 34mm stroke', async () => {
+    const { state, runtime, advance } = await fixture('pistol')
+    advance(1)
+    const pivot = runtime.weaponPivot()
+    const points = () => {
+      const result: Vector3[] = []
+      pivot.traverse(object => {
+        if (!(object instanceof SkinnedMesh)) return
+        const indices = object.geometry.getAttribute('skinIndex')
+        const weights = object.geometry.getAttribute('skinWeight')
+        for (let vertex = 0; vertex < indices.count; vertex++) {
+          const follows = [0, 1, 2, 3].some(component => object.skeleton.bones[indices.array[vertex * 4 + component]]?.name === 'slide' && weights.array[vertex * 4 + component] > 0.1)
+          if (follows) result.push(pivot.worldToLocal(object.getVertexPosition(vertex, new Vector3()).applyMatrix4(object.matrixWorld)))
+        }
+      })
+      return result
+    }
+    const closed = points()
+    state.empty = true
+    runtime.update(0)
+    const open = points()
+    expect(open.length).toBeGreaterThan(20)
+    for (let index = 0; index < open.length; index++) {
+      const travel = open[index].clone().sub(closed[index])
+      expect(travel.x).toBeCloseTo(0, 5)
+      expect(travel.y).toBeCloseTo(0, 5)
+      expect(travel.z).toBeCloseTo(0.034, 5)
+    }
+  })
 })
 
 describe.each(['rifle', 'pistol'] as const)('%s viewmodel', weapon => {
@@ -125,7 +155,7 @@ describe.each(['rifle', 'pistol'] as const)('%s viewmodel', weapon => {
     const { state, runtime, advance } = await fixture(weapon)
     advance(1)
     state.reloadSequence++
-    const samples = weapon === 'rifle' ? [0.44, 0.58, 0.7, 1.08, 1.25] : [0.54, 0.62, 0.74]
+    const samples = weapon === 'rifle' ? [0.44, 0.58, 0.7, 1.08, 1.25] : [0.4, 0.45, 0.54, 0.62, 0.74]
     const palmLocal: Vector3[] = []
     let previousTime = 0
     for (const time of samples) {
@@ -140,6 +170,23 @@ describe.each(['rifle', 'pistol'] as const)('%s viewmodel', weapon => {
       restFrame.setFromRotationMatrix(new Matrix4().makeBasis(forward, palm, z))
       const centre = rig.palmOffset.clone().applyQuaternion(restFrame).applyMatrix4(matrix).add(rig.hand.getWorldPosition(new Vector3()))
       const mag = runtime.weaponPivot().getObjectByName('magazine') as Bone
+      let surfaceDistance = Infinity
+      runtime.weaponPivot().traverse(object => {
+        if (!(object instanceof SkinnedMesh)) return
+        const indices = object.geometry.getAttribute('skinIndex')
+        const weights = object.geometry.getAttribute('skinWeight')
+        const faces = object.geometry.index
+        if (!faces) return
+        const belongs = (vertex: number) => [0, 1, 2, 3].some(component => object.skeleton.bones[indices.array[vertex * 4 + component]]?.name === 'magazine' && weights.array[vertex * 4 + component] > 0.1)
+        for (let face = 0; face < faces.count; face += 3) {
+          const vertices = [faces.getX(face), faces.getX(face + 1), faces.getX(face + 2)]
+          if (!vertices.every(belongs)) continue
+          const points = vertices.map(vertex => object.getVertexPosition(vertex, new Vector3()).applyMatrix4(object.matrixWorld))
+          const closest = new Triangle(points[0], points[1], points[2]).closestPointToPoint(centre, new Vector3())
+          surfaceDistance = Math.min(surfaceDistance, closest.distanceTo(centre))
+        }
+      })
+      expect(surfaceDistance, `palm to magazine surface at ${time}s`).toBeLessThan(0.02)
       palmLocal.push(mag.worldToLocal(centre))
     }
     for (const centre of palmLocal.slice(1)) expect(centre.distanceTo(palmLocal[0])).toBeLessThan(0.005)

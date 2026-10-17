@@ -7,8 +7,7 @@ export { createArmsState } from './arms/state'
 export type { ArmsState, ArmsWeapon, ArmsAction, ArmsRig } from './arms/state'
 export type { ArmsManifest, ArmsWeaponManifest } from './arms/manifestFile'
 export { portraitFov, type ArmsPresentation, type ArmsViewmodelProps } from './arms/presentation'
-export { VIEWMODEL, VIEWMODEL_WEAPONS, GRIPS, bobFrequency } from './viewmodel/model'
-export { VIEWMODEL_CLIPS, switchSeconds, type ClipEvent, type Clip as ViewmodelClip } from './viewmodel/clips'
+export { VIEWMODEL, VIEWMODEL_WEAPONS, GRIPS, bobFrequency, VIEWMODEL_CLIPS, switchSeconds, type ClipEvent, type ViewmodelClip } from './arms/model'
 
 const AlsViewmodel = lazy(() => import('./arms/AlsViewmodel'))
 

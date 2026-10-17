@@ -50,6 +50,11 @@ else:
         new={'Control':'weapon','Slide':'slide','Trigger':'trigger','Magazine':'magazine'}[name]
         rig.data.bones[name].name=new
         if name in mesh.vertex_groups:mesh.vertex_groups[name].name=new
+    for vertex in mesh.data.vertices:
+        parts=[group for group in vertex.groups if mesh.vertex_groups[group.group].name in ('slide','trigger','magazine') and group.weight>0]
+        name=mesh.vertex_groups[max(parts,key=lambda group:group.weight).group].name if parts else 'weapon'
+        for group in mesh.vertex_groups:group.remove([vertex.index])
+        mesh.vertex_groups[name].add([vertex.index],1,'REPLACE')
     bpy.context.view_layer.objects.active=rig;bpy.ops.object.mode_set(mode='EDIT')
     bone=rig.data.edit_bones.new('muzzle');bone.head=(0,-0.188,0.055);bone.tail=(0,-0.188,0.085);bone.parent=rig.data.edit_bones['weapon']
     bpy.ops.object.mode_set(mode='OBJECT')

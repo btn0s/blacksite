@@ -16,6 +16,8 @@ const profile = option('profile', 'desktop')
 const rig = option('rig', 'blacksite')
 const scale = Number(option('scale', '1'))
 const only = option('only', '').split(',').filter(Boolean)
+const weaponFilter = option('weapon', '').split(',').filter(Boolean)
+const batch = option('batch', '')
 const measureOnly = args.includes('--measure-only')
 const maxStep = Number(option('step', String(1 / 60)))
 const GPU_ARGS = ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu', '--use-gl=angle', ...(process.platform === 'darwin' ? ['--use-angle=metal'] : []), '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows']
@@ -97,6 +99,13 @@ const reset = async weapon => { await page.evaluate(() => { window.__captureYaw 
 const modelSnapshot = await page.evaluate(() => window.__viewmodel.model)
 const report = []
 const measurements = []
+let stopRequested = false
+process.once('SIGTERM', () => { stopRequested = true })
+const persist = async complete => {
+  const performanceSample = await page.evaluate(() => ({ firstPlayableMs: window.__captureReadyAt, render: window.__capturePerf }))
+  await Promise.all(assetRequests)
+  await writeFile(path.join(out, `report-${rig}-${profile}-${scale}x${batch ? `-${batch}` : ''}.json`), JSON.stringify({ capturedAt: new Date().toISOString(), complete, batch: batch || 'full', url: url.href, assets, performance: performanceSample, model: modelSnapshot, errors, measurements, report }, null, 2))
+}
 if (rig === 'blacksite' && (measureOnly || args.includes('--measure'))) {
   const model = await page.evaluate(() => window.__viewmodel.model)
   for (const weapon of ['rifle', 'pistol']) {
@@ -126,10 +135,11 @@ if (rig === 'blacksite' && (measureOnly || args.includes('--measure'))) {
     measurements.push({ weapon, metric: 'sway cap radians', expected: model.procedural.sway.maxRotation, actual: Math.abs(sway.swayRotation), pass: Math.abs(sway.swayRotation) <= model.procedural.sway.maxRotation * 1.03 && Math.abs(sway.swayRotation) >= model.procedural.sway.maxRotation * 0.9 })
   }
 }
-if (!measureOnly) for (const [name, build] of Object.entries(sequences)) {
+capture: if (!measureOnly) for (const [name, build] of Object.entries(sequences)) {
   if (only.length && !only.includes(name)) continue
   if (rig === 'found' && ['equip', 'inspect', 'land'].includes(name)) continue
   for (const weapon of rig === 'found' ? ['pistol'] : ['rifle', 'pistol']) {
+    if (weaponFilter.length && !weaponFilter.includes(weapon)) continue
     await reset(weapon)
     const dir = path.join(out, rig, `${profile}-${scale}x`, name, weapon)
     await mkdir(dir, { recursive: true })
@@ -158,11 +168,11 @@ if (!measureOnly) for (const [name, build] of Object.entries(sequences)) {
     }
     const sheet = path.join(dir, 'contact-sheet.png')
     await sharp({ create: { width: columns * width, height: Math.ceil(shots.length / columns) * height, channels: 3, background: '#12140f' } }).composite(tiles).png().toFile(sheet)
+    await persist(false)
+    if (stopRequested) break capture
   }
 }
-const performanceSample = await page.evaluate(() => ({ firstPlayableMs: window.__captureReadyAt, render: window.__capturePerf }))
-await Promise.all(assetRequests)
-await writeFile(path.join(out, `report-${rig}-${profile}-${scale}x.json`), JSON.stringify({ capturedAt: new Date().toISOString(), url: url.href, assets, performance: performanceSample, model: modelSnapshot, errors, measurements, report }, null, 2))
+await persist(!stopRequested)
 console.log(JSON.stringify({ errors, measurements, shots: report.length, maxHandError: Math.max(...report.map(entry => entry.handError ?? 0)), maxReach: Math.max(...report.map(entry => entry.reach ?? 0)) }, null, 2))
 await browser.close()
 if (errors.length || measurements.some(entry => !entry.pass)) process.exitCode = 1
