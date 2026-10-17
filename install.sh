@@ -2,18 +2,27 @@
 set -eu
 export GIT_TERMINAL_PROMPT=0
 
+usage='Usage: install.sh [--agent claude|codex|cursor|auto] [--skip-agents] [--dir <dir>] [--ref <ref>] [--uninstall]
+  --agent        register the Blacksite skill with one agent (default: every agent found)
+  --skip-agents  set up only the CLI, packages and templates; register the skill with no agent
+                 (use this when the skill came from skills.sh)'
+
 agent=auto
+agent_set=0
+skip_agents=0
 install_dir=${BLACKSITE_INSTALL_DIR:-"$HOME/.blacksite"}
 ref=main
 uninstall=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --agent) agent=${2:?missing agent}; shift 2 ;;
+    --agent) agent=${2:?missing agent}; agent_set=1; shift 2 ;;
+    --skip-agents) skip_agents=1; shift ;;
+    -h|--help) printf '%s\n' "$usage"; exit 0 ;;
     --dir) install_dir=${2:?missing directory}; shift 2 ;;
     --ref) ref=${2:?missing ref}; shift 2 ;;
     --uninstall) uninstall=1; shift ;;
     --yes) shift ;;
-    *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
+    *) printf 'Unknown option: %s\n%s\n' "$1" "$usage" >&2; exit 2 ;;
   esac
 done
 
@@ -21,8 +30,13 @@ for tool in node git pnpm; do
   if ! command -v "$tool" >/dev/null 2>&1; then printf 'Install %s, then rerun Blacksite setup.\n' "$tool" >&2; exit 1; fi
 done
 
+if [ "$skip_agents" -eq 1 ] && [ "$agent_set" -eq 1 ]; then printf 'Choose --agent or --skip-agents, not both.\n' >&2; exit 2; fi
+if [ "$agent_set" -eq 0 ] && [ -f "$install_dir/.git/blacksite-skip-agents" ]; then skip_agents=1; fi
+
 agents=
-if [ "$agent" = auto ]; then
+if [ "$skip_agents" -eq 1 ]; then
+  :
+elif [ "$agent" = auto ]; then
   for candidate in claude codex cursor; do
     if command -v "$candidate" >/dev/null 2>&1; then agents="$agents $candidate"; fi
   done
@@ -72,6 +86,16 @@ cli_name=$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8
 
 mkdir -p "$HOME/.local/bin"
 ln -sfn "$install_dir/cli/index.mjs" "$HOME/.local/bin/$cli_name"
+if [ "$skip_agents" -eq 1 ]; then : > "$install_dir/.git/blacksite-skip-agents"; else rm -f "$install_dir/.git/blacksite-skip-agents"; fi
 for selected in $agents; do node "$install_dir/cli/index.mjs" install --agent "$selected" --global --yes; done
 if ! command -v "$cli_name" >/dev/null 2>&1; then printf 'Add this to your shell PATH: export PATH="$HOME/.local/bin:$PATH"\n'; fi
-printf '\nBlacksite is ready. Ask your agent anything or run /blacksite:start; it will ask "What would you like to do?"\nOptional asset libraries: blacksite assets login fab, then blacksite assets sync.\n'
+printf '\nBlacksite is ready.\n'
+if [ "$skip_agents" -eq 1 ]; then printf 'No agent was changed: the skill is already installed through skills.sh. Ask your agent for a game.\n'; fi
+for selected in $agents; do
+  case "$selected" in
+    claude) printf 'Claude Code: ask for a game, or run /blacksite:blacksite <your idea>.\n' ;;
+    codex) printf 'Codex: ask for a game; the skill is in ~/.agents/skills/blacksite.\n' ;;
+    cursor) printf 'Cursor: ask for a game; the skill is in ~/.cursor/skills/blacksite.\n' ;;
+  esac
+done
+printf 'Optional asset libraries: blacksite assets login fab, then blacksite assets sync.\n'

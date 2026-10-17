@@ -38,7 +38,7 @@ export const tools: Tool[] = [
     packages: ['@blacksite/subject', '@blacksite/subject-fpp'],
     demos: [],
     agent: {
-      reads: [{ label: 'Characters reference', path: 'skills/blacksite/references/characters.md' }, { label: 'Character animation reference', path: 'skills/blacksite/references/als.md' }, { label: 'Character guide', path: 'vendor/als-web/docs/guide/overview.md' }],
+      reads: [{ label: 'Movement and camera', path: 'skills/blacksite/references/feel.md' }, { label: 'Character wiring', path: 'skills/blacksite/references/building-blocks.md' }, { label: 'Character guide', path: 'vendor/als-web/docs/guide/overview.md' }],
       commands: [
         { label: 'Start a third-person game', code: 'blacksite scaffold --profile tpp --name "My Game" --dir /absolute/path' },
         { label: 'Prototype a mechanic on the character', code: 'blacksite prototype new traversal --with tpp' },
@@ -48,7 +48,7 @@ export const tools: Tool[] = [
     guides: [
       { label: 'Character guide', path: 'vendor/als-web/docs/guide/overview.md' },
       { label: 'Player templates', path: 'docs/player-templates.md' },
-      { label: 'Character animation reference', path: 'skills/blacksite/references/als.md' },
+      { label: 'Character wiring', path: 'skills/blacksite/references/building-blocks.md' },
     ],
   },
   {
@@ -59,7 +59,7 @@ export const tools: Tool[] = [
     packages: ['@blacksite/landscape', '@blacksite/look'],
     demos: [],
     agent: {
-      reads: [{ label: 'Terrain to the horizon', path: 'skills/blacksite/references/far-field.md' }, { label: 'Grass and trees', path: 'skills/blacksite/references/foliage.md' }, { label: 'Wind', path: 'skills/blacksite/references/wind.md' }, { label: 'Sky and haze', path: 'skills/blacksite/references/atmosphere.md' }, { label: 'Materials', path: 'skills/blacksite/references/materials.md' }],
+      reads: [{ label: 'Sky, terrain and forests', path: 'skills/blacksite/references/worlds.md' }, { label: 'Light and materials', path: 'skills/blacksite/references/craft.md' }],
       commands: [{ label: 'Find a real terrain and ground materials', code: 'blacksite assets suggest --idea "alpine meadow above a forested valley" --json' }],
       note: 'The agent builds an open world from the landscape package, using Valley as its model: real elevation data for the ground, grass and flowers by mask, three tree species, and an outdoor sky.',
     },
@@ -73,7 +73,7 @@ export const tools: Tool[] = [
     packages: ['@blacksite/cascade'],
     demos: [],
     agent: {
-      reads: [{ label: 'Destruction reference', path: 'skills/blacksite/references/destruction.md' }, { label: 'Destruction guide', path: 'docs/cascade.md' }, { label: 'Package rules', path: 'packages/cascade/AGENTS.md' }],
+      reads: [{ label: 'Destruction reference', path: 'skills/blacksite/references/combat.md' }, { label: 'Destruction guide', path: 'docs/cascade.md' }, { label: 'Package rules', path: 'packages/cascade/AGENTS.md' }],
       commands: [{ label: 'Prototype a destructible building', code: 'blacksite prototype new collapse --with cascade' }],
       note: 'The agent describes a building as boxes, hands it to the destruction worker and draws the pieces with the package’s renderer. Impacts and charges are messages sent to the worker.',
     },
@@ -87,7 +87,7 @@ export const tools: Tool[] = [
     packages: ['@blacksite/subject-fpp', '@blacksite/armory'],
     demos: [],
     agent: {
-      reads: [{ label: 'Weapons reference', path: 'skills/blacksite/references/weapons.md' }, { label: 'First-person arms', path: 'docs/arms.md' }, { label: 'Package rules', path: 'packages/armory/AGENTS.md' }],
+      reads: [{ label: 'Weapons reference', path: 'skills/blacksite/references/combat.md' }, { label: 'First-person arms', path: 'docs/arms.md' }, { label: 'Package rules', path: 'packages/armory/AGENTS.md' }],
       commands: [{ label: 'Start a first-person game', code: 'blacksite scaffold --profile fpp --name "My Game" --dir /absolute/path' }],
       note: 'The first-person template connects the arms, the weapons and the controls. The agent adds the targets, impacts and hit reactions your game needs.',
     },
@@ -115,7 +115,7 @@ export const tools: Tool[] = [
     packages: ['@blacksite/warden', '@blacksite/warden-react'],
     demos: [],
     agent: {
-      reads: [{ label: 'Enemy AI reference', path: 'skills/blacksite/references/ai.md' }, { label: 'AI guide', path: 'docs/warden.md' }, { label: 'Package rules', path: 'packages/warden/AGENTS.md' }],
+      reads: [{ label: 'Enemy AI reference', path: 'skills/blacksite/references/enemies.md' }, { label: 'AI guide', path: 'docs/warden.md' }, { label: 'Package rules', path: 'packages/warden/AGENTS.md' }],
       commands: [{ label: 'Prototype a squad fight', code: 'blacksite prototype new firefight --with warden' }],
       note: 'The agent starts the squad simulation in a worker and draws each soldier with the game’s own characters.',
     },
@@ -129,7 +129,7 @@ export const tools: Tool[] = [
     packages: ['@blacksite/input', '@blacksite/ui'],
     demos: [],
     agent: {
-      reads: [{ label: 'Input reference', path: 'skills/blacksite/references/input.md' }, { label: 'Input guide', path: 'packages/input/README.md' }, { label: 'UI guide', path: 'packages/ui/README.md' }],
+      reads: [{ label: 'Input reference', path: 'skills/blacksite/references/feel.md' }, { label: 'Input guide', path: 'packages/input/README.md' }, { label: 'UI guide', path: 'packages/ui/README.md' }],
       commands: [{ label: 'Every template includes both', code: 'blacksite scaffold --profile blank --name "My Game" --dir /absolute/path' }],
       note: 'Every template includes input and menus. The agent binds the game’s actions to keys, buttons and touch controls, and builds menus a gamepad can drive.',
     },

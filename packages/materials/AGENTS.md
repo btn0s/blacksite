@@ -2,7 +2,7 @@
 
 A graph is an authoring asset. Compile and preview it while making the material; bake it before shipping. A game loads four textures and a small descriptor. It does not evaluate the graph each frame.
 
-Read this guide before authoring a graph, adding a node, baking a material or changing its loader. The game-facing workflow is also in `skills/blacksite/references/materials.md`.
+Read this guide before authoring a graph, adding a node, baking a material or changing its loader. The game-facing workflow is also in `skills/blacksite/references/building-blocks.md` (Materials) and `craft.md`.
 
 ## Work in this order
 
