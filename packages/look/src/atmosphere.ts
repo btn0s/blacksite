@@ -60,6 +60,7 @@ export interface PhysicalSkySpec {
   readonly illuminance: number;
   readonly elevation: number;
   readonly aerial: number;
+  readonly sky?: number;
   readonly disk: number;
   readonly heightFog: HeightFogSpec | null;
   readonly clouds: CloudSpec | null;
