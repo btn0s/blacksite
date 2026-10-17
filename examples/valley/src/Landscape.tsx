@@ -35,7 +35,7 @@ export function Landscape({ world, tier, wind, sun, bark, handle }: { world: Val
         { tile: 2.2, tint: [0.92, 0.84, 0.72], roughness: 0.9, normalScale: 1 },
         { tile: 3.5, tint: [0.86, 0.84, 0.8], roughness: 0.85, normalScale: 1.2 },
       ],
-      canopy: { height: canopy.height, start: settings.impostorFar[0] - canopy.lead, end: settings.impostorFar[1] - canopy.lead, crown: canopy.crown, color: [0.105, 0.135, 0.042], shade: [0.016, 0.026, 0.01] },
+      canopy: { height: canopy.height, start: settings.impostorFar[0] - canopy.lead, end: settings.impostorFar[1] - canopy.lead, crown: canopy.crown, color: [0.105, 0.135, 0.042], shade: [0.016, 0.026, 0.01], dither: tier === 'low' },
       detailDistance: tier === 'low' ? 140 : 260,
       coverShade: { distance: settings.coverDistance, strength: 0.4 },
       shadowDistance: settings.shadowDistance,

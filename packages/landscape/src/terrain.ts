@@ -117,6 +117,7 @@ export interface CanopySpec {
   readonly color: readonly [number, number, number]
   readonly shade: readonly [number, number, number]
   readonly crown: number
+  readonly dither?: boolean
 }
 
 export interface TerrainOptions {
@@ -282,8 +283,14 @@ if (vTerrainCanopy > 0.001) {
   float l0 = min(floor(level), 2.0);
   float lf = level - l0;
   float s0 = canopyParams.w * exp2(l0);
+#ifdef CANOPY_DITHER
+  float pick = step(fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))), lf);
+  vec4 c0 = bsCrowns(vTerrainWorld.xz / (s0 * (1.0 + pick)), pick > 0.5 ? 74u + uint(l0) * 13u : 61u + uint(l0) * 13u);
+  vec4 c1 = c0;
+#else
   vec4 c0 = bsCrowns(vTerrainWorld.xz / s0, 61u + uint(l0) * 13u);
   vec4 c1 = bsCrowns(vTerrainWorld.xz / (s0 * 2.0), 74u + uint(l0) * 13u);
+#endif
   vec3 dome = normalize(mix(c0.z < 0.0 ? vec3(0.0, 0.0, 1.0) : c0.xyz, c1.z < 0.0 ? vec3(0.0, 0.0, 1.0) : c1.xyz, lf));
   float top = mix(c0.z, c1.z, lf);
   float tone = mix(fract(c0.w), fract(c1.w), lf);
@@ -382,6 +389,7 @@ export function createTerrain(options: TerrainOptions): Terrain {
   }
 
   const material = new MeshStandardMaterial({ name: 'world-terrain', color: new Color(1, 1, 1), roughness: 1, metalness: 0, envMapIntensity: 0.55 })
+  if (canopy.dither) material.defines = { CANOPY_DITHER: '' }
   patchMaterial(material, 'world-terrain-v3', shader => {
     Object.assign(shader.uniforms, uniforms, shared, fragmentUniforms)
     shader.vertexShader = `${NOISE_GLSL}\n${TERRAIN_GLSL}\n${VERTEX_HEAD}\n${shader.vertexShader}`
