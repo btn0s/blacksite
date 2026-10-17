@@ -610,6 +610,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
       const bookmark = pose && route.bookmarks.find(entry => entry.position.every((value, index) => value === pose.position[index]) && entry.target.every((value, index) => value === pose.target[index]) && entry.fov === pose.fov)
       if (bookmark && posedBookmark !== bookmark.name) {
         idle()
+        if (shared.race.current.state !== 'ready') api.restart()
         api.respawn(bookmark.stand, bookmark.yaw)
         posedBookmark = bookmark.name
       } else if (!pose) posedBookmark = null

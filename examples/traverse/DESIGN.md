@@ -86,7 +86,7 @@ The contact probe measures the final rendered foot against an independent physic
 | Phone | 60 fps sustained, main-thread p95 ≤ 16.7 ms, half the ash, low look tier, pixel ratio ≤ 1.25, 1024 shadow map |
 | Hitch | no frame over 33 ms after first playable |
 | First playable | under 5 s |
-| Sound | ≤ 32 voices desktop, 16 phone; one-shots have at least 4 variants, ±5% pitch, ±1.5 dB, no back-to-back repeat. Musical chimes preserve their melody with zero pitch jitter and four tuned voicings: plain, upper octave, lower octave and fifth. The graph, impulse responses and recordings are prepared during loading; an early gesture resumes a silent mixer until the recorded outdoor bed is registered. |
+| Sound | ≤ 32 voices desktop, 16 phone; one-shots have at least 4 variants, ±5% pitch, ±1.5 dB, no back-to-back repeat. Musical chimes preserve their melody with zero pitch jitter and four tuned voicings: plain, upper octave, lower octave and fifth. The graph, impulse responses, every zone's reverb and the recordings are prepared during loading, and chimes share the effects bus so no reverb is built mid-run; an early gesture resumes a silent mixer until the recorded outdoor bed is registered. |
 | JavaScript | every chunk under 4 MB (rapier, three, ALS and vendor split) |
 | Draw calls | ≤ 180 desktop, ≤ 120 phone |
 | Shadowed lights | 1 (the sun) |

@@ -328,7 +328,7 @@ export function buildRoute() {
     { name: 'boiler-yard', position: [64, 3.6, 5.5], target: [78, 1.4, -5], fov: 55, stand: [69, 0, -1], yaw: 0 },
     { name: 'stairwell', position: [inner.x0 + 0.5, 3.4, inner.z1 - 0.4], target: [inner.x1 - 1, 1.2, inner.z0 + 1], fov: 62, stand: [flightStartX + 1.2, 0.7, -5.2], yaw: 0 },
     { name: 'rooftop', position: [104.6, 8.2, 3.2], target: [118, 5.4, -6], fov: 55, stand: [107, roof, -3], yaw: 0 },
-    { name: 'finish', position: [143, 3.4, 6], target: [finishX, 3, -1], fov: 55, stand: [150, 0, -2], yaw: 0 },
+    { name: 'finish', position: [143, 3.4, 6], target: [finishX, 3, -1], fov: 55, stand: [dockTop[0] + 10, 0, -2], yaw: 0 },
     { name: 'hero', position: [36.6, 2.2, 1.6], target: [39.6, 1.3, -1.4], fov: 50, stand: [39.6, 0, -0.2], yaw: -Math.PI / 2 },
   ]
 

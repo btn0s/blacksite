@@ -87,7 +87,7 @@ const note = (frequency: number, gain: number, duration: number, offset: number)
 
 function chime(notes: readonly number[], gap: number): CueDefinition {
   return {
-    class: 'ui', bus: 'ui', pitchJitter: 0, volumeJitterDb: 1.5, gain: 0.5,
+    class: 'ui', bus: 'sfx', pitchJitter: 0, volumeJitterDb: 1.5, gain: 0.5,
     variants: [
       { id: 'plain', interval: 0 },
       { id: 'upper-octave', interval: 12 },
@@ -184,8 +184,9 @@ export class TraverseAudio {
     mixer.registerCue('traverse.tarp', emitter('tarp', 0.4, 3, 45))
     mixer.registerCue('traverse.buzz', emitter('buzz', 0.12, 1.2, 25))
     mixer.registerCue('traverse.steam', emitter('steam', 0.15, 1.2, 24))
-    mixer.setZone('outdoor')
     mixer.prepare()
+    for (const zone of [...new Set(Object.values(zoneFor))]) mixer.setZone(zone)
+    mixer.setZone(zoneFor[this.zone])
     this.preparation = this.prepareRecordings()
     return this.preparation
   }
