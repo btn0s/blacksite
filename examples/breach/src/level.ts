@@ -741,7 +741,8 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     const a = Math.pow(Math.max(0, 1 - Math.abs(u - 0.5) * 2), 1.5) * (0.25 + 0.75 * smooth(0.3, 0.75, fbm(u * 3, v * 4, 0, 4)))
     return [1, 1, 1, a]
   }, { repeat: true }))
-  const atlas = own(texture(256, 256, (u, v) => {
+  const atlasSize = options.phone || options.quality === 'low' ? 128 : 256
+  const atlas = own(texture(atlasSize, atlasSize, (u, v) => {
     const cx = u < 0.5 ? 0 : 1, cy = v < 0.5 ? 0 : 1
     const x = (u - cx * 0.5) * 2, y = (v - cy * 0.5) * 2
     const n = fbm(x * 4 + cx * 17, y * 4 + cy * 31)

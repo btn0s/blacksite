@@ -2,7 +2,7 @@ import { createAudioLog, type AudioSample } from '@blacksite/check'
 import { STARTER_CUES, createSoundscape, type AudioLogLike, type CueDefinition, type SoundLayer, type Soundscape, type Surface, type Vec3, type VoiceHandle } from '@blacksite/soundscape'
 import { clearLine } from './geometry'
 import { PRACTICALS, type Footing, type Hit } from './layout'
-import { ACOUSTICS, AI, BUDGET, WEAPONS, sabine, type RoomId } from './model'
+import { ACOUSTICS, AI, BUDGET, PHONE_TAIL_SCALE, WEAPONS, sabine, type RoomId } from './model'
 
 export type Listener = { x: number; y: number; z: number; yaw: number }
 
@@ -90,9 +90,9 @@ function normalization(buffer: AudioBuffer) {
   return 0.00125 / Math.max(0.000125, Math.sqrt(power / (buffer.numberOfChannels * buffer.length))) * 44100 / buffer.sampleRate
 }
 
-function impulse(audio: BaseAudioContext, room: RoomId) {
+function impulse(audio: BaseAudioContext, room: RoomId, tailScale: number) {
   const acoustics = ACOUSTICS[room]
-  const tail = Math.min(3.2, sabine(acoustics))
+  const tail = Math.min(3.2, sabine(acoustics)) * tailScale
   const rate = audio.sampleRate
   const pre = Math.round(acoustics.predelay * rate)
   const slap = Math.round(SLAP * rate)
@@ -104,11 +104,13 @@ function impulse(audio: BaseAudioContext, room: RoomId) {
   for (let channel = 0; channel < 2; channel++) {
     const data = buffer.getChannelData(channel)
     let smooth = 0
-    for (let index = pre; index < Math.min(length, pre + Math.round(tail * rate)); index++) {
+    let envelope = 1
+    const fall = Math.exp(-k / rate)
+    for (let index = pre; index < Math.min(length, pre + Math.round(tail * rate)); index++, envelope *= fall) {
       const t = (index - pre) / rate
       const damp = 0.85 * (t / tail)
       smooth += (Math.random() * 2 - 1 - smooth) * (1 - damp)
-      data[index] = smooth * Math.exp(-k * t) * (t < 0.004 ? t / 0.004 : 1)
+      data[index] = smooth * envelope * (t < 0.004 ? t / 0.004 : 1)
     }
     if (acoustics.volume) for (let tap = 1; tap <= 6; tap++) {
       const at = pre + Math.round(tap * size * 0.0029 * (1 + channel * 0.13 + Math.random() * 0.3) * rate)
@@ -131,10 +133,13 @@ function brown(audio: BaseAudioContext, seconds = 3, gust = false) {
   const buffer = audio.createBuffer(1, audio.sampleRate * seconds, audio.sampleRate)
   const data = buffer.getChannelData(0)
   let walk = 0
+  let swell = 1
   for (let index = 0; index < data.length; index++) {
     walk = (walk + 0.02 * (Math.random() * 2 - 1)) / 1.02
-    const t = index / audio.sampleRate
-    const swell = gust ? 0.7 + 0.16 * Math.sin(t * 0.11 * Math.PI * 2) + 0.14 * Math.sin(t * 0.173 * Math.PI * 2 + 0.7) : 1
+    if (gust && (index & 255) === 0) {
+      const t = index / audio.sampleRate
+      swell = 0.7 + 0.16 * Math.sin(t * 0.11 * Math.PI * 2) + 0.14 * Math.sin(t * 0.173 * Math.PI * 2 + 0.7)
+    }
     data[index] = walk * 3.5 * swell
   }
   const fade = Math.round(audio.sampleRate * 0.05)
@@ -391,7 +396,7 @@ export function createBreachAudio(): BreachAudio {
     for (const [name, definition] of Object.entries(cues(audio))) sound.registerCue(name, definition)
     barkName(0, 3, 0.39)
     for (const id of ROOM_IDS) {
-      const { buffer, wet } = impulse(audio, id)
+      const { buffer, wet } = impulse(audio, id, phone ? PHONE_TAIL_SCALE : 1)
       sound.registerZone({
         name: id, impulse: buffer, wet, crossfade: 0.8,
         beds: [outdoor(id) ? 'breach.wind' : 'breach.room'],

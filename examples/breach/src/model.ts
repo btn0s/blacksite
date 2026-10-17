@@ -179,6 +179,7 @@ export const ACOUSTICS: Record<RoomId, Acoustics> = {
 }
 
 export const OUTDOOR_TAIL = 0.6
+export const PHONE_TAIL_SCALE = 0.7
 
 export function sabine(acoustics: Acoustics) {
   if (!acoustics.volume) return OUTDOOR_TAIL
@@ -204,8 +205,16 @@ export const FEEDBACK = {
 }
 
 export const PRESENTATION = {
-  animationInterval: { desktop: 2, phone: 3, hidden: 60 },
+  animationInterval: { desktop: [2, 2, 3], phone: [3, 4, 6], hidden: 60 },
+  animationBands: [10, 20] as const,
+  ragdolls: { desktop: 3, phone: 1 },
   physicsHz: { desktop: 60, phone: 30 },
+}
+
+export function animationInterval(tier: 'desktop' | 'phone', distance: number, visible: boolean) {
+  if (!visible) return PRESENTATION.animationInterval.hidden
+  const band = PRESENTATION.animationBands.findIndex(limit => distance < limit)
+  return PRESENTATION.animationInterval[tier][band < 0 ? 2 : band]!
 }
 
 export const BUDGET = {

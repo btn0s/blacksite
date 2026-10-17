@@ -84,6 +84,13 @@ function dress(root: THREE.Object3D) {
     if (!(object instanceof THREE.Mesh)) return
     meshes++
     object.castShadow = true
+    if (object instanceof THREE.SkinnedMesh) {
+      object.frustumCulled = false
+      if (!object.boundingSphere) {
+        if (!object.geometry.boundingSphere) object.geometry.computeBoundingSphere()
+        object.boundingSphere = object.geometry.boundingSphere!.clone()
+      }
+    }
     object.material = Array.isArray(object.material) ? object.material.map(paint) : paint(object.material)
   })
   return meshes

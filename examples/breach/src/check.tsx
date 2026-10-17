@@ -25,20 +25,33 @@ const bookmarks: Bookmark[] = BOOKMARKS.map(mark => ({ ...mark, position: [...ma
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 const HALL_DOOR: [number, number, number] = [0.2, 0, -5.9]
 
-async function warm(gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
-  const hidden: THREE.Object3D[] = []
-  scene.traverse(object => { if (!object.visible) { hidden.push(object); object.visible = true } })
-  try { await gl.compileAsync(scene, camera) } catch { gl.compile(scene, camera) }
-  for (const object of hidden) object.visible = false
+function reveal(scenes: THREE.Object3D[]) {
+  const shown = new Set<THREE.Object3D>()
+  const dimmed: THREE.Light[] = []
+  for (const scene of scenes) scene.traverse(object => { if (!object.visible && !(object instanceof THREE.Light)) { shown.add(object); object.visible = true } })
+  for (const scene of scenes) scene.traverse(object => {
+    if (!(object instanceof THREE.Light) || !object.visible) return
+    for (let parent = object.parent; parent; parent = parent.parent) if (shown.has(parent)) { dimmed.push(object); object.visible = false; break }
+  })
+  return () => {
+    for (const object of shown) object.visible = false
+    for (const light of dimmed) light.visible = true
+  }
 }
 
-export function CheckProbe({ driver, audio, ready }: { driver: Controls; audio: BreachAudio; ready: boolean }) {
+async function warm(gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
+  const restore = reveal([scene])
+  try { await gl.compileAsync(scene, camera) } catch { gl.compile(scene, camera) }
+  restore()
+}
+
+export function CheckProbe({ driver, audio, ready, overlay, onWarmed }: { driver: Controls; audio: BreachAudio; ready: boolean; overlay: { scene: THREE.Scene; camera: THREE.Camera } | null; onWarmed: () => void }) {
   const camera = useThree(state => state.camera)
   const size = useThree(state => state.size)
   const gl = useThree(state => state.gl)
   const scene = useThree(state => state.scene)
   const override = useRef<CameraPose | null>(null)
-  const state = useRef({ warming: false, warmed: false, frames: 0 })
+  const state = useRef({ phase: 'idle' as 'idle' | 'compiling' | 'reveal' | 'restore' | 'done', restore: null as (() => void) | null, frames: 0 })
   const check = useMemo(() => exposeCheck({
     bookmarks,
     camera(next) { override.current = next; driver.override(next) },
@@ -92,12 +105,23 @@ export function CheckProbe({ driver, audio, ready }: { driver: Controls; audio: 
   useEffect(() => check.dispose, [check])
   useFrame(() => {
     const local = state.current
-    if (ready && !local.warming) {
-      local.warming = true
-      void warm(gl, scene, camera).then(() => { local.warmed = true })
+    if (ready && local.phase === 'idle') {
+      local.phase = 'compiling'
+      void warm(gl, scene, camera).then(() => overlay ? warm(gl, overlay.scene, overlay.camera) : undefined).then(() => { local.phase = 'reveal' })
     }
-    if (local.warmed && !check.probe.ready && ++local.frames > 3) check.ready()
+    if (local.phase === 'reveal') {
+      local.restore = reveal(overlay ? [scene, overlay.scene] : [scene])
+      local.phase = 'restore'
+    }
+    if (local.phase === 'done' && !check.probe.ready && ++local.frames > 3) { check.ready(); onWarmed() }
     if (override.current) applyCameraPose(camera as Parameters<typeof applyCameraPose>[0], override.current, size)
   }, 0.9)
+  useFrame(() => {
+    const local = state.current
+    if (local.phase !== 'restore') return
+    local.restore?.()
+    local.restore = null
+    local.phase = 'done'
+  }, 1.5)
   return null
 }

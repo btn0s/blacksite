@@ -87,6 +87,8 @@ export function createEffects(scene: THREE.Scene) {
     mesh.renderOrder = 2
     mesh.receiveShadow = true
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3).fill(1), 3)
+    mesh.instanceColor.setUsage(THREE.DynamicDrawUsage)
     root.add(mesh)
     return [kind, { mesh, next: 0, capacity: count }]
   })) as unknown as Record<Decal, { mesh: THREE.InstancedMesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>; next: number; capacity: number }>
