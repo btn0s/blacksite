@@ -1,6 +1,6 @@
 # Shipped asset audit
 
-Checked 16 October 2026. 101 tracked files, 21,675,061 bytes. Exact SHA-256 values, evidence and recommendations: [audit.json](audit.json).
+Checked 16 October 2026. 92 tracked files, 21,233,151 bytes. Exact SHA-256 values, evidence and recommendations: [audit.json](audit.json).
 
 All tracked binary files plus text SVG/LUT/animation data. ALS excluded entirely by owner instruction. Dependencies, build output, caches and gitignored files excluded. No assets removed.
 
@@ -104,15 +104,6 @@ The inventory includes software archives for completeness. It adds text LUTs, SV
 | `site/public/thumbs/destruction.webp` | 41704 | Site showcase captures (declared in site/public/CREDITS.md) | FSL-1.1-ALv2 (repository notice; no separate image grant found) |
 | `site/public/thumbs/hero.webp` | 88712 | Site showcase captures (declared in site/public/CREDITS.md) | FSL-1.1-ALv2 (repository notice; no separate image grant found) |
 | `site/public/thumbs/multiplayer.webp` | 36136 | Site showcase captures (declared in site/public/CREDITS.md) | FSL-1.1-ALv2 (repository notice; no separate image grant found) |
-| `site/public/thumbs/weapons.webp` | 101946 | Site showcase captures (declared in site/public/CREDITS.md) | FSL-1.1-ALv2 (repository notice; no separate image grant found) |
-| `site/src/showcases/firing-range/textures/canvas_c.webp` | 57444 | [Fabric045](https://ambientcg.com/a/Fabric045) | CC0-1.0 |
-| `site/src/showcases/firing-range/textures/canvas_n.webp` | 110742 | [Fabric045](https://ambientcg.com/a/Fabric045) | CC0-1.0 |
-| `site/src/showcases/firing-range/textures/osb_c.webp` | 38106 | [Chipboard005](https://ambientcg.com/a/Chipboard005) | CC0-1.0 |
-| `site/src/showcases/firing-range/textures/osb_n.webp` | 18134 | [Chipboard005](https://ambientcg.com/a/Chipboard005) | CC0-1.0 |
-| `site/src/showcases/firing-range/textures/planks_c.webp` | 26046 | [Planks037A](https://ambientcg.com/a/Planks037A) | CC0-1.0 |
-| `site/src/showcases/firing-range/textures/planks_n.webp` | 12314 | [Planks037A](https://ambientcg.com/a/Planks037A) | CC0-1.0 |
-| `site/src/showcases/firing-range/textures/plate_c.webp` | 67908 | [PaintedMetal005](https://ambientcg.com/a/PaintedMetal005) | CC0-1.0 |
-| `site/src/showcases/firing-range/textures/plate_n.webp` | 9270 | [PaintedMetal005](https://ambientcg.com/a/PaintedMetal005) | CC0-1.0 |
 | `vendor/rapier/rapier3d-0.30.1.crate` | 257358 | vendor/rapier/build.mjs; https://github.com/dimforge/rapier.js; https://github.com/dimforge/rapier | Apache-2.0 upstream; local archive notices not exhaustively audited |
 | `vendor/rapier/rapier3d-compat-0.19.2-rupture.3.tgz` | 2514195 | vendor/rapier/build.mjs; https://github.com/dimforge/rapier.js; https://github.com/dimforge/rapier | Apache-2.0 upstream; local archive notices not exhaustively audited |
 | `vendor/rapier/rapier3d-compat-0.19.2-rupture.4.tgz` | 2520675 | vendor/rapier/build.mjs; https://github.com/dimforge/rapier.js; https://github.com/dimforge/rapier | Apache-2.0 upstream; local archive notices not exhaustively audited |

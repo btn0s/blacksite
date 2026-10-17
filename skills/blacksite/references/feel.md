@@ -19,7 +19,6 @@ Movement, camera, aim and controls: the numbers shipped character systems use, a
 | Mantle | Ledges 0.5–2.25 m from the ground, 0.5–1.5 m in the air | ALS |
 | Physics step | Fixed 1/60 s | Every template |
 | Template walker | 1.75 m/s walk, 3.75 run, 6.5 sprint, 0.25 s to top speed, 0.9 m apex | `src/game/model.ts` |
-| Firing range | 3.1 m/s walk, 5.2 sprint, 1.8 aiming | Firing Range |
 
 Players expect **coyote time** (0.1 s after leaving a ledge) and a **jump buffer** (0.1 s before landing); the template's motor has both, the ALS character and Subject don't. Add a camera dip on landing (below); the walker already plays the landing sound. The standalone first-person subject has no gravity, collision or jump, which is why the `fpp` template puts it on the walker.
 
@@ -29,7 +28,7 @@ Players expect **coyote time** (0.1 s after leaving a ledge) and a **jump buffer
 |---|---|
 | First-person eye height | 1.63 m standing, 1.0 m crouched, smoothed at exp(−20·dt) |
 | World FOV, first person | 75° (35–110 allowed), Arena uses 88° on desktop |
-| Aim FOV | 58° default; rifle 50°, pistol 60° in the Firing Range |
+| Aim FOV | 58° default; rifle 50°, pistol 60° in `VIEWMODEL_WEAPONS` |
 | FOV | Hip to aim on the ADS curve, plus sprint and punch springs; summed in horizontal degrees at 16:9, then converted to vertical |
 | Viewmodel FOV | 56°, in its own pass |
 | Near plane | 0.05 m world, 0.005 m viewmodel (see `craft.md` for the depth-buffer case for 0.1 m) |
@@ -57,7 +56,7 @@ From Breach and Traverse (`examples/*/src/model.ts`).
 
 ## Camera and weapon motion
 
-Every number below is in `@blacksite/subject-fpp/feel` (`CAMERA_FEEL`, `GUN_FEEL`, `RECOIL_TUNING`). Breach, the Firing Range and the `fpp` template all use it: `createCameraFeel` for the eye, `createAimRecoil` for the view's recoil, and the arms runtimes for the viewmodel. Springs are exact (closed form, frame-rate independent), written as frequency in Hz and damping ratio.
+Every number below is in `@blacksite/subject-fpp/feel` (`CAMERA_FEEL`, `GUN_FEEL`, `RECOIL_TUNING`). Breach and the `fpp` template both use it: `createCameraFeel` for the eye, `createAimRecoil` for the view's recoil, and the arms runtimes for the viewmodel. Springs are exact (closed form, frame-rate independent), written as frequency in Hz and damping ratio.
 
 | Motion | Value |
 |---|---|
@@ -93,7 +92,7 @@ Every number below is in `@blacksite/subject-fpp/feel` (`CAMERA_FEEL`, `GUN_FEEL
 - **Send gait, not speed.** Characters looked like they were in slow or fast motion because the bridge passed `desiredSpeed: 300/600`, values in cm/s, to an API in m/s and left out gait. At a real 3.75 m/s the graph picked Walking and played the walk at 2.5× instead of the run at 1.07×. The clocks were already correct, so no time multiplier was added. Send `desiredGait` (`Walking`, `Running`, `Sprinting`) and let the character pick its authored speed.
 - **Prove locomotion by foot slip.** A test actor moved at zero velocity advanced its animation clock for 3.8 s while its stride phase never changed and its foot slid over 10 m. Bound planted-foot slip instead: 3 cm per plant. Measured slip was 0.83 cm walking, 1.03 cm running and 1.78 cm sprinting.
 - **Scale look while aiming.** Multiply look sensitivity by tan(aim FOV ÷ 2) ÷ tan(hip FOV ÷ 2) so the crosshair moves the same distance on screen.
-- **Recoil comes back.** The Firing Range kept 96% of a burst's climb a second after release, and Breach kept 39%, because a fixed fraction of every kick was never recovered. With every kick returning, both keep about 10% at 1 s, and the player pulls down only during the burst.
+- **Recoil comes back.** Breach kept 39% of a burst's climb a second after release, because a fixed fraction of every kick was never recovered. With every kick returning, it keeps about 10% at 1 s, and the player pulls down only during the burst.
 - **The camera barely moves; the arms do.** Breach's first-person landing dropped the eye 37 mm, which read as a stumble. The eye now moves about 2 mm and the viewmodel drops instead. The same goes for firing: the old springs threw the rear sight 36 mm toward the eye on every shot, and now it moves 7 mm.
 - **Measure the sight, not the holder.** A found rig's holder transform includes compensation for its authored fire clip, so it reported motion the player never saw. The capture records the rear sight in camera space.
 - **Pointer lock is optional.** Phones threw `WrongDocumentError` from an unconditional lock request, and nothing could drive a player without it, which blocked touch and Arena's bot. Skip lock on touch, catch a refused request, and give every controllable character a virtual input path (`setVirtual`, `keySubject`, `lookSubject`).

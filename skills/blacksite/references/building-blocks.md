@@ -36,7 +36,7 @@ An animated player body that walks, runs, sprints, crouches, mantles, rolls, rag
 
 ALS ships its own agent guide; read it instead of guessing. It's at `vendor/als-web/docs/guide/` in Blacksite, or `vendor/blacksite/vendor/als-web/docs/guide/` in a generated game. Start with `overview.md` (who owns what, frame order, units, the input contract), then the recipe for the task in `recipes/` (local, camera, weapon, montage, actions, remote, fpp-arms, foot-ik, lifecycle, performance), with `api.md` for imports and `gotchas.md` for symptoms.
 
-Other guides: `docs/arms.md` (the first-person arms viewmodel and its `public/assets/arms.json` manifest), `docs/player-templates.md` (what each scaffold profile mounts), `packages/subject/AGENTS.md`, `packages/subject-fpp/AGENTS.md`. Working examples: `site/src/showcases/characters/` (Checkpoint, third person with the check contract), `firing-range/` (first person), `multiplayer/` (Subject, both views), `squad/soldiers.tsx` (remote actors).
+Other guides: `docs/arms.md` (the first-person arms viewmodel and its `public/assets/arms.json` manifest), `docs/player-templates.md` (what each scaffold profile mounts), `packages/subject/AGENTS.md`, `packages/subject-fpp/AGENTS.md`. Working examples: `site/src/showcases/characters/` (Checkpoint, third person with the check contract), `multiplayer/` (Subject, both views), `squad/soldiers.tsx` (remote actors), and `examples/breach/` (first person).
 
 - Wrap the scene in `<Physics gravity={[0, -9.8, 0]} timeStep={1/60} updatePriority={ALS_FRAME_PRIORITY.Physics}>`.
 - Preload the character with `preloadAlsCharacterGltf` behind the loading screen.
@@ -56,7 +56,7 @@ What isn't there yet:
 
 ## Weapons (Armory)
 
-Armory (`@blacksite/armory`) is a deterministic weapon simulation: fire modes, cadence, magazines, reloads, equips, spread, recoil and hitscan or ballistic projectiles. It renders nothing and sends nothing; the game feeds it aim and collision queries and turns its events into presentation. Guides: `packages/armory/AGENTS.md` (the contract), `docs/arms.md` (the arms viewmodel), `site/src/showcases/firing-range/` (the complete reference, with recoil, arms, impacts, steel targets and synthesized audio), `templates/prototype-kits/fpp/mode.tsx` (the smallest integration), `packages/relay/src/index.ts` (Armory on the server for multiplayer hits).
+Armory (`@blacksite/armory`) is a deterministic weapon simulation: fire modes, cadence, magazines, reloads, equips, spread, recoil and hitscan or ballistic projectiles. It renders nothing and sends nothing; the game feeds it aim and collision queries and turns its events into presentation. Guides: `packages/armory/AGENTS.md` (the contract), `docs/arms.md` (the arms viewmodel), `examples/breach/` (the complete reference, with recoil, arms, impacts and synthesized audio), `templates/prototype-kits/fpp/mode.tsx` (the smallest integration), `packages/relay/src/index.ts` (Armory on the server for multiplayer hits).
 
 - One runtime per owner: `createWeaponRuntime({ ownerId, seed, definitions: ALS_WEAPONS })`.
 - Step it from a fixed-step accumulator, clamped to 0.1 s: `weapon.step({ tick, trigger, reload, selectWeaponId, aim, muzzle }, queries)` while the accumulator holds a full `fixedDeltaSeconds` (1/60).
@@ -72,7 +72,7 @@ What isn't there yet:
 
 - No damage falloff, hit zones, headshots, armour or penetration: damage is flat on any hit.
 - No melee, grenades or throwables.
-- Aiming changes nothing in Armory unless the definition's `spread` says so; the Firing Range scales kick by 0.7 and narrows the FOV in game code.
+- Aiming changes nothing in Armory unless the definition's `spread` says so; scale the kick and narrow the FOV in game code.
 - The arms animate the rifle and pistol only. The bow's projectile path is untested in a shipped scene.
 - The `fpp` template answers Armory's queries with Rapier rays (a sphere sweep is approximated by its centre ray), excluding the player's capsule. Give targets their own colliders and map `colliderId` to them.
 - No lag compensation on the server (`multiplayer.md`).
@@ -150,7 +150,7 @@ What isn't there yet:
 Use `@blacksite/look` on every game: `<Look atmosphere="zone" quality={tier} environment sun={sun} fill={fill} />` in React Three Fiber, or `createLook(renderer, scene, camera, …)` and `look.render(dt)` in plain three. It brings HDR, half-resolution AO, bloom, a grade with a shoulder tonemap and a LUT, vignette, aberration and grain. Pass your own sun and hemisphere lights so the atmosphere drives their colour. Guides: `packages/look/README.md` and `packages/look/AGENTS.md` (the `Atmosphere` data, the presets, the sky, the quality tiers and the overlay).
 
 - **Exposure:** change it with an atmosphere of your own, `{ ...ZONE, exposure: 1.22 }`. Never set `renderer.toneMapping` or `toneMappingExposure`.
-- **Viewmodels go through the overlay.** `look.addOverlay(scene, camera)` or `<Look overlay>` replaced Arena's post-composer arms pass and the Firing Range's hand-inserted composer pass. `ArmsViewmodel render="external"` hands its presentation to the look, and `MultiplayerScene` passes it out through `onArmsPresentation`. The overlay runs after AO and before bloom with depth cleared, so the arms get the world's grade and never clip.
+- **Viewmodels go through the overlay.** `look.addOverlay(scene, camera)` or `<Look overlay>` replaced Arena's post-composer arms pass and hand-inserted composer passes. `ArmsViewmodel render="external"` hands its presentation to the look, and `MultiplayerScene` passes it out through `onArmsPresentation`. The overlay runs after AO and before bloom with depth cleared, so the arms get the world's grade and never clip.
 - **Antialiasing comes from the composer's MSAA**, not the canvas. Create the canvas with `antialias: false`.
 - **Quality:** `autoQuality()` picks the tier (`performance.md`); `internalPixelRatio()` from `@blacksite/look/world` applies the pixel-ratio cap. `depthDefaults(tier)` gives the near plane per tier; `logarithmic: true` for a far plane past 1 km.
 - **Shadows:** the world kit's `createAtmosphere` makes the one texel-snapped shadow frustum that follows the player.

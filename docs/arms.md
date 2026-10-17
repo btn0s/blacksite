@@ -58,7 +58,7 @@ A replacement set must keep the same licence bar and declare the same fields; me
 
 The authoritative model is `packages/subject-fpp/src/viewmodel/model.ts`; the short action curves are in `clips.ts`. Their public exports are `VIEWMODEL`, `VIEWMODEL_WEAPONS`, `VIEWMODEL_CLIPS` and `switchSeconds(to, from)`. These are Blacksite tuning values, not measurements claimed from a commercial title.
 
-Armory's older `ALS_WEAPONS` equip timings are shorter than the procedural holster-plus-equip animation. When using `rig="blacksite"`, derive the weapon definitions from the same curves; the FPP template and Firing Range demonstrate this migration. For definitions that have one equip duration per destination, use the longer of the two source weapons:
+Armory's older `ALS_WEAPONS` equip timings are shorter than the procedural holster-plus-equip animation. When using `rig="blacksite"`, derive the weapon definitions from the same curves; the FPP template demonstrates this migration. For definitions that have one equip duration per destination, use the longer of the two source weapons:
 
 ```ts
 const definitions = ALS_WEAPONS.map(weapon =>
@@ -90,7 +90,7 @@ Apply these definitions on the authoritative simulation as well as the client. S
 | Inspect | Two inspection angles, reversible interruption and support-hand release |
 | Land | A capped spring impulse proportional to impact speed |
 
-For any rig, the minimum visual parts are two skinned forearms with sleeves, two gloves, ten independently articulated fingers, two weapons, two detachable magazines, and a moving charging handle or slide on each weapon. Rifle and pistol have their own sight, wrist targets, elbow poles, grip poses and action curves. The Firing Range is the playable reference for all these states.
+For any rig, the minimum visual parts are two skinned forearms with sleeves, two gloves, ten independently articulated fingers, two weapons, two detachable magazines, and a moving charging handle or slide on each weapon. Rifle and pistol have their own sight, wrist targets, elbow poles, grip poses and action curves.
 
 The rifle calibration centres the front blade and pitches the model to retain a visible sight picture; the pistol uses its rear-sight target. Sight distances in the model are measured to those chosen points.
 
@@ -141,7 +141,7 @@ Owned-pack installation belongs in the user's game, through `blacksite assets se
 
 ## Verification
 
-Run the Firing Range capture harness and the standard `blacksite check` desktop and phone profiles. The capture harness pauses the animation clock and advances exact frame steps to expose the complete reload and equip, including handoffs. Its report includes model timings and contact residuals. Compare screenshots as well: zero wrist-target error cannot prove that a finger bends correctly or that a magazine is inside the hand.
+Run the standard `blacksite check` desktop and phone profiles. Compare screenshots as well: zero wrist-target error cannot prove that a finger bends correctly or that a magazine is inside the hand.
 
 Read the 1× view for framing and the 4× view for wrist deformation, finger placement, clipping, magazine contact and state transitions. Runtime tests cover the numerical model and the rig; a playtest still decides whether recoil, action weight and touch aiming feel right.
 

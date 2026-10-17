@@ -143,7 +143,6 @@ export const featured = [
   { showcase: 'breach', kind: 'First-person shooter' },
   { showcase: 'traverse', kind: 'Third-person action' },
   { showcase: 'valley', kind: 'Open world' },
-  { showcase: 'firing-range', kind: 'Weapons demo' },
 ]
 
 export const limits = [

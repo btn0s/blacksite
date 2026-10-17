@@ -220,6 +220,9 @@ importers:
       '@blacksite/check':
         specifier: workspace:*
         version: link:../../packages/check
+      '@blacksite/input':
+        specifier: workspace:*
+        version: link:../../packages/input
       '@blacksite/look':
         specifier: workspace:*
         version: link:../../packages/look
@@ -853,6 +856,15 @@ importers:
 
   packages/subject-fpp:
     dependencies:
+      '@blacksite/armory':
+        specifier: workspace:*
+        version: link:../armory
+      '@blacksite/input':
+        specifier: workspace:*
+        version: link:../input
+      '@blacksite/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@react-three/fiber':
         specifier: ^9.8.2
         version: 9.8.2(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(three@0.186.1)

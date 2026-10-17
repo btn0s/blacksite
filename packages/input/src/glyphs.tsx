@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import type { InputDevice } from "./actions"
 import { useInputSource } from "./provider"
 
 export type GamepadLayout = "xbox" | "playstation" | "generic"
@@ -19,15 +20,19 @@ export interface GlyphSpec {
 export type GlyphMap = Readonly<Record<string, GlyphSpec>>
 export type GlyphRenderer = (glyph: string, label: string) => ReactNode
 
+export function glyphText(spec: GlyphSpec, device: InputDevice, layout: GamepadLayout): string {
+  return device === "gamepad"
+    ? spec.gamepad?.[layout] ?? spec.gamepad?.generic ?? spec.label
+    : device === "mouse" ? spec.mouse ?? spec.keyboard ?? spec.label
+    : device === "touch" ? spec.touch ?? spec.label
+    : spec.keyboard ?? spec.label
+}
+
 export function Glyph({ action, glyphs, render }: { action: string; glyphs: GlyphMap; render?: GlyphRenderer }) {
   const { device, gamepadLayout } = useInputSource()
   const spec = glyphs[action]
   if (!spec) return <kbd aria-label={action}>{action}</kbd>
-  const glyph = device === "gamepad"
-    ? spec.gamepad?.[gamepadLayout] ?? spec.gamepad?.generic ?? spec.label
-    : device === "mouse" ? spec.mouse ?? spec.keyboard ?? spec.label
-    : device === "touch" ? spec.touch ?? spec.label
-    : spec.keyboard ?? spec.label
+  const glyph = glyphText(spec, device, gamepadLayout)
   return <span role="img" aria-label={spec.label} title={spec.label}>{render?.(glyph, spec.label) ?? <kbd>{glyph}</kbd>}</span>
 }
 

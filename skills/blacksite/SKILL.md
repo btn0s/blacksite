@@ -167,7 +167,7 @@ Flagship games in `examples/`, each built only on public packages. Read the one 
 | Blackout | Horror | Lighting, sound, atmosphere | Coming |
 | Arena | Multiplayer | Netcode that feels local | Coming |
 
-The site's showcases are smaller proofs of one block each: Checkpoint (characters), Firing Range (weapons), Squad (AI), Air Strike (destruction) and Arena (multiplayer), in `site/src/showcases/`.
+The site's showcases are smaller proofs of one block each: Checkpoint (characters), Squad (AI), Air Strike (destruction) and Arena (multiplayer), in `site/src/showcases/`.
 
 ## Rules
 

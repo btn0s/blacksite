@@ -53,3 +53,9 @@ canvas { display: block; touch-action: none; image-rendering: pixelated; filter:
   .hud-hints { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .hud-grain { animation: none; } }
+.hud-menu { position: absolute; z-index: 12; left: 50%; top: 44%; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 10px; min-width: min(280px, 80vw); padding: 20px 28px; border: 1px solid #f0ecdb30; background: #0c0e0be0; text-shadow: 0 1px 10px #000c; }
+.hud-menu strong { font: 600 32px/1 'Barlow Condensed', sans-serif; letter-spacing: 0.12em; text-transform: uppercase; color: #f0ecdb; }
+.hud-menu span { font: 500 12px 'IBM Plex Mono', monospace; letter-spacing: 0.14em; text-transform: uppercase; color: #a9b57e; }
+.hud-menu div { display: grid; gap: 8px; width: 100%; margin-top: 4px; }
+.hud-menu button { min-height: 44px; padding: 6px 16px; border: 1px solid #f0ecdb50; border-radius: 3px; background: #0c0e0bb8; color: #f0ecdb; font: 600 15px 'Barlow Condensed', sans-serif; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.hud-menu button:hover, .hud-menu button[data-console-selected] { border-color: #e2a23b; background: #e2a23bd8; color: #1a1307; }

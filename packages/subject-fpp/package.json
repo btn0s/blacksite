@@ -4,13 +4,19 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/StandaloneSubject.tsx",
+    ".": "./src/index.ts",
     "./intent": "./src/intent.ts",
+    "./body": "./src/controller/body.ts",
+    "./collision": "./src/controller/collision.ts",
     "./arms": "./src/ArmsViewmodel.tsx",
     "./arms/model": "./src/arms/model.ts",
-    "./feel": "./src/feel/index.ts"
+    "./feel": "./src/feel/index.ts",
+    "./input": "./src/input.ts"
   },
   "dependencies": {
+    "@blacksite/armory": "workspace:*",
+    "@blacksite/input": "workspace:*",
+    "@blacksite/ui": "workspace:*",
     "@react-three/fiber": "^9.8.2",
     "react": "^19.3.1",
     "three": "^0.186.1",

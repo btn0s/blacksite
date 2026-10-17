@@ -32,6 +32,7 @@ export const FPP_BINDINGS: ReadonlyArray<Binding> = [
   ...hold('jump', key('Space'), pad(0)),
   ...press('reload', key('KeyR'), pad(2)),
   ...press('swap', key('KeyQ'), pad(3)),
+  ...press('inspect', key('KeyF'), pad(12)),
   ...press('primary', key('Digit1')),
   ...press('secondary', key('Digit2')),
 ]
@@ -50,6 +51,7 @@ export const FPP_GLYPHS: GlyphMap = {
   jump: { label: 'Jump', keyboard: 'Space', gamepad: { xbox: 'A', playstation: '✕', generic: 'A' } },
   reload: { label: 'Reload', keyboard: 'R', gamepad: { xbox: 'X', playstation: '□', generic: 'X' } },
   swap: { label: 'Swap', keyboard: 'Q', gamepad: { xbox: 'Y', playstation: '△', generic: 'Y' } },
+  inspect: { label: 'Inspect', keyboard: 'F', gamepad: { xbox: 'D-pad ↑', playstation: 'D-pad ↑', generic: 'D-pad ↑' } },
   pause: { label: 'Pause', keyboard: 'Esc', gamepad: { xbox: '☰', playstation: 'OPTIONS', generic: 'START' } },
 }
 

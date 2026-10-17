@@ -8,7 +8,7 @@ Showcases are small game scenes built only on public package exports, the way a 
 | --- | --- | --- | --- |
 | Characters | **Checkpoint**: the ALS character runs, vaults and ragdolls through a zone checkpoint. | `als-ue5-r3f` Character and Camera, `@blacksite/subject-fpp/arms` | Live |
 | Destruction | **Air Strike**: a Soviet apartment block takes a strike and collapses, seen from a safe vantage. | `@blacksite/cascade` session and renderer | Next |
-| Weapons | **Firing range** in the shared look. | `@blacksite/subject-fpp`, `@blacksite/armory` | The older firing range is embedded until then |
+| Weapons | **Breach**: a room-by-room fight through a ruined factory against a squad that flanks you. | `@blacksite/subject-fpp`, `@blacksite/armory`, `@blacksite/warden` | Live |
 | Multiplayer | **Arena** with the loopback split view. | `@blacksite/relay`, `@blacksite/subject` | The older arena is embedded until then |
 | AI | **Squad** clearing a courtyard. | `@blacksite/warden`, `@blacksite/warden-react` | The older squad view is embedded until then |
 | Input | None yet. | `@blacksite/input`, `@blacksite/ui` | — |

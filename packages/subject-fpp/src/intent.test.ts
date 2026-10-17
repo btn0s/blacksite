@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createEvaluator, type Binding, type Control, type DeviceSnapshot, type Vec2 } from '@blacksite/input'
 import { FPP_BINDINGS, PAD_LOOK, aimCandidates, fppInput, padLookDegrees } from './input'
-import { readStandaloneIntent } from './intent'
+import { readActionIntent } from './intent'
 
 function evaluate(bindings: ReadonlyArray<Binding>, read: (control: Control) => Vec2) {
   const devices: DeviceSnapshot = { value: read, impulse: () => null, device: control => control.device === 'gamepad' ? 'gamepad' : 'keyboard' }
@@ -19,7 +19,7 @@ const pad = (axes: number[], buttons: number[] = []) => (control: Control): Vec2
 describe('standalone subject intent', () => {
   it('normalizes diagonal keyboard movement and keeps jump held', () => {
     const { values } = evaluate(FPP_BINDINGS, keys('KeyW', 'KeyD', 'Space'))
-    const intent = readStandaloneIntent(values.get('move')!, action => Boolean(values.get(action)?.x || values.get(action)?.y))
+    const intent = readActionIntent(values.get('move')!, action => Boolean(values.get(action)?.x || values.get(action)?.y))
     expect(intent.forward).toBeCloseTo(Math.SQRT1_2)
     expect(intent.right).toBeCloseTo(Math.SQRT1_2)
     expect(intent.jump).toBe(true)
@@ -46,15 +46,15 @@ describe('standalone subject intent', () => {
   it('holds a clicked sprint until the stick drops or the player aims', () => {
     const latch = { sprint: true, crouch: false }
     const idle = () => false
-    expect(readStandaloneIntent({ x: 0, y: 1 }, idle, latch).sprint).toBe(true)
-    expect(readStandaloneIntent({ x: 0, y: 1 }, action => action === 'aim', latch).sprint).toBe(false)
+    expect(readActionIntent({ x: 0, y: 1 }, idle, latch).sprint).toBe(true)
+    expect(readActionIntent({ x: 0, y: 1 }, action => action === 'aim', latch).sprint).toBe(false)
     latch.sprint = true
-    expect(readStandaloneIntent({ x: 0, y: 0.1 }, idle, latch).sprint).toBe(false)
+    expect(readActionIntent({ x: 0, y: 0.1 }, idle, latch).sprint).toBe(false)
   })
 
   it('toggles crouch from the pad and holds it from the keyboard', () => {
-    expect(readStandaloneIntent({ x: 0, y: 0 }, () => false, { sprint: false, crouch: true }).crouch).toBe(true)
-    expect(readStandaloneIntent({ x: 0, y: 0 }, action => action === 'crouch', { sprint: false, crouch: false }).crouch).toBe(true)
+    expect(readActionIntent({ x: 0, y: 0 }, () => false, { sprint: false, crouch: true }).crouch).toBe(true)
+    expect(readActionIntent({ x: 0, y: 0 }, action => action === 'crouch', { sprint: false, crouch: false }).crouch).toBe(true)
   })
 })
 

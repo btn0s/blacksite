@@ -1,8 +1,8 @@
-export type StandaloneIntent = { forward: number; right: number; jump: boolean; sprint: boolean; crouch: boolean; walk: boolean; aim: boolean }
+export type ActionIntent = { forward: number; right: number; jump: boolean; sprint: boolean; crouch: boolean; walk: boolean; aim: boolean }
 
 export type IntentLatch = { sprint: boolean; crouch: boolean }
 
-export function readStandaloneIntent(move: { x: number; y: number }, held: (action: string) => boolean, latch: IntentLatch = { sprint: false, crouch: false }): StandaloneIntent {
+export function readActionIntent(move: { x: number; y: number }, held: (action: string) => boolean, latch: IntentLatch = { sprint: false, crouch: false }): ActionIntent {
   const length = Math.max(1, Math.hypot(move.x, move.y))
   const forward = move.y / length
   const aim = held('aim')
