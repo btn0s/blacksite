@@ -7,7 +7,7 @@ import { autoQuality, depthDefaults, type QualityTier } from '@blacksite/look'
 import { ALS_WEAPONS, createWeaponRuntime, type QueryHit, type WeaponEvent } from '@blacksite/armory'
 import { StandaloneSubject, createStandaloneRecoil, createStandaloneTouch, type StandaloneIntent } from '@blacksite/subject-fpp'
 import { ArmsViewmodel, FIELD_SET, VIEWMODEL, VIEWMODEL_CLIPS, VIEWMODEL_WEAPONS, createArmsState, foundTimings, portraitFov, switchSeconds, type ArmsPresentation, type ArmsRig, type ArmsState } from '@blacksite/subject-fpp/arms'
-import { exposeCheck, applyCameraPose, type Bookmark, type CameraPose } from '@blacksite/check'
+import { exposeCheck, applyCameraPose, sampleView, type Bookmark, type CameraPose } from '@blacksite/check'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
 import { internalPixelRatio, texturesReady } from '@blacksite/look/world'
 import { Hints, Loading, Prompt, Screen, Status, TitleCard, TouchPad, useTouch } from '@blacksite/ui/hud'
@@ -86,6 +86,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     bookmarks,
     camera(next) { override.current = next },
     player() { const position = control.current.position; return { position: [position.x, position.y, position.z], grounded: control.current.height <= 0 } },
+    view: () => sampleView(camera),
     audio: audio.sample,
     input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
     model: { feel: RANGE_FEEL, budget: RANGE_BUDGET },

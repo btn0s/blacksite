@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
-import { applyCameraPose, exposeCheck, type Bookmark, type CameraPose } from '@blacksite/check'
+import { applyCameraPose, exposeCheck, sampleView, type Bookmark, type CameraPose } from '@blacksite/check'
 import type { BreachAudio } from './audio'
 import { clearLine, type Target, type V3 } from './geometry'
 import { BOOKMARKS, FEEL_START } from './layout'
@@ -59,6 +59,7 @@ export function CheckProbe({ driver, audio, ready, overlay, onWarmed }: { driver
       const body = driver.body
       return { position: [body.position.x, body.position.y, body.position.z], velocity: [body.velocity.x, body.velocity.y, body.velocity.z], grounded: body.grounded }
     },
+    view: () => sampleView(camera),
     audio: () => audio.sample(),
     scripts: {
       async feelStart() {
@@ -101,7 +102,7 @@ export function CheckProbe({ driver, audio, ready, overlay, onWarmed }: { driver
     },
     input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
     model: { feel: FEEL, budget: CHECK_BUDGET },
-  }), [driver, audio])
+  }), [driver, audio, camera])
   useEffect(() => check.dispose, [check])
   useFrame(() => {
     const local = state.current
