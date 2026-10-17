@@ -11,6 +11,7 @@ blacksite check dist                                       # serves a built fold
 blacksite check dist --page frames/game.html               # a page inside it
 blacksite check http://localhost:4173/ --only feel,pop --profile desktop
 blacksite check http://localhost:4173/ --out shots/check --seconds 20 --json
+blacksite check http://localhost:4173/ --only shimmer,flyover               # opt-in: foliage, thin lines, far field
 ```
 
 It starts headless Chrome with the GPU on (WebGL and WebGPU), loads the page once per profile and writes `report.json` and PNGs to `--out` (default `blacksite-check/<time>/`). It exits 1 if any check fails.
@@ -19,10 +20,13 @@ It starts headless Chrome with the GPU on (WebGL and WebGPU), loads the page onc
 |---|---|---|
 | `perf` | Runs the game's `perf` script, or flies the camera through every bookmark for `--seconds` (12), then hands the camera back for 1.5 s. Records every frame. | Main-thread time per frame p95 ≤ `budget.frameMs` (8.3 desktop) or `budget.phoneFrameMs` (16.7 phone), and frame spacing p95 within 1.25× the vsync interval. |
 | `hitch` | Same run. Counts every frame slower than `budget.hitchMs` (33) after first playable, and times first playable from navigation start. | No frame over the threshold, and first playable ≤ `budget.firstPlayableMs` (5000). |
-| `pop` | Moves the camera between consecutive bookmarks in 10 steps and photographs each step with the HUD hidden; then holds each bookmark still for one second. Writes `pop-sheet.png` and `pop-still.png`. | No moving frame changes more than 2.5× its neighbours (more than the motion explains), and no still view changes more than 2% of its pixels in a second. Flagged frames are outlined red on the sheet. |
+| `pop` | Moves the camera between consecutive bookmarks in 10 steps and photographs each step with the HUD hidden; then holds each bookmark still for one second, with `scripts.freeze` holding wind and animation if the game has it. Writes `pop-sheet.png` and `pop-still.png`. | No moving frame changes more than 2.5× its neighbours (more than the motion explains), and no still view changes more than 2% of its pixels in a second. Flagged frames are outlined red on the sheet. |
 | `feel` | Desktop only. Hands the camera back, runs `scripts.feelStart` if present, holds `input.move` for 3 s, adds `input.sprint` for 3 s, releases, then taps `input.jump`. Reads `player()` every frame and derives speed from positions. | Steady move speed, sprint speed, time to 90% of top speed and jump apex are each within `feel.tolerance` (10%) of `model.feel`. Numbers without a model value are reported, not judged. |
 | `critic` | At every bookmark: a 1× capture with the HUD on (desktop and phone), and on desktop a 4 × 4 grid of 4× crops rendered at full resolution through `camera.setViewOffset`, tiled into `critic/desktop-<name>-4x.png`. | Every capture is taken with no console errors and no failed requests. Passing proves only that the pictures exist. Reading them is your job. |
+| `zfight` | At every bookmark renders an object-ID buffer several times, each with a sub-pixel projection jitter and a 0.7 mm camera nudge, using the game's own materials, render target and depth format. Pixels whose winning ID flips between frames while their neighbours stay stable are z-fighting. Writes `zfight/<profile>-<bookmark>.png` with the pixels ringed, and `-raw.png` beside it. | Ringed pixels at every bookmark ≤ max(32, 0.003% of the frame), and the ID pass covered at least 2% of the view (an empty buffer proves nothing). Edges don't count: a pixel only counts when it sits in a patch at least 4 px across, and when the two IDs that flip are within a few centimetres of each other in depth (the ID pass stores depth in alpha), so a thin bar flickering against the wall behind it is not reported. |
 | `audio` | Polls `audio()` every 250 ms through the perf and feel runs. | Peak active voices ≤ `budget.voices` (32), and no cue plays the same sample twice in a row. |
+| `shimmer` | Opt-in. At every bookmark, with `scripts.freeze` holding wind and animation: reads 8 consecutive frames with the camera still, then shifts the view by ¼, ½ and ¾ of a render pixel across and down through `camera.setViewOffset`. Still flicker is the per-pixel luminance change between frames. Motion shimmer is what is left after the shifted frame is compared with the still frames resampled by the same shift, both lightly blurred, so true motion cancels and only aliasing survives. Writes `shimmer/<profile>-<name>.png` heatmaps and `shimmer-<profile>.png`. | Mean still flicker ≤ `quality.shimmerStill` (0.01) and mean motion shimmer ≤ `quality.shimmerMotion` (0.03) at every bookmark, in 0–1 luminance. p99 and max are reported, not judged. |
+| `flyover` | Opt-in. Flies a smooth spline through `flyover` with 16 frames a segment, wind frozen, and records the mean squared luminance change between consecutive frames. Writes `flyover-<profile>.png`, a contact sheet with flagged frames outlined red, and `flyover-<profile>.json`. | No more than `quality.popLimit` (0) of the frames change more than 2.5× the median of the two frames either side. |
 
 The `phone` profile is 390 × 844 at device pixel ratio 3, with touch and a coarse pointer, and the CPU throttled 4×. `desktop` is 1440 × 900 at ratio 1.
 
@@ -64,10 +68,35 @@ check.ready()                                  // when the first playable frame 
 | `input` | Key codes for the feel run. `move` is whatever runs the player along the open ground. Checkpoint uses `KeyS` because its runway lies behind the spawn. |
 | `model.feel` | `moveSpeed`, `sprintSpeed` (m/s), `timeToTopSpeed` (s to 90%), `jumpApex` (m), `tolerance` (fraction). Import them from the model module the game runs on, never retype them. |
 | `model.budget` | `frameMs`, `phoneFrameMs`, `hitchMs`, `firstPlayableMs`, `voices`. |
+| `model.quality` | `shimmerStill`, `shimmerMotion` and `popLimit` for the opt-in checks. Set them once you have measured a view you are happy with, a little above the measurement. |
+| `flyover` | `{ position, target, fov? }[]`: a camera path that crosses every level-of-detail band, low over the near ground, through the mid-distance and out to the horizon. Without it `flyover` skips. |
+| `scripts.freeze`, `scripts.unfreeze` | Stop and restart wind, foliage sway, particles and anything else that moves with no input, so frame differences are rendering, not motion. |
 
 With React Three Fiber, apply the pose in a `useFrame` whose priority is after your camera's and below the post stack's render (Look renders at priority 1). With ALS that is `ALS_FRAME_PRIORITY.Camera + 0.05`. `site/src/showcases/characters/check.tsx` is a complete example in 50 lines.
 
 A page without the contract still gets `perf`, `hitch` (first playable is then unknown and fails) and one critic capture. The rest report `skip` with the reason.
+
+## Z-fighting
+
+Two surfaces at the same depth look fine in a still and shimmer as soon as the camera moves; the check above finds them by what flips, and `blacksite lint` finds them before anything renders:
+
+```sh
+blacksite lint dist --page frames/game.html          # static: triangles, BVH, depth maths
+blacksite lint dist --page frames/game.html --near 0.1 --far 300 --bits 24
+blacksite lint scene.glb                             # a glTF, in Node, no browser
+```
+
+The lint takes every mesh in the scene (instanced and batched meshes included; skinned meshes at their current pose), finds triangle pairs that are within 1° of coplanar and overlap with real area, and asks whether the gap between them is smaller than the depth buffer can resolve at the distance each camera bookmark sees them. It reports both mesh names (or the `userData.parts` labels `LevelBuilder` writes), the world position, the overlap area, the gap and the gap that would be needed, so a 1 mm gap at 2 m passes and the same gap at 300 m fails. It exits 1 on any problem and runs in well under a second on a 250,000-triangle scene. From code: `lintZFighting(scene, options)` from `@blacksite/check`.
+
+Reading a line:
+
+```
+zfight  look-panel#21 and look-cast#29 overlap 909.4 m² at (-3.6, 0, -112), 0 mm apart; 34.6 mm needed at 120.4 m from view
+```
+
+`0 mm apart` is exactly coplanar: no depth format fixes it, move one surface. A gap smaller than the one `needed` is a decal or overlay: use `decalBias`, or lift it by the stated amount. Meshes that draw without writing depth (blended decals) are only compared with meshes that do. Transforms that live on the GPU (the Cascade fragment pool) can't be read back, so the lint reports them as pooled; the runtime check covers those.
+
+Fixes, in the order to try them: delete the hidden surface; trim the overlap; push the smaller face out by the `needed` gap plus margin; give flat overlays `decalBias`; raise the camera near plane. `LevelBuilder` does the third by default and says so. Reversed depth is not available as a default (N8AO renders white with it); logarithmic depth works with the Look composer but needs `logdepthbuf` chunks in every custom shader.
 
 ## Reading the output
 
@@ -88,9 +117,11 @@ That is Checkpoint. Phone hitches are single missed vsyncs under a 4× throttle,
 Then read the pictures, critically:
 
 1. `critic/desktop-*.png` and `critic/phone-*.png` at 1×. Ask the ten-second question: would a stranger take this screenshot for a shipped game with an art direction? Count against the parts list in `craft.md`: practicals lit, decals on walls, props in clusters, fog layering the distance, a readable silhouette at the focal point.
-2. The `-4x` sheets, zoomed in. Every tile should still have something true in it. A blank wall, a stretched texture, a floating prop, a seam of light under a wall, a z-fighting decal and a prop with no contact shadow all show here and nowhere else.
+2. The `-4x` sheets, zoomed in. Every tile should still have something true in it. A blank wall, a stretched texture, a floating prop, a seam of light under a wall, a z-fighting decal and a prop with no contact shadow all show here and nowhere else. A decal that shimmers will also be ringed in `zfight/`.
 3. `pop-sheet.png` frame by frame, and `pop-still.png` in pairs. A flagged frame is something that appeared, vanished or changed level of detail. A still pair that differs is streaming, a LOD swap or a shadow cascade jumping.
 4. Phone captures: the HUD fits, touch controls don't cover the focal point, and text is at least 12 px.
+5. With grass, trees or thin lines, run `shimmer` and open each heatmap. The left panel lights pixels that flicker with nothing moving: an unstable dither, temporal noise, a shadow cascade swimming. The right panel lights pixels that alias when the camera drifts by a fraction of a pixel. Expect grass tips and leaf edges to show faintly; solid yellow patches mean alpha-tested cards need alpha-to-coverage or sharpened alpha, or a texture needs mipmaps. See `foliage.md`.
+6. With a far field, run `flyover` and read the contact sheet as a film strip. A red frame is a tree swapping to its impostor, terrain detail switching, grass ending in a ring or a shadow cascade jumping. The JSON gives the frame and its pose; put the camera there with a bookmark and look. See `far-field.md`.
 
 ## Before you hand it over
 

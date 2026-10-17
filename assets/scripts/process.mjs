@@ -409,11 +409,11 @@ async function terrain(entry, source, out) {
   const values = new Float32Array(data.buffer, data.byteOffset, data.byteLength / 4)
   let min = Infinity, max = -Infinity
   for (let i = 0; i < size * size; i++) { const v = values[i * info.channels]; if (v > -1000) { min = Math.min(min, v); max = Math.max(max, v) } }
-  const height = Buffer.alloc(size * size * 2)
-  for (let i = 0; i < size * size; i++) { const v = Math.max(min, values[i * info.channels]); height.writeUInt16BE(Math.round(((v - min) / (max - min || 1)) * 65535), i * 2) }
+  const height = new Uint16Array(size * size)
+  for (let i = 0; i < size * size; i++) { const v = Math.max(min, values[i * info.channels]); height[i] = Math.round(((v - min) / (max - min || 1)) * 65535) }
   await mkdir(out, { recursive: true })
   const png = path.join(out, 'height.png')
-  await sharp(height, { raw: { width: size, height: size, channels: 1, premultiplied: false }, depth: 'ushort' }).toColourspace('grey16').png({ compressionLevel: 9 }).toFile(png)
+  await sharp(height, { raw: { width: size, height: size, channels: 1, premultiplied: false } }).toColourspace('grey16').png({ compressionLevel: 9 }).toFile(png)
   const meta = { size, minMetres: Number(min.toFixed(2)), maxMetres: Number(max.toFixed(2)), metresPerPixel: entry.process?.metresPerPixel }
   await writeFile(path.join(out, 'height.json'), JSON.stringify(meta, null, 2))
   return { outputs: [png, path.join(out, 'height.json')], ship: ['height.png', 'height.json'], meta }

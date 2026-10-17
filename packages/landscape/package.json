@@ -1,0 +1,14 @@
+{
+  "name": "@blacksite/landscape",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Open-world rendering systems: heightfield terrain with continuous LOD, GPU ground cover, forests with impostors and a far canopy, one shared wind field, and cascaded sun shadows",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "three": "^0.186.1"
+  },
+  "license": "FSL-1.1-ALv2"
+}

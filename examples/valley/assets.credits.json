@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "bark-pine",
+      "title": "Pine Bark",
+      "category": "material",
+      "author": "Dimitrios Savva (Poly Haven)",
+      "licence": "CC0-1.0",
+      "source": {
+        "url": "https://polyhaven.com/a/pine_bark"
+      },
+      "attribution": "\"Pine Bark\" by Dimitrios Savva (Poly Haven) (https://polyhaven.com/a/pine_bark), CC0 1.0",
+      "files": [
+        {
+          "name": "pine_bark_diff_2k.jpg",
+          "sha256": "741f333ab9f8a0996d8a53905b5ac792fab77d7ccb8cac5fbaed8c99b9f6abd5",
+          "size": 3167561
+        },
+        {
+          "name": "pine_bark_nor_gl_2k.jpg",
+          "sha256": "e91d024441a698523472ef2001be2eade2f73005d798466c7acd3ec5d585667f",
+          "size": 4637035
+        },
+        {
+          "name": "pine_bark_arm_2k.jpg",
+          "sha256": "34b678403ce3d069d590c407b2bef54ab5b0da1a55a8a7b64f420861b3986e2b",
+          "size": 3084928
+        }
+      ]
+    },
+    {
+      "id": "bed-wind-alpine",
+      "title": "Wind Soundscape from Gem Lake",
+      "category": "ambience",
+      "author": "J. Job, Rocky Mountain National Park (National Park Service)",
+      "licence": "Public-Domain",
+      "source": {
+        "url": "https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm"
+      },
+      "attribution": "\"Wind Soundscape from Gem Lake\" by J. Job, Rocky Mountain National Park (National Park Service) (https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm), public domain",
+      "files": [
+        {
+          "name": "romo-wind-gem-lake.mp3",
+          "sha256": "aa4bd8042d04eb6b956bc1721fe6856145526bda5ff89edd8bc78559cd38451c",
+          "size": 8602680
+        }
+      ]
+    },
+    {
+      "id": "soil-mud-scanned",
+      "title": "Ground 054",
+      "category": "material",
+      "author": "Lennart Demes (ambientCG)",
+      "licence": "CC0-1.0",
+      "source": {
+        "url": "https://ambientcg.com/a/Ground054"
+      },
+      "attribution": "\"Ground 054\" by ambientCG (https://ambientcg.com/a/Ground054), CC0 1.0",
+      "files": [
+        {
+          "name": "Ground054_2K-JPG.zip",
+          "sha256": "643e7c8689bac041f17c660eff6a5459bfe0535d4466737beb0e64902b23235a",
+          "size": 32987812
+        }
+      ]
+    },
+    {
+      "id": "step-grass-oga",
+      "title": "Footsteps on different surfaces: grass",
+      "category": "footstep",
+      "author": "congusbongus",
+      "licence": "CC-BY-3.0",
+      "source": {
+        "url": "https://opengameart.org/content/footsteps-on-different-surfaces"
+      },
+      "attribution": "\"Footsteps on different surfaces: grass\" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from \"footstep-grass.wav\" by swuing (https://freesound.org/s/38874/), CC BY 3.0",
+      "files": [
+        {
+          "name": "footsteps_0.zip",
+          "sha256": "542564e7f6b3a0b89a0d08542438e030e77a46303855fe5bf1644a48185861e9",
+          "size": 414824
+        }
+      ]
+    },
+    {
+      "id": "terrain-ridge-valley",
+      "title": "USGS 3DEP 1/3 arc-second n41w079",
+      "category": "terrain",
+      "author": "U.S. Geological Survey",
+      "licence": "Public-Domain",
+      "source": {
+        "url": "https://www.usgs.gov/3d-elevation-program"
+      },
+      "attribution": "Elevation data: U.S. Geological Survey 3D Elevation Program (public domain)",
+      "files": [
+        {
+          "name": "USGS_13_n41w079.tif",
+          "sha256": "d8f8e9f30573c2e9b14020706c6e01bfc35c2c4dcbcf08a5547de9fd3153ed5d",
+          "size": 465164969
+        }
+      ]
+    }
+  ]
+}

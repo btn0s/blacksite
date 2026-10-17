@@ -3,8 +3,13 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { chromium } from 'playwright-core'
+import { installHook } from './zfight/hook.mjs'
+import { runZFight, zfightDetail } from './zfight/runtime.mjs'
+import { runShimmer } from './shimmer.mjs'
+import { runFlyover } from './flyover.mjs'
 
-export const CHECKS = ['perf', 'hitch', 'pop', 'feel', 'critic', 'audio']
+export const CHECKS = ['perf', 'hitch', 'pop', 'feel', 'critic', 'audio', 'zfight']
+export const OPT_IN_CHECKS = ['shimmer', 'flyover']
 
 export const PROFILES = {
   desktop: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, isMobile: false, hasTouch: false, cpu: 1 },
@@ -13,7 +18,7 @@ export const PROFILES = {
 
 const DEFAULTS = { frameMs: 8.3, phoneFrameMs: 16.7, hitchMs: 33, firstPlayableMs: 5000, voices: 32 }
 
-const GPU_ARGS = [
+export const GPU_ARGS = [
   '--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu', '--use-gl=angle',
   ...(process.platform === 'darwin' ? ['--use-angle=metal'] : []),
   '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
@@ -235,6 +240,7 @@ export async function runChecks(options) {
       log(`${name}: loading ${url}`)
       const context = await browser.newContext({ viewport: profile.viewport, deviceScaleFactor: profile.deviceScaleFactor, isMobile: profile.isMobile, hasTouch: profile.hasTouch })
       await context.addInitScript(probeScript)
+      await context.addInitScript(installHook)
       await context.addInitScript(css => { addEventListener('DOMContentLoaded', () => { const style = document.createElement('style'); style.textContent = css; document.head.append(style) }) }, HIDE_HUD)
       const page = await context.newPage()
       const scratch = await context.newPage()
@@ -326,6 +332,7 @@ export async function runChecks(options) {
             }
           }
           const still = []
+          if (contract.scripts.includes('freeze')) await page.evaluate(() => window.__blacksite.scripts.freeze())
           for (const bookmark of bookmarks) {
             await setPose(page, bookmark, 30)
             const first = await shoot(page, out, `pop/still-${bookmark.name}-0.png`, false)
@@ -333,6 +340,7 @@ export async function runChecks(options) {
             const second = await shoot(page, out, `pop/still-${bookmark.name}-1.png`, false)
             still.push({ name: bookmark.name, first, second })
           }
+          if (contract.scripts.includes('unfreeze')) await page.evaluate(() => window.__blacksite.scripts.unfreeze())
           const moveDiffs = await diffImages(scratch, files.url, tiles.slice(1).map((tile, index) => [tiles[index].src, tile.src]))
           const stillDiffs = await diffImages(scratch, files.url, still.map(item => [item.first, item.second]))
           const flagged = []
@@ -348,6 +356,11 @@ export async function runChecks(options) {
           add('pop', name, { pass: flagged.length === 0 && stillFlags.length === 0, frames: tiles.length, flagged, still: stillFlags, files: ['pop-sheet.png', 'pop-still.png'], method: 'fraction of pixels (320 px wide, channel delta > 32) changed between frames; a moving frame is flagged above 2.5x its neighbours, a still camera above 2% in one second' })
         }
       }
+
+      const kit = { page, scratch, base: files.url, out, name, profile, contract, options, setPose, contactSheet, percentile, round }
+      if (only.includes('shimmer')) { log(`${name}: shimmer`); add('shimmer', name, await runShimmer(kit)) }
+      if (only.includes('flyover')) { log(`${name}: flyover`); add('flyover', name, await runFlyover(kit)) }
+      if (only.includes('zfight')) add('zfight', name, await runZFight({ page, scratch, files, out, profile: name, contract, options: options.zfight, log, setPose, shoot }))
 
       if (only.includes('critic')) {
         log(`${name}: critic captures`)
@@ -399,8 +412,11 @@ export function summarize(report) {
     if (check === 'feel' && !result.skipped) detail = Object.entries(result.numbers).map(([key, value]) => `${key} ${value.measured}${value.expected !== null ? `/${value.expected}` : ''}`).join(', ')
     if (check === 'audio' && !result.skipped) detail = `voices max ${result.voices.max}/${result.voices.budget}, ${result.plays} plays, ${result.backToBackRepeats} back-to-back repeats`
     if (check === 'pop' && !result.skipped) detail = `${result.flagged.length} moving frames and ${result.still.length} still views flagged of ${result.frames}`
+    if (check === 'shimmer' && !result.skipped) detail = `still mean ${Math.max(...result.views.map(view => view.still.mean))}/${result.budget.shimmerStill}, motion mean ${Math.max(...result.views.map(view => view.motion.mean))}/${result.budget.shimmerMotion} (worst of ${result.views.length} views)`
+    if (check === 'flyover' && !result.skipped) detail = `${result.flagged.length} of ${result.frames} frames flagged (budget ${result.allowed})`
+    if (check === 'zfight' && !result.skipped) detail = zfightDetail(result)
     if (check === 'critic') detail = `${result.captures} captures, ${result.consoleErrors} console errors`
-    lines.push(`${status.padEnd(4)}  ${check.padEnd(6)} ${profile.padEnd(7)} ${detail}`)
+    lines.push(`${status.padEnd(4)}  ${check.padEnd(7)} ${profile.padEnd(7)} ${detail}`)
   }
   lines.push(report.pass ? 'checks passed' : 'checks failed')
   return lines.join('\n')

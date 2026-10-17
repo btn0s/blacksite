@@ -99,7 +99,8 @@ Read the reference before wiring a block. Paths like `docs/cascade.md` are relat
 | Destruction: buildings that break by structure | Cascade, `@blacksite/cascade` | [destruction.md](references/destruction.md) |
 | Multiplayer | Relay, `@blacksite/relay` | [multiplayer.md](references/multiplayer.md) |
 | Input: keyboard, gamepad, touch | `@blacksite/input`, `@blacksite/ui/hud` | [input.md](references/input.md) |
-| The look: post stack, atmosphere, the ruins world kit | `@blacksite/look`, `@blacksite/look/world` | [craft.md](references/craft.md) |
+| The look: post stack, atmosphere, the ruins world kit | `@blacksite/look`, `@blacksite/look/world` | [craft.md](references/craft.md), [atmosphere.md](references/atmosphere.md) |
+| Open worlds: terrain to the horizon, ground cover, forests, one wind | `@blacksite/landscape` | [far-field.md](references/far-field.md), [foliage.md](references/foliage.md), [wind.md](references/wind.md) |
 | Checks | `@blacksite/check` | [verify.md](references/verify.md) |
 
 Run `blacksite catalog --json` for the live list; [catalog.md](references/catalog.md) is its release snapshot.
@@ -114,6 +115,10 @@ Run `blacksite catalog --json` for the live list; [catalog.md](references/catalo
 | Joining proven prototypes into the loop | [combine.md](references/combine.md) |
 | Lighting, materials, dressing, atmosphere, feedback | [craft.md](references/craft.md) |
 | Authoring, weathering, comparing or baking procedural and image-derived materials | [materials.md](references/materials.md) |
+| Sky, sun, aerial perspective, height fog and clouds outdoors | [atmosphere.md](references/atmosphere.md) |
+| Terrain to the horizon, impostors and crossfades that never pop | [far-field.md](references/far-field.md) |
+| Grass, flowers, undergrowth and trees | [foliage.md](references/foliage.md) |
+| One wind for grass, trees, particles and sound | [wind.md](references/wind.md) |
 | Movement, camera, aiming, controller response | [feel.md](references/feel.md) |
 | Footsteps, weapons, ambience, mixing | [sound.md](references/sound.md) |
 | Frame budgets and what gives way first | [performance.md](references/performance.md) |

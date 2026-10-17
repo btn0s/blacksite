@@ -21,7 +21,7 @@ export function buildCheckpoint() {
   ground.receiveShadow = true
   level.mesh(ground)
   level.collider({ kind: 'box', half: [210, 0.5, 210], position: [60, -0.5, 0], rotation: [0, 0, 0] })
-  level.plane(260, 7.5, { name: 'asphalt', ao: false }, { at: [40, 0.012, 0] })
+  level.plane(260, 7.5, { name: 'asphalt', ao: false }, { at: [40, 0.035, 0] })
   level.plane(46, 26, { name: 'slab', ao: false }, { at: [44, 0.02, -2] })
 
   for (const [x, z, r] of [[9, -2.1, 0.08], [11.5, 1.6, -0.05], [14, -1.2, 0.12], [26, 1.4, -0.3], [27.4, 2.3, -0.1]] as const) level.box([2.2, 0.82, 0.62], cast, { at: [x, 0.41, z], rotate: Math.PI / 2 + r })
