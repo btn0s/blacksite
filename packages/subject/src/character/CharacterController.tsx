@@ -101,7 +101,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
       overlayMode: command.overlay,
     }
   }, [als, controller, scratch])
-  const bodyLod = useMemo(() => () => ({ visible: camera.layers.isEnabled(BODY_LAYER), shadow: true }), [camera])
+  const bodyLod = useMemo(() => () => ({ visible: camera.layers.isEnabled(BODY_LAYER), shadow: gl.shadowMap.enabled }), [camera, gl])
   const controlRotation = useMemo(() => () => ({ yaw: als.command.yaw, pitch: als.command.pitch }), [als])
   const rightShoulder = useMemo(() => () => controller.rightShoulder, [controller])
 
