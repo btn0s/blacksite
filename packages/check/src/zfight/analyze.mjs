@@ -145,6 +145,19 @@ export function decodeDepth(data, width, height) {
   return depth
 }
 
+export function decodePackedDepth(data, width, height) {
+  const depth = new Float32Array(width * height)
+  for (let row = 0; row < height; row++) {
+    const source = (height - 1 - row) * width * 4
+    const target = row * width
+    for (let x = 0; x < width; x++) {
+      const o = source + x * 4
+      depth[target + x] = (data[o] + (data[o + 1] + data[o + 2] / 255) / 255) / 255
+    }
+  }
+  return depth
+}
+
 export function decodeIds(data, width, height, floats) {
   const ids = new Uint32Array(width * height)
   const scale = floats ? 255 : 1

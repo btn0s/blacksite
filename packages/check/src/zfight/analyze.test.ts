@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { analyzeFrames } from './analyze.mjs'
+import { analyzeFrames, decodePackedDepth } from './analyze.mjs'
 
 const W = 16
 const H = 16
@@ -39,5 +39,18 @@ describe('analyzeFrames', () => {
   it('without depth it cannot tell and counts both', () => {
     const { ids } = frames(flip, id => (id === 1 ? 40 : 46))
     expect(analyzeFrames(ids, W, H, {}).pixels).toBeGreaterThan(100)
+  })
+})
+
+describe('packed depth', () => {
+  it('round-trips a depth value through three bytes', () => {
+    const value = 0.73125987
+    const scaled = value * 255
+    const hi = Math.floor(scaled)
+    const rest = (scaled - hi) * 255
+    const mid = Math.floor(rest)
+    const bytes = new Uint8Array([hi, mid, Math.round((rest - mid) * 255), 255])
+    const decoded = decodePackedDepth(bytes, 1, 1)
+    expect(Math.abs(decoded[0] - value)).toBeLessThan(1e-6)
   })
 })

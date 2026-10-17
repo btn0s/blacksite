@@ -1,5 +1,5 @@
-import { decodeDepth, decodeIds } from './analyze.mjs'
-const state = { ids: new WeakMap(), variants: new WeakMap(), table: [null] }
+import { decodeDepth, decodeIds, decodePackedDepth } from './analyze.mjs'
+const state = { ids: new WeakMap(), variants: new WeakMap(), table: [null], mode: { value: 0 } }
 
 function halton(index, base) {
   let result = 0
@@ -30,9 +30,10 @@ function variantOf(material, id) {
   variant.onBeforeCompile = (shader, renderer) => {
     if (prior) prior.call(variant, shader, renderer)
     shader.uniforms.bsId = { value: colour }
-    const body = shader.fragmentShader.replace(/\}\s*$/, '\n\tgl_FragColor = vec4(bsId, gl_FragCoord.z);\n}')
+    shader.uniforms.bsMode = state.mode
+    const body = shader.fragmentShader.replace(/\}\s*$/, '\n\tif (bsMode > 0.5) { float bsZ = clamp(gl_FragCoord.z, 0.0, 0.999999) * 255.0; float bsHi = floor(bsZ); float bsR = (bsZ - bsHi) * 255.0; float bsMid = floor(bsR); gl_FragColor = vec4(bsHi / 255.0, bsMid / 255.0, (bsR - bsMid), 1.0); } else gl_FragColor = vec4(bsId, gl_FragCoord.z);\n}')
     const precision = body.match(/precision\s+\w+\s+float\s*;/)
-    shader.fragmentShader = precision ? body.replace(precision[0], `${precision[0]}\nuniform vec3 bsId;`) : `uniform vec3 bsId;\n${body}`
+    shader.fragmentShader = precision ? body.replace(precision[0], `${precision[0]}\nuniform vec3 bsId;\nuniform float bsMode;`) : `uniform vec3 bsId;\nuniform float bsMode;\n${body}`
   }
   variant.customProgramCacheKey = () => `bsid|${material.customProgramCacheKey ? material.customProgramCacheKey() : ''}`
   variant.blending = 0
@@ -136,9 +137,18 @@ export function runIdProbe(renderer, original, scene, camera, options = {}) {
       const read = readTarget(renderer, target, width, height)
       floats = read.floats
       captured.push(decodeIds(read.data, width, height, read.floats))
-      depths.push(read.floats ? decodeDepth(read.data, width, height) : null)
+      if (read.floats) depths.push(decodeDepth(read.data, width, height))
+      else {
+        state.mode.value = 1
+        renderer.clear(true, true, true)
+        original.call(renderer, scene, camera)
+        const packed = readTarget(renderer, target, width, height)
+        state.mode.value = 0
+        depths.push(decodePackedDepth(packed.data, width, height))
+      }
     }
   } finally {
+    state.mode.value = 0
     camera.position.set(...saved.position)
     if (saved.view) camera.view = saved.view
     else if (camera.clearViewOffset) camera.clearViewOffset()
@@ -152,5 +162,5 @@ export function runIdProbe(renderer, original, scene, camera, options = {}) {
     renderer.shadowMap.autoUpdate = saved.autoUpdate
     renderer.setClearColor(clear, saved.alpha)
   }
-  return { width, height, floats, frames: captured, depths: floats && !renderer.capabilities.logarithmicDepthBuffer ? depths : null, table: state.table }
+  return { width, height, floats, frames: captured, depths: renderer.capabilities.logarithmicDepthBuffer ? null : depths, table: state.table }
 }
