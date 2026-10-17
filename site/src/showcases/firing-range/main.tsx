@@ -63,6 +63,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
   const feel = useMemo(createCameraFeel, [])
   const look = useMemo(() => ({ pitch: 0, yaw: 0 }), [])
   const effects = useMemo(() => createEffects(scene), [scene])
+  useEffect(() => () => effects.dispose(), [effects])
   const weapon = useMemo(() => createWeaponRuntime({ ownerId: 'player', seed: 7, definitions: rig === 'found' ? definitions.map(definition => ({ ...definition, ...foundTimings(FIELD_SET, definition.id as WeaponId) })) : definitions, initialWeaponId: 'rifle' }), [rig])
   const [presentation, setPresentation] = useState<ArmsPresentation | null>(null)
   const shadows = tier !== 'low'
@@ -320,7 +321,6 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     if (worldReady && presentation) {
       if (warmFrames.current < 3) {
         const warming = warmFrames.current++ < 2
-        effects.warm(warming)
         steelSet.warm(warming)
       } else if (readyFrames.current++ > 2) check.ready()
     }

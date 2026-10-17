@@ -1,167 +1,8 @@
 import * as THREE from 'three'
+import { SoftParticles } from '@blacksite/look/soft'
 import type { DestructionEvent, SimulationFrame } from '@blacksite/cascade'
 
-const cloudVertex = `
-attribute vec3 cloudOrigin;
-attribute vec3 cloudVelocity;
-attribute vec2 cloudLife;
-attribute vec4 cloudShape;
-attribute vec4 cloudColor;
-uniform float time;
-varying vec2 vUv;
-varying vec4 vColor;
-varying float vSeed;
-varying float vT;
-#include <fog_pars_vertex>
-void main() {
-  float age = time - cloudLife.x;
-  float t = clamp(age / cloudLife.y, 0.0, 1.0);
-  float travel = (1.0 - exp(-age * 0.9)) / 0.9;
-  vec3 center = cloudOrigin + cloudVelocity * travel + vec3(0.0, cloudShape.w * age, 0.0);
-  float radius = cloudShape.x * (1.0 + cloudShape.y * sqrt(t));
-  vec4 mvPosition = modelViewMatrix * vec4(center, 1.0);
-  float angle = cloudShape.z * 6.2831853 + age * 0.25 * (fract(cloudShape.z * 7.0) - 0.5);
-  vec2 corner = mat2(cos(angle), -sin(angle), sin(angle), cos(angle)) * position.xy;
-  mvPosition.xy += corner * radius;
-  gl_Position = projectionMatrix * mvPosition;
-  vUv = position.xy;
-  vColor = cloudColor;
-  vColor.a *= smoothstep(0.0, 0.06, t) * pow(1.0 - t, 1.4) * step(0.0, age) * step(age, cloudLife.y);
-  vSeed = cloudShape.z;
-  vT = t;
-  #include <fog_vertex>
-}`
-
-const cloudFragment = `
-varying vec2 vUv;
-varying vec4 vColor;
-varying float vSeed;
-varying float vT;
-uniform sampler2D noise;
-#include <fog_pars_fragment>
-void main() {
-  float r = dot(vUv, vUv);
-  vec2 bands = texture2D(noise, vUv * 0.4 + vSeed * vec2(3.7, 5.3)).rg;
-  float n = bands.r * 0.6 + bands.g * 0.4;
-  float alpha = vColor.a * (1.0 - smoothstep(0.15, 1.0, r)) * smoothstep(0.12, 0.7, n + 0.3 * (1.0 - r));
-  if (alpha < 0.003) discard;
-#ifdef FLAME
-  vec3 color = mix(vec3(1.0, 0.82, 0.45), vColor.rgb, smoothstep(0.0, 0.7, vT)) * (1.2 + n);
-  gl_FragColor = vec4(color, alpha);
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-  #ifdef USE_FOG
-    gl_FragColor.a *= exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
-  #endif
-#else
-  vec3 color = vColor.rgb * (0.72 + 0.38 * (vUv.y * 0.5 + 0.5)) * (0.86 + n * 0.28);
-  gl_FragColor = vec4(color, alpha);
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-  #include <fog_fragment>
-#endif
-}`
-
-function noiseTexture() {
-  const size = 64
-  const data = new Uint8Array(size * size * 4)
-  const lattice = (cells: number, seed: number) => {
-    const grid = Array.from({ length: cells * cells }, (_, i) => { const x = Math.sin(i * 127.1 + seed * 311.7) * 43758.5453; return x - Math.floor(x) })
-    return (x: number, y: number) => {
-      const fx = x * cells / size, fy = y * cells / size
-      const ix = Math.floor(fx), iy = Math.floor(fy)
-      const tx = fx - ix, ty = fy - iy
-      const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty)
-      const at = (a: number, b: number) => grid[((b % cells) * cells) + (a % cells)]!
-      return (at(ix, iy) * (1 - sx) + at(ix + 1, iy) * sx) * (1 - sy) + (at(ix, iy + 1) * (1 - sx) + at(ix + 1, iy + 1) * sx) * sy
-    }
-  }
-  const low = lattice(6, 1), high = lattice(16, 2)
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const i = (y * size + x) * 4
-    data[i] = low(x, y) * 255
-    data[i + 1] = high(x, y) * 255
-    data[i + 3] = 255
-  }
-  const texture = new THREE.DataTexture(data, size, size)
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-  texture.magFilter = texture.minFilter = THREE.LinearFilter
-  texture.needsUpdate = true
-  return texture
-}
-
-const noise = noiseTexture()
-
-export type Puff = { at: THREE.Vector3; velocity?: THREE.Vector3; life: number; size: number; growth: number; rise?: number; color: THREE.Color; alpha: number }
-
-export class Clouds {
-  readonly mesh: THREE.Mesh
-  private readonly geometry = new THREE.InstancedBufferGeometry()
-  private readonly material: THREE.ShaderMaterial
-  private readonly attributes: Record<'origin' | 'velocity' | 'life' | 'shape' | 'color', THREE.InstancedBufferAttribute>
-  private cursor = 0
-  private count = 0
-  private seed = 1
-
-  constructor(readonly capacity: number, flame: boolean) {
-    this.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3))
-    this.geometry.setIndex([0, 1, 2, 0, 2, 3])
-    const attribute = (name: string, size: number) => {
-      const value = new THREE.InstancedBufferAttribute(new Float32Array(capacity * size), size).setUsage(THREE.DynamicDrawUsage)
-      this.geometry.setAttribute(name, value)
-      return value
-    }
-    this.attributes = { origin: attribute('cloudOrigin', 3), velocity: attribute('cloudVelocity', 3), life: attribute('cloudLife', 2), shape: attribute('cloudShape', 4), color: attribute('cloudColor', 4) }
-    this.geometry.instanceCount = 0
-    this.material = new THREE.ShaderMaterial({
-      uniforms: { ...THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { time: { value: 0 } }]), noise: { value: noise } },
-      vertexShader: cloudVertex,
-      fragmentShader: cloudFragment,
-      defines: flame ? { FLAME: '' } : {},
-      transparent: true,
-      depthWrite: false,
-      fog: true,
-      blending: flame ? THREE.AdditiveBlending : THREE.NormalBlending,
-    })
-    this.mesh = new THREE.Mesh(this.geometry, this.material)
-    this.mesh.frustumCulled = false
-    this.mesh.renderOrder = flame ? 4 : 3
-  }
-
-  random() {
-    this.seed = (this.seed * 1664525 + 1013904223) >>> 0
-    return this.seed / 4294967296
-  }
-
-  spawn(time: number, puff: Puff) {
-    const slot = this.cursor
-    this.cursor = (this.cursor + 1) % this.capacity
-    this.count = Math.min(this.capacity, this.count + 1)
-    const { origin, velocity, life, shape, color } = this.attributes
-    origin.setXYZ(slot, puff.at.x, puff.at.y, puff.at.z)
-    velocity.setXYZ(slot, puff.velocity?.x ?? 0, puff.velocity?.y ?? 0, puff.velocity?.z ?? 0)
-    life.setXY(slot, time, puff.life)
-    shape.setXYZW(slot, puff.size, puff.growth, this.random(), puff.rise ?? 0)
-    color.setXYZW(slot, puff.color.r, puff.color.g, puff.color.b, puff.alpha)
-    for (const value of [origin, velocity, life, shape, color]) {
-      value.addUpdateRange(slot * value.itemSize, value.itemSize)
-      value.needsUpdate = true
-    }
-    this.geometry.instanceCount = this.count
-  }
-
-  update(time: number) { this.material.uniforms.time!.value = time }
-
-  clear() {
-    this.cursor = this.count = 0
-    this.geometry.instanceCount = 0
-  }
-
-  dispose() {
-    this.geometry.dispose()
-    this.material.dispose()
-  }
-}
+const DRAG = 0.9
 
 function glowTexture() {
   const size = 64
@@ -199,18 +40,17 @@ const colors = {
   dust: new THREE.Color('#7a7366'),
   pale: new THREE.Color('#8f887a'),
   smoke: new THREE.Color('#4a463f'),
-  soot: new THREE.Color('#25231f'),
   trail: new THREE.Color('#c9c4b8'),
-  ember: new THREE.Color('#d2421a'),
-  fire: new THREE.Color('#ff7a26'),
+  ember: new THREE.Color(0.85, 0.3, 0.1),
+  fire: new THREE.Color(1, 0.5, 0.2),
 }
 
 export const STRIKE = { speed: 260, altitude: 260, dive: 0.62, bearing: 2.5, radius: 9, minRadius: 4.5, strength: 10, spacing: 8, stagger: 0.32, fireLife: 32, penetration: 4 }
 
 export class StrikeEffects {
   readonly group = new THREE.Group()
-  readonly smoke = new Clouds(1400, false)
-  readonly flames = new Clouds(700, true)
+  readonly smoke = new SoftParticles({ capacity: 1400 })
+  readonly flames = new SoftParticles({ capacity: 700 })
   readonly light = new THREE.PointLight('#ff9a4a', 0, 140, 1.4)
   private readonly fireLight = new THREE.PointLight('#ff7b30', 0, 70, 1.6)
   private readonly missiles: Missile[] = []
@@ -226,11 +66,19 @@ export class StrikeEffects {
   private readonly recent = new Map<string, number>()
   private dust = 0
   private flashLevel = 0
+  private seed = 1
   time = 0
   shake = 0
 
   constructor() {
-    this.group.add(this.smoke.mesh, this.flames.mesh, this.light, this.fireLight)
+    this.smoke.renderOrder = 3
+    this.flames.renderOrder = 4
+    this.group.add(this.smoke, this.flames, this.light, this.fireLight)
+  }
+
+  private random() {
+    this.seed = (this.seed * 1664525 + 1013904223) >>> 0
+    return this.seed / 4294967296
   }
 
   get busy() { return this.missiles.length > 0 }
@@ -274,20 +122,20 @@ export class StrikeEffects {
     this.light.position.copy(at).addScaledVector(direction, -3)
     this.flashLevel = 1
     this.shake = Math.min(1.6, this.shake + 80 / Math.max(25, camera.position.distanceTo(at)))
-    const random = () => this.smoke.random()
+    const random = () => this.random()
     const out = () => this.scratch.set(random() * 2 - 1, random() * 1.4 - 0.2, random() * 2 - 1).normalize()
     for (let i = 0; i < 30; i++) {
       const dir = out().clone()
-      this.flames.spawn(this.time, { at: at.clone().addScaledVector(dir, random() * 2), velocity: dir.multiplyScalar(6 + random() * 9), life: 0.7 + random() * 0.9, size: 1.8 + random() * 2, growth: 1.4, rise: 2, color: colors.fire, alpha: 0.55 })
+      this.flames.emit({ position: at.clone().addScaledVector(dir, random() * 2), velocity: dir.multiplyScalar(6 + random() * 9), acceleration: { x: 0, y: 2 * DRAG, z: 0 }, drag: DRAG, life: 0.7 + random() * 0.9, size: 3.6 + random() * 4, grow: 1.4, tint: colors.fire, glow: 0.9 })
     }
     for (let i = 0; i < 26; i++) {
       const dir = out().clone()
-      this.smoke.spawn(this.time, { at: at.clone().addScaledVector(dir, random() * 3), velocity: dir.multiplyScalar(4 + random() * 7), life: 12 + random() * 10, size: 3 + random() * 2.4, growth: 2.4, rise: 0.9 + random() * 0.8, color: random() > 0.5 ? colors.smoke : colors.dust, alpha: 0.55 })
+      this.smoke.emit({ position: at.clone().addScaledVector(dir, random() * 3), velocity: dir.multiplyScalar(4 + random() * 7), acceleration: { x: 0, y: (0.9 + random() * 0.8) * DRAG, z: 0 }, drag: DRAG, life: 12 + random() * 10, size: 6 + random() * 4.8, grow: 2.4, opacity: 0.5, tint: random() > 0.5 ? colors.smoke : colors.dust })
     }
     for (let i = 0; i < 18; i++) {
       const angle = random() * Math.PI * 2
       const speed = 9 + random() * 10
-      this.smoke.spawn(this.time, { at: new THREE.Vector3(at.x + Math.cos(angle) * 2, 0.8 + random(), at.z + Math.sin(angle) * 2), velocity: new THREE.Vector3(Math.cos(angle) * speed, 0.4 + random(), Math.sin(angle) * speed), life: 10 + random() * 8, size: 2.6 + random() * 2, growth: 2.8, rise: 0.25, color: colors.dust, alpha: 0.45 })
+      this.smoke.emit({ position: { x: at.x + Math.cos(angle) * 2, y: 0.8 + random(), z: at.z + Math.sin(angle) * 2 }, velocity: { x: Math.cos(angle) * speed, y: 0.4 + random(), z: Math.sin(angle) * speed }, acceleration: { x: 0, y: 0.25 * DRAG, z: 0 }, drag: DRAG, life: 10 + random() * 8, size: 5.2 + random() * 4, grow: 2.8, opacity: 0.45, tint: colors.dust })
     }
     this.fires.push({ at: new THREE.Vector3(at.x, Math.max(0.6, at.y * 0.35), at.z), spread: 4.5, age: 0, life: STRIKE.fireLife, flames: 0, smoke: 0 })
   }
@@ -307,14 +155,15 @@ export class StrikeEffects {
       const low = event.position[1] < 5
       const count = Math.min(4, Math.max(1, Math.round(Math.log10(mass) - 2)))
       for (let n = 0; n < count && this.dust >= 1; n++, this.dust--) {
-        const random = () => this.smoke.random()
+        const random = () => this.random()
         const angle = random() * Math.PI * 2
         const speed = low ? 2 + random() * 4 : 0.6 + random()
-        this.smoke.spawn(this.time, {
-          at: new THREE.Vector3(event.position[0] + (random() - 0.5) * 3, Math.max(0.6, event.position[1]), event.position[2] + (random() - 0.5) * 3),
-          velocity: new THREE.Vector3(Math.cos(angle) * speed, low ? 0.3 : -0.4, Math.sin(angle) * speed),
-          life: 9 + random() * 9, size: 1.6 + random() * 1.8 + (low ? 1 : 0), growth: 3, rise: low ? 0.5 : 0.2,
-          color: random() > 0.4 ? colors.dust : colors.pale, alpha: 0.4,
+        this.smoke.emit({
+          position: { x: event.position[0] + (random() - 0.5) * 3, y: Math.max(0.6, event.position[1]), z: event.position[2] + (random() - 0.5) * 3 },
+          velocity: { x: Math.cos(angle) * speed, y: low ? 0.3 : -0.4, z: Math.sin(angle) * speed },
+          acceleration: { x: 0, y: (low ? 0.5 : 0.2) * DRAG, z: 0 }, drag: DRAG,
+          life: 9 + random() * 9, size: 3.2 + random() * 3.6 + (low ? 2 : 0), grow: 3,
+          opacity: 0.4, tint: random() > 0.4 ? colors.dust : colors.pale,
         })
       }
     }
@@ -324,6 +173,8 @@ export class StrikeEffects {
 
   update(dt: number, camera: THREE.Camera) {
     this.time += dt
+    this.smoke.advance(dt)
+    this.flames.advance(dt)
     this.dust = Math.min(14, this.dust + dt * 10)
     for (let i = this.missiles.length - 1; i >= 0; i--) {
       const missile = this.missiles[i]!
@@ -340,8 +191,8 @@ export class StrikeEffects {
       missile.trail += dt
       while (missile.trail > 0.006) {
         missile.trail -= 0.006
-        const back = this.smoke.random() * tail * 0.5
-        this.smoke.spawn(this.time, { at: head.clone().addScaledVector(missile.to.clone().sub(missile.from).normalize(), -back - 4), life: 2.5 + this.smoke.random() * 2, size: 0.32, growth: 3.2, rise: 0.1, color: colors.trail, alpha: 0.32 })
+        const back = this.random() * tail * 0.5
+        this.smoke.emit({ position: head.clone().addScaledVector(missile.to.clone().sub(missile.from).normalize(), -back - 4), acceleration: { x: 0, y: 0.1 * DRAG, z: 0 }, drag: DRAG, life: 2.5 + this.random() * 2, size: 0.64, grow: 3.2, opacity: 0.32, tint: colors.trail })
       }
       if (t >= 1) {
         this.group.remove(missile.streak, missile.head)
@@ -377,22 +228,20 @@ export class StrikeEffects {
       center.addScaledVector(fire.at, strength)
       fire.flames += dt * 34 * strength
       fire.smoke += dt * 2.5 * strength
-      const random = () => this.flames.random()
+      const random = () => this.random()
       while (fire.flames > 1) {
         fire.flames--
         const angle = random() * Math.PI * 2
         const distance = Math.sqrt(random()) * fire.spread
-        this.flames.spawn(this.time, { at: new THREE.Vector3(fire.at.x + Math.cos(angle) * distance, fire.at.y + random() * 0.6, fire.at.z + Math.sin(angle) * distance), velocity: new THREE.Vector3((random() - 0.5) * 0.6, 0.8, (random() - 0.5) * 0.6), life: 0.8 + random() * 0.8, size: 0.7 + random() * 0.9 * strength, growth: 0.4, rise: 2.4 + random() * 1.5, color: random() > 0.5 ? colors.fire : colors.ember, alpha: 0.42 })
+        this.flames.emit({ position: { x: fire.at.x + Math.cos(angle) * distance, y: fire.at.y + random() * 0.6, z: fire.at.z + Math.sin(angle) * distance }, velocity: { x: (random() - 0.5) * 0.6, y: 0.8, z: (random() - 0.5) * 0.6 }, acceleration: { x: 0, y: (2.4 + random() * 1.5) * DRAG, z: 0 }, drag: DRAG, life: 0.8 + random() * 0.8, size: 1.4 + random() * 1.8 * strength, grow: 0.4, tint: random() > 0.5 ? colors.fire : colors.ember, glow: 0.75 })
       }
       while (fire.smoke > 1) {
         fire.smoke--
-        this.smoke.spawn(this.time, { at: new THREE.Vector3(fire.at.x + (random() - 0.5) * fire.spread, fire.at.y + 2.5, fire.at.z + (random() - 0.5) * fire.spread), velocity: new THREE.Vector3(0.6 + random() * 0.4, 0.3, (random() - 0.5) * 0.4), life: 11 + random() * 6, size: 1.6 + random(), growth: 3, rise: 1.7 + random(), color: random() > 0.5 ? colors.smoke : colors.dust, alpha: 0.42 })
+        this.smoke.emit({ position: { x: fire.at.x + (random() - 0.5) * fire.spread, y: fire.at.y + 2.5, z: fire.at.z + (random() - 0.5) * fire.spread }, velocity: { x: 0.6 + random() * 0.4, y: 0.3, z: (random() - 0.5) * 0.4 }, acceleration: { x: 0, y: (1.7 + random()) * DRAG, z: 0 }, drag: DRAG, life: 11 + random() * 6, size: 3.2 + random() * 2, grow: 3, opacity: 0.42, tint: random() > 0.5 ? colors.smoke : colors.dust })
       }
     }
     if (glow > 0) this.fireLight.position.copy(center.divideScalar(glow)).add(new THREE.Vector3(0, 2.5, 3))
     this.fireLight.intensity = Math.min(1.6, glow) * (900 + Math.sin(this.time * 23) * 140 + Math.sin(this.time * 7.3) * 220)
-    this.smoke.update(this.time)
-    this.flames.update(this.time)
     this.shake = Math.max(0, this.shake - dt * 1.4)
     void camera
   }
@@ -401,12 +250,18 @@ export class StrikeEffects {
     for (const missile of this.missiles) this.group.remove(missile.streak, missile.head)
     for (const flash of this.flashes) this.group.remove(flash.core, flash.ring)
     this.missiles.length = this.flashes.length = this.fires.length = 0
-    this.smoke.clear()
-    this.flames.clear()
+    this.smoke.reset()
+    this.flames.reset()
     this.seen.clear()
     this.recent.clear()
     this.dust = 0
     this.flashLevel = 0
     this.light.intensity = this.fireLight.intensity = 0
+  }
+
+  dispose() {
+    this.clear()
+    this.smoke.dispose()
+    this.flames.dispose()
   }
 }

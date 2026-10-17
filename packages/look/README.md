@@ -58,7 +58,24 @@ const removeViewmodel = look.addOverlay(viewmodelScene, viewmodelCamera)
 
 ## Soft particles
 
-Dust, smoke and steam drawn with `createSoftParticleMaterial()` from `@blacksite/look/soft` are lit by the scene's strongest `DirectionalLight` (wrapped diffuse with mild forward scattering), its `HemisphereLight` and `AmbientLight` sum, and `scene.fog`. They fade where they meet geometry and as they reach the camera. Add the `Points` to a `Scene` of your own and pass it as the `particles` option of `createLook` (or the `particles` prop of `<Look>`). A soft pass right after the scene render draws that scene with the main camera into the same buffer, depth-tested like any transparent object and faded against a copy of the frame's depth. Keeping particles in their own scene leaves the main scene's light setup untouched. Each point takes `size` (world diameter), `alpha`, `tint` (linear albedo) and `seed` attributes. Options: `softness` (contact fade depth as a fraction of the radius, default 1) and `scatter` (forward-scatter gain toward the sun, default 0.8). Without `particles` there is no soft pass; with an empty scene it does nothing. `surfaceAlbedo(hit)` from `@blacksite/look/world` returns the linear albedo under a raycast hit (material colour × texture mean × instance or vertex colour), for tinting what comes off a surface.
+`SoftParticles` from `@blacksite/look/soft` is the one way to draw dust, smoke, steam, ash, sparks and embers. It is a mesh of camera-facing quads; add it to your scene like any other object and the look's soft pass draws it after the scene render, depth-tested and faded against a copy of the frame's depth.
+
+```ts
+const dust = new SoftParticles({ capacity: 256 })
+scene.add(dust)
+dust.emit({ position, velocity, acceleration: { x: 0, y: 0.35, z: 0 }, drag: 2.2, life: 1.2, size: 0.3, grow: 2.7, opacity: 0.55, tint })
+dust.advance(dt)
+```
+
+- Lighting: every particle is lit by the same lights as the surfaces around it (directional, point, spot, hemisphere, ambient and light probes, through three's light uniforms). Directional lights that cast shadows shade each particle by their shadow map, sampled once at its centre, so a puff in shade is not sunlit. Each quad is shaded as a soft sphere with wrapped diffuse and mild forward scattering, then fogged with `scene.fog`.
+- Motion runs on the GPU from the spawn state: `velocity`, constant `acceleration` (gravity or buoyancy), and exponential `drag`. `emit` writes one slot of a ring of `capacity` slots and uploads only the slots written that frame; `advance(dt)` moves the clock.
+- Life: with `life > 0` a particle fades in over the first 8% of its life and out as `(1 - t)^1.5`, and its diameter grows from `size` to `size * (1 + grow)`. With `life <= 0` it lives until overwritten, for fields such as ash or motes. `delay` (seconds) starts its life later, for effects known ahead of time, such as a puff where a bullet will land.
+- `opacity` is how much the particle hides what is behind it; `glow` adds `tint * glow` of emitted light, unlit and unshadowed. Dust has opacity and no glow; sparks and embers have glow and no opacity; both blend in one premultiplied pass.
+- `stretch` (seconds) elongates the quad along its screen-space velocity, for sparks. `flutter` (metres) adds a slow seeded sway, for ash.
+- `wrap(center, size)` keeps particles inside a box in the object's space, wrapping each axis with a non-zero size and fading them near its faces; pass `null` to stop. `still = true` freezes motion and growth for reduced motion. `reset()` empties the ring.
+- Options: `capacity` (default 256), `softness` (contact fade depth as a fraction of the radius, default 1) and `scatter` (forward-scatter gain toward the light, default 0.8).
+
+`surfaceAlbedo(hit)` from `@blacksite/look/world` returns the linear albedo under a raycast hit (material colour × texture mean × instance or vertex colour), for tinting what comes off a surface.
 
 ## React Three Fiber
 

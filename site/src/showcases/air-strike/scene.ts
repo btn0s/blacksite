@@ -321,7 +321,7 @@ export class AirStrikeScene {
     this.renderer.setAnimationLoop(null)
     this.view?.dispose()
     void this.session?.dispose()
-    this.fx.clear()
+    this.fx.dispose()
     this.look.dispose()
     this.renderer.dispose()
     this.renderer.domElement.remove()

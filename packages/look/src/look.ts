@@ -30,7 +30,6 @@ export interface LookOptions {
   readonly fog?: boolean;
   readonly sun?: DirectionalLight | null;
   readonly fill?: HemisphereLight | null;
-  readonly particles?: Scene | null;
 }
 
 export interface Look {
@@ -61,7 +60,7 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
   renderer.toneMapping = NoToneMapping;
   const composer = new EffectComposer(renderer, { frameBufferType: HalfFloatType, multisampling: QUALITY[quality].multisampling });
   composer.addPass(new RenderPass(scene, camera));
-  if (options.particles) composer.addPass(new SoftPass(scene, camera, options.particles));
+  composer.addPass(new SoftPass(scene, camera));
 
   const size = renderer.getDrawingBufferSize(new Vector2());
   const ao = new N8AOPostPass(scene, camera, size.x || 1, size.y || 1);

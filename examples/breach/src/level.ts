@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { LevelBuilder, decalBias, apartmentBlock, apc, deadTree, groundMaterial, lada, puddleMaterial, surface, waterTower, worldBoxGeometry, worldPlaneGeometry, type SurfaceName, type SurfaceSource } from '@blacksite/look/world'
 import { APC_AT, EXFIL, LEVEL, PATCHES, PRACTICALS, ROOMS, SHAFTS, type Block, type Practical, type Room, type Vec3 } from './layout'
 import { BUDGET, type RoomId } from './model'
+import { SoftParticles } from '@blacksite/look/soft'
 import woodColor from './assets/wood-planks-old/c.webp?url'
 import woodNormal from './assets/wood-planks-old/n.webp?url'
 import woodOrm from './assets/wood-planks-old/orm.webp?url'
@@ -19,7 +20,6 @@ type Face = 'x+' | 'x-' | 'z+' | 'z-' | 'y+' | 'y-'
 type Cell = 'blotch' | 'streak' | 'crack' | 'soot'
 type Fixture = 'pendant' | 'cage' | 'tube' | 'fire' | 'emergency' | 'lamp' | 'sodium'
 type Spot = { kind: Practical['kind']; fixture: Fixture; at: Vec3; room: RoomId; color?: string; intensity?: number; distance?: number; housing?: boolean }
-type Motes = { points: THREE.Points; room: RoomId; base: Float32Array; speed: Float32Array; height: number; bottom: number; range: number }
 type Tape = { from: number; count: number; base: Float32Array; across: THREE.Vector3; loose: boolean; seed: number }
 type LightSource = { position: THREE.Vector3; color: THREE.Color; room: RoomId; base: number; kind: Practical['kind']; distance: number; seed: number; score: number; selected: boolean }
 
@@ -946,9 +946,9 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
       .replace('#include <alphamap_fragment>', '#include <alphamap_fragment>\ndiffuseColor.a *= smoothstep(0.3, 2.6, length(vShaftView));')
   }
   shaftMaterial.customProgramCacheKey = () => 'breach-shaft-near-fade'
-  const moteMaterial = own(new THREE.PointsMaterial({ map: dot, color: '#e6dcc4', size: 0.018, sizeAttenuation: true, vertexColors: true, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }))
+  const moteTint = new THREE.Color('#e6dcc4')
   const moteCount = options.quality === 'high' && !options.phone ? 60 : options.quality === 'low' ? 24 : 40
-  const motes: Motes[] = []
+  const motes: Array<{ field: SoftParticles; room: RoomId }> = []
   SHAFTS.forEach((shaft, index) => {
     const height = Math.max(shaft.at[1] * 2, roomOf(shaft.room).ceiling) + 0.3
     const geometry = crossed(Math.max(shaft.size[0], shaft.size[1]) * 1.05, height, 3, 8)
@@ -967,22 +967,24 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     fixtures.push({ object: add(volume), room: shaft.room })
 
     const bottom = 0.15, range = height - 0.6
-    const base = new Float32Array(moteCount * 4)
-    const speed = new Float32Array(moteCount)
+    const field = own(new SoftParticles({ capacity: moteCount }))
     for (let mote = 0; mote < moteCount; mote++) {
       const key = index * 101 + mote
-      base.set([(hash(key + 0.1) - 0.5) * shaft.size[0] * 0.9, hash(key + 0.2) * range, (hash(key + 0.3) - 0.5) * shaft.size[1] * 0.9, hash(key + 0.4) * Math.PI * 2], mote * 4)
-      speed[mote] = 0.015 + hash(key + 0.5) * 0.025
+      field.emit({
+        position: { x: (hash(key + 0.1) - 0.5) * shaft.size[0] * 0.9, y: bottom + hash(key + 0.2) * range, z: (hash(key + 0.3) - 0.5) * shaft.size[1] * 0.9 },
+        velocity: { x: 0, y: -(0.015 + hash(key + 0.5) * 0.025), z: 0 },
+        life: 0,
+        size: 0.012 + hash(key + 0.6) * 0.01,
+        tint: moteTint,
+        glow: 0.18 + hash(key + 0.7) * 0.2,
+        flutter: 0.07,
+        seed: hash(key + 0.4),
+      })
     }
-    const cloud = new THREE.BufferGeometry()
-    cloud.setAttribute('position', new THREE.BufferAttribute(new Float32Array(moteCount * 3), 3))
-    cloud.setAttribute('color', new THREE.BufferAttribute(new Float32Array(moteCount * 3), 3))
-    cloud.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, height / 2, 0), Math.hypot(shaft.size[0], height, shaft.size[1]) / 2 + 0.3)
-    const points = new THREE.Points(own(cloud), moteMaterial)
-    points.position.set(shaft.at[0], 0, shaft.at[2])
-    points.renderOrder = 3
-    points.name = `motes-${index}`
-    motes.push({ points: add(points), room: shaft.room, base, speed, height, bottom, range })
+    field.wrap({ x: 0, y: bottom + range / 2, z: 0 }, { x: shaft.size[0] * 0.9, y: range, z: shaft.size[1] * 0.9 })
+    field.position.set(shaft.at[0], 0, shaft.at[2])
+    field.name = `motes-${index}`
+    motes.push({ field: add(field), room: shaft.room })
   })
 
   const marker = new THREE.Group()
@@ -1147,20 +1149,8 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
       tapePosition.needsUpdate = true
     }
     for (const cloud of motes) {
-      cloud.points.visible = visibleRooms.has(cloud.room)
-      if (!cloud.points.visible) continue
-      const position = cloud.points.geometry.getAttribute('position') as THREE.BufferAttribute
-      const color = cloud.points.geometry.getAttribute('color') as THREE.BufferAttribute
-      for (let mote = 0; mote < cloud.speed.length; mote++) {
-        const o = mote * 4, phase = cloud.base[o + 3]!
-        const rise = ((cloud.base[o + 1]! - time * cloud.speed[mote]!) % cloud.range + cloud.range) % cloud.range
-        const y = cloud.bottom + rise
-        position.setXYZ(mote, cloud.base[o]! + Math.sin(time * 0.23 + phase) * 0.07, y, cloud.base[o + 2]! + Math.cos(time * 0.19 + phase * 1.3) * 0.07)
-        const fade = Math.min(1, rise / 0.4, (cloud.range - rise) / 0.4) * (0.35 + 0.65 * y / cloud.height)
-        color.setXYZ(mote, fade, fade, fade)
-      }
-      position.needsUpdate = true
-      color.needsUpdate = true
+      cloud.field.visible = visibleRooms.has(cloud.room)
+      cloud.field.advance(dt)
     }
   }
   update(0, 0, new Set(ROOMS.map(room => room.id)))
@@ -1171,7 +1161,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     practicals,
     update,
     dispose() {
-      group.traverse(object => { if (object instanceof THREE.Mesh || object instanceof THREE.Points) object.geometry.dispose() })
+      group.traverse(object => { if (object instanceof THREE.Mesh) object.geometry.dispose() })
       for (const item of owned) item.dispose()
       group.removeFromParent()
       group.clear()

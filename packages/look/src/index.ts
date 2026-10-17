@@ -16,5 +16,5 @@ export { applyPhysicalSky, bakePhysicalEnvironment, createAtmosphereLuts, create
 export type { AtmosphereLuts, AtmosphereUniforms, PhysicalSky } from './physical';
 export { applyStochasticTiling } from './stochastic';
 export type { StochasticTilingOptions } from './stochastic';
-export { SoftPass, createSoftParticleMaterial } from './soft';
-export type { SoftParticleOptions } from './soft';
+export { SoftParticles, SoftPass } from './soft';
+export type { SoftParticle, SoftParticlesOptions } from './soft';
