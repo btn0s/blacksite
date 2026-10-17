@@ -140,7 +140,7 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
         }),
       },
       input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
-      model: { feel: model.feel, budget: model.budget },
+      model: { feel: model.feel, budget: model.budget, quality: model.quality },
     })
     exposed.current = check
 

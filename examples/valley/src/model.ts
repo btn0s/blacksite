@@ -71,6 +71,7 @@ export const budget = {
 
 export const quality = {
   shimmerStill: 0.012,
+  shimmerMotion: 0.012,
   popLimit: 0.035,
 } as const
 

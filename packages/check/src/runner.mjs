@@ -3,8 +3,11 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { chromium } from 'playwright-core'
+import { runShimmer } from './shimmer.mjs'
+import { runFlyover } from './flyover.mjs'
 
 export const CHECKS = ['perf', 'hitch', 'pop', 'feel', 'critic', 'audio']
+export const OPT_IN_CHECKS = ['shimmer', 'flyover']
 
 export const PROFILES = {
   desktop: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, isMobile: false, hasTouch: false, cpu: 1 },
@@ -349,6 +352,10 @@ export async function runChecks(options) {
         }
       }
 
+      const kit = { page, scratch, base: files.url, out, name, profile, contract, options, setPose, contactSheet, percentile, round }
+      if (only.includes('shimmer')) { log(`${name}: shimmer`); add('shimmer', name, await runShimmer(kit)) }
+      if (only.includes('flyover')) { log(`${name}: flyover`); add('flyover', name, await runFlyover(kit)) }
+
       if (only.includes('critic')) {
         log(`${name}: critic captures`)
         const captured = []
@@ -399,8 +406,10 @@ export function summarize(report) {
     if (check === 'feel' && !result.skipped) detail = Object.entries(result.numbers).map(([key, value]) => `${key} ${value.measured}${value.expected !== null ? `/${value.expected}` : ''}`).join(', ')
     if (check === 'audio' && !result.skipped) detail = `voices max ${result.voices.max}/${result.voices.budget}, ${result.plays} plays, ${result.backToBackRepeats} back-to-back repeats`
     if (check === 'pop' && !result.skipped) detail = `${result.flagged.length} moving frames and ${result.still.length} still views flagged of ${result.frames}`
+    if (check === 'shimmer' && !result.skipped) detail = `still mean ${Math.max(...result.views.map(view => view.still.mean))}/${result.budget.shimmerStill}, motion mean ${Math.max(...result.views.map(view => view.motion.mean))}/${result.budget.shimmerMotion} (worst of ${result.views.length} views)`
+    if (check === 'flyover' && !result.skipped) detail = `${result.flagged.length} of ${result.frames} frames flagged (budget ${result.allowed})`
     if (check === 'critic') detail = `${result.captures} captures, ${result.consoleErrors} console errors`
-    lines.push(`${status.padEnd(4)}  ${check.padEnd(6)} ${profile.padEnd(7)} ${detail}`)
+    lines.push(`${status.padEnd(4)}  ${check.padEnd(7)} ${profile.padEnd(7)} ${detail}`)
   }
   lines.push(report.pass ? 'checks passed' : 'checks failed')
   return lines.join('\n')
