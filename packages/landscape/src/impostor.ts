@@ -229,6 +229,7 @@ uniform sampler2D impostorNormal;
 uniform float impostorFrames;
 uniform vec3 impostorTint;
 uniform float impostorContact;
+uniform float impostorBlur;
 varying vec2 vImpostorGrid;
 varying vec2 vImpostorUv;
 varying vec3 vImpostorFade;
@@ -242,7 +243,7 @@ vec2 bsFrameUv(vec2 frame) {
 
 const FRAGMENT_SAMPLE = /* glsl */ `
 float bsSmudge = vImpostorFade.z;
-float bsBias = bsSmudge * 1.25;
+float bsBias = bsSmudge * impostorBlur;
 #ifdef IMPOSTOR_SINGLE
 vec2 bsFrame = clamp(floor(vImpostorGrid + 0.5), vec2(0.0), vec2(impostorFrames - 1.0));
 vec4 bsA = texture2D(impostorAlbedo, bsFrameUv(bsFrame), bsBias);
@@ -290,6 +291,7 @@ export interface ImpostorMaterialOptions {
   readonly singleFrame?: boolean
   readonly tint?: readonly [number, number, number]
   readonly contact?: number
+  readonly blur?: number
 }
 
 export function createImpostorMaterial(options: ImpostorMaterialOptions): MeshStandardMaterial {
@@ -306,6 +308,7 @@ export function createImpostorMaterial(options: ImpostorMaterialOptions): MeshSt
     impostorRange: { value: new Vector4(...options.range) },
     impostorTint: { value: new Vector3(...(options.tint ?? [1, 1, 1])) },
     impostorContact: { value: options.contact ?? 1 },
+    impostorBlur: { value: options.blur ?? 1.25 },
   }
   material.userData.impostor = uniforms
   patchMaterial(material, `world-impostor-${options.singleFrame ? 1 : 4}-${options.alphaToCoverage ? 'a2c' : 'cut'}`, shader => {

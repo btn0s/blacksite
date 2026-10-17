@@ -163,17 +163,18 @@ export async function buildValley(tier: Tier, onProgress: (value: number) => voi
   const sources: TerrainSources = { near, far, nearSurface: null as never, farSurface: null as never, band: site.band }
   const heightAtWorld = (x: number, z: number) => terrainHeightAt(sources, x, z)
 
+  const summit = heightAt(far, site.meadowCentre[0], site.meadowCentre[1])
   const forest = (x: number, z: number) => {
     const wobble = (fbm(x / 140, z / 140, 3, 501) - 0.5) * 190
-    const meadow = 1 - smoothstep(site.meadowRadius - 50, site.meadowRadius + 70, Math.hypot(x - site.meadowCentre[0], z - site.meadowCentre[1]) + wobble)
     const h = heightAt(far, x, z)
+    const meadow = (1 - smoothstep(site.meadowRadius - 50, site.meadowRadius + 70, Math.hypot(x - site.meadowCentre[0], z - site.meadowCentre[1]) + wobble)) * smoothstep(summit - 70, summit - 35, h + wobble * 0.15)
     const local = 1 - smoothstep(900, 1400, Math.hypot(x, z))
     const relief = 1 - smoothstep(pathTop - 20, pathTop + 70, h) * local
     const patches = fbm(x / 260, z / 260, 3, 503)
     let density = smoothstep(0.3, 0.46, patches * 0.6 + relief * 0.35 + 0.12)
     density *= 1 - meadow
     density *= 1 - smoothstep(site.treeline - 220, site.treeline, h)
-    density *= 1 - smoothstep(34, 46, slopeAt(far, x, z))
+    density *= 1 - smoothstep(40, 54, slopeAt(far, x, z))
     const grove = smoothstep(0.8, 0.88, valueNoise(x / 34, z / 34, 507)) * meadow * (1 - smoothstep(site.meadowRadius * 0.45, site.meadowRadius * 0.7, Math.hypot(x, z)) * 0)
     density = Math.max(density, grove * 0.9)
     const lane = pathDistance(x, z)

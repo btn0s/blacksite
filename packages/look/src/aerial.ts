@@ -45,7 +45,7 @@ const AERIAL_FRAGMENT = `
     float h1 = max(y1 + atElevation, 0.0) * 0.001;
     vec3 tauAir = (atRayleigh * atLayer(h0, h1, km, 8.0) + atMieExtinction * atLayer(h0, h1, km, 1.2)) * atAerial;
     float tauFog = atFog.x > 0.0 ? atFog.x * atLayer(max(y0 - atFog.y, 0.0), max(y1 - atFog.y, 0.0), span, atFog.z) : 0.0;
-    vec3 tau = tauAir + tauFog;
+    vec3 tau = (tauAir + tauFog) * clamp(1.0 - atClear / max(span, 1.0), 0.0, 1.0);
     vec3 transmittance = exp(-tau);
     vec3 horizon = normalize(vec3(direction.x, max(direction.y, 0.0), direction.z));
     vec3 air = atSky(horizon);
@@ -55,7 +55,7 @@ const AERIAL_FRAGMENT = `
       vec3 sunlight = atSunlight(r, atSun.y) * atPhaseHg(dot(direction, atSun), 0.55);
       fog = atFogTint * (atSky(vec3(0.0, 1.0, 0.0)) * 0.55 + air * 0.45 + sunlight);
     }
-    vec3 weight = vec3(tauFog) / max(tau, vec3(1e-6));
+    vec3 weight = vec3(tauFog) / max(tauAir + tauFog, vec3(1e-6));
     vec3 inscatter = mix(air, fog, weight) * (1.0 - transmittance);
     outputColor = vec4(inputColor.rgb * transmittance + inscatter, inputColor.a);
   }

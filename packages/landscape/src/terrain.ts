@@ -206,21 +206,34 @@ uniform vec3 terrainViewer;
 uniform vec4 canopyParams;
 uniform vec3 canopyColor;
 uniform vec3 canopyShade;
-vec4 bsCrowns(vec2 p, uint salt) {
+vec4 bsCrowns(vec2 p, uint salt, vec3 view, out float cover) {
   vec2 cell = floor(p);
   vec2 local = p - cell;
-  float top = -1.0;
-  vec4 result = vec4(0.0, 0.0, -1.0, 0.5);
+  vec2 along = view.xy;
+  vec2 side = vec2(-along.y, along.x);
+  float sine = view.z;
+  float cosine = sqrt(max(1.0 - sine * sine, 0.0));
+  float squash = max(sine, 0.3);
+  vec2 stretch = vec2(sqrt(squash), inversesqrt(squash));
+  float top = -1e9;
+  cover = -1.0;
+  vec4 result = vec4(0.0, 1.0, 0.0, 0.5);
   for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
     ivec2 id = ivec2(cell) + ivec2(i, j);
     vec2 centre = vec2(float(i), float(j)) + 0.2 + 0.6 * vec2(bsHash(id, salt), bsHash(id, salt + 2u));
-    float radius = 0.38 + 0.3 * bsHash(id, salt + 4u);
+    float radius = 0.4 + 0.3 * bsHash(id, salt + 4u);
     vec2 r = local - centre;
-    float d2 = dot(r, r) / (radius * radius);
-    float h = sqrt(max(1.0 - d2, 0.0)) * radius + bsHash(id, salt + 6u) * 0.35;
-    if (d2 < 1.0 && h > top) { top = h; result = vec4(normalize(vec3(r / radius, sqrt(max(1.0 - d2, 0.02)))), bsHash(id, salt + 8u)); }
+    vec2 e = vec2(dot(r, side), dot(r, along)) / (radius * stretch);
+    float d2 = dot(e, e);
+    float z = sqrt(max(1.0 - d2, 0.0));
+    float key = (z * radius + bsHash(id, salt + 6u) * 0.35) * sine - dot(centre, along) * cosine;
+    if (d2 < 1.0 && key > top) { top = key; cover = z; result = vec4(e, max(z, 0.14), bsHash(id, salt + 8u)); }
   }
-  return result;
+  if (cover < 0.0) return result;
+  vec3 c = vec3(-along.x * cosine, sine, -along.y * cosine);
+  vec3 u = vec3(along.x * sine, cosine, along.y * sine);
+  vec3 s = vec3(side.x, 0.0, side.y);
+  return vec4(normalize(s * result.x + u * result.y + c * result.z), result.w);
 }
 uniform float terrainDetail;
 uniform vec2 terrainCoverShade;
@@ -283,24 +296,34 @@ if (vTerrainCanopy > 0.001) {
   float l0 = min(floor(level), 2.0);
   float lf = level - l0;
   float s0 = canopyParams.w * exp2(l0);
+  vec3 bsToEye = cameraPosition - vTerrainWorld;
+  vec2 bsAway = -bsToEye.xz / max(length(bsToEye.xz), 1e-3);
+  vec3 bsView = vec3(bsAway, clamp(dot(bsToEye, bsBase) / max(length(bsToEye), 1e-3), 0.0, 1.0));
+  float k0;
+  float k1;
 #ifdef CANOPY_DITHER
   float pick = step(fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))), lf);
-  vec4 c0 = bsCrowns(vTerrainWorld.xz / (s0 * (1.0 + pick)), pick > 0.5 ? 74u + uint(l0) * 13u : 61u + uint(l0) * 13u);
+  vec4 c0 = bsCrowns(vTerrainWorld.xz / (s0 * (1.0 + pick)), pick > 0.5 ? 74u + uint(l0) * 13u : 61u + uint(l0) * 13u, bsView, k0);
   vec4 c1 = c0;
+  k1 = k0;
 #else
-  vec4 c0 = bsCrowns(vTerrainWorld.xz / s0, 61u + uint(l0) * 13u);
-  vec4 c1 = bsCrowns(vTerrainWorld.xz / (s0 * 2.0), 74u + uint(l0) * 13u);
+  vec4 c0 = bsCrowns(vTerrainWorld.xz / s0, 61u + uint(l0) * 13u, bsView, k0);
+  vec4 c1 = bsCrowns(vTerrainWorld.xz / (s0 * 2.0), 74u + uint(l0) * 13u, bsView, k1);
 #endif
-  vec3 dome = normalize(mix(c0.z < 0.0 ? vec3(0.0, 0.0, 1.0) : c0.xyz, c1.z < 0.0 ? vec3(0.0, 0.0, 1.0) : c1.xyz, lf));
-  float top = mix(c0.z, c1.z, lf);
+  vec3 lump = normalize(mix(c0.xyz, c1.xyz, lf));
+  float top = mix(k0, k1, lf);
+  float rim = mix(max(k0, 0.0), max(k1, 0.0), lf);
   float tone = mix(fract(c0.w), fract(c1.w), lf);
   float covered = smoothstep(-0.6, 0.2, top);
   float relief = 1.0 / (1.0 + level * 0.3);
-  vec3 lump = normalize(vec3(dome.x, dome.z * 0.9, dome.y));
   vec3 canopyNormal = normalize(mix(bsBase, lump, (0.68 * covered + 0.15) * lumpFade * relief + 0.1));
-  float crownAo = mix(0.78 - 0.62 * relief, mix(0.3, 1.0, smoothstep(0.0, 0.8, dome.z)), covered);
+  float sunSide = 1.0;
+#if NUM_DIR_LIGHTS > 0
+  sunSide = smoothstep(-0.25, 0.55, dot(normalize((viewMatrix * vec4(lump, 0.0)).xyz), directionalLights[0].direction));
+#endif
+  float crownAo = mix(0.52 - 0.48 * relief, mix(0.16, 1.0, smoothstep(0.0, 0.75, rim)) * mix(0.28, 1.0, sunSide), covered);
   vec3 cellAlbedo = mix(canopyShade, canopyColor * (0.62 + tone * 0.76), crownAo);
-  vec3 meanAlbedo = mix(canopyShade, canopyColor * 0.95, 0.76);
+  vec3 meanAlbedo = mix(canopyShade, canopyColor * 0.95, 0.5);
   vec3 canopyAlbedo = mix(meanAlbedo, cellAlbedo, lumpFade);
   canopyAlbedo *= 0.85 + bsMacro * 0.3;
   bsAlbedo = mix(bsAlbedo, canopyAlbedo, vTerrainCanopy);
