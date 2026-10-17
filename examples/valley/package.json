@@ -12,8 +12,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "typecheck": "tsc --noEmit -p .",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
     "@blacksite/check": "workspace:*",

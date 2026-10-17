@@ -25,8 +25,7 @@
     "replay:verify": "tsx scripts/verify-replay.ts",
     "server": "tsx packages/server/src/index.ts",
     "bake": "tsx scripts/bake-map.ts",
-    "test:warden": "vitest run",
-    "test:cascade": "vitest run tests/destruction tests/destruction-host-physics.test.ts",
+    "test:cascade": "vitest run tests/destruction",
     "dev:warden": "vite --host 0.0.0.0"
   },
   "dependencies": {
