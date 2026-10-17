@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 
 export function CopyLine({ code, prompt = '$' }: { code: string; prompt?: string }) {
   const [copied, setCopied] = useState(false)
@@ -12,4 +12,8 @@ export function CopyLine({ code, prompt = '$' }: { code: string; prompt?: string
 
 export function Keys({ keys }: { keys: string[] }) {
   return <span className="keys">{keys.map(key => <kbd key={key}>{key}</kbd>)}</span>
+}
+
+export function Inline({ text }: { text: string }) {
+  return <>{text.split('`').map((part, index) => index % 2 ? <code key={index}>{part}</code> : <Fragment key={index}>{part}</Fragment>)}</>
 }

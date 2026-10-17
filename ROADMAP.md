@@ -4,22 +4,22 @@ October 2026.
 
 ## What Blacksite is for
 
-Blacksite is skills and building blocks that let game-dev agents build seriously good browser games. Everything on this page serves two promises:
+Blacksite is a skill that lets your coding agent build browser games that feel shipped, plus the building blocks it builds them from. Everything on this page serves two promises:
 
 1. **Agents use the blocks correctly.** Every block has a guide and a skill that tell an agent how it works and how to do common things with it, so it uses the block the standard way instead of guessing.
-2. **Fast by default.** 120 fps on desktop and a sustained 60 fps on phones, without the agent having to remember to optimise. Unreal and Unity turn on detail levels, streaming, budgets and background threads by default; browser games usually start with none of them. Blacksite's blocks do.
+2. **Fast by default.** 120 fps on desktop and a sustained 60 fps on phones, without the agent having to remember to optimise. Desktop game engines turn on detail levels, streaming, budgets and background threads by default; browser games usually start with none of them. Blacksite's blocks do.
 
 ## What works today
 
 | Area | What you get | Status |
 |---|---|---|
 | Player templates | `fpp` (single-player first person, rigged arms), `tpp` (ALS third person), `mp` (multiplayer, first/third person switch), `blank` | Usable |
-| Multiplayer | Relay v0: Colyseus rooms plus an in-browser loopback, owner movement, server-checked hits, remote bodies replaying full ALS state | Usable v0 |
-| Characters | ALS Web: the ALS Refactored animation system ported to three.js, with an [agent guide](vendor/als-web/docs/guide/overview.md) and `als` skill | Usable |
-| Weapons | Armory: rifle and pistol with fire, reload, aim and recoil | Usable |
-| World | Landscape: terrain to the horizon, ground cover, forests with impostors, one wind field; the physically based sky and nature look | Experimental |
-| Destruction | Cascade: structural collapse in a worker, walk mode with tools | Experimental |
-| AI | Warden: squad AI and tactical simulation | Experimental |
+| Multiplayer | Colyseus rooms plus an in-browser loopback, owner movement, server-checked hits, remote bodies replaying full ALS state | Usable v0 |
+| Characters | ALS Web: the ALS Refactored animation system ported to three.js, with an [agent guide](vendor/als-web/docs/guide/overview.md) and the `als` reference | Usable |
+| Weapons | Rifle and pistol with fire, reload, aim and recoil | Usable |
+| World | Terrain to the horizon, ground cover, forests with impostors, one wind field; the physically based sky and nature look | Experimental |
+| Destruction | Structural collapse in a worker, walk mode with tools | Experimental |
+| AI | Squad AI and tactical simulation | Experimental |
 | Input | Keyboard, mouse, gamepad, touch | Usable |
 | Agent tooling | `blacksite` CLI, the `blacksite` skill, `blacksite check`, budgets, owned-asset sync | Usable |
 | Docs and demos | [Site](https://blacksite-sable.vercel.app) with live demos and a performance overlay | Usable |
@@ -65,7 +65,7 @@ To keep the Rust path open now: the sim stays headless, data-oriented and determ
 
 ## How a feature gets in
 
-1. **Research**: what Unreal, Unity and Godot do, what the browser allows, written up in `docs/capture/<name>.md` with a target number.
+1. **Research**: what established game engines do, what the browser allows, written up in `docs/capture/<name>.md` with a target number.
 2. **Prototype**: a benchmark scene that hits the desktop and phone targets.
 3. **Default**: moved into a package and turned on for every new game.
 

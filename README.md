@@ -1,13 +1,15 @@
 # Blacksite
 
-**Skills and building blocks that let game-dev agents build seriously good browser games.**
+**A skill that lets your coding agent build browser games that feel shipped.**
 
-A coding agent can write a game loop. What it can't do in an afternoon is write a character with hundreds of animations, multiplayer that feels right, buildings that collapse, or squads that flank you, and keep all of it at 120 fps on a desktop and 60 fps on a phone. Blacksite gives the agent two things:
+Describe a game to Claude Code, Codex or Cursor. Blacksite has the agent size it, build it from tested parts, then measure the frame rate, the movement and the sound on desktop and phone before it hands you a link to play.
 
-- **One skill** teaches the agent to build the version of each feature that shipped games built, not the tutorial version: footsteps that follow the feet, fog that layers the distance, enemies that react a beat late. It sizes the work, writes the real numbers down first, lists the parts a shipped game has, builds them and checks the result like a critic. Every building block also has a reference, so the agent uses it the right way instead of guessing.
-- **Building blocks** are finished game systems the agent snaps together instead of writing from scratch.
+A coding agent can write a game loop. What it can't do in an afternoon is write a character with hundreds of animations, multiplayer that feels right, buildings that collapse, or squads that flank you, and keep all of it at 120 fps on a desktop and 60 fps on a phone. Blacksite gives the agent:
 
-You describe the game. The agent builds it with these.
+- **One skill.** `SKILL.md` is what the agent reads for anything about a game. It tells the agent what the shipped version of each feature has: footsteps triggered by the feet, 3 to 5 samples per surface and never the same one twice; enemies with a 0.2 s reaction delay and aim that starts wide. 26 reference files hold the numbers for light, sound, movement, frame budgets and each building block.
+- **Building blocks.** Finished game systems the agent puts together instead of writing from scratch.
+- **Templates, an open asset library and checks.** Four starting projects, 146 open-licence assets, and `blacksite check`, which measures a running game on desktop and phone.
+- **Example games.** Breach, Traverse and Valley, each built only on the public packages.
 
 [See the demos](https://blacksite-sable.vercel.app)
 
@@ -29,19 +31,9 @@ Then describe a game to your agent. The skill loads by itself for anything game-
 | `craft`, `feel`, `sound`, `performance` | How a shipped game is lit, dressed, tuned and mixed, with numbers, and what gives way first when the frame is over budget. |
 | `characters`, `als`, `weapons`, `ai`, `destruction`, `multiplayer`, `input` | One per building block, pointing to its guide, with its numbers, its gaps and the failures that shaped it. |
 | `architecture`, `assets`, `catalog` | Who owns which state, how to use assets you already own, and every package and command. |
-| `verify` | `blacksite check`: frame time, hitches, pop-in, movement feel, audio repeats and critic captures on desktop and phone. |
+| `verify` | `blacksite check`: frame time, hitches, pop-in, movement speed, repeated sounds and screenshots to review, on desktop and phone. |
 
-```mermaid
-flowchart LR
-  A[Size] --> B[Truth]
-  B --> C[Parts list]
-  C --> D[Build]
-  D --> E[Make it live]
-  E --> F[Verify]
-  F -. only on request .-> G[Ship]
-```
-
-Each step writes a file into the game project, and the work ends with checks the agent has to pass, so you can stop and resume anywhere.
+The agent asks one question at a time and sizes the job, writes the real numbers into one file, lists the parts a shipped game would have, builds the risky parts alone and joins them, makes the scene move and make sound, and checks its own work before it hands you a link. It deploys only when you ask. Each step writes a file into the game project, so you can stop and resume anywhere.
 
 ## Building blocks
 

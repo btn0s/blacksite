@@ -62,7 +62,7 @@ function Nav({ route }: { route: string }) {
       <div className="nav-group">{tools.map(tool => <a key={tool.slug} className={active(`tools/${tool.slug}`)} href={link(`tools/${tool.slug}`)}>{tool.name}</a>)}</div>
       <div className="nav-group nav-group--secondary">
         <a className={active('get-started')} href={link('get-started')}>Get started</a>
-        <a className={active('skills')} href={link('skills')}>Skills</a>
+        <a className={active('skills')} href={link('skills')}>How it works</a>
         <a className={active('roadmap')} href={link('roadmap')}>Roadmap</a>
         <a href={repo} className="nav-external">GitHub</a>
       </div>

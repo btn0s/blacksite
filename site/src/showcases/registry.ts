@@ -3,6 +3,8 @@ import type { Control } from '../content'
 export type Showcase = {
   tool: string
   title: string
+  summary: string
+  tryThis: string
   order?: number
   thumbnail?: string
   keyboard: Control[]

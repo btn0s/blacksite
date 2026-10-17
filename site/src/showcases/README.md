@@ -27,6 +27,8 @@ import type { Showcase } from '../registry'
 export const showcase: Showcase = {
   tool: 'weapons',
   title: 'Firing Range',
+  summary: 'A rifle and a pistol on rigged first-person arms, with recoil, impacts and targets at marked distances.',
+  tryThis: 'Aim down sights with the right mouse button, then press F to inspect the weapon in your hands.',
   thumbnail: 'thumbs/weapons.webp',
   keyboard: [{ action: 'Fire', keys: ['Left mouse'] }],
   touch: [{ action: 'Fire', keys: ['Fire'] }],
@@ -34,9 +36,10 @@ export const showcase: Showcase = {
 ```
 
 - `tool` is the tool slug: `characters`, `destruction`, `weapons`, `multiplayer`, `ai` or `input`.
+- `summary` says what the demo is and `tryThis` gives one thing to do in it. The tool page shows both under the demo's name. Write them as plain sentences with real numbers.
 - `keyboard` and `touch` fill the "?" panel in the corner of the canvas. Keep the in-canvas `Hints` to five keys or fewer.
-- `thumbnail` is a 1600×900 WebP in `site/public/thumbs/`. A tool appears in the home grid once one of its showcases has a thumbnail. When you add or change a thumbnail, run `pnpm meta:images` to rebuild the 1200×630 share images in `site/public/og/`. The site tests fail until you do.
-- `order` sorts several showcases on one tool page. Each one gets a full-width stage and a name line.
+- `thumbnail` is a 1600×900 WebP in `site/public/thumbs/`. It is the poster before the demo starts and the image for the tool's share card. When you add or change a thumbnail, run `pnpm meta:images` to rebuild the 1200×630 share images in `site/public/og/`. The site tests fail until you do.
+- `order` sorts several showcases on one tool page. Each one gets a name, its summary, a full-width stage and a Play button.
 
 Registered showcases replace the old demos listed in `content.ts` for that tool.
 
@@ -50,7 +53,7 @@ Registered showcases replace the old demos listed in `content.ts` for that tool.
 `@blacksite/ui/hud` provides:
 
 - `Screen`, a wrapper that adds grain and the vignette;
-- `TitleCard`, the small in-canvas tag, for example `Armory · Firing Range`;
+- `TitleCard`, the small in-canvas tag, for example `Weapons · Firing Range`;
 - `Hints`, one line that fades;
 - `Prompt` and `Loading`;
 - `Status` and `Actions`, for buttons in the bottom-right corner;

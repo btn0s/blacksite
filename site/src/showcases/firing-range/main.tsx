@@ -417,7 +417,7 @@ function App() {
     <Canvas shadows={tier !== 'low'} dpr={Number(params.get('dpr')) || internalPixelRatio()} camera={{ fov: RANGE_MOVEMENT.worldFov, near: depthDefaults(tier).near, far: 400, position: [0, eye, 0.4] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={state => attachPerfProbe(state.gl)}>
       <Scene tier={tier} rig={rig} worldReady={world} onReady={onArms} />
     </Canvas>
-    <TitleCard title="Armory · Firing Range" />
+    <TitleCard title="Weapons · Firing Range" />
     {ready && <Hud touch={touch} />}
     {ready && <button type="button" className={`range-rig${touch ? ' range-rig--touch' : ''}`} onClick={() => window.dispatchEvent(new CustomEvent('range-rig', { detail: rigs[(rigs.indexOf(rig) + 1) % rigs.length] }))}>
       <span>Arms</span><strong>{rigLabels[rig]}</strong>{!touch && <kbd>V</kbd>}

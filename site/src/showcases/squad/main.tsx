@@ -391,7 +391,7 @@ function App() {
       {ready && layer && <Scene intel={intel} layer={layer} focus={focus} setFocus={setFocus} roster={roster} />}
     </Canvas>
     <div className="squad-layer" ref={setLayer} />
-    <TitleCard title="Warden · Squad" />
+    <TitleCard title="AI · Squad" />
     {started && <Readout snapshot={snapshot} side={followed ? followed.team : intel} />}
     {started && followed && <div className="squad-follow" style={{ color: `#${TEAM_COLOR[followed.team].getHexString()}` }}>{followed.callsign} · {followed.role}</div>}
     <Legend visible={started && intel !== 'off'} />

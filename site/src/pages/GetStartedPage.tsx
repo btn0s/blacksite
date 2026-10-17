@@ -1,8 +1,10 @@
 import { installLine, repo } from '../content'
 import { CopyLine } from '../components'
 import { link } from '../links'
+import { skills } from '../skills'
 
 const makeGame = 'Make a stealth game in an abandoned factory'
+const command = `/blacksite:${skills[0]?.name ?? 'blacksite'}`
 
 export function GetStartedPage() {
   return <div className="page narrow get-started">
@@ -12,29 +14,24 @@ export function GetStartedPage() {
       <li>
         <h2>Install</h2>
         <CopyLine code={installLine} />
-        <p>On Windows, run <a href={`${repo}/blob/main/install.ps1`}>install.ps1</a> instead.</p>
+        <p>It clones Blacksite into <code>~/.blacksite</code>, puts the <code>blacksite</code> command on your PATH, and adds the skill to each of Claude Code, Codex and Cursor that it finds. On Windows, run <a href={`${repo}/blob/main/install.ps1`}>install.ps1</a> in PowerShell.</p>
       </li>
       <li>
-        <h2>Open your agent</h2>
-        <p>Claude Code, Codex or Cursor, in an empty folder.</p>
+        <h2>Open your agent in an empty folder</h2>
+        <p>Claude Code, Codex or Cursor.</p>
       </li>
       <li>
-        <h2>Tell it what to make</h2>
+        <h2>Say what you want to make</h2>
         <CopyLine code={makeGame} prompt=">" />
-        <p>The skill loads by itself for anything about a game. In Claude Code you can also start it with <code>/blacksite:blacksite</code> and your idea.</p>
+        <p>You don’t have to name the skill; the agent loads it for anything about a game. In Claude Code you can also type <code>{command}</code> followed by your idea.</p>
       </li>
     </ol>
+    <p className="done">That’s it.</p>
 
     <section className="next">
-      <h2>What happens next</h2>
-      <dl>
-        <div><dt>Size</dt><dd>The agent asks one question at a time, then sizes the work. A Slice is the default: one complete loop in one finished space. For anything bigger it proposes the Slice that proves the idea.</dd></div>
-        <div><dt>Truth</dt><dd>It writes the real numbers first, such as speeds, fire rates, ranges and budgets, in one module that the whole game reads.</dd></div>
-        <div><dt>Parts</dt><dd>It lists what a shipped game in that space would have, with minimum counts: light sources, materials, props, sound layers, enemy behaviours. You approve the list before anything is built.</dd></div>
-        <div><dt>Build</dt><dd>Each risky mechanic is built on its own, and the ones that work are joined into one loop. Then the space is dressed and made live.</dd></div>
-        <div><dt>Verify</dt><dd>It measures frame time, hitches, pop-in, movement feel and sound on desktop and phone, reads every capture like a critic, then hands you a link to play.</dd></div>
-      </dl>
-      <p>It is all one skill. <a href={link('skills')}>See the skill and its references →</a></p>
+      <h2>What you get</h2>
+      <p>The agent asks a few questions, one at a time, then proposes a Slice: one complete loop in one finished space, about 5 to 10 minutes of play. It builds it over a day or a few sessions, checks it on desktop and phone, and gives you a link to play with the check results.</p>
+      <p><a href={link('skills')}>How it works, step by step →</a></p>
     </section>
   </div>
 }

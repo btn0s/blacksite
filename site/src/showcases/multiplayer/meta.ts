@@ -27,4 +27,4 @@ const touch: Control[] = [
   { action: 'First or third person', keys: ['View'] },
 ]
 
-export const showcase: Showcase = { tool: 'multiplayer', title: 'Arena', thumbnail: 'thumbs/multiplayer.webp', keyboard, touch }
+export const showcase: Showcase = { tool: 'multiplayer', title: 'Arena', summary: 'Two players in one room inside this tab. A bot plays each side, the server checks every hit, and both characters run the full animation.', tryThis: 'Click a side to take it over from its bot; press Esc to hand it back.', thumbnail: 'thumbs/multiplayer.webp', keyboard, touch }

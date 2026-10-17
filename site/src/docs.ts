@@ -7,7 +7,6 @@ export type Doc = DocEntry & { load: Loader }
 
 const loaders: Record<string, Loader> = {
   roadmap: () => import('../../ROADMAP.md'),
-  als: () => import('../../vendor/als-web/docs/guide/overview.md'),
   'player-templates': () => import('../../docs/player-templates.md'),
   cascade: () => import('../../docs/cascade.md'),
   arms: () => import('../../docs/arms.md'),

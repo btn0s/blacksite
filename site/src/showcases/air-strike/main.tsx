@@ -70,7 +70,7 @@ function App() {
     : null
   return <Screen>
     <div ref={host} />
-    <TitleCard title="Cascade · Air Strike" />
+    <TitleCard title="Destruction · Air Strike" />
     {status && <Status {...status} />}
     <Hints visible={!touch} items={[['Click', 'Strike'], ['Drag', 'Orbit'], ['Wheel', 'Zoom'], ['R', 'Rebuild']]} />
     <Prompt text={touch ? 'Tap the block to call a strike' : 'Click the block to call a strike'} visible={state.phase === 'ready' && state.detached === 0} />

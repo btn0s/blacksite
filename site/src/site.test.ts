@@ -1,9 +1,10 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { resolveLegacy, tools } from './content'
+import { featured, limits, parts, resolveLegacy, tools } from './content'
 import { githubUrl, linkFor, rewriteHref } from './docs'
-import { invocationOf, parseFrontmatter, referenceGroups, summarizeReference } from './skill-meta'
+import { examples, invocationOf, parseFrontmatter, referenceGroups, referenceNotes, steps } from './skill-meta'
+import { pages } from './seo'
 import { showcases } from './showcases/registry'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -14,6 +15,7 @@ describe('legacy routes', () => {
     expect(resolveLegacy('demos/movement/')).toBe('tools/characters')
     expect(resolveLegacy('docs/warden')).toBe('tools/ai')
     expect(resolveLegacy('docs/roadmap')).toBe('roadmap')
+    expect(resolveLegacy('guides/als')).toBe('tools/characters')
     expect(resolveLegacy('demos/unknown')).toBe('')
     expect(resolveLegacy('tools/ai')).toBeNull()
   })
@@ -53,14 +55,14 @@ describe('skills', () => {
     expect(skills).toEqual({ blacksite: 'both' })
   })
 
-  it('places every reference in one group and summarizes it', () => {
+  it('places every reference in one group with a label and a one-line summary', () => {
     const directory = resolve(root, 'skills', 'blacksite', 'references')
     const names = readdirSync(directory).filter(name => name.endsWith('.md')).map(name => name.replace(/\.md$/, '')).sort()
     expect(referenceGroups.flatMap(group => group.names).sort()).toEqual(names)
+    expect(Object.keys(referenceNotes).sort()).toEqual(names)
     for (const name of names) {
-      const { title, summary } = summarizeReference(readFileSync(resolve(directory, `${name}.md`), 'utf8'))
-      expect(title, name).not.toBe('')
-      expect(summary.length, name).toBeGreaterThan(20)
+      expect(referenceNotes[name]!.label, name).not.toBe('')
+      expect(referenceNotes[name]!.summary.length, name).toBeGreaterThan(20)
     }
   })
 })
@@ -84,6 +86,19 @@ describe('showcases', () => {
       expect(existsSync(resolve(root, 'site/frames', `${showcase.frame}.html`))).toBe(true)
       expect(readFileSync(resolve(root, 'site/frames', `${showcase.frame}.html`), 'utf8')).toContain(`../src/showcases/${showcase.id}/`)
       if (showcase.thumbnail) expect(existsSync(resolve(root, 'site/public', showcase.thumbnail))).toBe(true)
+      expect(showcase.summary.length, showcase.id).toBeGreaterThan(20)
+      expect(showcase.tryThis.length, showcase.id).toBeGreaterThan(10)
     }
+  })
+
+  it('leads the home page with games that have a thumbnail', () => {
+    for (const entry of featured) expect(showcases.find(showcase => showcase.id === entry.showcase)?.thumbnail, entry.showcase).toBeTruthy()
+  })
+})
+
+describe('copy', () => {
+  it('names no other engine or system codename in what visitors read', () => {
+    const text = JSON.stringify([tools.map(({ packages: _, agent: { commands: __, ...agent }, ...tool }) => ({ ...tool, agent })), featured, parts, limits, steps, examples, referenceNotes, pages, showcases.map(({ summary, tryThis, title }) => ({ summary, tryThis, title }))])
+    expect(text).not.toMatch(/Unreal|Unity|Godot|\bUE5\b|Armory|Warden|Relay|Cascade/)
   })
 })

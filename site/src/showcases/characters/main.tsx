@@ -119,7 +119,7 @@ function App() {
     <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 70, near: depthDefaults(autoQuality()).near, far: 600, position: [-4, 2, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }} onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
       {ready && <Scene onFirstPerson={setFirstPerson} audio={audio} />}
     </Canvas>
-    <TitleCard title="ALS Web · Checkpoint" />
+    <TitleCard title="Characters · Checkpoint" />
     <Hints visible={!touch} items={[['WASD', 'Move'], ['Shift', 'Sprint'], ['Space', 'Mantle'], ['V', 'View'], ['X', 'Ragdoll']]} />
     <Prompt text="Click to look around" visible={ready && !touch && !locked} />
     {touch && ready && <Touch />}

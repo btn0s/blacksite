@@ -20,4 +20,6 @@ const touch: Control[] = [
   { action: 'Back to the meadow', keys: ['Home'] },
 ]
 
-export const showcase: Showcase = { tool: 'world', title: 'Valley', thumbnail: 'thumbs/valley.webp', keyboard, touch }
+export const showcase: Showcase = { tool: 'world', title: 'Valley',
+  summary: 'A square kilometre of meadow above a forested valley, with mountains 16 km away in the haze and one wind moving the grass, the trees and the sound.',
+  tryThis: 'Walk up to the ridge and look back across the valley; press R to return to the meadow.', thumbnail: 'thumbs/valley.webp', keyboard, touch }

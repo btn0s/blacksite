@@ -1,7 +1,7 @@
 {
   "name": "Blacksite",
   "short_name": "Blacksite",
-  "description": "Skills and building blocks for game-dev agents.",
+  "description": "A skill that lets your coding agent build browser games that feel shipped.",
   "start_url": "/",
   "display": "browser",
   "background_color": "#0c0e0b",

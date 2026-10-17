@@ -123,7 +123,7 @@ function App() {
     <div className={`mp-split${phone ? ' mp-split--single' : ''}`}>
       {peers.map((peer, index) => <PlayerView key={peer.id} index={index} connection={peer} subject={subjects[index]!} level={arena} tier={tier} mode={mode(index)} listening={phone ? index === 0 : human === index} onCreated={createdHandlers[index]} onReplica={onReplica} />)}
     </div>
-    <TitleCard title="Relay · Arena" />
+    <TitleCard title="Multiplayer · Arena" />
     {ready && !phone && <Hints visible={human !== null} items={[['WASD', 'Move'], ['LMB', 'Fire'], ['RMB', 'Aim'], ['Space', 'Mantle'], ['V', 'View']]} />}
     <Prompt text="Click a side to play it · a bot plays the other" visible={ready && !phone && human === null} />
     {phone && ready && <div className="mp-note">You against a bot in one loopback room</div>}

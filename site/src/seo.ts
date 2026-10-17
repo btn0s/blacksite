@@ -4,36 +4,35 @@ import { docList } from './doc-list'
 export const siteName = 'Blacksite'
 export const defaultSiteUrl = 'https://blacksite-sable.vercel.app'
 export const themeColor = '#0c0e0b'
-export const headline = 'Skills and building blocks for game-dev agents'
+export const headline = 'A skill that lets your coding agent build browser games that feel shipped'
 export const imageSize = { width: 1200, height: 630 }
 
 export type PageMeta = { route: string; title: string; description: string; image: string; imageAlt: string; type: 'website' | 'article' }
 
 const toolDescriptions: Record<string, string> = {
-  characters: 'A three.js port of ALS Refactored: a player body that walks, sprints, mantles, rolls, ragdolls and aims in first or third person.',
-  world: 'Open country from the grass at your feet to mountains at the horizon: terrain, grass, forests, one wind field and a physically based sky. Walk the Valley.',
-  destruction: 'Cascade: concrete buildings that crack, lose their supports and fall, with the physics in a web worker. Call an air strike in the demo.',
-  weapons: 'Armory: rigged first-person arms with a rifle and a pistol. Fire, reload, aim and recoil, with hits the server can check. Try the firing range.',
-  multiplayer: 'Relay: rooms where each player moves their own body, the server checks hits, and remote players run the full character animation.',
-  ai: 'Warden: enemy squads that pick cover, flank and coordinate, in a deterministic simulation that can replay every fight. Watch a squad fight.',
-  input: 'One input layer for keyboard, mouse, gamepad and touch, bound to named actions, plus menus, pause and settings that work with a controller.',
+  characters: 'A player character that walks, sprints, mantles, rolls, ragdolls and aims in first or third person. Play Traverse, a timed rooftop run, in the browser.',
+  world: 'Terrain, grass, forests, wind and sky that hold up from your feet to mountains 16 km away. Walk a square kilometre of meadow in Valley.',
+  destruction: 'Concrete buildings that crack, lose their supports and fall, with the physics in a web worker. Call in a strike on a six-storey block.',
+  weapons: 'A rifle and a pistol on rigged first-person arms, with recoil and hits a server can check. Play Breach, a squad fight, or the firing range.',
+  multiplayer: 'Rooms where each player moves their own character, the server checks every hit, and other players animate like you do. Try it against a bot.',
+  ai: 'Enemy squads that see, hear, take cover and flank, in a simulation that gives the same result every time. Watch two squads of five fight.',
+  input: 'One input layer for keyboard, mouse, gamepad and touch, bound to named actions, plus menus, pause and settings screens a controller can drive.',
 }
 
 const guideDescriptions: Record<string, string> = {
-  als: 'How a game uses the ALS Web character: who owns state, movement and animation, the frame order, units and axes, with recipes for common jobs.',
-  'player-templates': 'The fpp, tpp, mp and blank starting points for a new Blacksite game, what each one sets up, and how far along each one is.',
-  cascade: 'How Cascade works: bond graphs, stress solvers, fracture, the physics worker and renderer, plus walk mode inside a destructible building.',
-  arms: 'How the first-person arms work: the ALS skeleton masked to arms, the rifle and pistol upper-body graph, and the fire, reload and equip clips.',
-  warden: 'How to add Warden squad AI to a game: the packages to install, wiring it into a React Three Fiber scene, and running it in a worker.',
-  input: 'The Blacksite input package: one runtime for keyboard, mouse, touch and gamepads, with action contexts for menus, modals and gameplay.',
-  ui: 'The Blacksite UI package: shadcn and Base UI components with the neutral tokens, and console-style screens that work with a controller.',
+  'player-templates': 'The four starting projects for a Blacksite game: first person, third person, multiplayer and blank. What each one sets up and how far along it is.',
+  cascade: 'How destruction works: bonds and stress, fracture, the physics worker and renderer, and walking inside a building that can collapse.',
+  arms: 'How the first-person arms work: the skeleton masked to the arms, the rifle and pistol animation graph, and the fire, reload and equip clips.',
+  warden: 'How to add squad AI to a game: the packages to install, connecting it to a React Three Fiber scene, and running it in a worker.',
+  input: 'The Blacksite input package: one runtime for keyboard, mouse, touch and gamepads, with separate controls for menus, dialogs and gameplay.',
+  ui: 'The Blacksite UI package: menu components with neutral styling, and console-style screens you can drive with a gamepad.',
 }
 
 export const pages: PageMeta[] = [
-  { route: '', title: `${siteName} — ${headline}`, description: 'Skills and building blocks for game-dev agents. Your coding agent designs a web game with you, prototypes the risky parts and keeps it at 120 fps.', image: 'og/home.jpg', imageAlt: `${siteName}: ${headline}`, type: 'website' },
-  { route: 'get-started', title: `Get started — ${siteName}`, description: 'Install Blacksite, open Claude Code, Codex or Cursor and describe a game. The agent sizes it, builds what shipped games have and checks it.', image: 'og/get-started.jpg', imageAlt: `Get started with ${siteName}`, type: 'article' },
-  { route: 'skills', title: `Skills — ${siteName}`, description: 'The Blacksite skill and its references: how a coding agent builds the version of a game feature that shipped games built, and checks it like a critic.', image: 'og/skills.jpg', imageAlt: `${siteName} skills`, type: 'article' },
-  { route: 'roadmap', title: `Roadmap — ${siteName}`, description: 'What works in Blacksite today, what is in progress and what comes next for its game-dev skills and building blocks.', image: 'og/roadmap.jpg', imageAlt: `${siteName} roadmap`, type: 'article' },
+  { route: '', title: `${siteName} — ${headline}`, description: 'Describe a game to Claude Code, Codex or Cursor. Blacksite has the agent build it from tested parts and check frame rate, feel and sound before you play.', image: 'og/home.jpg', imageAlt: `${siteName}: ${headline}`, type: 'website' },
+  { route: 'get-started', title: `Get started — ${siteName}`, description: 'Install Blacksite with one command, open Claude Code, Codex or Cursor in an empty folder, and say what game you want. The agent builds it and sends a link.', image: 'og/get-started.jpg', imageAlt: `Get started with ${siteName}`, type: 'article' },
+  { route: 'skills', title: `How it works — ${siteName}`, description: 'What your coding agent does when you ask for a game: it sizes the job, writes the numbers down, lists the parts, builds them and checks its own work.', image: 'og/skills.jpg', imageAlt: `How ${siteName} works`, type: 'article' },
+  { route: 'roadmap', title: `Roadmap — ${siteName}`, description: 'What works in Blacksite today, what is being built now, and what comes after that, for the skill and its building blocks.', image: 'og/roadmap.jpg', imageAlt: `${siteName} roadmap`, type: 'article' },
   ...tools.map((tool): PageMeta => ({ route: `tools/${tool.slug}`, title: `${tool.name} — ${siteName}`, description: toolDescriptions[tool.slug] ?? tool.tagline, image: `og/${tool.slug}.jpg`, imageAlt: `${siteName} ${tool.name}: ${tool.tagline}`, type: 'article' })),
   ...docList.filter(doc => doc.slug !== 'roadmap').map((doc): PageMeta => ({ route: `guides/${doc.slug}`, title: `${doc.title} — ${siteName}`, description: guideDescriptions[doc.slug] ?? doc.title, image: doc.tool ? `og/${doc.tool}.jpg` : 'og/home.jpg', imageAlt: `${siteName} ${doc.title}`, type: 'article' })),
 ]
