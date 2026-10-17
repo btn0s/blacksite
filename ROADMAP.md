@@ -17,6 +17,7 @@ Blacksite is skills and building blocks that let game-dev agents build seriously
 | Multiplayer | Relay v0: Colyseus rooms plus an in-browser loopback, owner movement, server-checked hits, remote bodies replaying full ALS state | Usable v0 |
 | Characters | ALS Web: the ALS Refactored animation system ported to three.js, with an [agent guide](vendor/als-web/docs/guide/overview.md) and `als` skill | Usable |
 | Weapons | Armory: rifle and pistol with fire, reload, aim and recoil | Usable |
+| World | Landscape: terrain to the horizon, ground cover, forests with impostors, one wind field; the physically based sky and nature look | Experimental |
 | Destruction | Cascade: structural collapse in a worker, walk mode with tools | Experimental |
 | AI | Warden: squad AI and tactical simulation | Experimental |
 | Input | Keyboard, mouse, gamepad, touch | Usable |
