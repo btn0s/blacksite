@@ -25,6 +25,7 @@ It starts headless Chrome with the GPU on (WebGL and WebGPU), loads the page onc
 | `critic` | At every bookmark: a 1× capture with the HUD on (desktop and phone), and on desktop a 4 × 4 grid of 4× crops rendered at full resolution through `camera.setViewOffset`, tiled into `critic/desktop-<name>-4x.png`. | Every capture is taken with no console errors and no failed requests. Passing proves only that the pictures exist. Reading them is your job. |
 | `zfight` | At every bookmark renders an object-ID buffer several times, each with a sub-pixel projection jitter and a 0.7 mm camera nudge, then again with the nudges alone, using the game's own materials, render target and depth format. Pixels whose winning ID flips between frames, and still flips under the nudges alone, are z-fighting. Pixels that flip only under jitter are edge aliasing, reported as `edgeFlicker` per bookmark but not counted. Writes `zfight/<profile>-<bookmark>.png` with the pixels ringed, and `-raw.png` beside it. | Ringed pixels at every bookmark ≤ max(32, 0.003% of the frame), and the ID pass covered at least 2% of the view (an empty buffer proves nothing). Edges don't count: a pixel only counts when it sits in a patch at least 4 px across, and when the two IDs that flip are within a few centimetres of each other in depth (the ID pass stores depth in alpha), so a thin bar flickering against the wall behind it is not reported. |
 | `audio` | Polls `audio()` every 250 ms through the perf and feel runs. | Peak active voices ≤ `budget.voices` (32), and no cue plays the same sample twice in a row. |
+| `stress` | Runs last, with the frame loop driven at 144 Hz, so frames come faster than a 60 Hz fixed physics step and some frames run no physics substep at all. Six pointer-lock and release rounds, which re-render the scene while the player stands still; six rounds of moving, sprinting and jumping that end with `input.restart`; the tab hidden for 2 s; a 2.5 s main-thread stall while sprinting; fullscreen and three viewport sizes; then `scripts.edge`. Each step has 30 s to finish. | No error, unhandled rejection or `console.error` from first playable to the end. It stops at the first one and reports the step and the stack. |
 | `shimmer` | Opt-in. At every bookmark, with `scripts.freeze` holding wind and animation: reads 8 consecutive frames with the camera still, then shifts the view by ¼, ½ and ¾ of a render pixel across and down through `camera.setViewOffset`. Still flicker is the per-pixel luminance change between frames. Motion shimmer is what is left after the shifted frame is compared with the still frames resampled by the same shift, both lightly blurred, so true motion cancels and only aliasing survives. Writes `shimmer/<profile>-<name>.png` heatmaps and `shimmer-<profile>.png`. | Mean still flicker ≤ `quality.shimmerStill` (0.01) and mean motion shimmer ≤ `quality.shimmerMotion` (0.03) at every bookmark, in 0–1 luminance. p99 and max are reported, not judged. |
 | `flyover` | Opt-in. Flies a smooth spline through `flyover` with 16 frames a segment, wind frozen, and records the mean squared luminance change between consecutive frames. Writes `flyover-<profile>.png`, a contact sheet with flagged frames outlined red, and `flyover-<profile>.json`. | No more than `quality.popLimit` (0) of the frames change more than 2.5× the median of the two frames either side. |
 
@@ -49,7 +50,7 @@ const check = exposeCheck({
   player() { return { position: [x, y, z] } }, // the player's position in metres, every frame
   audio() { return mixer.sample() },           // { voices, plays: [{ cue, sample }] } since the last call
   scripts: { perf: tour, feelStart },          // optional
-  input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
+  input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space', restart: 'KeyR' },
   model: { feel: FEEL, budget: BUDGET },       // the same numbers the game runs on
 })
 check.ready()                                  // when the first playable frame is on screen
@@ -65,7 +66,8 @@ check.ready()                                  // when the first playable frame 
 | `audio()` | `{ voices, plays }`: voices playing now, and each sound started since the last call as `{ cue, sample }`. `createAudioLog()` keeps both if you call its `start(cue, sample)` and `end()` from your mixer. |
 | `scripts.perf` | A representative run that resolves when done: the busiest fight, the biggest explosion, the longest sightline. Without it the check flies through the bookmarks. |
 | `scripts.feelStart` | Puts the player at rest with at least 30 m of flat, open ground along `input.move`. Without it the run starts wherever the player is. |
-| `input` | Key codes for the feel run. `move` is whatever runs the player along the open ground. Checkpoint uses `KeyS` because its runway lies behind the spawn. |
+| `input` | Key codes for the feel and stress runs. `move` is whatever runs the player along the open ground. Checkpoint uses `KeyS` because its runway lies behind the spawn. `restart` is the key that respawns or restarts the player; without it the stress run skips that step. |
+| `scripts.edge` | Drives the player hard into the edge of the playable space, sprinting and jumping into walls and corners, and returns. Without it the stress run skips that step. |
 | `model.feel` | `moveSpeed`, `sprintSpeed` (m/s), `timeToTopSpeed` (s to 90%), `jumpApex` (m), `tolerance` (fraction). Import them from the model module the game runs on, never retype them. |
 | `model.budget` | `frameMs`, `phoneFrameMs`, `hitchMs`, `firstPlayableMs`, `voices`. |
 | `model.quality` | `shimmerStill`, `shimmerMotion` and `popLimit` for the opt-in checks. Set them once you have measured a view you are happy with, a little above the measurement. |
@@ -110,9 +112,10 @@ FAIL  hitch  phone   2 frames over 33 ms, longest 33.4 ms; first playable 2832 m
 pass  feel   desktop moveSpeed 3.74/3.75, sprintSpeed 6.49/6.5, timeToTopSpeed 0.23, jumpApex 0.82/0.9
 pass  pop    desktop 0 moving frames and 0 still views flagged of 41
 pass  critic desktop 10 captures, 0 console errors
+FAIL  stress desktop first error during pointer: unreachable
 ```
 
-That is Checkpoint. Phone hitches are single missed vsyncs under a 4× throttle, and they still count: fix them or explain them in your report. Every check must reach zero before you call the game done.
+That is Checkpoint, with a stress failure from an early Valley build. Phone hitches are single missed vsyncs under a 4× throttle, and they still count: fix them or explain them in your report. Every check must reach zero before you call the game done.
 
 Then read the pictures, critically:
 

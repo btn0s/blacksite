@@ -34,7 +34,7 @@ export type AudioPlay = { cue: string; sample: string }
 
 export type AudioSample = { voices: number; plays?: AudioPlay[] }
 
-export type CheckInput = { move?: string; sprint?: string; jump?: string }
+export type CheckInput = { move?: string; sprint?: string; jump?: string; restart?: string }
 
 export type BlacksiteCheck = {
   version: 1

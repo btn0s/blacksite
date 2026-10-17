@@ -1,6 +1,6 @@
 # @blacksite/check
 
-Headless checks that end in numbers: frame time, hitches, pop-in, movement feel, critic captures, audio voices and z-fighting.
+Headless checks that end in numbers: frame time, hitches, pop-in, movement feel, critic captures, audio voices, z-fighting and a stress run that fails on the first error.
 
 ```sh
 blacksite check http://localhost:4173/ --out shots/check
@@ -16,7 +16,7 @@ const check = exposeCheck({
   bookmarks: [{ name: 'spawn', position: [-4, 2, 0], target: [12, 1, 0] }, { name: 'street', position: [40, 2, 3], target: [82, 9, -6] }],
   camera(pose) { override = pose },
   player() { return { position: body.translation() } },
-  input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
+  input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space', restart: 'KeyR' },
   model: { feel: { moveSpeed: 4.5, sprintSpeed: 6.5, jumpApex: 1.1 }, budget: { frameMs: 8.3 } },
 })
 check.ready()

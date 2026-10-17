@@ -169,10 +169,11 @@ What isn't there yet: one cloud layer, no high cirrus and no volumetric clouds; 
 import { BREEZE, createWind } from '@blacksite/landscape'
 
 const wind = createWind(BREEZE)
-const terrain = createTerrain({ sources, layers, layerSpecs, canopy: { height: 13, start, end, crown: 8.5, color, shade }, detailDistance: 260 })
-const cover = createCover({ terrain: terrain.uniforms, wind, families, heightAt })
+const uniforms = terrainUniforms(sources)
+const cover = createCover({ terrain: uniforms, wind, families, heightAt })
+const terrain = createTerrain({ sources, uniforms, cover, layers, layerSpecs, canopy: { height: 13, start, end, crown: 8.5, color, shade }, detailDistance: 260 })
 const forest = createForest({ renderer, wind, species, density, choose, heightAt, bounds, spacing: 5.2, count: 64000, near: [48, 70], far: [640, 940], shadowDistance: 180, frameSize: 192, alphaToCoverage: true })
-scene.add(terrain.object, forest.object)
+scene.add(terrain.object, cover.object, forest.object)
 
 function frame(dt: number) {
   wind.update(dt)

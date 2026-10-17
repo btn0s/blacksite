@@ -88,6 +88,14 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
       if (!pose && override.current) (camera as THREE.PerspectiveCamera).clearViewOffset()
       override.current = pose
     }
+    const charge = async (x: number, z: number, yaw: number) => {
+      await place(x, z, yaw)
+      command.yaw = toDegrees(yaw)
+      command.forward = 1
+      command.sprint = true
+      for (let hop = 0; hop < 4; hop++) { await wait(0.4); command.jumpSequence++ }
+      idle()
+    }
     const freeze = (value: boolean) => { const landscape = shared.landscape.current; if (landscape) landscape.frozen = value }
 
     const bookmarks: Bookmark[] = model.bookmarks.map(bookmark => ({ name: bookmark.name, note: bookmark.note, fov: bookmark.fov, ...resolvePose(world, bookmark) }))
@@ -119,6 +127,12 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
       audio: () => shared.sound.sample(),
       scripts: {
         feelStart: () => scripted(() => place(feelStart[0], feelStart[1], flattest)),
+        edge: () => scripted(async () => {
+          const reach = model.site.walkable / 2 - 14
+          await charge(reach, reach, Math.PI / 4)
+          await charge(-reach, reach, Math.PI * 3 / 4)
+          await place(model.site.spawn[0], model.site.spawn[1], model.site.spawnYaw)
+        }),
         freeze: async () => freeze(true),
         unfreeze: async () => freeze(false),
         perf: () => scripted(async () => {
@@ -140,7 +154,7 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
           setCamera(null)
         }),
       },
-      input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
+      input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space', restart: 'KeyR' },
       model: { feel: model.feel, budget: model.budget, quality: model.quality },
     })
     exposed.current = check

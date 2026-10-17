@@ -1,6 +1,6 @@
 import {
   BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Frustum, FrontSide, Group, IcosahedronGeometry, InstancedBufferAttribute,
-  InstancedBufferGeometry, Matrix4, Mesh, MeshStandardMaterial, Sphere, Vector2, Vector3, Vector4,
+  InstancedBufferGeometry, Matrix4, Mesh, MeshStandardMaterial, SRGBColorSpace, Sphere, Vector2, Vector3, Vector4,
 } from 'three'
 import type { Camera, Texture } from 'three'
 import { hash2 } from './random'
@@ -51,6 +51,7 @@ export interface CoverOptions {
 export interface Cover {
   readonly object: Group
   readonly materials: readonly MeshStandardMaterial[]
+  readonly ground: string
   readonly stats: { patches: number; instances: number }
   update(camera: Camera): void
   dispose(): void
@@ -114,6 +115,52 @@ function partFor(family: CoverFamily): Part {
   if (family.shape === 'card') return groundCard()
   return pebble()
 }
+
+const STAMP = 64
+const HUE_TO_THIRD = 0.85 * (0.05 + 0.33 / 2)
+const GRAZING = 4
+
+const linear = (value: number) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+const rise = (value: number) => { const t = Math.min(1, Math.max(0, value / 0.85)); return t * t * (3 - 2 * t) }
+
+function bladeLook(family: CoverFamily, part: Part) {
+  const ao = family.ao ?? 0.5
+  const shade = (y: number) => ao + (1 - ao) * rise(y)
+  const flat = family.shape === 'card' || family.shape === 'pebble'
+  const image = family.texture?.image as CanvasImageSource | undefined
+  if (!image || typeof OffscreenCanvas === 'undefined') {
+    let sum = 0
+    for (let index = 1; index < part.position.length; index += 3) sum += shade(part.position[index]!)
+    return { albedo: [1, 1, 1].map(() => sum / (part.position.length / 3)), fill: 1 }
+  }
+  const canvas = new OffscreenCanvas(STAMP, STAMP)
+  const context = canvas.getContext('2d', { willReadFrequently: true })!
+  context.drawImage(image, 0, 0, STAMP, STAMP)
+  const data = context.getImageData(0, 0, STAMP, STAMP).data
+  const decode = family.texture!.colorSpace === SRGBColorSpace ? (value: number) => linear(value / 255) : (value: number) => value / 255
+  const albedo = [0, 0, 0]
+  let alpha = 0
+  for (let row = 0; row < STAMP; row++) {
+    const factor = shade(flat ? 0.02 : 1 - (row + 0.5) / STAMP)
+    for (let column = 0; column < STAMP; column++) {
+      const offset = (row * STAMP + column) * 4
+      const a = data[offset + 3]! / 255
+      for (let channel = 0; channel < 3; channel++) albedo[channel]! += decode(data[offset + channel]!) * a * factor
+      alpha += a
+    }
+  }
+  return { albedo: albedo.map(value => value / Math.max(alpha, 1e-6)), fill: alpha / (STAMP * STAMP) }
+}
+
+function bladeArea(family: CoverFamily) {
+  const size = (family.size[0] + family.size[1]) / 2
+  if (family.shape === 'card') return size * size
+  if (family.shape === 'pebble') return size * size * 0.5
+  return (family.quads ?? (family.shape === 'flower' ? 2 : 3)) * (family.width ?? (family.shape === 'flower' ? 0.6 : 1)) * size * size
+}
+
+const glslNumber = (value: number) => Number.isInteger(value) ? `${value}.0` : `${+value.toFixed(6)}`
+const glslVec3 = (value: readonly number[]) => `vec3(${value.map(glslNumber).join(', ')})`
 
 const R2_A = 0.7548776662466927
 const R2_B = 0.5698402909980532
@@ -291,10 +338,19 @@ export function createCover(options: CoverOptions): Cover {
   }
   const materials: MeshStandardMaterial[] = []
   const familyRings: { family: CoverFamily; rings: Ring[]; per: number }[] = []
+  const groundTerms: string[] = []
 
   for (const [familyIndex, family] of options.families.entries()) {
     const per = Math.max(1, Math.round(family.perPatch * density))
     const part = partFor(family)
+    const fade = family.fade ?? 1
+    const look = bladeLook(family, part)
+    const palette = [0, 1, 2].map(index => family.colors[Math.min(index, family.colors.length - 1)] ?? [1, 1, 1])
+    const toned = (index: number) => palette[index]!.map((value, channel) => (value * (1 - HUE_TO_THIRD) + palette[2]![channel]! * HUE_TO_THIRD) * look.albedo[channel]!)
+    const weight = per * bladeArea(family) * look.fill / (patchSize * patchSize)
+    groundTerms.push(`bsMask = clamp(${family.mask}, 0.0, 1.0) * ${glslNumber(weight)};
+  bsSum += bsMask * mix(${glslVec3(toned(0))}, ${glslVec3(toned(1))}, bsTone) * mix(${glslNumber(family.ao ?? 0.5)}, 1.0, smoothstep(${glslNumber(fadeStart * fade)}, ${glslNumber(distance * fade)}, bsDistance));
+  bsWeight += bsMask;`)
     const shared = patchGeometry(part, per, patchSize, seed * 31 + familyIndex)
     const textured = Boolean(family.texture)
     const material = new MeshStandardMaterial({
@@ -310,7 +366,7 @@ export function createCover(options: CoverOptions): Cover {
     const colors = [0, 1, 2].map(index => new Vector3(...(family.colors[Math.min(index, family.colors.length - 1)] ?? [1, 1, 1])))
     const uniforms = {
       coverViewer: { value: viewer },
-      coverFade: { value: new Vector4(fadeStart, distance * (family.fade ?? 1), family.shape === 'pebble' || family.shape === 'card' ? 1.2 : 1.9, 0) },
+      coverFade: { value: new Vector4(fadeStart * fade, distance * fade, family.shape === 'pebble' || family.shape === 'card' ? 1.2 : 1.9, 0) },
       coverShape: { value: new Vector4(family.size[0], family.size[1], family.bend ?? 0, 0) },
       coverPatchSize: { value: patchSize },
       coverColors: { value: colors },
@@ -365,9 +421,21 @@ export function createCover(options: CoverOptions): Cover {
   const stats = { patches: 0, instances: 0 }
   const counts = new Int32Array(ringEdges.length)
 
+  const ground = /* glsl */ `
+vec4 coverGround(vec2 bsRoot, vec4 bsSurface, float bsSlope, float bsGround, float bsDistance) {
+  float bsTone = smoothstep(0.25, 0.75, bsNoise(bsRoot * 0.035, 61u) * 0.7 + bsNoise(bsRoot * 0.12, 67u) * 0.3);
+  vec3 bsSum = vec3(0.0);
+  float bsWeight = 0.0;
+  float bsMask;
+  ${groundTerms.join('\n  ')}
+  return vec4(bsSum / max(bsWeight, 1e-4), 1.0 - exp(-bsWeight * ${glslNumber(GRAZING)}));
+}
+`
+
   return {
     object,
     materials,
+    ground,
     stats,
     update(camera) {
       viewer.setFromMatrixPosition(camera.matrixWorld)
