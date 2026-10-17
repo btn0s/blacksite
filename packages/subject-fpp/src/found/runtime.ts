@@ -1,4 +1,4 @@
-import { AnimationAction, AnimationClip, AnimationMixer, AnimationUtils, Bone, Euler, Group, LoopOnce, LoopRepeat, Matrix4, Object3D, Quaternion, Vector3, type Material, type Mesh } from 'three'
+import { AnimationAction, AnimationClip, AnimationMixer, AnimationUtils, Bone, Euler, Group, LoopOnce, LoopRepeat, Matrix4, Object3D, Quaternion, QuaternionKeyframeTrack, Vector3, type KeyframeTrack, type Material, type Mesh } from 'three'
 import { clone } from 'three/addons/utils/SkeletonUtils.js'
 import type { ArmsState, ArmsWeapon } from '../arms/state'
 import { applyGunPose, createViewmodelFeel } from '../feel/viewmodel'
@@ -28,6 +28,7 @@ type Rigged = {
 type Warmup = ReturnType<typeof warmup>
 
 const LOCOMOTION = ['idle', 'walk', 'run'] as const
+export const FOUND_CONVERGE = 12
 const vector = (value: Vec3, target = new Vector3()) => target.set(value[0], value[1], value[2])
 
 function resolveClip(asset: FoundAsset, source: FoundClipSource, fps: number, name: string) {
@@ -36,6 +37,25 @@ function resolveClip(asset: FoundAsset, source: FoundClipSource, fps: number, na
   if (!clip) throw new Error(`Found viewmodel clip ${clipName} is missing`)
   if (typeof source === 'string') return clip
   return AnimationUtils.subclip(clip, name, source.from, source.to, fps)
+}
+
+export function holdPose(clip: AnimationClip) {
+  const tracks = clip.tracks.map((track: KeyframeTrack) => {
+    const size = track.getValueSize()
+    const count = track.times.length
+    const mean = new Array<number>(size).fill(0)
+    for (let key = 0; key < count; key++) {
+      const flip = track instanceof QuaternionKeyframeTrack && key > 0 && [0, 1, 2, 3].reduce((dot, i) => dot + track.values[key * 4 + i] * track.values[i], 0) < 0 ? -1 : 1
+      for (let i = 0; i < size; i++) mean[i] += track.values[key * size + i] * flip / count
+    }
+    if (track instanceof QuaternionKeyframeTrack) {
+      const length = Math.hypot(...mean) || 1
+      for (let i = 0; i < size; i++) mean[i] /= length
+    }
+    const Track = track.constructor as new (name: string, times: number[], values: number[]) => KeyframeTrack
+    return new Track(track.name, [0, 1], [...mean, ...mean])
+  })
+  return new AnimationClip(clip.name, 1, tracks)
 }
 
 function warmup(model: Object3D) {
@@ -89,7 +109,8 @@ function rig(asset: FoundAsset, spec: FoundWeapon, name: string): Rigged {
   const mixer = new AnimationMixer(model)
   const actions: Rigged['actions'] = {}
   for (const [clip, source] of Object.entries(spec.clips) as [FoundClip, FoundClipSource][]) {
-    const action = mixer.clipAction(resolveClip(asset, source, spec.fps, `${name}:${clip}`))
+    const resolved = resolveClip(asset, source, spec.fps, `${name}:${clip}`)
+    const action = mixer.clipAction(clip === 'idle' ? holdPose(resolved) : resolved)
     const looping = (LOCOMOTION as readonly string[]).includes(clip)
     action.setLoop(looping ? LoopRepeat : LoopOnce, Infinity)
     action.clampWhenFinished = !looping
@@ -166,6 +187,13 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
   const euler = new Euler()
   const holderEuler = new Euler(0, 0, 0, 'YXZ')
   const sightPoint = new Vector3()
+  const clipQuaternion = new Quaternion()
+  const clipRear = new Vector3()
+  const groupEuler = new Euler(0, 0, 0, 'YXZ')
+  const hipRear = new Vector3()
+  const hipDirection = new Vector3()
+  const converge = new Vector3()
+  const correction = new Quaternion()
   const roll = new Quaternion()
   const minusZ = new Vector3(0, 0, -1)
   const offset = new Vector3()
@@ -258,11 +286,19 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
       up.applyQuaternion(aimQuaternion)
       roll.setFromAxisAngle(minusZ, -Math.atan2(-up.x, up.y))
       aimQuaternion.premultiply(roll)
+      clipQuaternion.copy(aimQuaternion).invert()
+      clipRear.copy(rear)
       aimPosition.set(0, 0, -spec.eyeRelief).sub(rear.applyQuaternion(aimQuaternion))
 
       vector(spec.pivot, pivot)
       hipQuaternion.setFromEuler(euler.set(...spec.hip.rotation))
       hipPosition.copy(pivot).sub(offset.copy(pivot).applyQuaternion(hipQuaternion)).add(vector(spec.hip.position, offset))
+      hipRear.copy(clipRear).applyQuaternion(hipQuaternion).add(hipPosition)
+      hipDirection.subVectors(front, clipRear).normalize().applyQuaternion(hipQuaternion)
+      converge.set(0, 0, -(spec.converge ?? FOUND_CONVERGE)).sub(hipRear).normalize()
+      correction.setFromUnitVectors(hipDirection, converge)
+      hipQuaternion.premultiply(correction)
+      hipPosition.sub(hipRear).applyQuaternion(correction).add(hipRear)
       blendQuaternion.slerpQuaternions(hipQuaternion, aimQuaternion, aim)
       blendPosition.lerpVectors(hipPosition, aimPosition, aim)
 
@@ -285,9 +321,14 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
       rigged.holder.updateMatrixWorld(true)
 
       const debug = state.debug
-      holderEuler.setFromQuaternion(rigged.holder.quaternion)
+      holderEuler.setFromQuaternion(clipQuaternion.premultiply(rigged.holder.quaternion))
       sightPoint.copy(rigged.rear).applyMatrix4(rigged.bone.matrixWorld)
       debug.holder = [sightPoint.x, sightPoint.y, sightPoint.z, holderEuler.x, holderEuler.y, holderEuler.z]
+      holderEuler.setFromQuaternion(clipQuaternion.copy(aimQuaternion).invert())
+      debug.clip = [clipRear.x, clipRear.y, clipRear.z, holderEuler.x, holderEuler.y, holderEuler.z]
+      const gunPose = feel.gun.pose
+      groupEuler.setFromQuaternion(gunPose.group.quaternion)
+      debug.feel = [groupEuler.x, groupEuler.y, groupEuler.z, gunPose.pivot.rotation.x, gunPose.pivot.rotation.y, gunPose.pivot.rotation.z, gunPose.pivot.position.x, gunPose.pivot.position.y, gunPose.pivot.position.z]
       debug.animationSeconds = clock
       debug.frames++
       debug.activeAction = playing?.action === 'fire' ? 'fire' : playing?.action === 'reload' ? 'reload' : playing?.action === 'draw' ? 'equip' : null

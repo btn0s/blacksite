@@ -73,14 +73,17 @@ Every number below is in `@blacksite/subject-fpp/feel` (`CAMERA_FEEL`, `GUN_FEEL
 | Sway | Look rate × 0.0355, soft-clamped to 0.1 rad (pitch 0.75 of that), on a 2.1 Hz, ζ 0.7 spring; the hands also reach toward the turn. ADS keeps 10%; firing tightens the grip |
 | Gun bob | A figure-eight at hip with the stride, a slower lope while sprinting, a small dip on each step in ADS; heavier weapons swing more and lag more |
 | ADS move | The gun arcs 3 cm in and settles with a small bump when it arrives |
+| Idle | Breath over 4.8 s: 1.5 mm of rise (0.6 mm in ADS) and 0.0012 rad of pitch (half at hip) about the shoulder; no roll |
 | Landing, viewmodel | Drops by 0.25 × fall speed (at most 1.6) on a 3 Hz, ζ 0.75 spring |
 
 ## First person
 
 - **One set of arms.** The arms viewmodel with the local body hidden, or the full body from the head socket with the head and eyes masked (`colorWrite` and `depthWrite` off). Never both: a viewmodel was once mounted while the full body stayed visible.
 - **The viewmodel draws last**, through the look's overlay, with its own 56° FOV. The rifle sits lower right at about 30% of a 16:9 width. Sprint lowers and cants the weapon with bob and roll rather than swinging full-body sprint poses across the screen.
-- **Narrow screens widen the vertical FOV** to hold horizontal coverage, for the world and the viewmodel: below 4:3 for split views, below 0.8 aspect for portrait phones (`portraitFov`). The hip framing slides inward on portrait, with a lens offset that fades to zero in ADS so the sights stay centred.
-- **Portrait is a different shot.** On a tall phone screen the upper arms filled the view. Pulling the weapon away was not enough; a portrait-only camera offset that fades out in ADS kept both hands and the weapon in frame.
+- **Narrow screens widen the vertical FOV** to hold horizontal coverage: the world below 0.8 aspect for portrait phones (`portraitFov`), and the viewmodel across the shorter side (`framePresentation`), so its 56° spans the width of a portrait phone just as it spans the height in landscape.
+- **Portrait frames the gun like landscape.** An inward lens shift and a portrait-only camera offset kept the arms in frame, but moved the viewmodel's vanishing point off the reticle. On an iPhone the hip rifle read as a diagonal from the bottom left, with its barrel 41 px off the crosshair. Holding the viewmodel FOV across the shorter side, with no shift, keeps both hands in view and the vanishing point on the reticle.
+- **The hip gun points at the reticle.** Each frame, the hip pose is turned about the rear sight so the sight line meets the crosshair at 12 m (`FOUND_CONVERGE`, or `converge` per weapon). The authored pistol hold pointed 9° up and 3° left, up to 178 px off on desktop; it now misses by under a pixel on every profile.
+- **Idle is a breath, not a seesaw.** The found idle clips were linear ping-pongs between two poses: the rifle rolled ±2° every 0.8 s, and the pistol pitched ±3° and pushed ±12 mm every 0.97 s. Read on a phone, the arms tilted around the muzzle. The runtime holds each idle clip at its mean pose (`holdPose`), and the feel layer breathes: a ±1.5 mm rise and under 0.1° of pitch over 4.8 s, about the shoulder.
 - **Cropped meshes end off screen.** Cropping a body at the elbow left rounded capsule ends in pistol aim and on phones. A sleeve on each forearm now runs past the edge of the screen in every pose and aspect.
 
 ## Rules, and the failures that taught them

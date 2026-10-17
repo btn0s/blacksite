@@ -51,6 +51,8 @@ export interface ArmsState {
     swayRotation: number
     bobPhase: number
     holder: number[]
+    clip: number[]
+    feel: number[]
     advance: number
   }
 }
@@ -63,6 +65,6 @@ export function createArmsState(): ArmsState {
     debug: { animationSeconds: 0, frames: 0, cameraRelativeError: 0,
       maxCameraRelativeError: 0, poseDelta: 0, activeAction: null, action: null, actionTime: 0,
       weapon: 'rifle', aiming: false, aimAmount: 0, sprintAmount: 0, boneCount: 0, triangles: 0,
-      handError: 0, reach: 0, weaponOffset: [0, 0, 0], recoilOffset: 0, swayRotation: 0, bobPhase: 0, holder: [0, 0, 0, 0, 0, 0], advance: 0 },
+      handError: 0, reach: 0, weaponOffset: [0, 0, 0], recoilOffset: 0, swayRotation: 0, bobPhase: 0, holder: [0, 0, 0, 0, 0, 0], clip: [0, 0, 0, 0, 0, 0], feel: [0, 0, 0, 0, 0, 0, 0, 0, 0], advance: 0 },
   }
 }

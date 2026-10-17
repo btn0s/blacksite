@@ -125,7 +125,7 @@ export default function Mode({ onCreated, physicsProbe }: { onCreated?: (state: 
         onCameraOverride={setCameraOverride}
         ready={() => surfacesReady() && presentation !== null}
         reset={walker.reset}
-        viewmodel={() => arms.debug.holder}
+        viewmodel={() => [...arms.debug.holder, ...arms.debug.clip, ...arms.debug.feel]}
         player={() => ({ position: [walker.position.x, walker.position.y, walker.position.z], velocity: [walker.motor.velocity.x, walker.motor.velocity.y, walker.motor.velocity.z], grounded: walker.motor.grounded })} />
       {physicsProbe}
     </Stage>
