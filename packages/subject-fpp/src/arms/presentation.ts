@@ -1,4 +1,5 @@
 import { DirectionalLight, HemisphereLight, PerspectiveCamera, Scene, type Camera, type WebGLRenderer } from 'three'
+import type { FoundSet } from '../found/model'
 import type { ArmsRig, ArmsState } from './state'
 
 export function portraitFov(fov: number, aspect: number, minimum = 0.8) {
@@ -16,6 +17,7 @@ export interface ArmsViewmodelProps {
   visible?: boolean
   manifestUrl?: string
   rig?: ArmsRig
+  found?: FoundSet
   render?: 'composite' | 'external'
   onPresentation?: (presentation: ArmsPresentation | null) => void
 }
@@ -32,10 +34,11 @@ export function createPresentation(fov: number) {
   return { scene, camera }
 }
 
-export function frameNarrow(view: PerspectiveCamera, fov: number, aspect: number, aim: number, minimum = NARROWEST_ASPECT) {
+export function frameNarrow(view: PerspectiveCamera, fov: number, aspect: number, aim: number, minimum = NARROWEST_ASPECT, offset: readonly [number, number, number] = [0, 0, 0]) {
   const vertical = portraitFov(fov, aspect, minimum)
   const narrow = Math.min(1, Math.max(0, (minimum - aspect) / (minimum - 0.5)))
   const shift = Math.round(narrow * (1 - aim) * 0.16 * view.getFilmWidth() * 1000) / 1000
+  view.position.set(offset[0], offset[1], offset[2]).multiplyScalar(narrow * (1 - aim))
   if (view.aspect !== aspect || view.fov !== vertical || view.filmOffset !== shift) { view.aspect = aspect; view.fov = vertical; view.filmOffset = shift; view.updateProjectionMatrix() }
 }
 

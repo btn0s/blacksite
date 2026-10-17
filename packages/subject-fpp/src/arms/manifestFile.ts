@@ -30,7 +30,7 @@ export interface ArmsManifest {
 export function validateArmsManifest(value: unknown): ArmsManifest {
   if (!value || typeof value !== 'object' || !('version' in value) || value.version !== 1) throw new Error('Arms manifest requires version 1')
   const manifest = value as ArmsManifest
-  if (manifest.rig !== undefined && manifest.rig !== 'blacksite' && manifest.rig !== 'als') throw new Error('Arms rig must be blacksite or als')
+  if (manifest.rig !== undefined && manifest.rig !== 'blacksite' && manifest.rig !== 'als' && manifest.rig !== 'found') throw new Error('Arms rig must be blacksite, als or found')
   if (manifest.fov !== undefined && (!Number.isFinite(manifest.fov) || manifest.fov <= 0 || manifest.fov >= 180)) throw new Error('Arms FOV must be between 0 and 180 degrees')
   for (const weapon of Object.values(manifest.weapons ?? {})) {
     for (const tuple of [weapon.attachment?.position, weapon.attachment?.rotation, weapon.presentation?.position, weapon.presentation?.aimOffset, weapon.presentation?.sight]) {

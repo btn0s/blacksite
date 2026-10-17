@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import * as THREE from 'three'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
@@ -6,7 +6,7 @@ import { Look } from '@blacksite/look/r3f'
 import { autoQuality, type QualityTier } from '@blacksite/look'
 import { ALS_WEAPONS, createWeaponRuntime, type QueryHit, type WeaponEvent } from '@blacksite/armory'
 import { StandaloneSubject, createStandaloneRecoil, createStandaloneTouch, type StandaloneIntent } from '@blacksite/subject-fpp'
-import { ArmsViewmodel, VIEWMODEL, VIEWMODEL_CLIPS, VIEWMODEL_WEAPONS, createArmsState, portraitFov, switchSeconds, type ArmsPresentation, type ArmsRig, type ArmsState } from '@blacksite/subject-fpp/arms'
+import { ArmsViewmodel, FIELD_SET, VIEWMODEL, VIEWMODEL_CLIPS, VIEWMODEL_WEAPONS, createArmsState, foundTimings, portraitFov, switchSeconds, type ArmsPresentation, type ArmsRig, type ArmsState } from '@blacksite/subject-fpp/arms'
 import { exposeCheck, applyCameraPose, type Bookmark, type CameraPose } from '@blacksite/check'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
 import { internalPixelRatio, texturesReady } from '@blacksite/look/world'
@@ -18,14 +18,13 @@ import { castRay } from './hits'
 import { rangeTexturesReady } from './materials'
 import { BOUNDS, buildRange } from './range'
 import { buildSteel } from './targets'
-import { FOUND_RELOAD_EVENTS, FOUND_RELOAD_SECONDS, RANGE_BUDGET, RANGE_FEEL, RANGE_MOVEMENT } from './model'
+import { RANGE_BUDGET, RANGE_FEEL, RANGE_MOVEMENT } from './model'
 import './firing-range.css'
 
 type WeaponId = 'rifle' | 'pistol'
-type ComparisonRig = ArmsRig | 'found'
-const FoundViewmodel = lazy(() => import('./FoundViewmodel'))
-const rigs: ComparisonRig[] = ['blacksite', 'found', 'als']
-const rigLabels: Record<ComparisonRig, string> = { blacksite: 'Blacksite · CC0', found: '1Matzh · Pistol', als: 'ALS body' }
+type ComparisonRig = ArmsRig
+const rigs: ComparisonRig[] = ['found', 'blacksite', 'als']
+const rigLabels: Record<ComparisonRig, string> = { found: 'Found · CC BY', blacksite: 'Built · CC0', als: 'ALS body' }
 
 const range = buildRange()
 const steelSet = buildSteel()
@@ -39,13 +38,13 @@ const touchInput = createStandaloneTouch()
 const commands = { reload: false, swap: false, aim: false, inspect: false, jump: false }
 const { eye, gravity, jump: jumpSpeed } = RANGE_MOVEMENT
 const params = new URLSearchParams(location.search)
-const initialRig: ComparisonRig = rigs.find(rig => rig === params.get('arms')) ?? 'blacksite'
+const initialRig: ComparisonRig = rigs.find(rig => rig === params.get('arms')) ?? 'found'
 const bookmarks: Bookmark[] = [
   { name: 'line', position: [0, eye, 0.4], target: [0, 1.4, -15] },
   { name: 'poppers', position: [-1.2, eye, -2], target: [-1, 0.9, -15] },
   { name: 'gongs', position: [1.5, eye, -1], target: [2, 1.6, -25] },
 ]
-declare global { interface Window { __viewmodel?: { arms: ArmsState; rig: () => ComparisonRig; setRig: (rig: ComparisonRig) => void; presentation: () => ArmsPresentation | null; capture: (active: boolean) => void; model: { procedural: typeof VIEWMODEL; weapons: typeof VIEWMODEL_WEAPONS; clips: typeof VIEWMODEL_CLIPS } } } }
+declare global { interface Window { __viewmodel?: { arms: ArmsState; rig: () => ComparisonRig; setRig: (rig: ComparisonRig) => void; presentation: () => ArmsPresentation | null; capture: (active: boolean) => void; model: { procedural: typeof VIEWMODEL; weapons: typeof VIEWMODEL_WEAPONS; clips: typeof VIEWMODEL_CLIPS; found: typeof FIELD_SET } } } }
 
 drill.set({ cleared: steelSet.steel.map(() => false) })
 
@@ -60,7 +59,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
   const size = useThree(state => state.size)
   const recoil = useMemo(createStandaloneRecoil, [])
   const effects = useMemo(() => createEffects(scene), [scene])
-  const weapon = useMemo(() => createWeaponRuntime({ ownerId: 'player', seed: 7, definitions: rig === 'found' ? definitions.map(definition => ({ ...definition, reloadSeconds: FOUND_RELOAD_SECONDS })) : definitions, initialWeaponId: rig === 'found' ? 'pistol' : 'rifle' }), [rig])
+  const weapon = useMemo(() => createWeaponRuntime({ ownerId: 'player', seed: 7, definitions: rig === 'found' ? definitions.map(definition => ({ ...definition, ...foundTimings(FIELD_SET, definition.id as WeaponId) })) : definitions, initialWeaponId: 'rifle' }), [rig])
   const [presentation, setPresentation] = useState<ArmsPresentation | null>(null)
   const shadows = tier !== 'low'
   const lights = useMemo(() => {
@@ -82,7 +81,6 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     flash: 0, shotCount: 0, phaseTimer: 0, startedAt: 0, clock: 0, lastTimeSent: 0, speed: 0, moving: false,
     height: 0, vertical: 0, jumpHeld: false,
   })
-  useEffect(() => { if (rig === 'found') { control.current.weapon = 'pistol'; arms.weapon = 'pistol' } }, [rig, arms])
   const check = useMemo(() => exposeCheck({
     bookmarks,
     camera(next) { override.current = next },
@@ -123,7 +121,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     },
   }), [])
   useEffect(() => check.dispose, [check])
-  useEffect(() => { window.__viewmodel = { arms, rig: () => rig, setRig: next => window.dispatchEvent(new CustomEvent('range-rig', { detail: next })), presentation: () => presentation, capture: active => { capturing.current = active }, model: { procedural: VIEWMODEL, weapons: VIEWMODEL_WEAPONS, clips: VIEWMODEL_CLIPS } }; return () => { delete window.__viewmodel } }, [arms, rig, presentation])
+  useEffect(() => { window.__viewmodel = { arms, rig: () => rig, setRig: next => window.dispatchEvent(new CustomEvent('range-rig', { detail: next })), presentation: () => presentation, capture: active => { capturing.current = active }, model: { procedural: VIEWMODEL, weapons: VIEWMODEL_WEAPONS, clips: VIEWMODEL_CLIPS, found: FIELD_SET } }; return () => { delete window.__viewmodel } }, [arms, rig, presentation])
   const scratch = useMemo(() => ({ right: new THREE.Vector3(), forward: new THREE.Vector3(), muzzle: new THREE.Vector3(), local: new THREE.Vector3(), from: new THREE.Vector3(), along: new THREE.Vector3() }), [])
 
   useEffect(() => { onReady(Boolean(presentation)) }, [presentation, onReady])
@@ -132,7 +130,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     const canvas = gl.domElement
     const doc = canvas.ownerDocument
     const active = () => doc.pointerLockElement === canvas
-    const select = (next: WeaponId) => { control.current.weapon = rig === 'found' ? 'pistol' : next }
+    const select = (next: WeaponId) => { control.current.weapon = next }
     const down = (event: KeyboardEvent) => {
       audio.start()
       if (!active()) return
@@ -140,7 +138,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
       if (event.code === 'Digit1') select('rifle')
       if (event.code === 'Digit2') select('pistol')
       if (event.code === 'KeyQ' && !event.repeat) select(control.current.weapon === 'rifle' ? 'pistol' : 'rifle')
-      if (event.code === 'KeyF' && !event.repeat && rig !== 'found') arms.inspectSequence++
+      if (event.code === 'KeyF' && !event.repeat) arms.inspectSequence++
     }
     const up = (event: KeyboardEvent) => { if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') control.current.sprint = false }
     const mouseDown = (event: MouseEvent) => { audio.start(); if (event.button === 2 && active()) control.current.aimHeld = true }
@@ -189,7 +187,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     const state = control.current
     if (event.type === 'reload-cancelled') { audio.cancelReload(); return }
     if (event.type === 'switch-started') { arms.weapon = event.weaponId as WeaponId; arms.equipSequence++; audio.equip(); return }
-    if (event.type === 'reload-started') { arms.reloadSequence++; audio.reload(event.weaponId as WeaponId, rig === 'found' ? FOUND_RELOAD_EVENTS[arms.empty ? 'empty' : 'normal'] : VIEWMODEL_CLIPS[event.weaponId as WeaponId].reload.events ?? []); return }
+    if (event.type === 'reload-started') { arms.reloadSequence++; audio.reload(event.weaponId as WeaponId, rig === 'found' ? FIELD_SET.weapons[event.weaponId as WeaponId].events?.[arms.empty ? 'reloadEmpty' : 'reload'] ?? [] : VIEWMODEL_CLIPS[event.weaponId as WeaponId].reload.events ?? []); return }
     if (event.type === 'trigger-blocked' && event.reason === 'empty') { audio.dry(); state.reload = true; return }
     if (event.type === 'shot') {
       const pistol = event.weaponId === 'pistol'
@@ -254,7 +252,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     state.clock += dt
     if (commands.inspect) { commands.inspect = false; arms.inspectSequence++ }
     if (commands.reload) { commands.reload = false; state.reload = true }
-    if (commands.swap) { commands.swap = false; state.weapon = rig === 'found' ? 'pistol' : state.weapon === 'rifle' ? 'pistol' : 'rifle' }
+    if (commands.swap) { commands.swap = false; state.weapon = state.weapon === 'rifle' ? 'pistol' : 'rifle' }
     scratch.forward.set(0, 0, -1).applyQuaternion(camera.quaternion)
     scratch.forward.y = 0
     scratch.forward.normalize()
@@ -279,7 +277,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     const moving = Math.hypot(intent.forward, intent.right) > 0.05
     arms.speed = moving ? speed : 0
     arms.sprinting = sprinting
-    arms.aiming = rig !== 'found' && (state.aimHeld || commands.aim) && !sprinting
+    arms.aiming = (state.aimHeld || commands.aim) && !sprinting
     state.accumulated = Math.min(state.accumulated + dt, 0.1)
     while (state.accumulated >= weapon.fixedDeltaSeconds) {
       state.accumulated -= weapon.fixedDeltaSeconds
@@ -330,12 +328,12 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     <primitive object={lights.flash} />
     <primitive object={range.group} />
     <primitive object={steelSet.group} />
-    <Suspense fallback={null}>{rig === 'found' ? <FoundViewmodel state={arms} onPresentation={setPresentation} /> : <ArmsViewmodel key={rig} state={arms} rig={rig} render="external" onPresentation={setPresentation} />}</Suspense>
+    <ArmsViewmodel key={rig} state={arms} rig={rig} render="external" onPresentation={setPresentation} />
     <StandaloneSubject onIntent={writeIntent} onFire={useCallback((firing: boolean, aim: { origin: THREE.Vector3; direction: THREE.Vector3 }) => { control.current.firing = firing; control.current.aim.direction.copy(aim.direction) }, [])} onReload={useCallback(() => { control.current.reload = true }, [])} touch={touchInput} recoil={recoil} sensitivity={Math.min(1, camera.fov / RANGE_MOVEMENT.worldFov)} />
   </>
 }
 
-function Touch({ found }: { found: boolean }) {
+function Touch() {
   const [aim, setAim] = useState(false)
   return <TouchPad
     onMove={(x, y) => { touchInput.forward = -y; touchInput.right = x }}
@@ -349,7 +347,7 @@ function Touch({ found }: { found: boolean }) {
       if (id === 'swap') commands.swap = true
       if (id === 'inspect') commands.inspect = true
     }}
-    buttons={(found ? [{ id: 'fire', label: 'Fire' }, { id: 'reload', label: 'Reload' }, { id: 'jump', label: 'Jump' }] : [{ id: 'fire', label: 'Fire' }, { id: 'aim', label: aim ? 'Hip' : 'Aim' }, { id: 'reload', label: 'Reload' }, { id: 'swap', label: 'Swap' }, { id: 'inspect', label: 'Inspect' }, { id: 'jump', label: 'Jump' }])} />
+    buttons={[{ id: 'fire', label: 'Fire' }, { id: 'aim', label: aim ? 'Hip' : 'Aim' }, { id: 'reload', label: 'Reload' }, { id: 'swap', label: 'Swap' }, { id: 'inspect', label: 'Inspect' }, { id: 'jump', label: 'Jump' }]} />
 }
 
 function Hud({ touch }: { touch: boolean }) {
@@ -397,7 +395,7 @@ function App() {
       commands.aim = false
       setRig(next)
       const url = new URL(location.href)
-      if (next !== 'blacksite') url.searchParams.set('arms', next)
+      if (next !== 'found') url.searchParams.set('arms', next)
       else url.searchParams.delete('arms')
       history.replaceState(null, '', url)
     }
@@ -417,10 +415,10 @@ function App() {
     {ready && <button type="button" className={`range-rig${touch ? ' range-rig--touch' : ''}`} onClick={() => window.dispatchEvent(new CustomEvent('range-rig', { detail: rigs[(rigs.indexOf(rig) + 1) % rigs.length] }))}>
       <span>Arms</span><strong>{rigLabels[rig]}</strong>{!touch && <kbd>V</kbd>}
     </button>}
-    {ready && rig === 'found' && <div className="range-found-note">Found comparison · pistol only<br />Idle, walk, run, fire and reload<br /><a href={`${import.meta.env.BASE_URL}viewmodel/CREDITS.md`} target="_blank" rel="noreferrer">1Matzh · CC BY 4.0 · Credits</a></div>}
-    <Hints visible={!touch} items={rig === 'found' ? [['LMB', 'Fire'], ['R', 'Reload'], ['WASD', 'Move'], ['Shift', 'Run'], ['V', 'Arms']] : [['LMB', 'Fire'], ['RMB', 'Aim'], ['R', 'Reload'], ['F', 'Inspect'], ['1 2', 'Swap'], ['V', 'Arms']]} />
+    {ready && rig === 'found' && <div className="range-found-note"><a href={`${import.meta.env.BASE_URL}viewmodel/CREDITS.md`} target="_blank" rel="noreferrer">Found arms · CC BY 4.0 · Credits</a></div>}
+    <Hints visible={!touch} items={[['LMB', 'Fire'], ['RMB', 'Aim'], ['R', 'Reload'], ['F', 'Inspect'], ['1 2', 'Swap'], ['V', 'Arms']]} />
     <Prompt text="Click to shoot" visible={ready && !touch && !locked} />
-    {touch && ready && <Touch found={rig === 'found'} />}
+    {touch && ready && <Touch />}
     <Loading title="Firing Range" detail={armsReady ? 'Hanging the steel' : 'Loading the arms'} progress={(armsReady ? 0.6 : 0.1) + (world ? 0.4 : 0)} done={ready} />
   </Screen>
 }

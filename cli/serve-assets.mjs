@@ -19,6 +19,9 @@ export function blacksiteAssets({ blacksiteRoot } = {}) {
       licenses = new Map([
         ['assets/LICENSE-Blacksite-Arms.md', path.join(armsAssets, 'LICENSE')],
         ['assets/viewmodel/CREDITS.md', path.join(armsAssets, 'arms/CREDITS.md')],
+        ['assets/viewmodel/found/CREDITS.md', path.join(armsAssets, 'found/CREDITS.md')],
+        ['assets/viewmodel/found/CC-BY-4.0.txt', path.join(armsAssets, 'found/CC-BY-4.0.txt')],
+        ['assets/viewmodel/found/Sketchfab-provenance.json', path.join(armsAssets, 'found/Sketchfab-provenance.json')],
       ])
       viewmodelLicenses = path.join(armsAssets, 'arms/licenses')
       base = new URL(config.base ?? '/', 'http://localhost').pathname.replace(/\/$/, '')

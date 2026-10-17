@@ -11,7 +11,7 @@ export const showcase: Showcase = {
     { action: 'Swap weapon', keys: ['1', '2', 'Q', 'Wheel'] },
     { action: 'Inspect weapon', keys: ['F'] },
     { action: 'Jump', keys: ['Space'] },
-    { action: 'Compare arms (Blacksite / 1Matzh pistol / ALS body)', keys: ['V'] },
+    { action: 'Compare arms (found / Blacksite / ALS body)', keys: ['V'] },
     { action: 'Move', keys: ['W', 'A', 'S', 'D'] },
     { action: 'Sprint', keys: ['Shift'] },
     { action: 'Release mouse', keys: ['Esc'] },

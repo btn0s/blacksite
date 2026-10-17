@@ -33,7 +33,7 @@
 .range-rig--touch { top: calc(112px + env(safe-area-inset-top)); }
 
 @media (max-width: 640px) {
-  .range-rig { font-size: 12px; min-height: 44px; }
+  .range-rig { top: calc(112px + env(safe-area-inset-top)); font-size: 12px; min-height: 44px; }
   .hud-title, .hud-loading-kicker { font-size: 12px; }
   .range-ammo span, .range-pips span, .range-hud .hud-status span { font-size: 12px; letter-spacing: 0.06em; }
 }

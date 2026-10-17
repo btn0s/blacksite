@@ -1,6 +1,6 @@
 export type ArmsWeapon = 'rifle' | 'pistol'
 export type ArmsAction = 'fire' | 'reload' | 'equip'
-export type ArmsRig = 'blacksite' | 'als'
+export type ArmsRig = 'blacksite' | 'als' | 'found'
 
 export interface ArmsState {
   weapon: ArmsWeapon

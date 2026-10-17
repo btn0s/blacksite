@@ -1,6 +1,6 @@
 # Viewmodel asset provenance
 
-Checked 16 October 2026. The default art is CC0. Runtime TypeScript remains under the repository's code licence. The optional legacy ALS viewmodel retains its existing MIT attribution and is a separate presentation.
+Checked 17 October 2026. The default viewmodel is the found field set, CC BY 4.0, credited in [found/CREDITS.md](found/CREDITS.md). The Blacksite rig below (`rig="blacksite"`) is CC0. Runtime TypeScript remains under the repository's code licence. The optional legacy ALS viewmodel retains its existing MIT attribution and is a separate presentation.
 
 ## Blacksite arms
 
@@ -22,11 +22,11 @@ blender --background --factory-startup --python packages/subject-fpp/scripts/bui
 
 ## Original animation and grip data
 
-Blacksite dedicates its original animation and grip data to [CC0 1.0](licenses/CC0-1.0.txt): the authored timing, movement curves and event data in `VIEWMODEL_CLIPS` (`packages/subject-fpp/src/viewmodel/clips.ts`), finger-pose values in `GRIPS`, and weapon socket and pose transforms in `VIEWMODEL_WEAPONS` (`packages/subject-fpp/src/viewmodel/model.ts`). These data were authored for this viewmodel and do not derive from the optional found-animation comparison or legacy ALS clips.
+Blacksite dedicates its original animation and grip data to [CC0 1.0](licenses/CC0-1.0.txt): the authored timing, movement curves and event data in `VIEWMODEL_CLIPS` (`packages/subject-fpp/src/viewmodel/clips.ts`), finger-pose values in `GRIPS`, and weapon socket and pose transforms in `VIEWMODEL_WEAPONS` (`packages/subject-fpp/src/viewmodel/model.ts`). These data were authored for this viewmodel and do not derive from the found field set or legacy ALS clips.
 
 The CC0 dedication applies to the animation and grip data. The TypeScript sampler, runtime and other implementation code retain the repository's code licence.
 
-## Default weapons
+## Blacksite rig weapons
 
 `../weapons/rifle.glb` derives from **AKM**, by **LonesomeDucky**, [CC0 1.0](licenses/CC0-1.0.txt): [author's release](https://opengameart.org/content/akm), [source Blender file](https://opengameart.org/sites/default/files/akm54.blend). The source includes weathered base-colour, normal, metalness, roughness and ambient-occlusion maps. Blacksite adds a weapon rig with magazine, charging-handle and muzzle bones, reorients the model, and reduces the embedded maps from 4096 to 1024 pixels with JPEG quality 88.
 
@@ -50,18 +50,6 @@ Sleeve, glove and weapon maps come from **ambientCG / Lennart Demes**, [CC0 1.0]
 | `paint_*` | [PaintedMetal005](https://ambientcg.com/view?id=PaintedMetal005) |
 | `polymer_*` | [Plastic012B](https://ambientcg.com/view?id=Plastic012B) |
 
-## Found-animation comparison
+## Found field set
 
-The optional Firing Range comparison file is `site/public/viewmodel/found-pistol.glb`, rather than a default package dependency. It is based on **9mm Pistol | First Person Animations** by **1Matzh**, [source](https://sketchfab.com/3d-models/9mm-pistol-first-person-animations-c26d7f5aa72f4b01a6da4578caa8f07f), [author](https://sketchfab.com/1Matzh), licensed under [CC BY 4.0](licenses/CC-BY-4.0.txt).
-
-Its credited component works are:
-
-- **9mm Pistol** by **Urpo**, [source](https://sketchfab.com/3d-models/9mm-pistol-30222f9a59104426ba526a6b20cd7532), [author](https://sketchfab.com/Urpo), CC BY 4.0. Rigged by 1Matzh.
-- **Modern Soldier** by **Blue Spirit**, [source](https://sketchfab.com/3d-models/modern-soldier-358b4fb07f0146cb9b9063342db5897a), [author](https://sketchfab.com/Blue-Spirit), CC BY 4.0. Edited to arms by 1Matzh.
-- The original presentation also credits **sky dome demo** by **fangzhangmnm**, [source](https://sketchfab.com/3d-models/sky-dome-demo-a5778d3c90e644e2be1062895ccd44aa), [author](https://sketchfab.com/fangzhangmnm), CC BY 4.0, using the CC0 [Je Gray Park](https://polyhaven.com/a/je_gray_park) HDRI. The shipped comparison contains the five arms/weapon meshes only, without a sky mesh.
-
-Blacksite modifications: re-export to GLB, texture reduction to 512 pixels, JPEG quality 85, and removal of an unrelated preview object. The original six clips remain: `Idle`, `Walk`, `Run`, `Fire`, `Reload`, `Reload_Empty`. The public API's advertised animation count differs from this downloaded version; no missing clips are claimed.
-
-The comparison player preserves the authored poses and curves but plays `Reload_Empty` at approximately 1.2533× speed, reducing its duration from 3.9167 to 3.125 seconds to match the gameplay reload timer. The normal `Reload` remains 3.125 seconds.
-
-This art is supplied without warranty; see the included [CC BY 4.0 legal code](licenses/CC-BY-4.0.txt). The attribution does not imply endorsement. The authors' current licence declarations are recorded in [Sketchfab-provenance.json](licenses/Sketchfab-provenance.json).
+The default `found` rig ships `rifle.glb` and `pistol.glb` from `packages/subject-fpp/assets/found/`. Both are CC BY 4.0 works by user77, DJMaesen and Armored Wave; full attribution, changes, the warranty disclaimer and the licence text are in [found/CREDITS.md](found/CREDITS.md), and the authors' licence declarations at the time of checking are in [found/Sketchfab-provenance.json](found/Sketchfab-provenance.json).

@@ -88,6 +88,8 @@ it('serves and builds site assets under its base path from an explicit engine ch
     mkdirSync(path.join(actionAssets, 'arms/licenses'), { recursive: true });
     writeFileSync(path.join(actionAssets, 'arms/CREDITS.md'), 'Viewmodel attribution and modifications');
     writeFileSync(path.join(actionAssets, 'arms/licenses/CC0-1.0.txt'), 'CC0 legal text');
+    mkdirSync(path.join(actionAssets, 'found'), { recursive: true });
+    writeFileSync(path.join(actionAssets, 'found/CREDITS.md'), 'Found attribution');
     writeFileSync(path.join(publicAssets, 'arms.json'), '{"version":1}');
     const helper = pathToFileURL(path.resolve('cli/serve-assets.mjs')).href;
     execFileSync(process.execPath, ['--input-type=module', '--eval', `
@@ -100,7 +102,7 @@ it('serves and builds site assets under its base path from an explicit engine ch
       const server = createServer((request,response)=>middleware(request,response,()=>{response.statusCode=418;response.end()}));
       await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
       try {
-        for (const [name,expected] of [['skm-als.glb','MIT mannequin'],['LICENSE-Blacksite-Arms.md','MIT actions'],['viewmodel/CREDITS.md','Viewmodel attribution and modifications'],['viewmodel/licenses/CC0-1.0.txt','CC0 legal text']]) {
+        for (const [name,expected] of [['skm-als.glb','MIT mannequin'],['LICENSE-Blacksite-Arms.md','MIT actions'],['viewmodel/CREDITS.md','Viewmodel attribution and modifications'],['viewmodel/licenses/CC0-1.0.txt','CC0 legal text'],['viewmodel/found/CREDITS.md','Found attribution']]) {
           const response = await fetch('http://127.0.0.1:'+server.address().port+'/blacksite/assets/'+name, {headers:{Connection:'close'}});
           if (!response.ok || await response.text() !== expected) throw new Error('Missing base-path asset '+name);
         }
@@ -113,5 +115,6 @@ it('serves and builds site assets under its base path from an explicit engine ch
     expect(readFileSync(path.join(site, 'dist/assets/LICENSE-Blacksite-Arms.md'), 'utf8')).toBe('MIT actions');
     expect(readFileSync(path.join(site, 'dist/assets/viewmodel/CREDITS.md'), 'utf8')).toBe('Viewmodel attribution and modifications');
     expect(readFileSync(path.join(site, 'dist/assets/viewmodel/licenses/CC0-1.0.txt'), 'utf8')).toBe('CC0 legal text');
+    expect(readFileSync(path.join(site, 'dist/assets/viewmodel/found/CREDITS.md'), 'utf8')).toBe('Found attribution');
   } finally { rmSync(scratch, { recursive: true, force: true }); }
 });

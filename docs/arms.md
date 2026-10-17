@@ -1,6 +1,14 @@
 # First-person arms
 
-`ArmsViewmodel` from `@blacksite/subject-fpp/arms` draws a separately lit, camera-relative viewmodel after the world. The default is a finger-rigged MakeHuman/MPFB mesh with textured sleeves and gloves. Weapon parts drive short action curves; two-bone IK places the hands on the grip, magazine and charging handle. The existing ALS-derived arms remain available for games that want local arms matching the remote character.
+`ArmsViewmodel` from `@blacksite/subject-fpp/arms` draws a separately lit, camera-relative viewmodel after the world. Three rigs share one `ArmsState`:
+
+| `rig` | What it is | Licence |
+| --- | --- | --- |
+| `found` (default) | The field set: an authored, hand-keyed AKM and Beretta with gloved arms, played as clips with procedural sway, bob, recoil, ADS, sprint, holster and landing on top | CC BY 4.0, attribution required |
+| `blacksite` | A finger-rigged MakeHuman/MPFB mesh with procedural action curves and two-bone IK on the grip, magazine and charging handle | CC0 |
+| `als` | The ALS-derived arms, for local arms that match the remote character | MIT |
+
+The found set replaced the procedural rig as the default because its authored reloads, finger contact and weapon handling read better at both 1× and 4×. The procedural rig remains the right choice for CC0-only projects and for custom weapons that need calibrated sockets.
 
 ## Use
 
@@ -19,11 +27,38 @@ Aim, firing and sprint cancel inspect smoothly. Reload and weapon switching supp
 
 `StandaloneSubject` accepts `touch` (`createStandaloneTouch()`), `recoil` (`createStandaloneRecoil()`) and `sensitivity`. Scale look sensitivity by aim FOV / hip FOV. It owns camera input; the arms derive sway from that finished camera pose without another mouse listener.
 
-## Motion model and parts list
+## Found field set
+
+The set lives in `packages/subject-fpp/src/found/`. `FIELD_SET` (`sets.ts`) declares each weapon's GLB, frame ranges for `idle`, `fire`, `fireLast`, `reload`, `reloadEmpty`, `holster`, `draw` and `inspect`, the eye basis of the authored camera, a bone-local rear and front sight, eye relief, hip, sprint and pivot offsets, recoil scale and reload events. The runtime solves ADS each frame from the two sight landmarks, so the sight line lands on screen centre at any aspect. Missing clips are procedural: the rifle inspect, sprint, holster when a set has none, and walking bob. Below a 4:3 aspect `portrait.camera` moves the hip view back and up so both forearms stay in frame; ADS fades the offset to zero.
+
+Gameplay must use the clip lengths. `foundTimings(FIELD_SET, weapon)` returns `reloadSeconds`, `emptyReloadSeconds` and `equipSeconds`; Armory's `emptyReloadSeconds` applies when the magazine is empty when the reload starts. Set `arms.empty` from the displayed magazine so the empty reload and last-shot clips play.
+
+```ts
+import { FIELD_SET, foundTimings } from '@blacksite/subject-fpp/arms'
+
+const definitions = ALS_WEAPONS.map(weapon =>
+  weapon.id === 'rifle' || weapon.id === 'pistol'
+    ? { ...weapon, ...foundTimings(FIELD_SET, weapon.id) }
+    : weapon,
+)
+```
+
+Authoritative servers import the same data without the renderer or GLB URLs: `foundTimings({ weapons: FIELD_WEAPONS }, weapon.id)` from `@blacksite/subject-fpp/arms/model` returns identical values.
+
+A replacement set must keep the same licence bar and declare the same fields; measure the sight landmarks from the weapon mesh, not from a screenshot. The bake and sleeve-dressing scripts are `packages/subject-fpp/scripts/bake-found-set.py` and `dress-viewmodel.py`.
+
+### Migrating to the found default
+
+- The default `rig` changed from `blacksite` to `found`. Pass `rig="blacksite"` or `rig="als"`, as a prop or as `"rig"` in the manifest, to keep an earlier look. Manifests with ALS character or weapon overrides still select ALS automatically.
+- Derive Armory definitions from `foundTimings`, on the server as well as the client. Rifle and pistol reloads are longer than the procedural curves, and the empty reload is longer again.
+- Ship attribution. `cli/serve-assets.mjs` serves and copies the credits to `assets/viewmodel/found/`; link them from the game's credits screen.
+- `ArmsState`, `createArmsState()`, the sequence counters and `onPresentation` are unchanged.
+
+## Procedural rig: motion model and parts list
 
 The authoritative model is `packages/subject-fpp/src/viewmodel/model.ts`; the short action curves are in `clips.ts`. Their public exports are `VIEWMODEL`, `VIEWMODEL_WEAPONS`, `VIEWMODEL_CLIPS` and `switchSeconds(to, from)`. These are Blacksite tuning values, not measurements claimed from a commercial title.
 
-Armory's older `ALS_WEAPONS` equip timings are shorter than the new holster-plus-equip animation. When adopting this default, derive the weapon definitions from the same curves; the FPP template and Firing Range demonstrate this migration. For definitions that have one equip duration per destination, use the longer of the two source weapons:
+Armory's older `ALS_WEAPONS` equip timings are shorter than the procedural holster-plus-equip animation. When using `rig="blacksite"`, derive the weapon definitions from the same curves; the FPP template and Firing Range demonstrate this migration. For definitions that have one equip duration per destination, use the longer of the two source weapons:
 
 ```ts
 const definitions = ALS_WEAPONS.map(weapon =>
@@ -55,7 +90,7 @@ Apply these definitions on the authoritative simulation as well as the client. S
 | Inspect | Two inspection angles, reversible interruption and support-hand release |
 | Land | A capped spring impulse proportional to impact speed |
 
-The minimum visual parts are two skinned forearms with sleeves, two gloves, ten independently articulated fingers, two weapons, two detachable magazines, and a moving charging handle or slide on each weapon. Rifle and pistol have their own sight, wrist targets, elbow poles, grip poses and action curves. The Firing Range is the playable reference for all these states.
+For any rig, the minimum visual parts are two skinned forearms with sleeves, two gloves, ten independently articulated fingers, two weapons, two detachable magazines, and a moving charging handle or slide on each weapon. Rifle and pistol have their own sight, wrist targets, elbow poles, grip poses and action curves. The Firing Range is the playable reference for all these states.
 
 The rifle calibration centres the front blade and pitches the model to retain a visible sight picture; the pistol uses its rear-sight target. Sight distances in the model are measured to those chosen points.
 
@@ -112,4 +147,4 @@ Read the 1× view for framing and the 4× view for wrist deformation, finger pla
 
 ## Distribution
 
-Asset provenance and licence texts live beside the arms in `packages/subject-fpp/assets/arms/`. `cli/serve-assets.mjs` serves and copies the provenance to `assets/viewmodel/CREDITS.md` and the full texts to `assets/viewmodel/licenses/` in both the site and generated games. The pre-existing ALS option and original ALS action tracks retain their MIT notices. See `docs/viewmodel-research.md` for the Find shortlist and exclusions.
+Asset provenance and licence texts live beside the arms in `packages/subject-fpp/assets/arms/` and `packages/subject-fpp/assets/found/`. `cli/serve-assets.mjs` serves and copies them to `assets/viewmodel/CREDITS.md`, `assets/viewmodel/licenses/` and `assets/viewmodel/found/` in both the site and generated games. The pre-existing ALS option and original ALS action tracks retain their MIT notices. See `docs/viewmodel-research.md` for the Find shortlist and exclusions.

@@ -23,8 +23,3 @@ export const RANGE_BUDGET = {
   voices: 32,
 } as const
 
-export const FOUND_RELOAD_SECONDS = 3.125
-export const FOUND_RELOAD_EVENTS = {
-  normal: [[0.5, 'magazineOut'], [1.5, 'magazineIn']],
-  empty: [[0.4, 'magazineOut'], [1.2, 'magazineIn'], [2.05, 'rackBack'], [2.2, 'rackForward']],
-} as const

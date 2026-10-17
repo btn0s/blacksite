@@ -3,7 +3,7 @@ import { useFrame, useThree, type RootState } from '@react-three/fiber'
 import { useRapier } from '@react-three/rapier'
 import * as THREE from 'three'
 import { ALS_WEAPONS, createWeaponRuntime, type QueryHit, type WeaponQueries } from '@blacksite/armory'
-import { ArmsViewmodel, createArmsState, switchSeconds, VIEWMODEL_CLIPS, type ArmsPresentation, type ArmsState, type ArmsWeapon } from '@blacksite/subject-fpp/arms'
+import { ArmsViewmodel, createArmsState, FIELD_SET, foundTimings, type ArmsPresentation, type ArmsState, type ArmsWeapon } from '@blacksite/subject-fpp/arms'
 import { CheckProbe } from '../../game-shell/src/game/check'
 import { PlayHud } from '../../game-shell/src/game/hud'
 import { held, take, value } from '../../game-shell/src/game/input'
@@ -13,7 +13,7 @@ import { Stage, surfacesReady, useSurfaces } from '../../game-shell/src/game/sta
 import { WalkerBody, createWalker, type Walker } from '../../game-shell/src/game/walker'
 
 const definitions = ALS_WEAPONS.map(weapon => weapon.id === 'rifle' || weapon.id === 'pistol'
-  ? { ...weapon, reloadSeconds: VIEWMODEL_CLIPS[weapon.id].reload.duration, equipSeconds: Math.max(switchSeconds(weapon.id, 'rifle'), switchSeconds(weapon.id, 'pistol')) }
+  ? { ...weapon, ...foundTimings(FIELD_SET, weapon.id) }
   : weapon)
 
 function useQueries(walker: Walker): WeaponQueries {
