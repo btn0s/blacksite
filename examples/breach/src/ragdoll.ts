@@ -147,10 +147,17 @@ const STANDING: Record<string, [number, number, number]> = {
 
 export function warmCorpseRagdoll(rapier: Rapier, world: World) {
   const corpse = new THREE.Group()
-  corpse.position.set(0, -40, 0)
   for (const [name, position] of Object.entries(STANDING)) corpse.add(Object.assign(new THREE.Bone(), { name }).translateX(position[0]).translateY(position[1]).translateZ(position[2]))
   corpse.updateMatrixWorld(true)
-  const ragdoll = createCorpseRagdoll(rapier, world, corpse, { x: 0, z: 1 }, { x: 0, z: 0 })
-  ragdoll?.update()
+  const scratch = new rapier.World(world.gravity)
+  scratch.timestep = world.timestep
+  scratch.createCollider(rapier.ColliderDesc.cuboid(4, 0.5, 4).setTranslation(0, -0.5, 0))
+  scratch.createCollider(rapier.ColliderDesc.cuboid(4, 2, 0.5).setTranslation(0, 2, 1))
+  const ragdoll = createCorpseRagdoll(rapier, scratch, corpse, { x: 0, z: 1 }, { x: 0, z: 0 })
+  for (let step = 0; step < 90; step++) {
+    scratch.step()
+    ragdoll?.update()
+  }
   ragdoll?.dispose()
+  scratch.free()
 }
