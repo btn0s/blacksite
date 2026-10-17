@@ -343,7 +343,7 @@ export function buildRoute() {
     ...flights.flatMap((flight, index) => [{ at: flight.to }, ...(index < 2 ? [{ at: [index === 0 ? inner.x1 - 0.7 : inner.x0 + 1.4, flight.to[1], (inner.z0 + inner.z1) / 2] as Vec3 }] : [])]),
     { at: [inner.x1 - 0.5, c[1], -3.9] }, { at: [101.2, roof, -3.6] },
     { at: [104.5, roof, -3] }, { at: [113, upper, -3], action: 'mantle' }, { at: [117.2, upper + plant, -3], action: 'mantle' },
-    { at: [119.5, upper + plant, -3] }, { at: [121.6, upper, -3] }, { at: [slabEnd[0] + 0.6, 0, -3] }, { at: [slabEnd[0] + 3, 0, -3] },
+    { at: [119.5, upper + plant, -3] }, { at: [slabTop[0] + 3.4, upper - 3.4 * Math.tan(degrees(30)), -3] }, { at: [slabEnd[0] + 0.6, 0, -3] }, { at: [slabEnd[0] + 3, 0, -3] },
     { at: [dockStart[0] - 0.4, 0, -3] }, { at: [dockTop[0] + 0.5, dockTop[1], -3] }, { at: [dockTop[0] + 6.6, dockTop[1], -3] },
     { at: [dockTop[0] + 10, 0, -2] }, { at: [finishX - 3, 0, -1] }, { at: [finishX + 5, 0, -1] },
   ]
