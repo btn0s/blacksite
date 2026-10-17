@@ -7,34 +7,91 @@ import { asset } from './links'
 const coarse = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
 
 type Demo = { title: string; frame: string; thumbnail?: string; keyboard: Control[]; touch: Control[] }
+type Mode = 'off' | 'native' | 'pseudo'
+type FullscreenDocument = Document & { webkitFullscreenEnabled?: boolean; webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> | void }
+type FullscreenTarget = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void }
+
+const STAGE_EVENT = 'blacksite:stage-fullscreen'
+const LOCKED = 'stage-fullscreen-open'
+const fullscreenDocument = () => document as FullscreenDocument
+const fullscreenElement = () => document.fullscreenElement ?? fullscreenDocument().webkitFullscreenElement ?? null
+
+function nativeRequest(target: FullscreenTarget) {
+  const doc = fullscreenDocument()
+  if (doc.fullscreenEnabled && typeof target.requestFullscreen === 'function') return () => target.requestFullscreen()
+  if (doc.webkitFullscreenEnabled && typeof target.webkitRequestFullscreen === 'function') return () => target.webkitRequestFullscreen!()
+  return null
+}
+
+async function enterNative(target: FullscreenTarget) {
+  const request = nativeRequest(target)
+  if (!request) return false
+  try { await request() } catch { return false }
+  for (let tries = 0; tries < 25 && fullscreenElement() !== target; tries++) await new Promise(resolve => setTimeout(resolve, 20))
+  return fullscreenElement() === target
+}
+
+async function exitNative() {
+  if (!fullscreenElement()) return
+  const doc = fullscreenDocument()
+  try { await (document.exitFullscreen ? document.exitFullscreen() : doc.webkitExitFullscreen?.()) } catch {}
+}
 
 export default function DemoFrame({ demo, autoplay }: { demo: Demo; autoplay: boolean }) {
   const iframe = useRef<HTMLIFrameElement>(null)
   const stage = useRef<HTMLDivElement>(null)
   const [source, setSource] = useState<Window | null>(null)
   const [started, setStarted] = useState(autoplay)
-  const [fullscreen, setFullscreen] = useState(false)
+  const [mode, setMode] = useState<Mode>('off')
   const [help, setHelp] = useState(false)
   const controls = coarse() && demo.touch.length ? demo.touch : demo.keyboard
+  const fullscreen = mode !== 'off'
   useEffect(() => {
-    const sync = () => { if (!document.fullscreenElement) setFullscreen(false) }
+    const sync = () => { if (fullscreenElement() !== stage.current) setMode(current => current === 'native' ? 'off' : current) }
     document.addEventListener('fullscreenchange', sync)
-    return () => document.removeEventListener('fullscreenchange', sync)
+    document.addEventListener('webkitfullscreenchange', sync)
+    return () => {
+      document.removeEventListener('fullscreenchange', sync)
+      document.removeEventListener('webkitfullscreenchange', sync)
+    }
   }, [])
   useEffect(() => {
-    document.body.classList.toggle('stage-fullscreen-open', fullscreen)
-    return () => document.body.classList.remove('stage-fullscreen-open')
+    const other = (event: Event) => {
+      if ((event as CustomEvent<HTMLElement>).detail === stage.current) return
+      setStarted(false)
+      setSource(null)
+      setHelp(false)
+    }
+    addEventListener(STAGE_EVENT, other)
+    return () => removeEventListener(STAGE_EVENT, other)
+  }, [])
+  useEffect(() => {
+    if (!fullscreen) return
+    const root = document.documentElement
+    const top = scrollY
+    root.style.setProperty('--stage-scroll', `${-top}px`)
+    root.classList.add(LOCKED)
+    document.body.classList.add(LOCKED)
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMode(current => current === 'pseudo' ? 'off' : current) }
+    addEventListener('keydown', escape)
+    return () => {
+      removeEventListener('keydown', escape)
+      root.classList.remove(LOCKED)
+      document.body.classList.remove(LOCKED)
+      root.style.removeProperty('--stage-scroll')
+      scrollTo({ top, behavior: 'instant' })
+    }
   }, [fullscreen])
   const toggleFullscreen = async () => {
     if (fullscreen) {
-      if (document.fullscreenElement) await document.exitFullscreen().catch(() => {})
-      setFullscreen(false)
+      await exitNative()
+      setMode('off')
       return
     }
-    if (document.fullscreenEnabled && stage.current?.requestFullscreen) {
-      try { await stage.current.requestFullscreen(); setFullscreen(true); return } catch {}
-    }
-    setFullscreen(true)
+    const target = stage.current
+    if (!target) return
+    dispatchEvent(new CustomEvent(STAGE_EVENT, { detail: target }))
+    setMode(await enterNative(target) ? 'native' : 'pseudo')
   }
   return <div ref={stage} className={`stage${fullscreen ? ' stage--fullscreen' : ''}`}>
     {started
