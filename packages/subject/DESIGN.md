@@ -88,13 +88,13 @@ The request was a default perspective, a flag that allows switching, and an FPP 
 
 ## Networking is a layer, not a controller
 
-`<Replication controller={player} replica={replica} />` sits beside the controller and uses only what the controller already exposes:
+`<Replication connection={connection} controller={player} />` mounts the controller and uses only what it already exposes:
 - it sends `onSnapshot` to the server as `move` messages;
 - it sends `onWeapon` shots as `fire` messages, aimed from the server's shot origin;
 - it applies server spawn, death and life through `respawn` and `ragdoll`;
 - it draws other players as `AlsRemoteActor` puppets fed from snapshot buffers.
 
-A multiplayer game mounts the same controller with `queries` set to the Rapier world (client-side visuals only); the server stays authoritative for hits. Weapon definitions are shared with the server.
+The controller's default weapon queries cast into the Rapier world, so a multiplayer game's local hits are visuals only; the server stays authoritative for hits. Weapon definitions are shared with the server.
 
 ## What gets deleted
 
@@ -115,7 +115,7 @@ These are the walls I expect. If one stands, I stop and report it with a redesig
 
 ## Transition
 
-During slice 2 the old `Subject`, `MultiplayerScene` and `createSubject` stay in place for the arena and the multiplayer kit. They are deleted in slice 3, when those move onto the controller plus `Replication`. Nothing new depends on them.
+The old `Subject`, `MultiplayerSubject`, `MultiplayerScene`, `createSubject` and `LoopbackSplitView` are deleted. The arena and every kit except `blank` run on the controller; `blank` keeps the game-shell walker because it is the kit for a custom, ALS-free body.
 
 ## Migration order
 

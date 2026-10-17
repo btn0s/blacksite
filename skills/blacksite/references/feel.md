@@ -20,7 +20,7 @@ Movement, camera, aim and controls: the numbers shipped character systems use, a
 | Physics step | Fixed 1/60 s | Every template |
 | Template walker | 1.75 m/s walk, 3.75 run, 6.5 sprint, 0.25 s to top speed, 0.9 m apex | `src/game/model.ts` |
 
-Players expect **coyote time** (0.1 s after leaving a ledge) and a **jump buffer** (0.1 s before landing); the template's motor has both, the ALS character and Subject don't. Add a camera dip on landing (below); the walker already plays the landing sound. The standalone first-person subject has no gravity, collision or jump, which is why the `fpp` template puts it on the walker.
+Players expect **coyote time** (0.1 s after leaving a ledge) and a **jump buffer** (0.1 s before landing); the Character Controller has both (`jump: { coyoteSeconds, bufferSeconds }`), and so does the `blank` walker's motor. Add a camera dip on landing (below); the walker already plays the landing sound.
 
 ## Camera
 
@@ -87,7 +87,7 @@ Every number below is in `@blacksite/subject/feel` (`CAMERA_FEEL`, `GUN_FEEL`, `
 
 ## Rules, and the failures that taught them
 
-- **One owner for the view.** Subject and the ALS camera each read the same mouse at different sensitivities. At 144 Hz render and 60 Hz physics the yaw sawtoothed by 1.748°. With one control-rotation source the error was under 1e-12°. Pass Subject's yaw and pitch to the character and to `AlsCamera.controlRotationSource`. When joining prototypes, two that both read the mouse or both own the player's position will fight.
+- **One owner for the view.** Subject and the ALS camera each read the same mouse at different sensitivities. At 144 Hz render and 60 Hz physics the yaw sawtoothed by 1.748°. With one control-rotation source the error was under 1e-12°. The Character Controller is that one source: it owns control rotation for the body, the camera and the arms. When joining prototypes, two that both read the mouse or both own the player's position will fight.
 - **Frame order.** Control rotation, character, physics, pose, animation, camera, then attachments. Done the other way, held objects lag one frame behind. Physics was moved before pose and camera, and the arms attach after the final camera; the measured residual was 5.6e-15.
 - **Send gait, not speed.** Characters looked like they were in slow or fast motion because the bridge passed `desiredSpeed: 300/600`, values in cm/s, to an API in m/s and left out gait. At a real 3.75 m/s the graph picked Walking and played the walk at 2.5× instead of the run at 1.07×. The clocks were already correct, so no time multiplier was added. Send `desiredGait` (`Walking`, `Running`, `Sprinting`) and let the character pick its authored speed.
 - **Prove locomotion by foot slip.** A test actor moved at zero velocity advanced its animation clock for 3.8 s while its stride phase never changed and its foot slid over 10 m. Bound planted-foot slip instead: 3 cm per plant. Measured slip was 0.83 cm walking, 1.03 cm running and 1.78 cm sprinting.
@@ -95,7 +95,7 @@ Every number below is in `@blacksite/subject/feel` (`CAMERA_FEEL`, `GUN_FEEL`, `
 - **Recoil comes back.** Breach kept 39% of a burst's climb a second after release, because a fixed fraction of every kick was never recovered. With every kick returning, it keeps about 10% at 1 s, and the player pulls down only during the burst.
 - **The camera barely moves; the arms do.** Breach's first-person landing dropped the eye 37 mm, which read as a stumble. The eye now moves about 2 mm and the viewmodel drops instead. The same goes for firing: the old springs threw the rear sight 36 mm toward the eye on every shot, and now it moves 7 mm.
 - **Measure the sight, not the holder.** A found rig's holder transform includes compensation for its authored fire clip, so it reported motion the player never saw. The capture records the rear sight in camera space.
-- **Pointer lock is optional.** Phones threw `WrongDocumentError` from an unconditional lock request, and nothing could drive a player without it, which blocked touch and Arena's bot. Skip lock on touch, catch a refused request, and give every controllable character a virtual input path (`setVirtual`, `keySubject`, `lookSubject`).
+- **Pointer lock is optional.** Phones threw `WrongDocumentError` from an unconditional lock request, and nothing could drive a player without it, which blocked touch and Arena's bot. Skip lock on touch, catch a refused request, and give every controllable character a path that needs no lock: touch, pad, and `controller.drive` for bots.
 - **Clear held input on blur.** A key held while the tab loses focus must release, or the player walks forever. Clear on disconnect and possession change too.
 - **Show the right glyphs.** Swap prompts to the last device used.
 

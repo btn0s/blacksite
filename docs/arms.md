@@ -25,7 +25,7 @@ Keep one `ArmsState` per player. Update `weapon`, `aiming`, `speed` in metres pe
 
 Aim, firing and sprint cancel inspect smoothly. Reload and weapon switching suppress ADS until the action permits it. Animation does not authorize shots or refill magazines; Armory owns those decisions.
 
-`StandaloneSubject` accepts `touch` (`createStandaloneTouch()`), `recoil` (`createStandaloneRecoil()`) and `sensitivity`. Scale look sensitivity by aim FOV / hip FOV. It owns camera input; the arms derive sway from that finished camera pose without another mouse listener.
+The Character Controller with `views: ['arms']` keeps the `ArmsState` for you and scales look sensitivity by aim FOV / hip FOV. It owns camera input; the arms derive sway from that finished camera pose without another mouse listener.
 
 ## Found field set
 

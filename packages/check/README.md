@@ -16,7 +16,8 @@ const check = exposeCheck({
   bookmarks: [{ name: 'spawn', position: [-4, 2, 0], target: [12, 1, 0] }, { name: 'street', position: [40, 2, 3], target: [82, 9, -6] }],
   camera(pose) { override = pose },
   player() { return { position: body.translation() } },
-  input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space', restart: 'KeyR' },
+  input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
+  character: player.check,
   model: { feel: { moveSpeed: 4.5, sprintSpeed: 6.5, jumpApex: 1.1 }, budget: { frameMs: 8.3 } },
 })
 check.ready()
