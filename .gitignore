@@ -11,3 +11,4 @@ __pycache__/
 blacksite-check/
 assets/.build/
 assets/.build-site/
+.vercel
