@@ -45,3 +45,4 @@
 }
 .breach-credits { display: grid; align-items: center; min-height: 44px; box-sizing: border-box; position: absolute; z-index: 8; top: calc(12px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right)); padding: 8px; pointer-events: auto; color: #c8c4b3; background: #0c0e0b80; font: 500 12px 'IBM Plex Mono', monospace; text-decoration: none; }
 .breach-credits:focus-visible { outline: 2px solid #e2a23b; }
+.breach-hints .hud-hints { left: 50%; transform: translateX(-50%); bottom: calc(22px + env(safe-area-inset-bottom)); max-width: calc(100% - 320px); }

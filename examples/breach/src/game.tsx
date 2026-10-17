@@ -743,7 +743,7 @@ export function Game() {
     </Canvas>
     <TitleCard title="Breach" />
     {ready && playing && <Hud touch={touch} />}
-    <Hints visible={!touch} items={[['WASD', 'Move'], ['LMB', 'Fire'], ['RMB', 'Aim'], ['Shift', 'Sprint'], ['C', 'Crouch']]} />
+    <div className="breach-hints"><Hints visible={!touch} items={[['WASD', 'Move'], ['LMB', 'Fire'], ['RMB', 'Aim'], ['Shift', 'Sprint'], ['C', 'Crouch']]} /></div>
     <Prompt text="Click to fight" visible={ready && playing && !touch && !locked} />
     {touch && ready && <Touch touchInput={touchInput} commands={commands} />}
     <Loading title="Breach" detail={error ?? (progress < 0.85 ? 'Loading the squad' : 'Clearing the rubble')} progress={progress} done={ready && playing} />
