@@ -664,7 +664,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     lights.sun.target.position.set(cx, 0, cz)
     lights.sun.position.set(cx + atmosphere.sun.direction[0] * 60, atmosphere.sun.direction[1] * 60, cz + atmosphere.sun.direction[2] * 60)
     lights.sun.target.updateMatrixWorld()
-    if (Math.round(state.clock * 60) % 2 === 0) gl.shadowMap.needsUpdate = true
+    if (PRESENTATION.armsPoseInterleave[phone ? 'phone' : 'desktop'] ? !scratch.parity : Math.round(state.clock * 60) % 2 === 0) gl.shadowMap.needsUpdate = true
     if (!state.firstFrame && presentation) { state.firstFrame = true; setLive(true) }
   }, 0.5)
 

@@ -15,6 +15,11 @@ export function createChips(root: THREE.Object3D, heroes: Map<string, THREE.Mesh
   group.name = 'chips'
   root.add(group)
   const scar = new THREE.MeshStandardMaterial({ color: '#b9b2a2', roughness: 0.95 })
+  const primer = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.01, 0.01), scar)
+  primer.visible = false
+  primer.castShadow = true
+  primer.receiveShadow = true
+  group.add(primer)
   const pieces = new Map<string, Piece[]>()
   const debris: Debris[] = []
   const blocks = new Map(LEVEL.blocks.filter(block => block.hero).map(block => [block.id, block]))
@@ -142,7 +147,7 @@ export function createChips(root: THREE.Object3D, heroes: Map<string, THREE.Mesh
       for (const item of debris) { item.mesh.removeFromParent(); item.mesh.traverse(object => { if (object instanceof THREE.Mesh) object.geometry.dispose() }) }
       debris.length = 0
     },
-    dispose() { this.reset(); scar.dispose(); group.removeFromParent() },
+    dispose() { this.reset(); primer.geometry.dispose(); scar.dispose(); group.removeFromParent() },
   }
 }
 
