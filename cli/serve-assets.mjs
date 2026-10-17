@@ -15,7 +15,7 @@ export function blacksiteAssets({ blacksiteRoot } = {}) {
       config = next
       const root = path.resolve(config.root, blacksiteRoot ?? 'vendor/blacksite')
       source = path.join(root, 'vendor/als-web/public')
-      const armsAssets = path.join(root, 'packages/subject-fpp/assets')
+      const armsAssets = path.join(root, 'packages/subject/assets')
       licenses = new Map([
         ['assets/LICENSE-Blacksite-Arms.md', path.join(armsAssets, 'LICENSE')],
         ['assets/viewmodel/CREDITS.md', path.join(armsAssets, 'arms/CREDITS.md')],

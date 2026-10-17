@@ -1,25 +1,14 @@
 import type { WeaponDefinition } from '@blacksite/armory'
-import { FIELD_WEAPONS, foundTimings } from '@blacksite/subject-fpp/arms/model'
-import { jumpApex as bodyJumpApex, timeToTopSpeed as bodyTimeToTopSpeed, type FirstPersonMove } from '@blacksite/subject-fpp/body'
+import { FIELD_WEAPONS, foundTimings } from '@blacksite/subject/arms/model'
 
 export const DEG = Math.PI / 180
 export const SPEED_OF_SOUND = 343
-
-export const FEET = {
-  walk: 0.4,
-  run: 0.3,
-  sprint: 0.26,
-  crouch: 0.5,
-}
 
 export const MOVE = {
   eye: 1.63,
   crouchEye: 1.0,
   eyeSmoothing: 20,
   radius: 0.3,
-  height: 1.8,
-  crouchHeight: 1.12,
-  step: 0.45,
   walk: 1.75,
   run: 3.75,
   sprint: 6.5,
@@ -27,19 +16,33 @@ export const MOVE = {
   aim: 1.65,
   accelerate: [20, 7.5] as const,
   brake: [15, 12.5, 5] as const,
-  airControl: 0.25,
   jumpSpeed: 4.2,
   gravity: 9.8,
-  coyoteSeconds: 0.1,
-  bufferSeconds: 0.1,
-  crouchSeconds: 0.2,
   sprintOutSeconds: 0.22,
-  bobAmplitude: 0.012,
-  feet: FEET,
-} satisfies FirstPersonMove
+}
 
-export const jumpApex = () => bodyJumpApex(MOVE)
-export const timeToTopSpeed = (speed: number, fraction = 0.9) => bodyTimeToTopSpeed(MOVE, speed, fraction)
+export const jumpApex = () => MOVE.jumpSpeed * MOVE.jumpSpeed / (2 * MOVE.gravity)
+
+export function acceleration(speed: number) {
+  const k = Math.min(1, Math.max(0, speed / MOVE.sprint))
+  return MOVE.accelerate[0] + (MOVE.accelerate[1] - MOVE.accelerate[0]) * k
+}
+
+export function braking(speed: number) {
+  if (speed <= MOVE.run) return MOVE.brake[0] + (MOVE.brake[1] - MOVE.brake[0]) * speed / MOVE.run
+  return MOVE.brake[1] + (MOVE.brake[2] - MOVE.brake[1]) * Math.min(1, (speed - MOVE.run) / (MOVE.sprint - MOVE.run))
+}
+
+export function timeToTopSpeed(speed: number, fraction = 0.9) {
+  let velocity = 0
+  let time = 0
+  const dt = 1 / 240
+  while (velocity < speed * fraction && time < 2) {
+    velocity = Math.min(speed, velocity + acceleration(velocity) * dt)
+    time += dt
+  }
+  return time
+}
 
 export const VIEW = {
   fov: 75,
@@ -183,6 +186,13 @@ export function sabine(acoustics: Acoustics) {
   return 0.161 * acoustics.volume / (acoustics.area * acoustics.absorption)
 }
 
+export const FEET = {
+  walk: 0.4,
+  run: 0.3,
+  sprint: 0.26,
+  crouch: 0.5,
+}
+
 export const FEEDBACK = {
   hitMarkerSeconds: 0.12,
   killMarkerSeconds: 0.32,
@@ -204,7 +214,6 @@ export const PRESENTATION = {
   topple: { seconds: 0.55, lift: 0.13, bounce: { seconds: 0.3, angle: 0.1 } },
   ragdolls: { desktop: 3, phone: 2 },
   ragdoll: { desktop: 'als', phone: 'corpse' } as const,
-  physicsHz: { desktop: 60, phone: 30 },
 }
 
 export type CorpseShape = { from: string; to: string; radius: number; beyond?: number }
@@ -289,6 +298,10 @@ export function sprintOk(intentForward: number, aiming: boolean, firing: boolean
   return intentForward > 0.3 && !aiming && !firing
 }
 
+export function moveSpeed(state: { sprinting: boolean; crouched: boolean; aiming: boolean; walking: boolean }) {
+  const base = state.sprinting ? MOVE.sprint : state.crouched ? MOVE.crouch : state.walking ? MOVE.walk : MOVE.run
+  return state.aiming && !state.sprinting ? Math.min(base, MOVE.aim) : base
+}
 
 export function aiHitChance(exposureSeconds: number, target: { moving: boolean; sprinting: boolean; crouched: boolean }) {
   const ramp = Math.min(1, Math.max(0, exposureSeconds / AI.accuracy.rampSeconds))

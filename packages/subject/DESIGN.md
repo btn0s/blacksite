@@ -9,7 +9,7 @@ const player = createCharacterController({ views: ['arms'], weapons, move, start
   <LevelColliders />
   <CharacterController controller={player} queries={queries} events={events} aimTargets={targets} />
 </Physics>
-<CharacterOverlay controller={player} prompt="Click to fight" pauseItems={[restart]} />
+<CharacterOverlay controller={player} prompt="Click to fight" />
 ```
 
 ## Views replace perspective, switch flag and FPP mode
@@ -37,8 +37,39 @@ The request was a default perspective, a flag that allows switching, and an FPP 
 - **State and handles:**
   - status (locked, paused, view) for React;
   - per-frame state (eye, aim, velocity, grounded, stance, gait);
-  - `respawn`, `teleport`, `face`, `ragdoll`, `pause`;
+  - `respawn`, `teleport`, `face`, `ragdoll`, `setPaused`;
   - a driver for check scripts.
+
+## One aim model for every view
+
+- **The aim ray** comes from the active view's camera: its position and forward after the frame's look and recoil. In `arms` that's the stable eye, in `head` the head-socket camera, and in `shoulder` the third-person camera behind the shoulder.
+- **The shot** leaves the muzzle and converges on whatever the aim ray hits. Armory already works this way: `step` takes `aim` and `muzzle`, casts the aim ray, and aims the muzzle cast at that point. It never turns the gun backwards when the camera is nearer cover than the muzzle.
+- **The muzzle** is a point the controller tracks:
+  - in `arms`, the eye itself, so a hip shot can never start on the far side of a wall the camera is touching;
+  - in `head` and `shoulder`, the muzzle socket of the world weapon on the hand, clamped inside the capsule so it can't poke through a thin wall.
+- **Recoil** acts on the control rotation, the same yaw and pitch that ALS and the camera read, so it kicks every view the same way. Camera feel (bob, roll, landing dip, sprint FOV) is a pose layered on top in `arms` only; it never moves the aim ray.
+- **Implementation:** one fixed-step weapon loop. The only thing a view changes is where the camera transform and the muzzle point come from.
+
+## The weapon in the world
+
+- **Source:** each found GLB already holds the weapon as its own nodes beside the arms (`rifle.glb` is the AKM, `pistol.glb` the Beretta). The world weapon is a clone of those weapon nodes, so the viewmodel and the body draw one asset.
+- **Attachment:** a per-weapon `world` grip transform in `found/field.ts` (the same model file as the viewmodel's hip and ADS numbers). The clone attaches through ALS's `renderOverlayObject` to `VB hand_r_to_ik_hand_gun`, and the overlay pose (`Rifle`, `PistolTwoHanded`) follows the equipped weapon.
+- **Where it shows:** in `head` and `shoulder` it is visible. In `arms` it is hidden from the camera but still casts a shadow with the body.
+- **Remote players:** `AlsRemoteActor` takes the same `renderOverlayObject`, so `Replication` draws remote players' weapons the same way.
+- **What it replaces:** ALS's default rifle and pistol props are no longer used. They stay in `vendor/` untouched.
+
+## Pause is state, the menu belongs to the game
+
+- **The controller owns** the pause action (Esc, Start, losing pointer lock) and a `paused` status. A pause stops the world, the same way in every game:
+  - it stops the frame loop, so physics, animation, the weapon and every game frame stop together, and the clock restarts on resume with no catch-up step;
+  - it stops `now()`, the controller's world clock, for anything that runs off the frame loop (a worker simulation, timestamps, interpolation buffers);
+  - it releases pointer lock.
+- **Games don't shift clocks.** They read `now()` instead of `performance.now()` and need no pause code of their own, except telling an off-thread simulation to stop.
+- **Menus belong to the game:**
+  - the game shell already owns a pause screen with console navigation (`templates/game-shell/src/main.tsx`), so a shell game opens its screen from that status;
+  - a standalone game like Breach draws its own menu from `@blacksite/ui/hud`'s `Menu` plus `useConsoleNavigation`.
+- **Why the menu isn't bundled:** a bundled menu would have to take every game's items and actions. That turns a character controller into a screen manager, and a shell game would end up with two pause screens.
+- **`CharacterOverlay`** is input UI only: touch controls and device prompts.
 
 ## What a game supplies
 
@@ -80,6 +111,10 @@ These are the walls I expect. If one stands, I stop and report it with a redesig
 2. **Feel numbers.** Breach's model is already ALS's normal movement curve: walk 1.75, run 3.75, sprint 6.5, acceleration 20 easing to 7.5, braking 15/12.5/5, jump 4.2. The feel check should match without changes; this is verified, not assumed.
 3. **Footstep cadence.** Breach's footsteps come from a stride timer today; they will come from animation notifies, the same as every other ALS game.
 4. **Steps and ledges.** Breach climbs 0.45 m steps; the ALS step height and mantles replace that, and are checked on Breach's stairs.
+
+## Transition
+
+During slice 2 the old `Subject`, `MultiplayerScene` and `createSubject` stay in place for the arena and the multiplayer kit. They are deleted in slice 3, when those move onto the controller plus `Replication`. Nothing new depends on them.
 
 ## Migration order
 

@@ -1,33 +1,33 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps, type RefObject } from 'react'
 import * as THREE from 'three'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { CuboidCollider, Physics, RigidBody, useAfterPhysicsStep, useRapier } from '@react-three/rapier'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import type { AlsRagdollHandle } from 'als-ue5-r3f/app/AlsRemoteActor'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
+import { ALS_RAPIER_GRAVITY } from 'als-ue5-r3f/als/AlsCharacter.hooks'
 import type { CameraPose } from '@blacksite/check'
 import { Look } from '@blacksite/look/r3f'
 import { autoQuality, depthDefaults, type Atmosphere, type QualityTier } from '@blacksite/look'
 import { ZONE } from '@blacksite/look/presets'
-import { createWeaponRuntime, type QueryHit, type WeaponEvent } from '@blacksite/armory'
-import { StandaloneSubject, createStandaloneRecoil, createStandaloneTouch, type StandaloneIntent, type StandaloneView } from '@blacksite/subject-fpp'
-import { RECOIL_TUNING, createCameraFeel } from '@blacksite/subject-fpp/feel'
-import { ArmsViewmodel, createArmsState, portraitFov, type ArmsPresentation } from '@blacksite/subject-fpp/arms'
+import type { QueryHit, WeaponEvent } from '@blacksite/armory'
+import { InputProvider, MENU, useConsoleNavigation, useInputContext } from '@blacksite/input'
+import { BODY_LAYER, CharacterController, CharacterOverlay, createCharacterController, useCharacterStatus, useTouchActive, type AimTarget, type AlsFootstepSoundRequest, type CharacterHandle as Player } from '@blacksite/subject'
+import type { ArmsPresentation } from '@blacksite/subject/arms'
 import type { Intent } from '@blacksite/warden'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
 import { internalPixelRatio, setAnisotropy, texturesReady } from '@blacksite/look/world'
-import { Hints, Loading, Prompt, Screen, TitleCard, TouchPad, useTouch } from '@blacksite/ui/hud'
+import { Loading, Menu, Screen, TitleCard } from '@blacksite/ui/hud'
 import { createBreachAudio, type BreachAudio } from './audio'
 import { PLAYER_ID, type PlayerState } from './authority'
-import { CheckProbe, type Controls, type Driver } from './check'
+import { CheckProbe, type Controls } from './check'
 import { createChips, type Chips } from './chips'
 import { createEffects, type Effects } from './effects'
 import { SOLIDS, castLevel, castTargets, clearLine, groundHit, zoneMultiplier, type Target, type V3 } from './geometry'
 import { Hud } from './hud'
 import { ENCOUNTERS, EXFIL, START, footingAt, roomAt } from './layout'
 import { breachTexturesReady, buildLevel, type BreachLevel } from './level'
-import { AI, CORPSE_RAGDOLL, DEG, FEEDBACK, MOVE, PLAYER, PRESENTATION, VIEW, WEAPONS, animationBudget, animationInterval, armoryDefinitions, scheduleAnimation, footInterval, type HitZone, type RoomId } from './model'
-import { createBody, eyePosition, placeBody, stepBody } from './player'
+import { AI, CORPSE_RAGDOLL, DEG, FEEDBACK, MOVE, PAD, PLAYER, PRESENTATION, VIEW, WEAPONS, animationBudget, animationInterval, armoryDefinitions, scheduleAnimation, footInterval, type HitZone, type RoomId } from './model'
 import { createCorpseRagdoll, warmCorpseRagdoll, type CorpseRagdoll } from './ragdoll'
 import { Soldiers, corpseOf, lod, releaseWeaponAim } from './soldiers'
 import { SquadClient, type TimedEvent } from './squad'
@@ -59,8 +59,6 @@ function effectsFor(scene: THREE.Scene) {
   return effects
 }
 const ADMISSION = -2.25
-type Commands = { reload: boolean; swap: boolean; aim: boolean; crouch: boolean; jump: boolean; sprint: boolean }
-type TouchInput = ReturnType<typeof createStandaloneTouch>
 type RapierHandle = ReturnType<typeof useRapier>
 const atmosphere: Atmosphere = {
   ...ZONE,
@@ -90,12 +88,26 @@ const OBJECTIVES = ['Clear the lobby', 'Clear the machine hall', 'Clear the reco
 
 const playerState: PlayerState = { x: START.position[0], y: MOVE.eye, z: START.position[2], yaw: 0, pitch: 0, crouch: false, moving: false, sprinting: false, alive: true }
 
-function readKeys(intent: StandaloneIntent, keys: ReadonlySet<string>) {
-  const forward = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown'))
-  const right = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'))
-  if (intent.forward || intent.right) return { forward: intent.forward, right: intent.right }
-  const length = Math.max(1, Math.hypot(forward, right))
-  return { forward: forward / length, right: right / length }
+function createPlayer() {
+  return createCharacterController({
+    views: ['arms'],
+    start: START,
+    weapons: definitions.map(definition => {
+      const id = definition.id as WeaponId
+      return { definition, adsFov: WEAPONS[id].adsFov, adsSeconds: WEAPONS[id].adsSeconds, overlay: id === 'pistol' ? 'PistolTwoHanded' : 'Rifle', rumble: PAD.rumble[id] }
+    }),
+    eye: { stand: MOVE.eye, crouch: MOVE.crouchEye, smoothing: MOVE.eyeSmoothing },
+    sprintOutSeconds: MOVE.sprintOutSeconds,
+    fov: VIEW.fov,
+    look: { mouse: VIEW.sensitivity, touch: VIEW.touchSensitivity },
+    padLook: PAD.look,
+    ownerId: PLAYER_ID,
+    seed: 1,
+  })
+}
+
+function usePaused(player: Player) {
+  return useSyncExternalStore(player.subscribe, () => player.status().paused)
 }
 
 type LookHandle = Parameters<NonNullable<ComponentProps<typeof Look>['onReady']>>[0]
@@ -115,27 +127,20 @@ function LevelColliders() {
   </RigidBody>
 }
 
-function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { tier: QualityTier; audio: BreachAudio; touchInput: TouchInput; commands: Commands; onArms: () => void; onFirstFrame: () => void }) {
+function Scene({ player, tier, audio, restartRef, onArms, onFirstFrame }: { player: Player; tier: QualityTier; audio: BreachAudio; restartRef: { current: () => void }; onArms: () => void; onFirstFrame: () => void }) {
   const camera = useThree(state => state.camera) as THREE.PerspectiveCamera
   const gl = useThree(state => state.gl)
   const scene = useThree(state => state.scene)
   const phone = coarse || tier === 'low'
-  const squad = useMemo(() => new SquadClient(), [])
-  const keys = useMemo(() => new Set<string>(), [])
+  const squad = useMemo(() => new SquadClient(player.now), [player])
+  const paused = usePaused(player)
   const handles = useMemo(() => new Map<string, RefObject<AlsRagdollHandle | null>>(), [])
   const { level, chips } = useMemo(() => worldFor(tier, phone), [tier, phone])
   const effects = useMemo(() => effectsFor(scene), [scene])
-  const arms = useMemo(() => { const state = createArmsState(); state.aimSeconds = WEAPONS.rifle.adsSeconds; return state }, [])
-  const recoil = useMemo(createStandaloneRecoil, [])
-  const feel = useMemo(createCameraFeel, [])
-  const look = useMemo(() => ({ pitch: 0, yaw: 0 }), [])
-  const view = useMemo<StandaloneView>(() => ({ yaw: START.yaw, pitch: 0, reset: true }), [])
-  const body = useMemo(() => createBody(START.position), [])
-  const weapon = useRef(createWeaponRuntime({ ownerId: PLAYER_ID, seed: 7, definitions, initialWeaponId: 'rifle' }))
+  const arms = player.arms
   const [presentation, setPresentation] = useState<ArmsPresentation | null>(null)
   const [roster, setRoster] = useState<string[]>([])
   const [frozen, setFrozen] = useState<ReadonlySet<string>>(() => new Set())
-  const override = useRef(false)
   const pose = useRef<CameraPose | null>(null)
   const [posed, setPosed] = useState(false)
   const [live, setLive] = useState(false)
@@ -147,25 +152,25 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     sun.shadow.normalBias = 0.04
     Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 140 })
     sun.shadow.camera.updateProjectionMatrix()
+    sun.shadow.camera.layers.enable(BODY_LAYER)
     const fill = new THREE.HemisphereLight()
     const flash = new THREE.PointLight('#ffb36a', 0, 10, 2)
     const enemy = new THREE.PointLight('#ffb070', 0, 8, 2)
     return { sun, fill, flash, enemy }
   }, [tier, phone])
   const game = useRef({
-    firing: false, reload: false, weapon: 'rifle' as WeaponId, aimHeld: false, accumulated: 0, clock: 0, flash: 0, enemyFlash: 0,
-    aim: { origin: new THREE.Vector3(), direction: new THREE.Vector3(0, 0, -1) }, health: PLAYER.health as number, lastHurt: -10, crouched: false,
+    clock: 0, flash: 0, enemyFlash: 0, health: PLAYER.health as number, lastHurt: -10,
     phase: 'play' as 'play' | 'dead' | 'exfil', restartAt: 0, cleared: [false, false, false], exfil: false, startedAt: 0,
     shots: 0, hits: 0, kills: 0, barkAt: new Map<string, number>(), squadBarkAt: -10, subtitleId: 0, damageId: 0,
     rounds: new Map<string, number>(), down: new Set<string>(), downAt: new Map<string, number>(), laid: new Set<string>(), settled: new Map<string, number>(), dead: new Set<string>(), pushes: new Map<string, THREE.Vector3>(),
-    seed: 1, firstFrame: false, sprinting: false, fireReadyAt: 0, sentAt: 0, room: 'yard' as RoomId, deathTilt: 0, drive: null as Driver | null,
+    seed: 1, firstFrame: false, sentAt: 0, room: 'yard' as RoomId, deathTilt: 0,
     footsteps: new Map<string, number>(),
     drops: new Map<string, { pivot: THREE.Group; axis: THREE.Vector3; base: number; start: number }>(),
     corpses: new Map<string, CorpseRagdoll>(),
   })
   const scratch = useMemo(() => ({
-    eye: { x: 0, y: 0, z: 0 } as V3, right: new THREE.Vector3(), forward: new THREE.Vector3(), muzzle: new THREE.Vector3(), point: new THREE.Vector3(), normal: new THREE.Vector3(),
-    from: new THREE.Vector3(), to: new THREE.Vector3(), sample: { x: 0, z: 0, crouch: false, alive: true, yaw: 0 }, targets: [] as Target[], zones: new Map<string, HitZone>(),
+    right: new THREE.Vector3(), forward: new THREE.Vector3(), muzzle: new THREE.Vector3(), point: new THREE.Vector3(), normal: new THREE.Vector3(),
+    from: new THREE.Vector3(), to: new THREE.Vector3(), sample: { x: 0, z: 0, crouch: false, alive: true, yaw: 0 }, targets: [] as Target[], assist: [] as AimTarget[], zones: new Map<string, HitZone>(),
     frustum: new THREE.Frustum(), matrix: new THREE.Matrix4(), sphere: new THREE.Sphere(new THREE.Vector3(), 1.2), visible: new Set<RoomId>(), corpses: new THREE.Group(), lightEye: new THREE.Vector3(),
     animation: new Map<string, number>(), credit: new Map<string, number>(), due: new Set<string>(), budget: 0, parity: false, waiting: [] as string[], arriving: 0, falling: 0, stepped: false,
     physics: null as RapierHandle | null,
@@ -194,24 +199,16 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     return next
   }), [])
 
-  const restart = useCallback(() => {
+  const resetWorld = useCallback(() => {
     const state = game.current
-    state.seed = (state.seed * 7919 + 13) % 100003
-    placeBody(body, START.position)
-    view.yaw = START.yaw
-    view.pitch = 0
-    view.reset = true
-    weapon.current = createWeaponRuntime({ ownerId: PLAYER_ID, seed: state.seed, definitions, initialWeaponId: 'rifle' })
-    Object.assign(state, { firing: false, reload: false, weapon: 'rifle', health: PLAYER.health, lastHurt: -10, phase: 'play', cleared: [false, false, false], exfil: false, startedAt: state.clock, shots: 0, hits: 0, kills: 0, squadBarkAt: -10, deathTilt: 0, accumulated: 0, fireReadyAt: 0, sprinting: false })
+    player.active = true
+    player.eyeDrop = 0
+    Object.assign(state, { health: PLAYER.health, lastHurt: -10, phase: 'play', cleared: [false, false, false], exfil: false, startedAt: state.clock, shots: 0, hits: 0, kills: 0, squadBarkAt: -10, deathTilt: 0 })
     state.barkAt.clear(); state.rounds.clear(); state.down.clear(); state.downAt.clear(); state.laid.clear(); state.settled.clear(); state.dead.clear(); state.pushes.clear()
     state.footsteps.clear()
     state.drops.clear()
     for (const ragdoll of state.corpses.values()) ragdoll.dispose()
     state.corpses.clear()
-    arms.weapon = 'rifle'
-    arms.aimSeconds = WEAPONS.rifle.adsSeconds
-    feel.reset()
-    arms.equipSequence++
     scratch.corpses.clear()
     chips.reset()
     setFrozen(new Set())
@@ -223,64 +220,44 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     syncPlayer()
     squad.reset(state.seed, { ...playerState })
     hud.reset({ objective: OBJECTIVES[0]! })
-  }, [arms, body, chips, feel, scratch, squad, view])
+  }, [chips, player, scratch, squad])
+
+  const restart = useCallback(() => {
+    const state = game.current
+    state.seed = (state.seed * 7919 + 13) % 100003
+    player.respawn(state.seed)
+    resetWorld()
+  }, [player, resetWorld])
+  restartRef.current = restart
 
   useEffect(() => {
     squad.start()
     const unsubscribe = squad.subscribe(() => setRoster(squad.roster.length ? squad.roster.map(soldier => soldier.id) : soldierIds))
     setRoster(soldierIds)
-    restart()
+    resetWorld()
     return () => { unsubscribe(); squad.dispose() }
-  }, [restart, squad])
+  }, [resetWorld, squad])
+
+  useEffect(() => { squad.pause(paused) }, [squad, paused])
 
   useEffect(() => {
-    const canvas = gl.domElement
-    const doc = canvas.ownerDocument
-    const active = () => doc.pointerLockElement === canvas
-    const select = (next: WeaponId) => { game.current.weapon = next }
-    const down = (event: KeyboardEvent) => {
-      audio.start()
-      keys.add(event.code)
-      if (event.code === 'Space' && !event.repeat) commands.jump = true
-      if (event.code === 'KeyR' && !event.repeat) game.current.reload = true
-      if (event.code === 'Digit1') select('rifle')
-      if (event.code === 'Digit2') select('pistol')
-      if (event.code === 'KeyQ' && !event.repeat) select(game.current.weapon === 'rifle' ? 'pistol' : 'rifle')
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) event.preventDefault()
-    }
-    const up = (event: KeyboardEvent) => keys.delete(event.code)
-    const blur = () => { keys.clear(); game.current.aimHeld = false; touchInput.fire = false }
-    const mouseDown = (event: MouseEvent) => { audio.start(); if (event.button === 2 && active()) game.current.aimHeld = true }
-    const mouseUp = (event: MouseEvent) => { if (event.button === 2) game.current.aimHeld = false }
-    const wheel = (event: WheelEvent) => { if (active() && Math.abs(event.deltaY) > 4) select(game.current.weapon === 'rifle' ? 'pistol' : 'rifle') }
-    const lockChange = () => { const locked = active(); hud.set({ locked }); if (!locked) game.current.aimHeld = false }
-    const context = (event: MouseEvent) => event.preventDefault()
-    const touchStart = () => audio.start()
-    doc.addEventListener('keydown', down)
-    doc.addEventListener('keyup', up)
-    window.addEventListener('blur', blur)
-    doc.addEventListener('mousedown', mouseDown)
-    doc.addEventListener('mouseup', mouseUp)
-    doc.addEventListener('wheel', wheel, { passive: true })
-    doc.addEventListener('pointerlockchange', lockChange)
-    doc.addEventListener('touchstart', touchStart, { passive: true })
-    canvas.addEventListener('contextmenu', context)
-    return () => {
-      doc.removeEventListener('keydown', down); doc.removeEventListener('keyup', up); window.removeEventListener('blur', blur); doc.removeEventListener('mousedown', mouseDown); doc.removeEventListener('mouseup', mouseUp)
-      doc.removeEventListener('wheel', wheel); doc.removeEventListener('pointerlockchange', lockChange); doc.removeEventListener('touchstart', touchStart); canvas.removeEventListener('contextmenu', context)
-    }
-  }, [gl, audio, keys, touchInput])
+    const doc = gl.domElement.ownerDocument
+    const start = () => audio.start()
+    doc.addEventListener('keydown', start)
+    doc.addEventListener('mousedown', start)
+    doc.addEventListener('touchstart', start, { passive: true })
+    return () => { doc.removeEventListener('keydown', start); doc.removeEventListener('mousedown', start); doc.removeEventListener('touchstart', start) }
+  }, [gl, audio])
 
   const syncPlayer = () => {
-    const eye = eyePosition(body, scratch.eye)
-    playerState.x = eye.x
-    playerState.y = eye.y
-    playerState.z = eye.z
-    playerState.yaw = view.yaw
-    playerState.pitch = view.pitch
-    playerState.crouch = body.crouch > 0.5
-    playerState.moving = Math.hypot(body.velocity.x, body.velocity.z) > 0.6
-    playerState.sprinting = game.current.sprinting
+    playerState.x = player.eye.x
+    playerState.y = player.eye.y
+    playerState.z = player.eye.z
+    playerState.yaw = player.control.yaw
+    playerState.pitch = player.control.pitch
+    playerState.crouch = player.crouching
+    playerState.moving = player.speed > 0.6
+    playerState.sprinting = player.sprinting
     playerState.alive = game.current.phase !== 'dead'
   }
 
@@ -308,14 +285,15 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     state.health = Math.max(0, state.health - amount)
     state.lastHurt = state.clock
     audio.hurt(amount)
-    const angle = Math.atan2(from.x - body.position.x, from.z - body.position.z)
-    const facing = Math.atan2(-Math.sin(view.yaw), -Math.cos(view.yaw))
+    const angle = Math.atan2(from.x - player.position.x, from.z - player.position.z)
+    const facing = Math.atan2(-Math.sin(player.control.yaw), -Math.cos(player.control.yaw))
     const relative = facing - angle
-    feel.hurt(amount, Math.sin(relative))
+    player.hurt(amount, Math.sin(relative))
     const now = hud.get()
     hud.set({ health: state.health, damage: [...now.damage.filter(item => item.until > state.clock), { id: ++state.damageId, angle: relative, until: state.clock + 0.9 }].slice(-4) })
     if (state.health <= 0) {
       state.phase = 'dead'
+      player.active = false
       state.restartAt = state.clock + PLAYER.deathRestartSeconds
       audio.sting('death')
       hud.set({ phase: 'dead', time: state.clock - state.startedAt, shots: state.shots, hits: state.hits, kills: state.kills })
@@ -345,7 +323,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
   const corpseSlot = () => {
     const state = game.current
     if (state.corpses.size < PRESENTATION.ragdolls.phone) return true
-    const time = performance.now() / 1000
+    const time = player.now() / 1000
     let oldest: string | null = null
     for (const id of state.corpses.keys()) if (!oldest || (state.downAt.get(id) ?? time) < (state.downAt.get(oldest) ?? time)) oldest = id
     const ragdoll = oldest ? state.corpses.get(oldest) : null
@@ -367,14 +345,14 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     scratch.corpses.add(corpse)
     state.corpses.set(id, ragdoll)
     state.down.add(id)
-    state.downAt.set(id, performance.now() / 1000)
+    state.downAt.set(id, player.now() / 1000)
     state.laid.add(id)
     freeze(id, true)
   }
 
   const rest = () => {
     const state = game.current
-    const time = performance.now() / 1000
+    const time = player.now() / 1000
     for (const [id, ragdoll] of state.corpses) {
       const age = time - (state.downAt.get(id) ?? time)
       if (ragdoll.pelvis.velocity.lengthSq() < FEEDBACK.corpse.settledSpeed ** 2) state.settled.set(id, state.settled.get(id) ?? time)
@@ -401,7 +379,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     if (axis.lengthSq() < 1e-6) axis.set(1, 0, 0)
     state.drops.set(id, { pivot, axis: axis.normalize(), base: feet.y, start: state.clock })
     state.down.add(id)
-    state.downAt.set(id, performance.now() / 1000)
+    state.downAt.set(id, player.now() / 1000)
     state.laid.add(id)
     freeze(id, true)
   }
@@ -423,7 +401,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     const state = game.current
     const falling = [...state.down].filter(other => !state.laid.has(other))
     if (falling.length < PRESENTATION.ragdolls[phone ? 'phone' : 'desktop']) return true
-    const time = performance.now() / 1000
+    const time = player.now() / 1000
     let oldest: string | null = null
     for (const other of falling) if (!oldest || (state.downAt.get(other) ?? time) < (state.downAt.get(oldest) ?? time)) oldest = other
     const handle = oldest ? handles.get(oldest)?.current : null
@@ -436,7 +414,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     const last = state.barkAt.get(id) ?? -10
     const audible = force || (state.clock - last >= AI.barkCooldownSeconds && state.clock - state.squadBarkAt >= AI.squadBarkSeconds)
     if (!audible && !announce) return
-    if (Math.hypot(at.x - body.position.x, at.z - body.position.z) > AI.hearingRange) return
+    if (Math.hypot(at.x - player.position.x, at.z - player.position.z) > AI.hearingRange) return
     if (audible) { state.barkAt.set(id, state.clock); state.squadBarkAt = state.clock }
     const index = soldierIds.indexOf(id)
     const duration = audible ? audio.bark(text, at, index) : 1.3
@@ -456,7 +434,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
       lights.enemy.position.copy(scratch.from)
       state.enemyFlash = FEEDBACK.muzzleFlashSeconds
       if (fired % FEEDBACK.tracerEvery === 1) effects.tracer(scratch.from, scratch.to)
-      const occluded = !clearLine(event.from, scratch.eye)
+      const occluded = !clearLine(event.from, player.eye)
       audio.enemyShot(event.from, occluded)
       if (event.hit === 'player') { hurt(event.damage, event.from); return }
       if (event.hit !== 'none') {
@@ -485,23 +463,11 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
 
   const handle = (event: WeaponEvent) => {
     const state = game.current
-    if (event.type === 'switch-started') {
-      arms.weapon = event.weaponId as WeaponId
-      const definition = WEAPONS[arms.weapon]
-      arms.aimSeconds = definition.adsSeconds
-      arms.equipSequence++
-      audio.equip()
-      return
-    }
-    if (event.type === 'reload-started') { arms.reloadSequence++; audio.reload(event.weaponId as WeaponId, arms.empty); return }
-    if (event.type === 'trigger-blocked' && event.reason === 'empty') { audio.dry(); state.reload = true; return }
+    if (event.type === 'switch-started') { audio.equip(); return }
+    if (event.type === 'reload-started') { audio.reload(event.weaponId as WeaponId, arms.empty); return }
+    if (event.type === 'trigger-blocked' && event.reason === 'empty') { audio.dry(); return }
     if (event.type === 'shot') {
       const pistol = event.weaponId === 'pistol'
-      arms.fireSequence++
-      const kick = arms.aiming ? 0.75 : 1
-      recoil.pitch += event.recoil.pitch * kick
-      recoil.yaw += event.recoil.yaw * kick
-      feel.shot(arms.debug.aimAmount)
       audio.shot(pistol ? 'pistol' : 'rifle')
       effects.eject(camera, pistol)
       state.flash = FEEDBACK.muzzleFlashSeconds
@@ -512,13 +478,13 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
       scratch.muzzle.y += arms.aiming ? -0.05 : -0.09
       lights.flash.position.copy(scratch.muzzle)
       if (state.shots % FEEDBACK.tracerEvery === 0) effects.tracer(scratch.muzzle, scratch.to.set(event.end.x, event.end.y, event.end.z))
-      squad.shot(scratch.eye)
+      squad.shot(player.eye)
       return
     }
     if (event.type === 'damage') {
       const zone = scratch.zones.get(event.targetId) ?? 'chest'
       state.hits++
-      squad.damage(event.targetId, event.amount * zoneMultiplier(zone), scratch.eye)
+      squad.damage(event.targetId, event.amount * zoneMultiplier(zone), player.eye)
       audio.hitMarker(false, zone === 'head')
       const screen = hud.get()
       hud.set({ marker: screen.marker + 1, markerKind: zone === 'head' ? 'head' : 'hit' })
@@ -543,64 +509,28 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     chips.hit(hit.colliderId, hit.point, { x: scratch.forward.x, y: scratch.forward.y, z: scratch.forward.z }, hit.normal, power)
   }
 
-  const writeIntent = (intent: StandaloneIntent, dt: number) => {
-    const state = game.current
-    const step = Math.min(dt, 0.1)
-    state.clock += step
-    if (commands.reload) { commands.reload = false; state.reload = true }
-    if (commands.swap) { commands.swap = false; state.weapon = state.weapon === 'rifle' ? 'pistol' : 'rifle' }
-    const drive = state.drive
-    const move = drive ? { forward: drive.forward, right: drive.right } : readKeys(intent, keys)
-    const playing = state.phase === 'play'
-    const crouch = keys.has('KeyC') || keys.has('ControlLeft') || commands.crouch
-    const sprintKey = keys.has('ShiftLeft') || keys.has('ShiftRight') || commands.sprint || touchInput.forward > 0.92 || !!drive?.sprint
-    const jump = commands.jump || intent.jump || !!drive?.jump
-    commands.jump = false
-    if (drive) drive.jump = false
-    const firing = playing && (state.firing || !!drive?.fire)
-    if (state.sprinting) state.fireReadyAt = state.clock + MOVE.sprintOutSeconds
-    const events = stepBody(body, {
-      forward: playing ? move.forward : 0, right: playing ? move.right : 0, yaw: view.yaw, sprint: sprintKey, crouch: playing && crouch, jump: playing && jump,
-      aiming: arms.aiming, firing, walk: keys.has('AltLeft'),
-    }, step)
-    state.sprinting = events.sprinting
-    const footing = footingAt(body.position.x, body.position.z)
-    if (events.step) audio.footstep(footing, events.sprinting ? 1 : body.crouch > 0.5 ? 0.35 : 0.7)
-    if (events.landed > 1.5) audio.footstep(footing, Math.min(1, events.landed / 5), true)
-    if (events.landed > 0) { feel.land(events.landed); arms.landSpeed = events.landed; arms.landSequence++ }
-    if (events.jumped) { audio.footstep(footing, 0.5); feel.jump() }
-    const crouched = body.crouch > 0.5
-    if (crouched !== state.crouched) { state.crouched = crouched; feel.crouch(crouched) }
-    arms.speed = events.speed
-    arms.sprinting = events.sprinting
-    arms.aiming = playing && (state.aimHeld || commands.aim || !!drive?.aim) && !events.sprinting
-    const sinYaw = Math.sin(view.yaw), cosYaw = Math.cos(view.yaw)
-    const forward = -sinYaw * body.velocity.x - cosYaw * body.velocity.z
-    const lateral = cosYaw * body.velocity.x - sinYaw * body.velocity.z
-    const definition = WEAPONS[arms.weapon]
-    feel.step({ speed: events.speed, lateral, grounded: body.grounded, sprinting: events.sprinting, aim: arms.debug.aimAmount }, VIEW.fov, definition.adsFov, step, arms.kick)
-    arms.motion = { forward, lateral, grounded: body.grounded, crouching: crouched, look, walk: feel.phase, bob: feel.bob }
-    const eye = eyePosition(body, scratch.eye)
-    if (state.phase === 'dead') { state.deathTilt = Math.min(1, state.deathTilt + step * 1.6); eye.y -= state.deathTilt * (body.eye - 0.35) }
-    state.accumulated = Math.min(state.accumulated + step, 0.1)
-    const runtime = weapon.current
-    while (state.accumulated >= runtime.fixedDeltaSeconds) {
-      state.accumulated -= runtime.fixedDeltaSeconds
-      state.aim.origin.set(eye.x, eye.y, eye.z)
-      const stance = { aiming: arms.aiming, moving: Math.min(1, events.speed / MOVE.run), crouched: body.crouch > 0.5 }
-      camera.getWorldDirection(state.aim.direction)
-      const out = runtime.step({ tick: runtime.snapshot().nextTick, trigger: firing && !events.sprinting && state.clock >= state.fireReadyAt, reload: playing && state.reload, selectWeaponId: state.weapon, aim: state.aim, muzzle: state.aim.origin, stance }, queries)
-      state.reload = false
-      for (const event of out) handle(event)
-    }
+  const footstep = (request: Readonly<AlsFootstepSoundRequest>) => {
+    if (request.SoundType === 'Land') return
+    const loud = player.sprinting ? 1 : player.crouching ? 0.35 : 0.7
+    audio.footstep(footingAt(request.Location.x, request.Location.z), loud * request.VolumeMultiplier)
+  }
+
+  const events = {
+    onWeapon: handle,
+    onFootstep: footstep,
+    onLand: (speed: number) => { if (speed > 1.5) audio.footstep(footingAt(player.position.x, player.position.z), Math.min(1, speed / 5), true) },
+    onJump: () => audio.footstep(footingAt(player.position.x, player.position.z), 0.5),
+  }
+
+  const showWeapon = () => {
+    const runtime = player.weapon
+    if (!runtime) return
     const snapshot = runtime.snapshot()
     const current = snapshot.weapons.find(entry => entry.id === snapshot.equippedWeaponId)!
-    arms.empty = current.magazine <= 0
     hud.set({
       weapon: snapshot.equippedWeaponId as WeaponId, magazine: current.magazine, reserve: current.reserve, capacity: WEAPONS[snapshot.equippedWeaponId as WeaponId].magazine,
-      reloading: snapshot.status.kind === 'reloading', aiming: arms.aiming, spread: Math.min(4, snapshot.spread / DEG + (body.grounded ? 0 : 1.5)),
+      reloading: snapshot.status.kind === 'reloading', aiming: arms.aiming, spread: Math.min(4, snapshot.spread / DEG + (player.grounded ? 0 : 1.5)),
     })
-    return eye
   }
 
   useFrame(() => {
@@ -632,11 +562,14 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
   useFrame((_, dt) => {
     const state = game.current
     const step = Math.min(dt, 0.1)
+    state.clock += step
+    if (state.phase === 'dead') { state.deathTilt = Math.min(1, state.deathTilt + step * 1.6); player.eyeDrop = state.deathTilt * (MOVE.eye - 0.35) }
+    showWeapon()
     syncPlayer()
     if (state.clock - state.sentAt > 1 / 30) { state.sentAt = state.clock; squad.player({ ...playerState }) }
-    const room = roomAt(body.position.x, body.position.z)
+    const room = roomAt(player.position.x, player.position.z)
     state.room = room.id
-    audio.setListener({ x: scratch.eye.x, y: scratch.eye.y, z: scratch.eye.z, yaw: view.yaw }, room.id)
+    audio.setListener({ x: player.eye.x, y: player.eye.y, z: player.eye.z, yaw: player.control.yaw }, room.id)
     audio.update(step)
     const seen = pose.current ? roomAt(pose.current.position[0], pose.current.position[2]) : room
     scratch.visible.clear()
@@ -655,6 +588,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     squad.drain(now, handleSquad)
     const targets = scratch.targets
     targets.length = 0
+    scratch.assist.length = 0
     camera.updateMatrixWorld()
     scratch.frustum.setFromProjectionMatrix(scratch.matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse))
     const alive = [0, 0, 0]
@@ -663,7 +597,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
       if (!squad.sample(soldier.id, now, scratch.sample)) continue
       const sample = scratch.sample
       const speed = Math.hypot(soldier.vx, soldier.vz)
-      if (sample.alive && speed > 0.6 && Math.hypot(sample.x - body.position.x, sample.z - body.position.z) < AI.hearingRange) {
+      if (sample.alive && speed > 0.6 && Math.hypot(sample.x - player.position.x, sample.z - player.position.z) < AI.hearingRange) {
         const stride = (state.footsteps.get(soldier.id) ?? 0) + step
         const interval = footInterval({ sprinting: speed > MOVE.run, crouched: sample.crouch, walking: speed < 2.2 })
         if (stride >= interval) audio.enemyStep(footingAt(sample.x, sample.z), { x: sample.x, y: 0, z: sample.z })
@@ -678,10 +612,13 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
         if (!soldier.alive && !state.dead.has(soldier.id)) { state.dead.add(soldier.id); state.kills++ }
         continue
       }
-      if (sample.alive && !isDown && !waiting) targets.push({ id: soldier.id, x: sample.x, y: 0, z: sample.z, crouch: sample.crouch })
+      if (sample.alive && !isDown && !waiting) {
+        targets.push({ id: soldier.id, x: sample.x, y: 0, z: sample.z, crouch: sample.crouch })
+        scratch.assist.push({ id: soldier.id, x: sample.x, y: sample.crouch ? PAD.target.crouchChest : PAD.target.chest, z: sample.z, radius: PAD.target.radius, moving: speed > PAD.target.moving })
+      }
       if (!soldier.alive && !state.dead.has(soldier.id)) { state.dead.add(soldier.id); state.kills++; audio.hitMarker(true, false); const screen = hud.get(); hud.set({ marker: screen.marker + 1, markerKind: 'kill' }) }
       if (!sample.alive && !isDown && !state.pushes.has(soldier.id)) {
-        const push = new THREE.Vector3(sample.x - body.position.x, 0, sample.z - body.position.z)
+        const push = new THREE.Vector3(sample.x - player.position.x, 0, sample.z - player.position.z)
         state.pushes.set(soldier.id, push.lengthSq() < 1e-4 ? push.set(0, 0, -1) : push.normalize())
       }
       if (!sample.alive && !isDown && PRESENTATION.ragdoll[phone ? 'phone' : 'desktop'] === 'corpse') {
@@ -689,9 +626,9 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
       } else if (!sample.alive && handleRef && !isDown && ragdollSlot(soldier.id)) {
         const push = state.pushes.get(soldier.id) ?? new THREE.Vector3(0, 0, -1)
         releaseWeaponAim(soldier.id)
-        if (handleRef.StartRagdolling({ initialImpulse: { boneName: 'spine_03', impulse: { x: push.x * 38, y: 6, z: push.z * 38 } } })) { state.down.add(soldier.id); state.downAt.set(soldier.id, performance.now() / 1000) }
+        if (handleRef.StartRagdolling({ initialImpulse: { boneName: 'spine_03', impulse: { x: push.x * 38, y: 6, z: push.z * 38 } } })) { state.down.add(soldier.id); state.downAt.set(soldier.id, player.now() / 1000) }
       } else if (isDown && handleRef?.active && !state.laid.has(soldier.id)) {
-        const time = performance.now() / 1000
+        const time = player.now() / 1000
         const age = time - (state.downAt.get(soldier.id) ?? time)
         if (handleRef.pelvis.velocity.lengthSq() < FEEDBACK.corpse.settledSpeed ** 2) state.settled.set(soldier.id, state.settled.get(soldier.id) ?? time)
         else state.settled.delete(soldier.id)
@@ -721,8 +658,9 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
       if (done && !state.exfil) state.exfil = true
       const next = state.cleared.findIndex(value => !value)
       hud.set({ cleared: state.cleared, exfil: state.exfil, objective: OBJECTIVES[next < 0 ? 3 : next]! })
-      if (state.exfil && Math.hypot(body.position.x - EXFIL.at[0], body.position.z - EXFIL.at[1]) < EXFIL.radius) {
+      if (state.exfil && Math.hypot(player.position.x - EXFIL.at[0], player.position.z - EXFIL.at[1]) < EXFIL.radius) {
         state.phase = 'exfil'
+        player.active = false
         state.restartAt = state.clock + PLAYER.exfilRestartSeconds
         audio.sting('exfil')
         hud.set({ phase: 'exfil', time: state.clock - state.startedAt, shots: state.shots, hits: state.hits, kills: state.kills })
@@ -741,10 +679,8 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     if (screen.subtitles.some(line => line.until <= state.clock)) hud.set({ subtitles: screen.subtitles.filter(line => line.until > state.clock) })
     if (screen.damage.some(item => item.until <= state.clock)) hud.set({ damage: screen.damage.filter(item => item.until > state.clock) })
     if (state.phase === 'dead') camera.rotateZ(state.deathTilt * 0.5)
-    const fov = portraitFov(feel.fov, camera.aspect)
-    if (!override.current && Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix() }
     const texel = 52 / lights.sun.shadow.mapSize.x
-    const cx = Math.round(body.position.x / texel) * texel, cz = Math.round(body.position.z / texel) * texel
+    const cx = Math.round(player.position.x / texel) * texel, cz = Math.round(player.position.z / texel) * texel
     lights.sun.target.position.set(cx, 0, cz)
     lights.sun.position.set(cx + atmosphere.sun.direction[0] * 60, atmosphere.sun.direction[1] * 60, cz + atmosphere.sun.direction[2] * 60)
     lights.sun.target.updateMatrixWorld()
@@ -753,15 +689,15 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
   }, 0.5)
 
   const driver = useMemo<Controls>(() => ({
-    drive(next: Driver | null) { game.current.drive = next },
-    place(position: readonly [number, number, number], yaw: number) { placeBody(body, position); view.yaw = yaw; view.pitch = 0; view.reset = true; syncPlayer() },
-    body,
-    override(next: CameraPose | null) { const on = next !== null; pose.current = next; override.current = on; setPosed(on); if (!on) { camera.clearViewOffset(); camera.updateProjectionMatrix() } },
+    drive(next) { player.drive(next) },
+    place(position, yaw) { player.teleport(position, yaw); syncPlayer() },
+    player,
+    override(next: CameraPose | null) { const on = next !== null; pose.current = next; player.override = on; setPosed(on); if (!on) { camera.clearViewOffset(); camera.updateProjectionMatrix() } },
     restart,
-    face(target: V3) { const dx = target.x - body.position.x, dz = target.z - body.position.z; view.yaw = Math.atan2(-dx, -dz); view.pitch = Math.atan2(target.y - scratch.eye.y, Math.hypot(dx, dz)); view.reset = true },
+    face(target: V3) { player.face(target) },
     targets: () => scratch.targets,
     heal() { game.current.health = PLAYER.health; hud.set({ health: PLAYER.health }) },
-  }), [body, camera, restart, scratch, view])
+  }), [camera, player, restart, scratch])
 
   return <>
     <Look atmosphere={atmosphere} quality={tier} environment sun={lights.sun} fill={lights.fill} overlay={posed ? null : presentation} onReady={opaqueAo} />
@@ -771,50 +707,45 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     <primitive object={lights.flash} />
     <primitive object={lights.enemy} />
     <primitive object={level.group} />
-    <Physics gravity={[0, -9.81, 0]} timeStep={1 / (phone ? PRESENTATION.physicsHz.phone : PRESENTATION.physicsHz.desktop)} updatePriority={ALS_FRAME_PRIORITY.Physics}>
+    <Physics gravity={[0, -ALS_RAPIER_GRAVITY, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <LevelColliders />
+      <CharacterController controller={player} queries={queries} events={events} aimTargets={() => scratch.assist} onPresentation={setPresentation} />
       <StepProbe onStep={useCallback(() => { scratch.stepped = true; for (const ragdoll of game.current.corpses.values()) ragdoll.update() }, [scratch])} onPhysics={useCallback((physics: RapierHandle) => {
         scratch.physics = physics
         if (PRESENTATION.ragdoll[phone ? 'phone' : 'desktop'] === 'corpse') warmCorpseRagdoll(physics.rapier, physics.world)
       }, [scratch, phone])} />
       <Soldiers roster={roster} frozen={frozen} client={squad} handles={handles} phone={phone} />
     </Physics>
-    <ArmsViewmodel state={arms} render="external" onPresentation={setPresentation} />
-    <StandaloneSubject view={view} onIntent={writeIntent} onFire={useCallback((firing: boolean, aim: { origin: THREE.Vector3; direction: THREE.Vector3 }) => { game.current.firing = firing; game.current.aim.direction.copy(aim.direction) }, [])} onReload={useCallback(() => { game.current.reload = true }, [])} touch={touchInput} recoil={recoil} recoilFeel={RECOIL_TUNING[arms.weapon]} pose={override.current ? undefined : feel.pose} look={look} sensitivity={feel.lookScale} />
     <CheckProbe driver={driver} audio={audio} ready={live} overlay={presentation} onWarmed={onFirstFrame} viewmodel={() => [...arms.debug.holder, ...arms.debug.clip, ...arms.debug.feel]} />
   </>
 }
 
-function Touch({ touchInput, commands }: { touchInput: TouchInput; commands: Commands }) {
-  const [aim, setAim] = useState(false)
-  const [crouch, setCrouch] = useState(false)
-  return <TouchPad
-    onMove={(x, y) => { touchInput.forward = -y; touchInput.right = x }}
-    onLook={(dx, dy) => { touchInput.lookX += dx * 1.4; touchInput.lookY += dy * 1.4 }}
-    onButton={(id, pressed) => {
-      if (id === 'fire') touchInput.fire = pressed
-      if (!pressed) return
-      if (id === 'aim') { commands.aim = !commands.aim; setAim(commands.aim) }
-      if (id === 'crouch') { commands.crouch = !commands.crouch; setCrouch(commands.crouch) }
-      if (id === 'jump') commands.jump = true
-      if (id === 'reload') commands.reload = true
-      if (id === 'swap') commands.swap = true
-    }}
-    buttons={[{ id: 'fire', label: 'Fire' }, { id: 'aim', label: aim ? 'Hip' : 'Aim' }, { id: 'reload', label: 'Reload' }, { id: 'crouch', label: crouch ? 'Stand' : 'Crouch' }, { id: 'jump', label: 'Jump' }, { id: 'swap', label: 'Swap' }]} />
+function Pause({ player, onRestart }: { player: Player; onRestart: () => void }) {
+  const resume = () => { player.setPaused(false); player.lock() }
+  const navigation = useConsoleNavigation(resume)
+  useInputContext(MENU)
+  return <Menu root={navigation.root} title="Paused" items={[
+    { id: 'resume', label: 'Resume', onPress: resume },
+    { id: 'restart', label: 'Restart', onPress: () => { resume(); onRestart() } },
+  ]} />
 }
 
 export function Game() {
+  const player = useMemo(createPlayer, [])
+  return <InputProvider runtime={player.input}><Shell player={player} /></InputProvider>
+}
+
+function Shell({ player }: { player: Player }) {
   const audio = useMemo(createBreachAudio, [])
-  const touchInput = useMemo(createStandaloneTouch, [])
-  const commands = useMemo<Commands>(() => ({ reload: false, swap: false, aim: false, crouch: false, jump: false, sprint: false }), [])
-  const touch = useTouch()
+  const touch = useTouchActive()
+  const status = useCharacterStatus(player)
   const tier = useMemo(autoQuality, [])
+  const restartRef = useRef(() => {})
   const [armsReady, setArmsReady] = useState(false)
   const [world, setWorld] = useState(false)
   const [progress, setProgress] = useState(0.05)
   const [playing, setPlaying] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { locked } = useHud('locked')
   const ready = armsReady && world
   useEffect(() => () => audio.dispose(), [audio])
   useEffect(() => {
@@ -826,16 +757,16 @@ export function Game() {
   }, [audio])
   const onArms = useCallback(() => { setProgress(1); setArmsReady(true) }, [])
   const onFirstFrame = useCallback(() => setPlaying(true), [])
+  const live = ready && playing
   return <Screen>
     <Canvas shadows={tier !== 'low'} dpr={internalPixelRatio()} camera={{ fov: VIEW.fov, ...depthDefaults(tier, { far: 260 }).camera, position: [START.position[0], MOVE.eye, START.position[2]] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={state => attachPerfProbe(state.gl)}>
-      {world && <Scene tier={tier} audio={audio} touchInput={touchInput} commands={commands} onArms={onArms} onFirstFrame={onFirstFrame} />}
+      {world && <Scene player={player} tier={tier} audio={audio} restartRef={restartRef} onArms={onArms} onFirstFrame={onFirstFrame} />}
     </Canvas>
     <TitleCard title="Breach" />
-    {ready && playing && <Hud touch={touch} />}
-    <div className="breach-hints"><Hints visible={!touch} items={[['WASD', 'Move'], ['LMB', 'Fire'], ['RMB', 'Aim'], ['Shift', 'Sprint'], ['C', 'Crouch']]} /></div>
-    <Prompt text="Click to fight" visible={ready && playing && !touch && !locked} />
-    {touch && ready && <Touch touchInput={touchInput} commands={commands} />}
-    <Loading title="Breach" detail={error ?? (progress < 0.85 ? 'Loading the squad' : 'Clearing the rubble')} progress={progress} done={ready && playing} />
+    {live && <Hud touch={touch} />}
+    <CharacterOverlay controller={player} visible={live} prompt="Click to fight" hintsClassName="breach-hints" />
+    {live && status.paused && <Pause player={player} onRestart={() => restartRef.current()} />}
+    <Loading title="Breach" detail={error ?? (progress < 0.85 ? 'Loading the squad' : 'Clearing the rubble')} progress={progress} done={live} />
   </Screen>
 }
 

@@ -28,7 +28,7 @@ Every profile, prototype kit, system, package and command in Blacksite, generate
 
 | System | Use when |
 | --- | --- |
-| subject | ALS player control |
+| subject | The Character Controller: input, ALS movement, camera views, arms and weapons |
 | armory | Weapons and combat |
 | warden | Squad AI |
 | cascade | Destruction |
@@ -76,8 +76,7 @@ Every profile, prototype kit, system, package and command in Blacksite, generate
 | @blacksite/server | server |
 | @blacksite/sim-core | sim core |
 | @blacksite/soundscape | Mixer, spatial sound, zones and starter cues |
-| @blacksite/subject | ALS player control |
-| @blacksite/subject-fpp | Arms-only first person input and camera |
+| @blacksite/subject | The Character Controller: input, ALS movement, camera views, arms and weapons |
 | @blacksite/training | training |
 | @blacksite/ui | Game frame and stock neutral UI |
 | @blacksite/warden | Squad AI |
