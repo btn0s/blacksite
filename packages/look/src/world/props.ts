@@ -50,7 +50,7 @@ export function lada(level: LevelBuilder, at: Vec3, yaw: number, color = '#3b342
   level.box([1.55, 0.52, 1.44], body, { at: place(-0.3, 1.0, 0), rotate: yaw, collide: false })
   level.box([0.06, 0.62, 1.38], glass, { at: place(0.62, 0.98, 0), rotate: [0, yaw, -0.62], collide: false, shadow: false })
   level.box([0.06, 0.58, 1.38], glass, { at: place(-1.22, 0.98, 0), rotate: [0, yaw, 0.58], collide: false, shadow: false })
-  level.box([1.3, 0.36, 1.46], glass, { at: place(-0.3, 1.02, 0), rotate: yaw, collide: false, shadow: false })
+  level.box([1.3, 0.36, 1.48], glass, { at: place(-0.3, 1.02, 0), rotate: yaw, collide: false, shadow: false })
   level.box([1.75, 0.08, 1.5], body, { at: place(-0.3, 1.3, 0), rotate: yaw, collide: false, shadow: false })
   for (const [x, z] of [[1.25, 0.74], [1.25, -0.74], [-1.3, 0.74], [-1.3, -0.74]] as const) level.cylinder(0.29, 0.2, { name: 'metal', color: '#1d1c19', ao: false }, { at: place(x, 0.24, z), rotate: [Math.PI / 2, 0, -yaw], collide: false }, 10)
 }

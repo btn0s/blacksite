@@ -1,0 +1,24 @@
+{
+  "id": "bed-drip-basement",
+  "category": "ambience",
+  "ship": [
+    "clip.ogg"
+  ],
+  "files": {
+    "clip.ogg": 239566,
+    "clip.m4a": 366975
+  },
+  "bytes": 239566,
+  "budget": 1600000,
+  "withinBudget": true,
+  "over": [],
+  "variations": [
+    {
+      "file": "clip.ogg",
+      "fallback": "clip.m4a",
+      "seconds": 20.107,
+      "source": "atmosbasement.flac"
+    }
+  ],
+  "channels": 2
+}

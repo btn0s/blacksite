@@ -34,6 +34,7 @@
     "@blacksite/armory": "workspace:*",
     "@blacksite/cascade": "workspace:*",
     "@blacksite/check": "workspace:*",
+    "@blacksite/example-traverse": "workspace:*",
     "@blacksite/example-valley": "workspace:*",
     "@blacksite/input": "workspace:*",
     "@blacksite/landscape": "workspace:*",

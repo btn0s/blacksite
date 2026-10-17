@@ -116,11 +116,14 @@ export function runIdProbe(renderer, original, scene, camera, options = {}) {
   const forward = [-camera.matrixWorld.elements[8], -camera.matrixWorld.elements[9], -camera.matrixWorld.elements[10]]
   const captured = []
   const depths = []
+  const nudged = []
   let floats = false
   try {
-    for (let k = 0; k < frames; k++) {
-      const jx = k === 0 ? 0 : (halton(k, 2) - 0.5) * 2 * jitter * scale
-      const jy = k === 0 ? 0 : (halton(k, 3) - 0.5) * 2 * jitter * scale
+    for (let step = 0; step < frames * 2 - 1; step++) {
+      const still = step >= frames
+      const k = still ? step - frames + 1 : step
+      const jx = k === 0 || still ? 0 : (halton(k, 2) - 0.5) * 2 * jitter * scale
+      const jy = k === 0 || still ? 0 : (halton(k, 3) - 0.5) * 2 * jitter * scale
       const nx = k === 0 ? 0 : (halton(k, 5) - 0.5) * 2 * nudge
       const ny = k === 0 ? 0 : (halton(k, 7) - 0.5) * 2 * nudge
       const nz = k === 0 ? 0 : (halton(k, 11) - 0.5) * 2 * nudge
@@ -136,6 +139,7 @@ export function runIdProbe(renderer, original, scene, camera, options = {}) {
       original.call(renderer, scene, camera)
       const read = readTarget(renderer, target, width, height)
       floats = read.floats
+      if (still) { nudged.push(decodeIds(read.data, width, height, read.floats)); continue }
       captured.push(decodeIds(read.data, width, height, read.floats))
       if (read.floats) depths.push(decodeDepth(read.data, width, height))
       else {
@@ -162,5 +166,5 @@ export function runIdProbe(renderer, original, scene, camera, options = {}) {
     renderer.shadowMap.autoUpdate = saved.autoUpdate
     renderer.setClearColor(clear, saved.alpha)
   }
-  return { width, height, floats, frames: captured, depths: renderer.capabilities.logarithmicDepthBuffer ? null : depths, table: state.table }
+  return { width, height, floats, frames: captured, nudged: [captured[0], ...nudged], depths: renderer.capabilities.logarithmicDepthBuffer ? null : depths, table: state.table }
 }

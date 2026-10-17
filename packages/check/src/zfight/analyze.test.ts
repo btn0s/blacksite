@@ -36,6 +36,36 @@ describe('analyzeFrames', () => {
     expect(result.edges).toBeGreaterThan(100)
   })
 
+  it('counts a flip only when it also flips under the depth nudge alone', () => {
+    const { ids, depths } = frames(flip, () => 40)
+    const nudged = frames(flip, () => 40, 5).ids
+    const result = analyzeFrames(ids, W, H, { depths, depth, nudged })
+    expect(result.pixels).toBeGreaterThan(100)
+    expect(result.edgeFlicker).toBe(0)
+  })
+
+  it('reports flips that only appear under jitter as edge flicker, not z-fighting', () => {
+    const { ids, depths } = frames(flip, () => 40)
+    const still = frames((_f, x, y) => flip(0, x, y), () => 40, 5).ids
+    const result = analyzeFrames(ids, W, H, { depths, depth, nudged: still })
+    expect(result.pixels).toBe(0)
+    expect(result.regions).toHaveLength(0)
+    expect(result.edgeFlicker).toBeGreaterThan(100)
+    expect(result.edgeFlicker).toBe(analyzeFrames(ids, W, H, { depths, depth }).pixels)
+  })
+
+  it('keeps only the nudge-flipping patch when jitter and nudge patches sit side by side', () => {
+    const half = (f: number, x: number, y: number) => (x < W / 2 ? flip(f, x, y) : flip(0, x, y))
+    const { ids, depths } = frames(flip, () => 40)
+    const nudged = frames(half, () => 40, 5).ids
+    const all = analyzeFrames(ids, W, H, { depths, depth }).pixels
+    const result = analyzeFrames(ids, W, H, { depths, depth, nudged })
+    expect(result.pixels).toBeGreaterThan(30)
+    expect(result.edgeFlicker).toBeGreaterThan(30)
+    expect(result.pixels + result.edgeFlicker).toBe(all)
+    expect(result.regions.every(region => region.x + region.w <= W / 2)).toBe(true)
+  })
+
   it('without depth it cannot tell and counts both', () => {
     const { ids } = frames(flip, id => (id === 1 ? 40 : 46))
     expect(analyzeFrames(ids, W, H, {}).pixels).toBeGreaterThan(100)
