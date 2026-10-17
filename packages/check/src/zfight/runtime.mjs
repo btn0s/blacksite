@@ -60,7 +60,8 @@ export async function runZFight({ page, scratch, files, out, profile, contract, 
       pixels: probe.pixels,
       unstable: probe.unstable,
       noiseFloor: floor,
-      pass: probe.pixels <= floor,
+      covered: round(probe.covered, 3),
+      pass: probe.pixels <= floor && probe.covered >= 0.02,
       regions: probe.regions.length,
       pairs,
       file,
@@ -82,8 +83,10 @@ export async function runZFight({ page, scratch, files, out, profile, contract, 
 }
 
 export function zfightDetail(result) {
+  const empty = result.bookmarks.find(item => item.covered < 0.02)
+  if (empty) return `the object-ID pass at ${empty.bookmark} covered ${(empty.covered * 100).toFixed(1)}% of the frame, so nothing was measured`
   const worst = [...result.bookmarks].sort((a, b) => b.pixels - a.pixels)[0]
   const depth = result.depth
   const where = worst && worst.pixels > 0 ? `; worst ${worst.bookmark} ${worst.pixels} px${worst.pairs[0] ? ` between ${worst.pairs[0].a?.name} and ${worst.pairs[0].b?.name}` : ''}` : ''
-  return `${result.total} z-fighting pixels over ${result.bookmarks.length} views (${depth ? `${depth.float ? 'float ' : ''}${depth.bits}-bit ${depth.reversed ? 'reversed' : 'standard'} depth, near ${round(depth.near)}` : 'depth unknown'})${where}`
+  return `${result.total} z-fighting pixels over ${result.bookmarks.length} views (${depth ? `${depth.float ? 'float ' : ''}${depth.bits}-bit ${depth.logarithmic ? 'logarithmic' : depth.reversed ? 'reversed' : 'standard'} depth, near ${round(depth.near)}` : 'depth unknown'})${where}`
 }

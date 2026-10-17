@@ -8,6 +8,8 @@ export function analyzeFrames(frames, width, height, options = {}) {
   const first = frames[0]
   const unstable = new Uint8Array(total)
   let unstableCount = 0
+  let covered = 0
+  for (let p = 0; p < total; p++) if (first[p] !== 0 && first[p] !== MIXED) covered++
   for (let p = 0; p < total; p++) {
     const base = first[p]
     let reference = base
@@ -91,6 +93,7 @@ export function analyzeFrames(frames, width, height, options = {}) {
   return {
     width, height, frames: frames.length,
     unstable: unstableCount,
+    covered: covered / total,
     pixels: denseCount,
     regions,
     pairs: [...pairs.entries()].sort((a, b) => b[1] - a[1]).map(([key, count]) => ({ pair: key.split(',').map(Number), pixels: count })),
