@@ -179,7 +179,7 @@ kbd { display: inline-block; min-width: 24px; padding: 2px 6px; border: 1px soli
 .how-steps p { margin: 0; color: var(--muted); }
 
 .compare-row, .block-row { display: grid; gap: 24px; align-items: baseline; padding: 14px 0; border-bottom: 1px solid var(--line); }
-.compare-row { grid-template-columns: minmax(120px, 0.6fr) minmax(160px, 1fr) 2.4fr; }
+.compare-row { grid-template-columns: minmax(140px, 0.5fr) 3fr; }
 .block-row { grid-template-columns: minmax(150px, 0.6fr) 3fr; }
 .compare-row > span, .block-row > span { color: var(--muted); }
 .compare-row > span:first-child { color: var(--text); }

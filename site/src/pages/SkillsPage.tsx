@@ -9,7 +9,7 @@ export function SkillsPage() {
   return <div className="page how">
     <header className="tool-head">
       <h1 className="page-title">How it works</h1>
-      <p className="lede">Blacksite is one skill your coding agent reads, plus {references.length} reference files it opens when the work needs them. Ask for a game, a level or a mechanic and the agent uses it on its own, even if you never say Blacksite.</p>
+      <p className="lede">Blacksite is one skill your coding agent reads, plus {references.length} reference files it opens when the work needs them. Describe a game to Claude Code, Codex or Cursor, without naming Blacksite, and the agent plans it with you, builds it from tested parts and checks that no frame takes longer than 33 ms before it sends you a link to play.</p>
     </header>
 
     <section className="section section--first" aria-labelledby="steps-title">
@@ -20,13 +20,12 @@ export function SkillsPage() {
     </section>
 
     <section className="section" aria-labelledby="examples-title">
-      <h2 className="section-title" id="examples-title">What you ask for, and what it builds</h2>
-      <p className="section-lede">A quick first attempt at a feature works, but looks and feels thin. For each feature, the skill lists what a finished version includes, with numbers.</p>
+      <h2 className="section-title" id="examples-title">What the agent knows to build</h2>
+      <p className="section-lede">For each feature, the skill gives the agent the details and numbers that real games use.</p>
       <div className="compare-table" role="table">
-        <div className="compare-row compare-row--head" role="row"><span role="columnheader">You ask for</span><span role="columnheader">A first attempt</span><span role="columnheader">What the agent builds</span></div>
+        <div className="compare-row compare-row--head" role="row"><span role="columnheader">You ask for</span><span role="columnheader">What the agent builds</span></div>
         {examples.map(example => <div className="compare-row" role="row" key={example.ask}>
           <span role="cell">{example.ask}</span>
-          <span role="cell">{example.quick}</span>
           <span role="cell">{example.built}</span>
         </div>)}
       </div>

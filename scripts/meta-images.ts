@@ -85,16 +85,16 @@ function text(face: Font, value: string, x: number, y: number, size: number, fil
 
 function overlay(spec: ImageSpec): string {
   const { width, height } = imageSize, left = 72
-  const titleSize = spec.subtitle ? 76 : 60, titleLeading = titleSize * 1.12, titleLines = wrap(display, spec.title, titleSize, 1000, -0.02)
+  const titleSize = spec.subtitle && spec.title.length <= 40 ? 76 : 60, titleLeading = titleSize * 1.12, titleLines = wrap(display, spec.title, titleSize, 1000, -0.02)
   const subtitleLines = spec.subtitle ? wrap(body, spec.subtitle, 32, 900, 0) : []
   let y = height - 72 - (subtitleLines.length - 1) * 44
   const parts: string[] = []
-  for (const line of subtitleLines) { parts.push(text(body, line, left, y, 32, '#a3a3a8')); y += 44 }
+  for (const line of subtitleLines) { parts.push(text(body, line, left, y, 32, '#c4c4c8')); y += 44 }
   y = height - 72 - (subtitleLines.length ? subtitleLines.length * 44 + 20 : 0) - (titleLines.length - 1) * titleLeading
   for (const line of titleLines) { parts.push(text(display, line, left, y, titleSize, '#ececec', -0.02)); y += titleLeading }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
     <defs>
-      <linearGradient id="foot" x1="0" x2="0" y1="1" y2="0"><stop offset="0" stop-color="${themeColor}" stop-opacity="0.92"/><stop offset="0.6" stop-color="${themeColor}" stop-opacity="0"/></linearGradient>
+      <linearGradient id="foot" x1="0" x2="0" y1="1" y2="0"><stop offset="0" stop-color="${themeColor}" stop-opacity="0.92"/><stop offset="0.85" stop-color="${themeColor}" stop-opacity="0"/></linearGradient>
       <linearGradient id="head" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${themeColor}" stop-opacity="0.75"/><stop offset="0.3" stop-color="${themeColor}" stop-opacity="0"/></linearGradient>
     </defs>
     ${spec.card ? '' : `<rect width="${width}" height="${height}" fill="url(#foot)"/><rect width="${width}" height="${height}" fill="url(#head)"/>`}

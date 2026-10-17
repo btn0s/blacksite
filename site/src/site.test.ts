@@ -99,7 +99,7 @@ describe('copy', () => {
   it('names no other engine or system codename in what visitors read', () => {
     const text = JSON.stringify([tools.map(({ packages: _, agent: { commands: __, ...agent }, ...tool }) => ({ ...tool, agent })), featured, parts, limits, steps, examples, referenceNotes, pages, showcases.map(({ summary, tryThis, title }) => ({ summary, tryThis, title }))])
     expect(text).not.toMatch(/Unreal|Unity|Godot|\bUE5\b|Armory|Warden|Relay|Cascade/)
-    expect(text).not.toMatch(/feel shipped|shipped game|shipped version|student project|\bSlice\b|first playable|hitch|pop-in|coyote|viewmodel/i)
+    expect(text).not.toMatch(/feel shipped|shipped game|shipped version|student project|\bSlice\b|first playable|hitch|pop-in|coyote|viewmodel|first attempt|feels thin|most agents|instead of writing|from scratch/i)
   })
 
   it('shows no status labels', () => {

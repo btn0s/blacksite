@@ -4,9 +4,9 @@ October 2026.
 
 ## What Blacksite is for
 
-Blacksite is a skill that helps your coding agent build 3D browser games, plus the building blocks it builds them from. Everything on this page serves two promises:
+The game-dev instincts your coding agent is missing. Blacksite gives your agents best practices from real games, top-quality examples to learn from, and building blocks to build on. Everything on this page serves two promises:
 
-1. **Agents use the blocks correctly.** Every block has a guide and a skill that tell an agent how it works and how to do common things with it, so it uses the block the standard way instead of guessing.
+1. **Agents use the blocks correctly.** Every block has a guide and a skill that tell an agent how it works and how to do common things with it, so it uses the block the standard way.
 2. **Fast by default.** 120 fps on desktop and a sustained 60 fps on phones, without the agent having to remember to optimise. Desktop game engines turn on detail levels, streaming, budgets and background threads by default; browser games usually start with none of them. Blacksite's blocks do.
 
 ## What works today
@@ -28,7 +28,7 @@ Blacksite is a skill that helps your coding agent build 3D browser games, plus t
 
 Being built now, or next. Each item is done when the line after the dash is true.
 
-- **Showcase demos.** Polished scenes per capability (movement, demolition, firing range, squad AI, arena) built only on the public packages — the site's demos look like a game, not a lab.
+- **Showcase demos.** Polished scenes per capability (movement, demolition, firing range, squad AI, arena) built only on the public packages — the site's demos look and play like games.
 - **Agent guides for the remaining systems.** Cascade, Warden, Relay and Armory get what ALS now has: a mental model, units, the input contract, tested recipes and symptom-indexed gotchas, plus a skill — an agent can do a common task from the guide alone.
 - **Touch controls for the player templates.** `fpp`, `tpp` and `mp` playable on a phone — the same check Cascade walk mode already passes.
 - **Measurement.** Pick reference devices (a desktop and an iPhone/Android pair), a benchmark harness that runs headless and writes JSON, and a frame-time breakdown per system — every demo reports where its frame time goes.

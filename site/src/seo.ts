@@ -4,7 +4,8 @@ import { docList } from './doc-list'
 export const siteName = 'Blacksite'
 export const defaultSiteUrl = 'https://blacksite-sable.vercel.app'
 export const themeColor = '#0e0e0f'
-export const headline = 'A skill that helps your coding agent build 3D browser games'
+export const headline = 'The game-dev instincts your coding agent is missing'
+export const subhead = 'Blacksite gives your agents best practices from real games, top-quality examples to learn from, and building blocks to build on.'
 export const imageSize = { width: 1200, height: 630 }
 
 export type PageMeta = { route: string; title: string; description: string; image: string; imageAlt: string; type: 'website' | 'article' }
@@ -29,7 +30,7 @@ const guideDescriptions: Record<string, string> = {
 }
 
 export const pages: PageMeta[] = [
-  { route: '', title: `${siteName} — ${headline}`, description: 'Describe a game to Claude Code, Codex or Cursor. The agent builds it from tested parts and checks speed, movement and sound before you play.', image: 'og/home.jpg', imageAlt: `${siteName}: ${headline}`, type: 'website' },
+  { route: '', title: `${siteName} — ${headline}`, description: subhead, image: 'og/home.jpg', imageAlt: `${siteName}: ${headline}`, type: 'website' },
   { route: 'get-started', title: `Get started — ${siteName}`, description: 'Install Blacksite with one command, open Claude Code, Codex or Cursor in an empty folder, and say what game you want. The agent builds it and sends a link.', image: 'og/get-started.jpg', imageAlt: `Get started with ${siteName}`, type: 'article' },
   { route: 'skills', title: `How it works — ${siteName}`, description: 'What your coding agent does when you ask for a game: it sizes the job, writes the numbers down, lists the parts, builds them and checks its own work.', image: 'og/skills.jpg', imageAlt: `How ${siteName} works`, type: 'article' },
   { route: 'roadmap', title: `Roadmap — ${siteName}`, description: 'What works in Blacksite today, what is being built now, and what comes after that, for the skill and its building blocks.', image: 'og/roadmap.jpg', imageAlt: `${siteName} roadmap`, type: 'article' },

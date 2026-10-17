@@ -1,7 +1,7 @@
 import { featured, installLine, repo, tools } from '../content'
 import { CopyLine } from '../components'
 import { asset, link } from '../links'
-import { headline } from '../seo'
+import { headline, subhead } from '../seo'
 import { showcases } from '../showcases/registry'
 
 export function Home() {
@@ -10,7 +10,7 @@ export function Home() {
     <section className="hero">
       <div className="hero-copy">
         <h1>{headline}.</h1>
-        <p className="hero-line">Describe a game to Claude Code, Codex or Cursor. The agent plans it with you, builds it from tested parts, and checks on desktop and phone that no frame takes longer than 33 ms before it sends you a link to play.</p>
+        <p className="hero-line">{subhead}</p>
         <div className="hero-install">
           <CopyLine code={installLine} />
           <a className="hero-alt" href={`${repo}/blob/main/install.ps1`}>On Windows, use install.ps1</a>
@@ -35,7 +35,7 @@ export function Home() {
 
     <section className="section" aria-labelledby="blocks-title">
       <h2 className="section-title" id="blocks-title">Building blocks</h2>
-      <p className="section-lede">Finished game systems the agent puts together instead of writing from scratch. Each one has a page with a demo you can play.</p>
+      <p className="section-lede">Finished game systems the agent builds your game from. Each one has a page with a demo you can play.</p>
       <div className="block-table" role="table">
         <div className="block-row block-row--head" role="row"><span role="columnheader">Block</span><span role="columnheader">What it gives your game</span></div>
         {tools.map(tool => <div className="block-row" role="row" key={tool.slug}>

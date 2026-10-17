@@ -1,13 +1,13 @@
 # Blacksite
 
-**A skill that helps your coding agent build 3D browser games.**
+**The game-dev instincts your coding agent is missing.**
 
-Describe a game to Claude Code, Codex or Cursor. The agent plans it with you, builds it from tested parts, and checks on desktop and phone that no frame takes longer than 33 ms before it sends you a link to play.
+Blacksite gives your agents best practices from real games, top-quality examples to learn from, and building blocks to build on.
 
-A coding agent can write a game loop. What it can't do in an afternoon is write a character with hundreds of animations, multiplayer that feels right, buildings that collapse, or squads that flank you, and keep all of it at 120 fps on a desktop and 60 fps on a phone. Blacksite gives the agent:
+Blacksite covers characters with hundreds of animations, multiplayer, buildings that collapse and squads that flank you, at 120 fps on a desktop and 60 fps on a phone. It gives the agent:
 
-- **One skill.** `SKILL.md` is what the agent reads for anything about a game. It tells the agent what a finished version of each feature includes: footsteps triggered by the feet, 3 to 5 samples per surface and never the same one twice; enemies with a 0.2 s reaction delay and aim that starts wide. 26 reference files hold the numbers for light, sound, movement, frame budgets and each building block.
-- **Building blocks.** Finished game systems the agent puts together instead of writing from scratch.
+- **One skill.** `SKILL.md` is what the agent reads for anything about a game. It tells the agent what each feature includes in real games: footsteps triggered by the feet, 3 to 5 samples per surface and never the same one twice; enemies with a 0.2 s reaction delay and aim that starts wide. 26 reference files hold the numbers for light, sound, movement, frame budgets and each building block.
+- **Building blocks.** Finished game systems the agent builds your game from.
 - **Templates, an open asset library and checks.** Four starting projects, 146 open-licence assets, and `blacksite check`, which measures a running game on desktop and phone.
 - **Example games.** Breach, Traverse and Valley, each built only on the public packages.
 

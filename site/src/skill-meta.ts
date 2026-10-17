@@ -13,10 +13,10 @@ export const steps = [
 ]
 
 export const examples = [
-  { ask: 'Footsteps', quick: 'One sample on a timer', built: '3 to 5 samples per surface, triggered by the animation’s foot plants, never the same one twice in a row, with a landing sound scaled by fall speed' },
-  { ask: 'A gun', quick: 'A ray and a muzzle flash', built: 'A 600 RPM weapon with recoil the view recovers from, a kick in the arms on screen, a visible tracer on one round in three, bullet marks and dust that match the surface, and an echo that matches the room' },
-  { ask: 'Smart enemies', quick: 'A chase in a straight line with perfect aim', built: 'Vision cones and hearing, a 0.2 s reaction delay, cover, squad roles, callouts that tell you what they’re doing, and aim that starts wide and tightens' },
-  { ask: 'A jump', quick: 'Upward velocity on a key press', built: 'About 0.9 m high, still allowed 0.1 s after you run off a ledge, a press up to 0.1 s before landing still counts, a dip in the camera on landing and a landing sound' },
+  { ask: 'Footsteps', built: '3 to 5 samples per surface, triggered by the animation’s foot plants, never the same one twice in a row, with a landing sound scaled by fall speed' },
+  { ask: 'A gun', built: 'A 600 RPM weapon with recoil the view recovers from, a kick in the arms on screen, a visible tracer on one round in three, bullet marks and dust that match the surface, and an echo that matches the room' },
+  { ask: 'Smart enemies', built: 'Vision cones and hearing, a 0.2 s reaction delay, cover, squad roles, callouts that tell you what they’re doing, and aim that starts wide and tightens' },
+  { ask: 'A jump', built: 'About 0.9 m high, still allowed 0.1 s after you run off a ledge, a press up to 0.1 s before landing still counts, a dip in the camera on landing and a landing sound' },
 ]
 
 export const referenceGroups = [
