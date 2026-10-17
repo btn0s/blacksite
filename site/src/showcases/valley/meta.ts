@@ -20,4 +20,4 @@ const touch: Control[] = [
   { action: 'Back to the meadow', keys: ['Home'] },
 ]
 
-export const showcase: Showcase = { tool: 'characters', title: 'Valley', order: -0.5, thumbnail: 'thumbs/valley.webp', keyboard, touch }
+export const showcase: Showcase = { tool: 'world', title: 'Valley', thumbnail: 'thumbs/valley.webp', keyboard, touch }
