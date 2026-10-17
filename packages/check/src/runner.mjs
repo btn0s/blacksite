@@ -7,8 +7,9 @@ import { installHook } from './zfight/hook.mjs'
 import { runZFight, zfightDetail } from './zfight/runtime.mjs'
 import { runShimmer } from './shimmer.mjs'
 import { runFlyover } from './flyover.mjs'
+import { runStress } from './stress.mjs'
 
-export const CHECKS = ['perf', 'hitch', 'pop', 'feel', 'critic', 'audio', 'zfight']
+export const CHECKS = ['perf', 'hitch', 'pop', 'feel', 'critic', 'audio', 'zfight', 'stress']
 export const OPT_IN_CHECKS = ['shimmer', 'flyover']
 
 export const PROFILES = {
@@ -48,10 +49,14 @@ function probeScript() {
   const raf = window.requestAnimationFrame.bind(window)
   const state = { frames: [], busy: 0, readyAt: null, recording: true, longTasks: [], errors: [] }
   window.__check = state
-  window.requestAnimationFrame = callback => raf(time => {
+  const cancel = window.cancelAnimationFrame.bind(window)
+  const run = (callback, time) => {
     const start = performance.now()
     try { callback(time) } finally { state.busy += performance.now() - start }
-  })
+  }
+  state.hz = null
+  window.requestAnimationFrame = callback => state.hz ? -setTimeout(() => run(callback, performance.now()), 1000 / state.hz) : raf(time => run(callback, time))
+  window.cancelAnimationFrame = id => id < 0 ? clearTimeout(-id) : cancel(id)
   let last = null
   const loop = time => {
     if (last !== null && state.recording) state.frames.push([time, time - last, state.busy])
@@ -62,8 +67,16 @@ function probeScript() {
   }
   raf(loop)
   try { new PerformanceObserver(list => { for (const entry of list.getEntries()) state.longTasks.push([entry.startTime, entry.duration]) }).observe({ type: 'longtask', buffered: true }) } catch {}
-  addEventListener('error', event => state.errors.push(String(event.message)))
-  addEventListener('unhandledrejection', event => state.errors.push(String(event.reason)))
+  state.first = null
+  const fail = (message, stack) => { state.errors.push(message); state.first ??= { message, stack } }
+  addEventListener('error', event => fail(String(event.error?.message ?? event.message), String(event.error?.stack ?? '')))
+  addEventListener('unhandledrejection', event => fail(String(event.reason?.message ?? event.reason), String(event.reason?.stack ?? '')))
+  const consoleError = console.error.bind(console)
+  console.error = (...args) => {
+    const error = args.find(arg => arg instanceof Error)
+    state.first ??= { message: args.map(arg => arg instanceof Error ? arg.message : String(arg)).join(' ').slice(0, 400), stack: String(error?.stack ?? new Error().stack) }
+    consoleError(...args)
+  }
   state.frame = (count = 1) => new Promise(resolve => { let left = count; const step = () => (--left <= 0 ? resolve() : raf(step)); raf(step) })
   const lerp = (a, b, t) => a.map((value, index) => value + (b[index] - value) * t)
   state.fly = (poses, seconds) => new Promise(resolve => {
@@ -387,6 +400,7 @@ export async function runChecks(options) {
         const errors = report.console.filter(item => item.profile === name)
         add('critic', name, { pass: errors.length === 0, captures: captured.length, files: captured, consoleErrors: errors.length, read: 'open every PNG at 1x and the grid sheets zoomed in; the check only proves they were captured with no console errors' })
       }
+      if (only.includes('stress')) add('stress', name, await runStress({ page, scratch, contract, profile, name, log }))
       clearInterval(audioTimer)
       await context.close()
     }
@@ -416,6 +430,7 @@ export function summarize(report) {
     if (check === 'flyover' && !result.skipped) detail = `${result.flagged.length} of ${result.frames} frames flagged (budget ${result.allowed})`
     if (check === 'zfight' && !result.skipped) detail = zfightDetail(result)
     if (check === 'critic') detail = `${result.captures} captures, ${result.consoleErrors} console errors`
+    if (check === 'stress') detail = result.pass ? `${result.refreshHz} Hz: ${result.steps.join(', ')} with no errors${result.absent.length ? ` (game has no ${result.absent.join(', ')})` : ''}` : `first error during ${result.during}: ${result.firstError.message.split('\n')[0].slice(0, 160)}`
     lines.push(`${status.padEnd(4)}  ${check.padEnd(7)} ${profile.padEnd(7)} ${detail}`)
   }
   lines.push(report.pass ? 'checks passed' : 'checks failed')
