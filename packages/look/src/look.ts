@@ -4,12 +4,15 @@ import { Color, Fog, FogExp2, HalfFloatType, NoToneMapping, Vector2 } from 'thre
 import type { Camera, DirectionalLight, HemisphereLight, Scene, WebGLRenderer, WebGLRenderTarget } from 'three';
 import { isExpFog } from './atmosphere';
 import type { Atmosphere } from './atmosphere';
+import { AerialEffect } from './aerial';
 import { GradeEffect } from './grade';
 import { loadLut } from './lut';
 import { atmosphereOf } from './presets';
 import type { PresetName } from './presets';
 import { QUALITY, autoQuality } from './quality';
 import type { QualityTier } from './quality';
+import { bakePhysicalEnvironment, createPhysicalSky } from './physical';
+import type { PhysicalSky } from './physical';
 import { bakeSkyEnvironment, createSky } from './sky';
 import type { Sky } from './sky';
 
@@ -65,6 +68,10 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
   ao.configuration.intensity = POST_TUNING.ao.intensity;
   composer.addPass(ao);
 
+  const physical: PhysicalSky | null = atmosphere.physical && options.sky !== false ? createPhysicalSky(renderer, atmosphere, QUALITY[quality].atmosphere) : null;
+  const aerial = physical ? new AerialEffect(camera, physical.luts) : null;
+  if (aerial) composer.addPass(new EffectPass(camera, aerial));
+
   const bloom = new BloomEffect({
     intensity: POST_TUNING.bloom.intensity,
     luminanceThreshold: POST_TUNING.bloom.threshold,
@@ -78,7 +85,7 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
   const grade = new GradeEffect();
   composer.addPass(new EffectPass(camera, grade));
 
-  const sky = options.sky === false ? null : createSky(atmosphere);
+  const sky = options.sky === false ? null : physical ?? createSky(atmosphere);
   if (sky) scene.add(sky.mesh);
 
   const applyQuality = () => {
@@ -93,6 +100,8 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
     bloomPass.enabled = settings.bloom !== false;
     if (settings.bloom) bloom.mipmapBlurPass.levels = settings.bloom.levels;
     grade.setFeatures({ aberration: settings.aberration, grain: settings.grain });
+    physical?.configure(settings.atmosphere);
+    aerial?.setEdges(settings.atmosphere.edges);
   };
 
   const applyLut = (url: string | null) => {
@@ -114,7 +123,9 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
 
   const applyAtmosphere = () => {
     const { fog, sun, fill } = atmosphere;
-    if (useFog) {
+    if (useFog && aerial && atmosphere.physical) {
+      scene.fog = null;
+    } else if (useFog) {
       if (isExpFog(fog)) {
         if (scene.fog instanceof FogExp2) scene.fog.density = fog.density;
         else scene.fog = new FogExp2(0, fog.density);
@@ -130,7 +141,7 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
     else scene.background = new Color().setRGB(...fog.color);
     if (options.environment) {
       environment?.dispose();
-      environment = bakeSkyEnvironment(renderer, atmosphere);
+      environment = physical && atmosphere.physical ? bakePhysicalEnvironment(renderer, physical) : bakeSkyEnvironment(renderer, atmosphere);
       scene.environment = environment.texture;
     }
     if (options.sun) {
@@ -143,6 +154,8 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
       options.fill.groundColor.setRGB(...fill.ground);
       options.fill.intensity = fill.strength;
     }
+    aerial?.setAtmosphere(atmosphere);
+    bloom.intensity = atmosphere.grade.bloom ?? POST_TUNING.bloom.intensity;
     grade.exposure = atmosphere.exposure;
     grade.setGrade(atmosphere.grade);
     grade.aberration = atmosphere.grade.aberration + extraAberration;
@@ -163,6 +176,10 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
       return quality;
     },
     render(dt) {
+      if (physical) {
+        if (options.sun) physical.luts.track(options.sun);
+        physical.tick(dt ?? 0);
+      }
       composer.render(dt);
     },
     setSize(width, height, updateStyle) {

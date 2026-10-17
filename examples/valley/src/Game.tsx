@@ -7,7 +7,7 @@ import { Look } from '@blacksite/look/r3f'
 import { internalPixelRatio, isTouchDevice } from '@blacksite/look/world'
 import { BREEZE, createWind, type Wind } from '@blacksite/landscape'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
-import { Hints, Loading, Prompt, Screen, TitleCard, TouchPad, useTouch } from '@blacksite/ui/hud'
+import { Hints, Loading, Prompt, TitleCard, TouchPad, useTouch } from '@blacksite/ui/hud'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import { createCharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
 import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
@@ -178,7 +178,7 @@ export function Game() {
 
   const api = useMemo<ProbeApi>(() => ({ respawn }), [respawn])
   const ready = world !== null && bark !== null && spawn !== null
-  return <InputProvider runtime={runtime}><Screen>
+  return <InputProvider runtime={runtime}><div className="hud-screen">
     <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 55, near: 0.1, far: site.horizon[tier], position: [0, 260, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }}
       onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
       {ready && <Scene shared={shared} world={world} bark={bark} tier={tier} spawn={spawn} onAction={onAction} api={api} />}
@@ -195,5 +195,5 @@ export function Game() {
       }}
       buttons={[{ id: 'jump', label: 'Jump' }, { id: 'crouch', label: 'Crouch' }, { id: 'home', label: 'Home' }]} />}
     <Loading title="Valley" detail={progress < 0.5 ? 'Loading the walker' : 'Growing the forest'} progress={progress} done={ready} />
-  </Screen></InputProvider>
+  </div></InputProvider>
 }
