@@ -1,4 +1,4 @@
-import { useImperativeHandle, useMemo, useRef, type MutableRefObject, type RefObject } from 'react'
+import { useEffect, useImperativeHandle, useMemo, useRef, type MutableRefObject, type RefObject } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { CharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
@@ -67,6 +67,7 @@ type Puff = { x: number; y: number; z: number; vx: number; vy: number; vz: numbe
 
 const dustShade: [number, number, number] = [0.56, 0.53, 0.47]
 const smokeShade: [number, number, number] = [0.3, 0.29, 0.27]
+const steamShade: [number, number, number] = [0.68, 0.71, 0.67]
 const flashShade: [number, number, number] = [1.0, 0.75, 0.38]
 
 export function Effects({ route, pose, handle, sound }: { route: Route; pose: MutableRefObject<CharacterPoseSample>; handle: { current: EffectsHandle | null }; sound: TraverseAudio }) {
@@ -88,6 +89,12 @@ export function Effects({ route, pose, handle, sound }: { route: Route; pose: Mu
     return { points, seeds: Float32Array.from({ length: count }, () => Math.random() * 100) }
   }, [])
   const puffs = useMemo(() => cloud(160), [])
+  useEffect(() => () => {
+    ash.points.geometry.dispose()
+    ;(ash.points.material as THREE.Material).dispose()
+    puffs.geometry.dispose()
+    ;(puffs.material as THREE.Material).dispose()
+  }, [ash, puffs])
   const live = useRef<Puff[]>([])
   const smokeClock = useRef(0)
   const previous = useRef<{ mode: string | null; action: string | null; vz: number; airborne: number }>({ mode: null, action: null, vz: 0, airborne: 0 })
@@ -125,6 +132,7 @@ export function Effects({ route, pose, handle, sound }: { route: Route; pose: Mu
   useImperativeHandle(handle as RefObject<EffectsHandle>, () => api, [api])
 
   const fires = useMemo(() => route.emitters.filter(emitter => emitter.kind === 'fire'), [route])
+  const vents = useMemo(() => route.emitters.filter(emitter => emitter.kind === 'steam'), [route])
 
   useFrame(({ clock }, rawDelta) => {
     const dt = Math.min(rawDelta, 1 / 20)
@@ -160,6 +168,10 @@ export function Effects({ route, pose, handle, sound }: { route: Route; pose: Mu
         if (Math.hypot(fire.at[0] - cx, fire.at[2] - cz) > 45) continue
         spawn({ x: fire.at[0] + (Math.random() - 0.5) * 0.3, y: fire.at[1] + 0.4, z: fire.at[2] + (Math.random() - 0.5) * 0.3, vx: 0.15 + Math.random() * 0.1, vy: 0.7 + Math.random() * 0.3, vz: (Math.random() - 0.5) * 0.1, life: 3.2, size: 0.35, grow: 0.7, shade: smokeShade, peak: 0.32 })
         if (Math.random() < 0.5) spawn({ x: fire.at[0], y: fire.at[1] + 0.25, z: fire.at[2], vx: (Math.random() - 0.5) * 0.6, vy: 1.6 + Math.random() * 1.2, vz: (Math.random() - 0.5) * 0.6, life: 0.6 + Math.random() * 0.5, size: 0.035, grow: 0, shade: flashShade, peak: 1 })
+      }
+      for (const vent of vents) {
+        if (Math.hypot(vent.at[0] - cx, vent.at[2] - cz) > 45) continue
+        spawn({ x: vent.at[0], y: vent.at[1], z: vent.at[2], vx: 0.1 + Math.random() * 0.16, vy: 0.65 + Math.random() * 0.3, vz: 0.6 + Math.random() * 0.3, life: 2.4, size: 0.2, grow: 1.6, shade: steamShade, peak: 0.3 })
       }
     }
 

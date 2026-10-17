@@ -522,7 +522,7 @@ export function dress(level: LevelBuilder, context: DressingContext) {
   dish([50.2, garageTop, -8.1], -Math.PI / 2 + 0.3)
   antenna([41.6, garageTop, -8.3], 3.2)
   antenna([59.2, garageTop, -8.2], 2.6)
-  for (let k = 0; k < 10; k++) box([0.25, 0.07, 0.12], brick, [34.5 + rand() * 26, garageTop + 0.035, pick([-8.2, -3.1]) + jitter(0.5)], rand() * 3, false, false)
+  for (let k = 0; k < 10; k++) box([0.25, 0.07, 0.12], brick, [garages[k % garages.length]! + 0.3 + rand() * 2.6, garageTop + 0.035, pick([-8.2, -3.1]) + jitter(0.5)], rand() * 3, false, false)
   cyl(0.15, 1.0, rubber, [45.8, garageTop + 0.15, -3.0], [Math.PI / 2, 0, 1.4], false, 8)
   for (const x of [37, 47, 54, 60.2]) weedsAlong([x, -8.4], [x + 1.0, -8.4], 2, garageTop)
 
@@ -674,6 +674,12 @@ export function dress(level: LevelBuilder, context: DressingContext) {
   mark(R.tsoi, [104.6, 0.9, boiler.z1], 0, 0.4, -0.04)
   for (const x of [boiler.x0 + 0.3, boiler.x1 - 0.3]) { cyl(0.08, roof, rust, [x, roof / 2, boiler.z1 + 0.14], undefined, false, 6); box([0.3, 0.1, 0.3], rust, [x, 0.1, boiler.z1 + 0.24], 0, false, false) }
   pipe([boiler.x0 + 0.6, 3.35, boiler.z1 + 0.38], [boiler.x1 - 0.6, 3.35, boiler.z1 + 0.38], 0.2, stained, 6)
+  const steam: Vec3 = [boiler.x0 + 3.6, 3.7, boiler.z1 + 0.85]
+  pipe([steam[0], 3.35, boiler.z1 + 0.38], [steam[0], steam[1], boiler.z1 + 0.38], 0.09, rust)
+  pipe([steam[0], steam[1], boiler.z1 + 0.38], steam, 0.09, rust)
+  cyl(0.13, 0.05, metal, [steam[0], steam[1], steam[2] - 0.04], [Math.PI / 2, 0, 0], false, 10)
+  cyl(0.065, 0.006, rubber, [steam[0], steam[1], steam[2] + 0.003], [Math.PI / 2, 0, 0], false, 10)
+  context.emitters.push({ kind: 'steam', at: steam })
   for (const x of [boiler.x0 + 0.6, boiler.x1 - 0.6]) box([0.44, 0.44, 0.5], metal, [x, 3.35, boiler.z1 + 0.2], 0, false, false)
   weedsAlong([100.4, boiler.z1 + 0.3], [121.6, boiler.z1 + 0.3], 14)
   for (const z of [-8, -5.2, 1.2, 3.0]) mark(pick([R.soot, R.stain, R.crack, R.rust]), [boiler.x1, 2.0 + jitter(0.6), z], Math.PI / 2, 1.8)

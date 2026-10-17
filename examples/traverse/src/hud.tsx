@@ -37,7 +37,7 @@ export function Clock({ handle, checkpoint, total, best, banner, finish, touch }
       <span className="tr-finish-kicker">{finish.record ? 'New best' : 'Finished'}{medal && ` · ${medal}`}</span>
       <strong>{formatTime(finish.time)}</strong>
       <span className="tr-finish-detail">Best {formatTime(finish.best)} · par {formatTime(route.parSeconds)} · gold {formatTime(route.goldSeconds)}</span>
-      <span className="tr-finish-detail">{touch ? 'Tap Restart to race your ghost' : 'R to race your ghost · G hides it'}</span>
+      <span className="tr-finish-detail">{touch ? 'Tap Retry to race your ghost' : 'R to race your ghost · G hides it'}</span>
     </div>}
   </div>
 }

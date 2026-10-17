@@ -41,7 +41,7 @@ The shipped version we build: the third-person traversal of a modern action game
 | --- | --- | --- |
 | Planted-foot travel per contact | p95 ≤ 3 cm | feel.md: bound planted-foot slip at 3 cm per plant (measured 0.83 / 1.03 / 1.78 cm walking, running, sprinting). A contact is a run of frames with the foot within 2.5 cm of the ground, minus 2 edge frames. |
 | Planted-foot drift, flat / uneven | p95 ≤ 0.10 / 0.15 m/s | Foot skate is the classic motion-matching failure metric (Holden et al., Learned Motion Matching, 2020). Foot IK on stairs and slopes adds pelvis and foot offsets on top of the locked pose. |
-| Gait changes | measured, not gated | ALS itself lets the foot slide on start, stop and run→walk (its blend-space smoothing and 5/s lock release); the port reproduces that exactly. See the report. |
+| Gait changes | same planted-contact bar | Start, stop and gait transitions are included in the contact checks. |
 | Foot-to-ground gap while planted | ≤ 0.04 m | Above 4 cm a foot visibly floats at the default camera distance. |
 | Stairs | riser 0.17 m, tread 0.28 m | Building-code stairs (IBC: riser ≤ 178 mm, tread ≥ 279 mm). |
 | Slopes on the route | 10°, 20°, 30° | Ramp, rubble and a fallen slab, all walkable. |
@@ -86,7 +86,7 @@ The shipped version we build: the third-person traversal of a modern action game
 | Phone | 60 fps sustained, main-thread p95 ≤ 16.7 ms, half the ash, low look tier, pixel ratio ≤ 1.25, 1024 shadow map |
 | Hitch | no frame over 33 ms after first playable |
 | First playable | under 5 s |
-| Sound | ≤ 32 voices; one-shots have 4 variants, ±5% pitch, ±2 dB, no back-to-back repeat |
+| Sound | ≤ 32 voices desktop, 16 phone; one-shots have at least 4 variants, ±5% pitch, ±1.5 dB, no back-to-back repeat. Musical chimes preserve their melody with zero pitch jitter and four tuned voicings: plain, upper octave, lower octave and fifth. The graph, impulse responses and recordings are prepared during loading; an early gesture resumes a silent mixer until the recorded outdoor bed is registered. |
 | JavaScript | every chunk under 4 MB (rapier, three, ALS and vendor split) |
 | Draw calls | ≤ 180 desktop, ≤ 120 phone |
 | Shadowed lights | 1 (the sun) |
@@ -97,12 +97,12 @@ The shipped version we build: the third-person traversal of a modern action game
 A ruined khrushchyovka block: a five-storey panel block, a row of garages, a boiler house with a chimney, and the yards between them. Overcast, heavy fog, birch and dead poplars.
 
 1. **Gate** — the start, under the arch of the block. Kerb (0.50 m) and a planter (0.75 m) teach the first mantle.
-2. **Garage yard** — a low wall (1.00 m), then a dumpster (1.25 m) to the garage roofs (1.50 m from the dumpster lid's side). A 2.00 m garage back wall is the discovery shortcut: mantle it straight from the ground.
+2. **Garage yard** — a low wall (1.00 m), then a dumpster (1.25 m) to the garage roofs (1.50 m from the dumpster lid's side). The 2.00 m boiler-house ledge later on the route is the discovery shortcut, approached from a raised service platform.
 3. **Garage roofs** — run the roofs, jump a 1.2 m gap, drop 3 m into the boiler yard. A hard landing rolls.
 4. **Boiler yard** — rubble slope (20°), a fallen slab (30°), a broken fence. The ragdoll is here: a loose barrel stack.
-5. **Stairwell** — four flights, 17 cm risers, landings with a flickering tube light. Out of a blown wall on the third floor.
+5. **Stairwell** — three flights, 17 cm risers, landings with a flickering tube light. Out of a blown wall on the third floor.
 6. **Rooftop** — the boiler house roof (drop 1.5 m), a parapet (1.75 m), the plant room (2.00 m), a water tank.
-7. **Descent** — a 10° ramp of fallen roof sheet down to the far yard.
+7. **Descent** — a 30° fallen roof slab down to the far yard, followed by the 10° loading ramp and dock.
 8. **Finish** — under the second arch.
 
 ## Parts list
@@ -115,7 +115,7 @@ A ruined khrushchyovka block: a five-storey panel block, a row of garages, a boi
 | Set dressing: props | 25 | dumpsters, Ladas, barrels, crates, tyres, pipes, benches, laundry poles, tank, antennas, trees, rubble |
 | Lighting | key, fill, bounce, 3 practicals | overcast sun (only shadow caster), hemisphere fill, bounce from the sky environment, a stairwell tube light, a sodium lamp, a fire barrel; emissive windows |
 | Atmosphere | fog plus 2 particle systems | exponential fog, falling ash/snow, dust puffs, a steam vent |
-| Audio | bed, 3 spot emitters, one-shots, 2 reverb zones | wind bed and distant drone; tube buzz, fire crackle, dripping pipe; footsteps, landing, mantle, roll, checkpoint, ghost; stairwell and open-yard reverb |
+| Audio | Soundscape: bed, spot emitters, one-shots, 3 zones, occlusion | wind bed that rises with height, room tone indoors; tube buzz, fire crackle, dripping pipe, tarp loops with ray occlusion; surface footsteps and landings (concrete, metal garage roofs, dirt rubble, water puddles), body landing, mantle, roll, ragdoll, checkpoint chimes; outdoor, arch (corridor) and stairwell (hall) reverb |
 | Feedback | every action | land: thud, dust, camera dip; mantle: hand slap and cloth; roll: body roll; checkpoint: chime, marker flash, split time; ragdoll: impact |
 
 ## Camera bookmarks
@@ -142,3 +142,12 @@ Each scripted run drives input the way a player does and measures against the mo
 - `camera-wall`: walk along walls and into corners while turning the camera; zero clip frames.
 - `shoulder`: swap shoulders while running; no frame step over the bar.
 - `route`: the reference run of the whole route; it completes, sets the par, and records a ghost.
+
+
+## Delivered parts inventory
+
+The route contains eight garage bays, seven apartment blocks, a boiler house and chimney, the stairwell, two arches and two sheds. The six trim families and eight decal families listed above are present. Props include 15 crates, 24 pallets, 23 stacked tyres, four cars, a transport hull, water tank, three benches, three radiators and six roof vents, in addition to the original barrels, trees and rubble. These are merged by material through the public world kit.
+
+Eight practical sources (three sodium lamps, three fluorescent tubes, two fires) share a maximum of four nearby point lights. The sun is the sole shadow caster. Eight located audio spots use outdoor, corridor and hall acoustic zones. Recorded concrete, metal, gravel and water footsteps each have five variants; the source and processing record is in `CREDITS.md` and `assets.credits.json`.
+
+Checkpoint respawn poses are authored on safe floor surfaces independently of trigger bounds. The phone stick sprints at full travel; the six action buttons provide jump/mantle, roll, crouch, shoulder, ragdoll/get-up and checkpoint retry. After finishing, Retry starts the next race against the saved ghost.

@@ -45,22 +45,27 @@ function RaceDriver({ shared, onEvent, ghostVisible }: { shared: Shared; onEvent
   const recorder = useRef<GhostRecorder | null>(null)
   const ghost = useRef<GhostPlayer | null>(null)
   const pending = useRef<GhostTake | null>(null)
+  const sourceRoot = useRef<THREE.Object3D | null>(null)
   useEffect(() => {
     let cancelled = false
     void loadTake().then(take => { if (!cancelled && take) { pending.current = take; ghost.current?.load(take) } })
     return () => { cancelled = true }
   }, [])
-  useEffect(() => () => { if (ghost.current) scene.remove(ghost.current.object) }, [scene])
+  useEffect(() => () => { ghost.current?.dispose() }, [scene])
   useFrame(({ clock }) => {
     const sample = shared.pose.current
     if (!sample.ready || !sample.rootBone) return
-    if (!recorder.current || !ghost.current) {
+    if (sourceRoot.current !== sample.rootBone || !recorder.current || !ghost.current) {
       const model = modelOf(sample.rootBone)
       if (!model) return
-      recorder.current = new GhostRecorder(model)
-      ghost.current = new GhostPlayer(model)
-      ghost.current.load(pending.current)
-      scene.add(ghost.current.object)
+      if (recorder.current) recorder.current.bind(model)
+      else recorder.current = new GhostRecorder(model)
+      if (!ghost.current) {
+        ghost.current = new GhostPlayer(model)
+        ghost.current.load(pending.current)
+        scene.add(ghost.current.object)
+      }
+      sourceRoot.current = sample.rootBone
     }
     const now = clock.elapsedTime
     const race = shared.race.current
@@ -179,7 +184,7 @@ export function Game() {
     void Promise.all([
       preloadAlsCharacterGltf(undefined, { onProgress: value => { if (!cancelled && value !== undefined) setProgress(0.05 + value * 0.85) } }).then(outfit),
       texturesReady(),
-      new Promise<void>(resolve => setTimeout(() => { shared.sound.prepare(); resolve() }, 0)),
+      Promise.resolve().then(() => shared.sound.prepare()),
     ]).then(() => { if (!cancelled) { setProgress(1); setReady(true) } })
     const onLock = () => setLocked(document.pointerLockElement !== null)
     document.addEventListener('pointerlockchange', onLock)
@@ -216,8 +221,8 @@ export function Game() {
     else if (action === 'checkpoint') {
       const race = shared.race.current
       if (race.state !== 'running') { restart(); return }
-      const gate = shared.route.gates[Math.max(0, race.next - 1)]!
-      respawn([gate.at[0] + 1, gate.at[1] - gate.half[1], gate.at[2]], gate.yaw)
+      const index = Math.max(0, race.next - 1)
+      respawn(shared.route.respawns[index]!, shared.route.gates[index]!.yaw)
     }
   }, [respawn, restart, shared])
 
@@ -252,7 +257,7 @@ export function Game() {
       onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
       {ready && <Scene shared={shared} spawn={spawn} onAction={onAction} onEvent={onEvent} ghostVisible={ghostVisible} api={api} />}
     </Canvas>
-    <TitleCard title="Traverse · The Block" />
+    <TitleCard title={touch ? 'Traverse' : 'Traverse · The Block'} />
     <Clock handle={shared.clock} checkpoint={checkpoint} total={total} best={shared.race.current.best} banner={banner} finish={finish} touch={touch} />
     <Hints visible={!touch && !finish} items={[['WASD', 'Move'], ['Shift', 'Sprint · tap roll'], ['Space', 'Mantle'], ['C', 'Shoulder'], ['R', 'Restart']]} />
     <Prompt text="Click to look around · run through the gate to start the clock" visible={ready && !touch && !locked} />
@@ -260,10 +265,10 @@ export function Game() {
       onMove={(x, y) => { shared.touchMove.current.right = x; shared.touchMove.current.forward = -y }}
       onLook={(dx, dy) => { shared.touchLook.current.x += dx; shared.touchLook.current.y += dy }}
       onButton={(id, pressed) => {
-        if (id === 'restart') { if (pressed) restart(); return }
+        if (id === 'checkpoint') { if (pressed) onAction('checkpoint'); return }
         runtime.actions.setTouchButton(id, pressed)
       }}
-      buttons={[{ id: 'jump', label: 'Jump' }, { id: 'sprint', label: 'Sprint' }, { id: 'roll', label: 'Roll' }, { id: 'crouch', label: 'Crouch' }, { id: 'shoulder', label: 'Shoulder' }, { id: 'restart', label: 'Restart' }]} />}
+      buttons={[{ id: 'jump', label: 'Jump' }, { id: 'roll', label: 'Roll' }, { id: 'crouch', label: 'Crouch' }, { id: 'shoulder', label: 'Shoulder' }, { id: 'ragdoll', label: 'Fall / up' }, { id: 'checkpoint', label: 'Retry' }]} />}
     <Loading title="Traverse" detail={progress < 0.9 ? 'Loading the runner' : 'Pouring the concrete'} progress={progress} done={ready} />
   </Screen></InputProvider>
 }

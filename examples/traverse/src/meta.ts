@@ -18,11 +18,12 @@ const touch: Control[] = [
   { action: 'Move', keys: ['Left stick'] },
   { action: 'Look', keys: ['Drag right side'] },
   { action: 'Jump · mantle', keys: ['Jump'] },
-  { action: 'Sprint', keys: ['Sprint'] },
+  { action: 'Sprint', keys: ['Full stick'] },
   { action: 'Roll', keys: ['Roll'] },
   { action: 'Crouch', keys: ['Crouch'] },
   { action: 'Swap shoulder', keys: ['Shoulder'] },
-  { action: 'Restart the run', keys: ['Restart'] },
+  { action: 'Ragdoll · get up', keys: ['Fall / up'] },
+  { action: 'Retry checkpoint · restart after finish', keys: ['Retry'] },
 ]
 
 export const meta = { name: 'traverse', title: 'Traverse', summary: 'A timed third-person run across the roofs, yards and stairwells of a ruined block, racing the ghost of your best time.', keyboard, touch }

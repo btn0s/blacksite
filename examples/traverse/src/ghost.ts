@@ -30,16 +30,26 @@ export class GhostRecorder {
   private positions: number[] = []
   private frames = 0
   private next = 0
-  private readonly bones: THREE.Bone[]
-  private readonly moving: THREE.Bone[]
+  private bones: THREE.Bone[]
+  private moving: THREE.Bone[]
   private readonly matrix = new THREE.Matrix4()
   private readonly position = new THREE.Vector3()
   private readonly quaternion = new THREE.Quaternion()
   private readonly scale = new THREE.Vector3()
 
-  constructor(private readonly model: THREE.Object3D, private readonly hz = route.ghostHz) {
+  constructor(private model: THREE.Object3D, private readonly hz = route.ghostHz) {
     this.bones = bonesOf(model)
     this.moving = this.bones.filter(bone => movingBone.test(bone.name))
+  }
+
+  bind(model: THREE.Object3D) {
+    if (model === this.model) return
+    const bones = bonesOf(model)
+    const moving = bones.filter(bone => movingBone.test(bone.name))
+    if (bones.length !== this.bones.length || moving.length !== this.moving.length) this.reset()
+    this.model = model
+    this.bones = bones
+    this.moving = moving
   }
 
   reset() { this.root = []; this.rotations = []; this.positions = []; this.frames = 0; this.next = 0 }
@@ -94,6 +104,19 @@ export class GhostPlayer {
   load(take: GhostTake | null) { this.take = take && take.bones === this.bones.length ? take : null }
 
   get duration() { return this.take ? (this.take.frames - 1) / this.take.hz : 0 }
+
+  dispose() {
+    const materials = new Set<THREE.Material>()
+    const skeletons = new Set<THREE.Skeleton>()
+    this.object.traverse(child => {
+      const mesh = child as THREE.SkinnedMesh
+      if (mesh.isMesh) for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) materials.add(material)
+      if (mesh.isSkinnedMesh) skeletons.add(mesh.skeleton)
+    })
+    for (const material of materials) material.dispose()
+    for (const skeleton of skeletons) skeleton.dispose()
+    this.object.removeFromParent()
+  }
 
   pose(t: number | null) {
     const take = this.take

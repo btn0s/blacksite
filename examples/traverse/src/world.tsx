@@ -50,32 +50,44 @@ const flicker = (t: number, seed: number) => {
 export function Practicals({ route }: { route: Route }) {
   const { camera } = useThree()
   const lights = useMemo(() => route.lights.map(light => {
-    const point = new THREE.PointLight(light.color, 0, light.distance, 2)
-    point.position.set(...light.at)
     const glow = new THREE.Mesh(
       light.kind === 'tube' ? new THREE.BoxGeometry(0.06, 0.04, 1.1) : light.kind === 'sodium' ? new THREE.SphereGeometry(0.13, 10, 6) : new THREE.SphereGeometry(0.01, 4, 2),
       new THREE.MeshBasicMaterial({ color: new THREE.Color(light.color).multiplyScalar(light.kind === 'fire' ? 0 : 3.2), toneMapped: false }),
     )
     glow.position.set(...light.at)
+    glow.visible = light.kind !== 'fire'
     if (light.kind === 'tube') glow.position.y -= 0.02
-    return { light, point, glow }
+    return { light, glow, level: 1 }
   }), [route])
+  const points = useMemo(() => Array.from({ length: Math.min(frame.pointLights, lights.length) }, () => new THREE.PointLight('#ffffff', 0, 0, 2)), [lights])
   const order = useMemo(() => lights.map((_, index) => index), [lights])
   const distance = useMemo(() => new Float32Array(lights.length), [lights])
   const nearer = useMemo(() => (a: number, b: number) => distance[a]! - distance[b]!, [distance])
+  useEffect(() => () => {
+    for (const { glow } of lights) { glow.geometry.dispose(); glow.material.dispose() }
+    for (const point of points) point.dispose()
+  }, [lights, points])
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
-    for (let index = 0; index < lights.length; index++) distance[index] = lights[index]!.point.position.distanceToSquared(camera.position)
-    order.sort(nearer)
-    order.forEach((index, rank) => {
-      const { light, point, glow } = lights[index]!
-      const on = rank < frame.pointLights
+    for (let index = 0; index < lights.length; index++) {
+      const fixture = lights[index]!
+      const { light, glow } = fixture
+      distance[index] = glow.position.distanceToSquared(camera.position)
       const level = light.kind === 'tube' ? flicker(t, index * 2.7) : light.kind === 'fire' ? 0.75 + 0.25 * Math.sin(t * 17 + Math.sin(t * 5.3) * 2) * Math.sin(t * 3.1) : 1
-      point.intensity = on ? light.intensity * level : 0
-      ;(glow.material as THREE.MeshBasicMaterial).color.set(light.color).multiplyScalar(light.kind === 'fire' ? 0 : 3.2 * level)
-    })
+      fixture.level = level
+      glow.material.color.set(light.color).multiplyScalar(light.kind === 'fire' ? 0 : 3.2 * level)
+    }
+    order.sort(nearer)
+    for (let rank = 0; rank < points.length; rank++) {
+      const point = points[rank]!
+      const { light, level } = lights[order[rank]!]!
+      point.position.set(...light.at)
+      point.color.set(light.color)
+      point.distance = light.distance
+      point.intensity = light.intensity * level
+    }
   })
-  return <>{lights.map(({ point, glow }, index) => <group key={index}><primitive object={point} /><primitive object={glow} /></group>)}</>
+  return <>{points.map((point, index) => <primitive key={`light-${index}`} object={point} />)}{lights.map(({ glow }, index) => <primitive key={`glow-${index}`} object={glow} />)}</>
 }
 
 export function Markers({ route, race }: { route: Route; race: { current: Race } }) {

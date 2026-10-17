@@ -13,7 +13,7 @@ export type Ledge = { height: number; base: number; approach: Vec3; yaw: number;
 export type Ramp = { degrees: number; from: Vec3; to: Vec3; label: string }
 export type Bookmark = { name: string; position: Vec3; target: Vec3; fov: number; stand: Vec3; yaw: number }
 export type Light = { kind: 'tube' | 'sodium' | 'fire'; at: Vec3; color: string; intensity: number; distance: number }
-export type Emitter = { kind: 'buzz' | 'fire' | 'drip' | 'tarp'; at: Vec3 }
+export type Emitter = { kind: 'buzz' | 'fire' | 'drip' | 'tarp' | 'steam'; at: Vec3 }
 export type Zone = { kind: 'stairwell' | 'arch'; min: Vec3; max: Vec3 }
 export type Waypoint = { at: Vec3; action?: 'mantle' | 'jump' }
 
@@ -268,6 +268,18 @@ export function buildRoute() {
     { name: 'Finish', at: [finishX + 4, 1.5, -1], half: [0.8, 2.5, 2.4], yaw: 0 },
   ]
 
+  const respawns: Vec3[] = [
+    [11.5, 0, 0],
+    [30.5, 0, 0],
+    [41.8, garageRoof + 0.14, -5.6],
+    [66.8, 0, -2],
+    [105, roof + 0.12, -3],
+    [118.5, upper + plant, -3],
+    [slabEnd[0] + 3, 0, -3],
+    [dockTop[0] + 5, dockTop[1], -3],
+    [finishX + 5, 0, -1],
+  ]
+
   const bookmarks: Bookmark[] = [
     { name: 'gate', position: [17.6, 2.1, 5.6], target: [8.5, 2.2, -0.6], fov: 55, stand: [12.5, 0, 0], yaw: 0 },
     { name: 'garages', position: [30, 2.6, 6], target: [42, 1.8, -4], fov: 55, stand: [38, 0, -0.4], yaw: -Math.PI / 2 },
@@ -306,7 +318,7 @@ export function buildRoute() {
     return 'concrete'
   }
 
-  return { group, colliders: level.colliders, surfaceAt, spawn: [2.5, 0, 0] as Vec3, spawnYaw: 0, gates, ledges, ramps, stairs, lights, emitters, zones, bookmarks, line }
+  return { group, colliders: level.colliders, surfaceAt, spawn: [2.5, 0, 0] as Vec3, spawnYaw: 0, gates, respawns, ledges, ramps, stairs, lights, emitters, zones, bookmarks, line }
 }
 
 export type Route = ReturnType<typeof buildRoute>

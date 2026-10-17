@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, type MutableRefObject } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { Effect } from 'effect'
 import { useActionEvents, useInputContext, useInputRuntime } from '@blacksite/input'
+import { isTouchDevice } from '@blacksite/look/world'
 import { Character, type AlsRagdollHandle } from 'als-ue5-r3f/app/Character'
 import { AlsCamera } from 'als-ue5-r3f/app/AlsCamera'
 import type { CharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
@@ -52,12 +52,12 @@ export function Player({ command, pose, time, audio, spawn, scripted, touchLook,
     else if (event.action === 'ragdoll') command.ragdollSequence++
     else if (event.action === 'shoulder') command.rightShoulder = !command.rightShoulder
     else onAction(event.action)
-    if (event.device === 'gamepad' && (event.action === 'ragdoll' || event.action === 'roll')) Effect.runSync(runtime.rumble(140, 0.5, 0.3))
+    if (event.device === 'gamepad' && (event.action === 'ragdoll' || event.action === 'roll')) runtime.rumble(140, 0.5, 0.3)
   })
 
   useEffect(() => {
     const canvas = gl.domElement
-    const lock = () => { if (document.pointerLockElement !== canvas) void canvas.requestPointerLock()?.catch?.(() => {}) }
+    const lock = () => { if (!isTouchDevice() && document.pointerLockElement !== canvas && typeof canvas.requestPointerLock === 'function') void canvas.requestPointerLock()?.catch?.(() => {}) }
     const move = (event: PointerEvent) => {
       if (scripted.current || document.pointerLockElement !== canvas) return
       look(command, event.movementX * tuning.mouseDegreesPerPixel, event.movementY * tuning.mouseDegreesPerPixel)
@@ -66,22 +66,20 @@ export function Player({ command, pose, time, audio, spawn, scripted, touchLook,
     canvas.addEventListener('click', lock)
     document.addEventListener('pointermove', move)
     window.addEventListener('blur', blur)
-    const offFrame = runtime.onFrame(pad => {
-      if (scripted.current || !pad) return
-      const dt = 1 / 60
-      look(command, stickCurve(pad.axes[2] ?? 0) * tuning.padYawRate * dt, stickCurve(pad.axes[3] ?? 0) * tuning.padPitchRate * dt)
-    })
     return () => {
       canvas.removeEventListener('click', lock)
       document.removeEventListener('pointermove', move)
       window.removeEventListener('blur', blur)
-      offFrame()
     }
   }, [command, gl, runtime, scripted])
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (scripted.current) return
     const pad = runtime.snapshot().gameplayReady ? runtime.activePad() : null
+    if (pad) {
+      const dt = Math.min(delta, 0.05)
+      look(command, stickCurve(pad.axes[2] ?? 0) * tuning.padYawRate * dt, stickCurve(pad.axes[3] ?? 0) * tuning.padPitchRate * dt)
+    }
     const keyForward = (hub.isHeld('forward') ? 1 : 0) - (hub.isHeld('back') ? 1 : 0)
     const keyRight = (hub.isHeld('right') ? 1 : 0) - (hub.isHeld('left') ? 1 : 0)
     const padRight = pad ? stickCurve(pad.axes[0] ?? 0) : 0

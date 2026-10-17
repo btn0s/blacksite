@@ -1,0 +1,24 @@
+{
+  "id": "bed-wind-alpine",
+  "category": "ambience",
+  "ship": [
+    "clip.ogg"
+  ],
+  "files": {
+    "clip.ogg": 980149,
+    "clip.m4a": 1638839
+  },
+  "bytes": 980149,
+  "budget": 1600000,
+  "withinBudget": true,
+  "over": [],
+  "variations": [
+    {
+      "file": "clip.ogg",
+      "fallback": "clip.m4a",
+      "seconds": 90.007,
+      "source": "romo-wind-gem-lake.mp3"
+    }
+  ],
+  "channels": 2
+}
