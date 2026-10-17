@@ -115,7 +115,7 @@ export function Player({ command, pose, time, audio, spawn, scripted, touchLook,
       onSizeChange={noop} onOverlayModeBridgeChange={noop} toggleRotationModeKey={null}
       showDebugControls={false} exposeDebugGlobals={false} gamepadEnabled={false} />
     <AlsCamera poseSample={pose} worldTime={time} footstepAudioRuntime={audio} toggleViewModeKey={null}
-      controlRotationSource={rotation} gamepadEnabled={false} />
+      controlRotationSource={rotation} gamepadEnabled={false} nearClipPlane={null} />
   </>
 }
 

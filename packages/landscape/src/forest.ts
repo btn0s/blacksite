@@ -33,6 +33,7 @@ export interface ForestOptions {
   readonly frameSize?: number
   readonly alphaToCoverage?: boolean
   readonly singleFrame?: boolean
+  readonly impostorBlur?: number
   readonly proxyLayer?: number
   readonly sun?: { readonly direction: Vector3; readonly color: Color }
   readonly seed?: number
@@ -214,7 +215,7 @@ export function createForest(options: ForestOptions): Forest {
     const atlas = bakeImpostor(options.renderer, model, textures, { frames: options.frames, frameSize: options.frameSize })
     stats.bakeMs += atlas.milliseconds
     atlases.push(atlas)
-    const impostorMaterial = createImpostorMaterial({ atlas, wind, range: [options.near[0], options.near[1], options.far[0], options.far[1]], alphaToCoverage: options.alphaToCoverage, singleFrame: options.singleFrame })
+    const impostorMaterial = createImpostorMaterial({ atlas, wind, range: [options.near[0], options.near[1], options.far[0], options.far[1]], alphaToCoverage: options.alphaToCoverage, singleFrame: options.singleFrame, blur: options.impostorBlur })
     const indices: number[] = []
     for (let index = 0; index < total; index++) if (kinds[index] === kind) indices.push(index)
     const plane = new PlaneGeometry(1, 1)

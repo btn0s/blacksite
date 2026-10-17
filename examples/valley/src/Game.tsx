@@ -85,17 +85,6 @@ function Ground({ world }: { world: ValleyWorld }) {
   </RigidBody>
 }
 
-function DepthRange({ tier }: { tier: Tier }) {
-  const { near, far } = depthDefaults(tier, { far: site.far })
-  useFrame(({ camera }) => {
-    if (!(camera instanceof THREE.PerspectiveCamera) || (camera.near === near && camera.far === far)) return
-    camera.near = near
-    camera.far = far
-    camera.updateProjectionMatrix()
-  }, ALS_FRAME_PRIORITY.Camera + 0.1)
-  return null
-}
-
 function Listener({ shared }: { shared: Shared }) {
   const forward = useMemo(() => new THREE.Vector3(), [])
   useFrame(({ camera }, delta) => {
@@ -125,7 +114,6 @@ function Scene({ shared, world, bark, tier, spawn, onAction, api }: { shared: Sh
       {compiled && <Probe shared={shared} world={world} api={api} />}
     </Physics>
     <Listener shared={shared} />
-    <DepthRange tier={tier} />
   </>
 }
 

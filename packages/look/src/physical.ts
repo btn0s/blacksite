@@ -32,6 +32,7 @@ export const ATMOSPHERE_CORE = `
   uniform vec3 atSun;
   uniform float atIlluminance;
   uniform float atSkyGain;
+  uniform float atClear;
 
   vec3 atExtinction(float h, out vec3 rayleigh, out float mie) {
     float height = max(h, 0.0);
@@ -424,6 +425,7 @@ export interface AtmosphereUniforms {
   readonly atSun: Uniform<Vector3>;
   readonly atIlluminance: Uniform<number>;
   readonly atSkyGain: Uniform<number>;
+  readonly atClear: Uniform<number>;
 }
 
 export interface AtmosphereLuts {
@@ -471,6 +473,7 @@ export function createAtmosphereLuts(renderer: WebGLRenderer, settings: QualityS
     atSun: new Uniform(new Vector3(0, 1, 0)),
     atIlluminance: new Uniform(1),
     atSkyGain: new Uniform(1),
+    atClear: new Uniform(0),
   };
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
@@ -517,6 +520,7 @@ export function createAtmosphereLuts(renderer: WebGLRenderer, settings: QualityS
       uniforms.atAltitude.value = Math.max(spec.elevation, 1) * 0.001;
       uniforms.atIlluminance.value = spec.illuminance;
       uniforms.atSkyGain.value = spec.sky ?? 1;
+      uniforms.atClear.value = spec.clear ?? 0;
       sun.set(...atmosphere.sun.direction).normalize();
       const key = mediumKey(spec);
       if (key !== medium) {
