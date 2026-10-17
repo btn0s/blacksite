@@ -38,7 +38,8 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
 
   useFrame(state => {
     const check = exposed.current
-    if (check && !check.probe.ready && shared.pose.current.ready && shared.landscape.current) check.ready()
+    if (shared.warm.current > 0) shared.warm.current++
+    if (check && !check.probe.ready && shared.pose.current.ready && shared.landscape.current && shared.warm.current > 10) check.ready()
     const pose = override.current
     if (pose) applyCameraPose(camera as Parameters<typeof applyCameraPose>[0], pose, state.size)
   }, ALS_FRAME_PRIORITY.Camera + 0.05)
@@ -56,7 +57,7 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
     const place = async (x: number, z: number, yaw: number) => {
       idle()
       const at: Vec3 = [x, world.heightAt(x, z) + 1.2, z]
-      api.respawn(at, yaw)
+      if (Math.hypot(position().x - x, position().z - z) > 1.5) api.respawn(at, yaw)
       command.yaw = toDegrees(yaw)
       command.pitch = -8
       await wait(0.3)

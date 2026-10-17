@@ -31,6 +31,7 @@ export type Shared = {
   sound: ValleyAudio
   wind: Wind
   landscape: { current: LandscapeHandle | null }
+  warm: { current: number }
 }
 
 function tierOf(): Tier {
@@ -101,10 +102,11 @@ function Scene({ shared, world, bark, tier, spawn, onAction, api }: { shared: Sh
   const sun = useMemo(() => new THREE.DirectionalLight(), [])
   const fill = useMemo(() => new THREE.HemisphereLight(), [])
   const atmosphere = useMemo(() => atmosphereFor(tier), [tier])
+  const onLook = useCallback((look: unknown) => { shared.warm.current = look ? 1 : 0 }, [shared])
   return <>
     <primitive object={fill} />
     <Landscape world={world} tier={tier} wind={shared.wind} sun={sun} bark={bark} handle={shared.landscape} />
-    {compiled ? <Look atmosphere={atmosphere} quality={tier} sky fog environment sun={sun} fill={fill} /> : <Warmup onDone={done} />}
+    {compiled ? <Look atmosphere={atmosphere} quality={tier} sky fog environment sun={sun} fill={fill} onReady={onLook} /> : <Warmup onDone={done} />}
     <Physics gravity={[0, -locomotion.gravity, 0]} timeStep={locomotion.physicsStep} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <Player command={shared.command} pose={shared.pose} time={time} audio={shared.sound} spawn={spawn} scripted={shared.scripted} touchLook={shared.touchLook} touchMove={shared.touchMove} onAction={onAction} />
       <Ground world={world} />
@@ -127,6 +129,7 @@ export function Game() {
     sound: new ValleyAudio(tier === 'low' ? 'phone' : 'desktop'),
     wind: createWind(BREEZE),
     landscape: { current: null },
+    warm: { current: 0 },
   }), [tier])
   const [world, setWorld] = useState<ValleyWorld | null>(null)
   const [bark, setBark] = useState<BarkSet | null>(null)
@@ -141,7 +144,7 @@ export function Game() {
     const report = () => { if (!cancelled) setProgress(0.04 + character * 0.4 + terrain * 0.5) }
     void Promise.all([
       preloadAlsCharacterGltf(undefined, { onProgress: value => { if (value !== undefined) { character = value; report() } } }).then(outfit),
-      buildValley(value => { terrain = value; report() }),
+      buildValley(tier, value => { terrain = value; report() }),
       loadBark(),
       Promise.resolve().then(() => shared.sound.prepare()),
     ]).then(([, built, barkSet]) => {

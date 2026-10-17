@@ -1,5 +1,5 @@
 import { createHeightfield, decodeGrey16Png, fbm, heightAt, loadLayerImages, ridged, smoothstep, surfaceTexture, terrainHeightAt, valueNoise, type Heightfield, type LayerImages, type TerrainSources } from '@blacksite/landscape'
-import { site } from './model'
+import { site, type Tier } from './model'
 
 const library = import.meta.glob<string>('../assets/library/*/**/*.{png,webp,json,ogg,m4a}', { eager: true, query: '?url&no-inline', import: 'default' })
 const shared = import.meta.glob<string>('../../../packages/look/assets/world/{grass,dirt,gravel}_{c,n}.webp', { eager: true, query: '?url&no-inline', import: 'default' })
@@ -69,13 +69,13 @@ function buildPath(scan: Scan): [number, number][] {
 
 function segmentDistance(path: readonly (readonly [number, number])[]) {
   const cell = 32
-  const grid = new Map<string, number[]>()
+  const grid = new Map<number, number[]>()
   for (let index = 0; index < path.length - 1; index++) {
     const [ax, az] = path[index]!
     const [bx, bz] = path[index + 1]!
     for (let gx = Math.floor((Math.min(ax, bx) - 8) / cell); gx <= Math.floor((Math.max(ax, bx) + 8) / cell); gx++) {
       for (let gz = Math.floor((Math.min(az, bz) - 8) / cell); gz <= Math.floor((Math.max(az, bz) + 8) / cell); gz++) {
-        const key = `${gx},${gz}`
+        const key = (gx + 32768) * 65536 + gz + 32768
         const list = grid.get(key) ?? []
         list.push(index)
         grid.set(key, list)
@@ -83,7 +83,7 @@ function segmentDistance(path: readonly (readonly [number, number])[]) {
     }
   }
   return (x: number, z: number) => {
-    const list = grid.get(`${Math.floor(x / cell)},${Math.floor(z / cell)}`)
+    const list = grid.get((Math.floor(x / cell) + 32768) * 65536 + Math.floor(z / cell) + 32768)
     if (!list) return Infinity
     let best = Infinity
     for (const index of list) {
@@ -98,7 +98,7 @@ function segmentDistance(path: readonly (readonly [number, number])[]) {
   }
 }
 
-export async function buildValley(onProgress: (value: number) => void): Promise<ValleyWorld> {
+export async function buildValley(tier: Tier, onProgress: (value: number) => void): Promise<ValleyWorld> {
   const timings: Record<string, number> = {}
   let mark = performance.now()
   const lap = (name: string) => { const now = performance.now(); timings[name] = Math.round(now - mark); mark = now }
@@ -119,7 +119,7 @@ export async function buildValley(onProgress: (value: number) => void): Promise<
 
   const nearDetail = (x: number, z: number) => (fbm(x / 23, z / 23, 3, 401) - 0.5) * 0.9 + (valueNoise(x / 4.5, z / 4.5, 409) - 0.5) * 0.18
   const near = createHeightfield({
-    size: site.nearSize,
+    size: tier === 'low' ? (site.nearSize - 1) / 2 + 1 : site.nearSize,
     extent: site.walkable,
     origin: [-site.walkable / 2, -site.walkable / 2],
     sample: (x, z) => {
@@ -143,7 +143,7 @@ export async function buildValley(onProgress: (value: number) => void): Promise<
   }
   const farExtent = site.farExtent
   const far = createHeightfield({
-    size: site.farSize,
+    size: tier === 'low' ? (site.farSize - 1) / 2 + 1 : site.farSize,
     extent: farExtent,
     origin: [-farExtent / 2, -farExtent / 2],
     sample: (x, z) => {
