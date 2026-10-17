@@ -2,18 +2,16 @@ import * as THREE from 'three'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Physics, useRapier } from '@react-three/rapier'
-import { InputProvider, makeInputDevices } from '@blacksite/input'
+import { InputProvider, glyphText, useInputSource } from '@blacksite/input'
 import { Look } from '@blacksite/look/r3f'
 import { internalPixelRatio, isTouchDevice, texturesReady } from '@blacksite/look/world'
 import { autoQuality, depthDefaults } from '@blacksite/look/quality'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
-import { Hints, Loading, Prompt, Screen, TitleCard, TouchPad, useTouch } from '@blacksite/ui/hud'
+import { Loading, Screen, TitleCard } from '@blacksite/ui/hud'
+import { CharacterController, CharacterOverlay, CharacterPause, useCharacterStatus, useLocalSession, useTouchActive, type CharacterEvents, type CharacterHandle } from '@blacksite/subject'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
-import { createCharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
-import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
-import { createCommand, type Command } from './controls'
-import { Player, type Spawn } from './player'
+import { TRAVERSE_GLYPHS, TRAVERSE_HINTS, createRunner, yawOf } from './runner'
 import { buildRoute, type Route } from './route'
 import { Atmosphere, Level, Markers, Practicals } from './world'
 import { createRace, elapsed, stepRace, type Race, type RaceEvent } from './race'
@@ -31,19 +29,15 @@ const readBest = (): number[] | null => { try { const value = JSON.parse(localSt
 
 type Shared = {
   route: Route
-  command: Command
-  pose: { current: ReturnType<typeof createCharacterPoseSample> }
+  runner: CharacterHandle
   race: { current: Race }
-  scripted: { current: boolean }
-  touchLook: { current: { x: number; y: number } }
-  touchMove: { current: { forward: number; right: number } }
   sound: TraverseAudio
   ghost: { current: GhostPlayer | null }
   effects: { current: EffectsHandle | null }
   clock: { current: ClockHandle | null }
 }
 
-function RaceDriver({ shared, onEvent, ghostVisible }: { shared: Shared; onEvent: (event: RaceEvent, now: number) => void; ghostVisible: boolean }) {
+function RaceDriver({ shared, now: clock, onEvent, ghostVisible }: { shared: Shared; now: () => number; onEvent: (event: RaceEvent, now: number) => void; ghostVisible: boolean }) {
   const { scene } = useThree()
   const recorder = useRef<GhostRecorder | null>(null)
   const ghost = shared.ghost
@@ -55,8 +49,8 @@ function RaceDriver({ shared, onEvent, ghostVisible }: { shared: Shared; onEvent
     return () => { cancelled = true }
   }, [])
   useEffect(() => () => { ghost.current?.dispose() }, [scene])
-  useFrame(({ clock }) => {
-    const sample = shared.pose.current
+  useFrame(() => {
+    const sample = shared.runner.als.pose.current
     if (!sample.ready || !sample.rootBone) return
     if (sourceRoot.current !== sample.rootBone || !recorder.current || !ghost.current) {
       const model = modelOf(sample.rootBone)
@@ -70,7 +64,7 @@ function RaceDriver({ shared, onEvent, ghostVisible }: { shared: Shared; onEvent
       }
       sourceRoot.current = sample.rootBone
     }
-    const now = clock.elapsedTime
+    const now = clock() / 1000
     const race = shared.race.current
     const event = stepRace(race, shared.route.gates, now, sample.pelvis.x, sample.pelvis.y, sample.pelvis.z)
     if (event?.kind === 'start') recorder.current.reset()
@@ -99,7 +93,7 @@ function Warmup({ shared, onDone }: { shared: Shared; onDone: () => void }) {
     let frame = 0
     const compile = () => {
       const ghost = shared.ghost.current?.object
-      if (!ghost || !shared.pose.current.ready) { frame = requestAnimationFrame(compile); return }
+      if (!ghost || !shared.runner.als.pose.current.ready) { frame = requestAnimationFrame(compile); return }
       const visible = ghost.visible
       ghost.visible = true
       void gl.compileAsync(scene, camera).then(() => {
@@ -139,52 +133,52 @@ function SoundOcclusion({ sound }: { sound: TraverseAudio }) {
   return null
 }
 
-const Scene = memo(function Scene({ shared, spawn, onAction, onEvent, ghostVisible, api }: { shared: Shared; spawn: Spawn; onAction: (action: string) => void; onEvent: (event: RaceEvent, now: number) => void; ghostVisible: boolean; api: ProbeApi }) {
-  const time = useMemo(createWorldTimeState, [])
+const Scene = memo(function Scene({ shared, now, events, onEvent, ghostVisible, api }: { shared: Shared; now: () => number; events: CharacterEvents; onEvent: (event: RaceEvent, now: number) => void; ghostVisible: boolean; api: ProbeApi }) {
   const [compiled, setCompiled] = useState(false)
   const done = useCallback(() => setCompiled(true), [])
   return <>
     <Atmosphere />
     {compiled ? <Look atmosphere="zone" sky={false} fog={false} /> : <Warmup shared={shared} onDone={done} />}
     <Physics gravity={[0, -locomotion.gravity, 0]} timeStep={locomotion.physicsStep} updatePriority={ALS_FRAME_PRIORITY.Physics}>
-      <Player command={shared.command} pose={shared.pose} time={time} audio={shared.sound} spawn={spawn} scripted={shared.scripted} touchLook={shared.touchLook} touchMove={shared.touchMove} onAction={onAction} />
+      <CharacterController controller={shared.runner} events={events} />
       <Level route={shared.route} />
       {compiled && <Probe shared={shared} api={api} />}
       <SoundOcclusion sound={shared.sound} />
     </Physics>
     <Practicals route={shared.route} />
     <Markers route={shared.route} race={shared.race} />
-    <Effects route={shared.route} pose={shared.pose} handle={shared.effects} sound={shared.sound} />
-    <RaceDriver shared={shared} onEvent={onEvent} ghostVisible={ghostVisible} />
+    <Effects route={shared.route} pose={shared.runner.als.pose} handle={shared.effects} sound={shared.sound} />
+    <RaceDriver shared={shared} now={now} onEvent={onEvent} ghostVisible={ghostVisible} />
   </>
 })
 
 type Banner = { title: string; detail: string; tone: 'ahead' | 'behind' | 'even'; key: number }
 
 export function Game() {
-  const runtime = useMemo(makeInputDevices, [])
-  const touch = useTouch()
   const shared = useMemo<Shared>(() => {
     const route = buildRoute()
     const sound = new TraverseAudio(route, isTouchDevice() ? 'phone' : 'desktop')
     return {
       route,
-      command: createCommand(route.spawnYaw),
-      pose: { current: createCharacterPoseSample() },
+      runner: createRunner(route),
       race: { current: createRace(readBest()) },
-      scripted: { current: false },
-      touchLook: { current: { x: 0, y: 0 } },
-      touchMove: { current: { forward: 0, right: 0 } },
       sound,
       ghost: { current: null },
       effects: { current: null },
       clock: { current: null },
     }
   }, [])
+  return <InputProvider runtime={shared.runner.input}><Shell shared={shared} /></InputProvider>
+}
+
+function Shell({ shared }: { shared: Shared }) {
+  const runner = shared.runner
+  const touch = useTouchActive()
+  const status = useCharacterStatus(runner)
+  const session = useLocalSession(runner)
+  const { device, gamepadLayout } = useInputSource()
   const [ready, setReady] = useState(false)
   const [progress, setProgress] = useState(0.05)
-  const [locked, setLocked] = useState(false)
-  const [spawn, setSpawn] = useState<Spawn>({ revision: 0, position: shared.route.spawn, yaw: shared.route.spawnYaw })
   const [banner, setBanner] = useState<Banner | null>(null)
   const [finish, setFinish] = useState<{ time: number; best: number; record: boolean } | null>(null)
   const [ghostVisible, setGhostVisible] = useState(true)
@@ -198,26 +192,18 @@ export function Game() {
       texturesReady(),
       Promise.resolve().then(() => shared.sound.prepare()),
     ]).then(() => { if (!cancelled) { setProgress(1); setReady(true) } })
-    const onLock = () => setLocked(document.pointerLockElement !== null)
-    document.addEventListener('pointerlockchange', onLock)
     const unlock = () => shared.sound.unlock()
     addEventListener('pointerdown', unlock)
     addEventListener('keydown', unlock)
     return () => {
       cancelled = true
-      document.removeEventListener('pointerlockchange', onLock)
       removeEventListener('pointerdown', unlock)
       removeEventListener('keydown', unlock)
       shared.sound.dispose()
     }
   }, [shared])
 
-  const respawn = useCallback((position: [number, number, number], yaw: number) => {
-    shared.command.yaw = yaw * 180 / Math.PI
-    shared.command.pitch = -12
-    shared.command.crouch = false
-    setSpawn(previous => ({ revision: previous.revision + 1, position, yaw }))
-  }, [shared])
+  const respawn = useCallback((position: [number, number, number], heading: number) => runner.teleport(position, yawOf(heading)), [runner])
 
   const restart = useCallback(() => {
     shared.race.current = createRace(shared.race.current.best)
@@ -225,8 +211,8 @@ export function Game() {
     setBanner(null)
     setCheckpoint(0)
     setRacing(false)
-    respawn(shared.route.spawn, shared.route.spawnYaw)
-  }, [respawn, shared])
+    runner.respawn()
+  }, [runner, shared])
 
   const onAction = useCallback((action: string) => {
     if (action === 'restart') restart()
@@ -263,28 +249,29 @@ export function Game() {
     return () => clearTimeout(timer)
   }, [banner])
 
+  const events = useMemo<CharacterEvents>(() => ({ onFootstep: request => shared.sound.PlayFootstepSound(request), onAction }), [onAction, shared])
   const api = useMemo<ProbeApi>(() => ({ respawn, restart }), [respawn, restart])
   const total = shared.route.gates.length - 1
-  return <InputProvider runtime={runtime}><Screen>
-    <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 60, ...depthDefaults(autoQuality(), { far: 600 }).camera, position: [-4, 2, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }}
+  const glyph = (action: string) => glyphText(TRAVERSE_GLYPHS[action]!, device, gamepadLayout)
+  const retry = touch ? 'Tap Retry to race your ghost' : `${glyph('restart')} to race your ghost · ${glyph('ghost')} hides it`
+  return <Screen>
+    <Canvas frameloop={session.frameloop} shadows dpr={internalPixelRatio()} camera={{ fov: 60, ...depthDefaults(autoQuality(), { far: 600 }).camera, position: [-4, 2, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }}
       onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
-      {ready && <Scene shared={shared} spawn={spawn} onAction={onAction} onEvent={onEvent} ghostVisible={ghostVisible} api={api} />}
+      {ready && <Scene shared={shared} now={session.now} events={events} onEvent={onEvent} ghostVisible={ghostVisible} api={api} />}
     </Canvas>
     <TitleCard title={touch ? 'Traverse' : 'Traverse · The Block'} />
     <a className="tr-credits" href={creditsUrl} target="_blank" rel="noreferrer">Credits</a>
-    <Clock handle={shared.clock} checkpoint={checkpoint} total={total} best={shared.race.current.best} banner={banner} finish={finish} touch={touch} />
-    <Hints visible={!touch && !finish} items={[['WASD', 'Move'], ['Shift', 'Sprint · tap roll'], ['Space', 'Jump · mantle'], ['Ctrl', 'Crouch'], ['C', 'Shoulder'], ['X', 'Fall / up'], ['T', 'Retry'], ['R', 'Restart']]} />
-    <Prompt text={racing ? 'Click to look around' : 'Click to look around · run through the gate to start the clock'} visible={ready && !touch && !locked && !finish} />
-    {touch && ready && <TouchPad
-      onMove={(x, y) => { shared.touchMove.current.right = x; shared.touchMove.current.forward = -y }}
-      onLook={(dx, dy) => { shared.touchLook.current.x += dx; shared.touchLook.current.y += dy }}
-      onButton={(id, pressed) => {
-        if (id === 'checkpoint') { if (pressed) onAction('checkpoint'); return }
-        runtime.actions.setTouchButton(id, pressed)
-      }}
+    <Clock handle={shared.clock} checkpoint={checkpoint} total={total} best={shared.race.current.best} banner={banner} finish={finish} touch={touch} retry={retry} />
+    {ready && <CharacterOverlay controller={runner} visible={!finish} glyphs={TRAVERSE_GLYPHS} hints={TRAVERSE_HINTS}
+      prompt={racing ? 'Click to look around' : 'Click to look around · run through the gate to start the clock'}
       buttons={[{ id: 'jump', label: 'Jump' }, { id: 'roll', label: 'Roll' }, { id: 'crouch', label: 'Crouch' }, { id: 'shoulder', label: 'Shoulder' }, { id: 'ragdoll', label: 'Fall / up' }, { id: 'checkpoint', label: 'Retry' }]} />}
+    {status.paused && <CharacterPause controller={runner} items={[
+      { id: 'checkpoint', label: 'Back to last checkpoint', onPress: () => onAction('checkpoint') },
+      { id: 'restart', label: 'Restart the run', onPress: restart },
+      { id: 'ghost', label: ghostVisible ? 'Ghost off' : 'Ghost on', onPress: () => setGhostVisible(value => !value) },
+    ]} />}
     <Loading title="Traverse" detail={progress < 0.9 ? 'Loading the runner' : 'Pouring the concrete'} progress={progress} done={ready} />
-  </Screen></InputProvider>
+  </Screen>
 }
 
 export type { Shared }

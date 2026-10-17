@@ -46,7 +46,7 @@ describe('standalone subject intent', () => {
   })
 
   it('holds a clicked sprint until the stick drops or the player aims', () => {
-    const latch = { sprint: true, crouch: false }
+    const latch = { sprint: true, crouch: false, walk: false }
     const idle = () => false
     expect(readActionIntent({ x: 0, y: 1 }, idle, latch).sprint).toBe(true)
     expect(readActionIntent({ x: 0, y: 1 }, action => action === 'aim', latch).sprint).toBe(false)
@@ -55,8 +55,8 @@ describe('standalone subject intent', () => {
   })
 
   it('toggles crouch from the pad and holds it from the keyboard', () => {
-    expect(readActionIntent({ x: 0, y: 0 }, () => false, { sprint: false, crouch: true }).crouch).toBe(true)
-    expect(readActionIntent({ x: 0, y: 0 }, action => action === 'crouch', { sprint: false, crouch: false }).crouch).toBe(true)
+    expect(readActionIntent({ x: 0, y: 0 }, () => false, { sprint: false, crouch: true, walk: false }).crouch).toBe(true)
+    expect(readActionIntent({ x: 0, y: 0 }, action => action === 'crouch', { sprint: false, crouch: false, walk: false }).crouch).toBe(true)
   })
 })
 

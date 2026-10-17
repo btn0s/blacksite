@@ -54,18 +54,10 @@ export const camera = {
 } as const
 
 export const input = {
-  mouseDegreesPerPixel: 0.0022 * 180 / Math.PI,
-  touchDegreesPerPixel: 0.0042 * 180 / Math.PI * 1.7,
-  padYawRate: 240,
-  padPitchRate: 90,
+  pitch: -12,
   pitchMin: -70,
   pitchMax: 55,
-  walkStick: 0.5,
-  stickDeadZone: 0.2,
-  touchSprint: 0.92,
-  rollTapSeconds: 0.25,
-  jumpBufferSeconds: 0.1,
-  coyoteSeconds: 0.1,
+  touchScale: 1.7,
   landingDip: 0.12,
   landingDipRecovery: 9,
 } as const

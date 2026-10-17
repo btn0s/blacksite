@@ -6,7 +6,7 @@ export type ClockHandle = { set(seconds: number, state: 'ready' | 'running' | 'f
 
 type Banner = { title: string; detail: string; tone: 'ahead' | 'behind' | 'even'; key: number }
 
-export function Clock({ handle, checkpoint, total, best, banner, finish, touch }: {
+export function Clock({ handle, checkpoint, total, best, banner, finish, touch, retry }: {
   handle: { current: ClockHandle | null }
   checkpoint: number
   total: number
@@ -14,6 +14,7 @@ export function Clock({ handle, checkpoint, total, best, banner, finish, touch }
   banner: Banner | null
   finish: { time: number; best: number; record: boolean } | null
   touch: boolean
+  retry: string
 }) {
   const time = useRef<HTMLSpanElement>(null)
   const shown = useRef('')
@@ -37,7 +38,7 @@ export function Clock({ handle, checkpoint, total, best, banner, finish, touch }
       <span className="tr-finish-kicker">{finish.record ? 'New best' : 'Finished'}{medal && ` · ${medal}`}</span>
       <strong>{formatTime(finish.time)}</strong>
       <span className="tr-finish-detail">Best {formatTime(finish.best)} · par {formatTime(route.parSeconds)} · gold {formatTime(route.goldSeconds)}</span>
-      <span className="tr-finish-detail">{touch ? 'Tap Retry to race your ghost' : 'R to race your ghost · G hides it'}</span>
+      <span className="tr-finish-detail">{retry}</span>
     </div>}
   </div>
 }

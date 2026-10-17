@@ -29,7 +29,7 @@ const MOVEMENT: ReadonlyArray<Binding> = [
   ...press('sprintToggle', pad(10)),
   ...hold('crouch', key('KeyC'), key('ControlLeft')),
   ...press('crouchToggle', pad(1)),
-  ...hold('walk', key('AltLeft')),
+  ...press('walkToggle', key('AltLeft')),
   ...hold('jump', key('Space'), pad(0)),
   ...press('roll', pad(5)),
   ...press('ragdoll', key('KeyX'), pad(14)),

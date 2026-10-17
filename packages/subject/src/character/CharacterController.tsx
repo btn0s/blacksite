@@ -35,7 +35,7 @@ export type CharacterEvents = {
 
 export type CharacterControllerProps = {
   controller: Controller
-  queries: WeaponQueries
+  queries?: WeaponQueries
   events?: CharacterEvents
   aimTargets?: () => ReadonlyArray<AimTarget>
   onPresentation?: (presentation: ArmsPresentation | null) => void
@@ -46,10 +46,12 @@ export type CharacterControllerProps = {
 }
 
 const ASSIST_CONE = 6
+const TOUCH_SPRINT = 0.92
 const DEG = Math.PI / 180
 const noop = () => {}
+const NO_HITS: WeaponQueries = { castRay: () => null, sweepSphere: () => null }
 
-export function CharacterController({ controller, queries, events, aimTargets, onPresentation, ragdollRef, renderWeapon, snapshotRateHz, manifestUrl }: CharacterControllerProps) {
+export function CharacterController({ controller, queries = NO_HITS, events, aimTargets, onPresentation, ragdollRef, renderWeapon, snapshotRateHz, manifestUrl }: CharacterControllerProps) {
   const camera = useThree(state => state.camera) as PerspectiveCamera
   const gl = useThree(state => state.gl)
   const hooks = useRef(events)
@@ -65,7 +67,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
   const scratch = useMemo(() => ({
     rotation: new Euler(0, 0, 0, 'YXZ'), quaternion: new Quaternion(), posed: new Euler(0, 0, 0, 'YXZ'), turned: new Euler(0, 0, 0, 'YXZ'), shift: new Vector3(),
     right: new Vector3(), up: new Vector3(0, 1, 0),
-    latch: { sprint: false, crouch: false }, mouse: { fire: false }, candidates: [] as AimCandidate[],
+    latch: { sprint: false, crouch: false, walk: false }, mouse: { fire: false }, candidates: [] as AimCandidate[],
     aimed: false, crouched: false, grounded: true, fall: 0, height: controller.eyeConfig.stand, jumpHeld: false, walk: false, settled: false,
     sprintHeld: false, sprintSince: 0, rollSequence: 0, jumpBuffer: 0,
     assist: createAimAssist(controller.aimAssist || undefined),
@@ -128,6 +130,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     else if (action === 'view') controller.cycleView()
     else if (action === 'sprintToggle') scratch.latch.sprint = !scratch.latch.sprint
     else if (action === 'crouchToggle') scratch.latch.crouch = !scratch.latch.crouch
+    else if (action === 'walkToggle') scratch.latch.walk = !scratch.latch.walk
     hooks.current?.onAction?.(action, device)
   }), [controller, scratch])
 
@@ -285,8 +288,8 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     command.forward = active ? intent.forward : 0
     command.right = active ? intent.right : 0
     command.crouch = active && (intent.crouch || (!drive && status.touchCrouch))
-    command.sprint = active && (intent.sprint || (!drive && touch.forward > 0.92)) && intent.forward > 0.3 && !aiming && !firing
-    command.aim = aiming && !command.sprint
+    command.sprint = active && (intent.sprint || (!drive && Math.hypot(touch.forward, touch.right) > TOUCH_SPRINT)) && !firing
+    command.aim = aiming
     scratch.walk = intent.walk || command.aim
     command.yaw = -(scratch.rotation.y + Math.PI / 2) / DEG
     command.pitch = scratch.rotation.x / DEG
@@ -404,7 +407,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
       <Suspense fallback={null}>
         <Character key={revision} initialPosition={als.spawn} poseSample={als.pose} worldTime={worldTime} footstepSoundSink={sink}
           onSizeChange={noop} onOverlayModeBridgeChange={noop} inputEnabled={false} inputSource={inputSource} terrainFootLock
-          ragdollRef={ragdollRef} teleportRef={controller.teleporter} gaitSpeedOverrides={controller.config.gaits} animationLod={bodyLod} renderOverlayObject={renderWeapon ?? (scene => <Suspense fallback={null}><WorldWeapon characterScene={scene} weapon={() => controller.arms.weapon} /></Suspense>)}
+          ragdollRef={ragdollRef} teleportRef={controller.teleporter} gaitSpeedOverrides={controller.config.gaits} animationLod={bodyLod} renderOverlayObject={renderWeapon ?? (controller.armed ? scene => <Suspense fallback={null}><WorldWeapon characterScene={scene} weapon={() => controller.arms.weapon} /></Suspense> : undefined)}
           onSnapshot={events?.onSnapshot} snapshotRateHz={snapshotRateHz} gamepadEnabled={false} toggleRotationModeKey={null} showDebugControls={false} exposeDebugGlobals={false} />
       </Suspense>
     </group>

@@ -82,12 +82,12 @@ describe('character gamepad bindings', () => {
 
   it('has a pad glyph for every hinted action', () => {
     for (const spec of Object.values(CHARACTER_GLYPHS)) expect(spec.gamepad?.xbox).toBeTruthy()
-    for (const action of characterActions(SHOOTER)) expect(CHARACTER_GLYPHS[action] ?? ['primary', 'secondary', 'sprintToggle', 'crouchToggle'].includes(action), action).toBeTruthy()
+    for (const action of characterActions(SHOOTER)) expect(CHARACTER_GLYPHS[action] ?? ['primary', 'secondary', 'sprintToggle', 'crouchToggle', 'walkToggle'].includes(action), action).toBeTruthy()
   })
 
   it('binds only what the character can do', () => {
     const runner = characterActions(RUNNER)
-    for (const action of ['move', 'look', 'jump', 'sprint', 'crouch', 'walk', 'roll', 'ragdoll', 'aim', 'shoulder', 'view', 'pause']) expect(runner, action).toContain(action)
+    for (const action of ['move', 'look', 'jump', 'sprint', 'crouch', 'walkToggle', 'roll', 'ragdoll', 'aim', 'shoulder', 'view', 'pause']) expect(runner, action).toContain(action)
     for (const action of ['fire', 'reload', 'swap', 'inspect']) expect(runner, action).not.toContain(action)
     const arms = characterActions({ armed: true, views: ['arms'] })
     expect(arms).toContain('fire')
