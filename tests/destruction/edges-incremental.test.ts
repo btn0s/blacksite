@@ -17,7 +17,7 @@ function fixture(count = 128) {
     stats: { tick: 1, brokenBonds: count, totalBonds: count, activeBodies: count, sleepingBodies: 0, settledBodies: 0, supportedFragments: 0, detachedFragments: count, physicsMs: 0, structuralMs: 0, workerMs: 0, checksum: '', commands: 0, droppedFrames: 0 },
   };
   const pool = new GPUTransformPool(count + 2);
-  pool.synchronize(new Map(manifest.fragments.map((_, i) => [String(i), [`primary:${i}`]])));
+  pool.synchronize(new Set(manifest.fragments.map((_, i) => `primary:${i}`)));
   const material = new MeshBasicMaterial();
   const edges = new ExposedFractureEdges(manifest, pool, () => material);
   return { manifest, frame, pool, edges, dispose: () => { edges.dispose(); pool.dispose(); material.dispose(); } };
@@ -61,7 +61,10 @@ it('updates a changed section with the same bond ID, rebinds pool slots, and cle
       f.edges.update(f.frame);
       expect(add).toHaveBeenCalledTimes(1);
       // Changing pool ownership must update existing draws without reconstructing geometry.
-      f.pool.synchronize(new Map([['all', Array.from({ length: 8 }, (_, i) => `primary:${7 - i}`)]]));
+      const before = f.pool.slots.get('primary:0');
+      f.pool.synchronize(new Set());
+      f.pool.synchronize(new Set(Array.from({ length: 8 }, (_, i) => `primary:${i}`)));
+      expect(f.pool.slots.get('primary:0')).not.toBe(before);
       for (let i = 0; i < 8; i++) f.pool.write(f.pool.slots.get(`primary:${i}`)!, new Matrix4().makeTranslation(i + 100, 0, 0));
       f.edges.update(f.frame);
       const mesh = f.edges.group.children[0] as BatchedMesh;

@@ -62,7 +62,7 @@ export class DestructionRenderer {
   }
   readonly transformPool: GPUTransformPool;
   private readonly meshes: Array<PooledBatchedMesh> = [];
-  private readonly effects: DestructionEffects;
+  private readonly effects: DestructionEffects | null;
   private readonly edges: ExposedFractureEdges;
   private readonly connections: ConnectionOverlay;
   private readonly options: DestructionRendererOptions;
@@ -97,7 +97,6 @@ export class DestructionRenderer {
   private lastSnapshotTick = -Infinity;
   private connectionsDirty = false;
   private readonly fragmentIndices: ReadonlyMap<number, number>;
-  private layoutActors?: SimulationFrame['actors'];
   private readonly layoutVisible: Uint8Array;
   private layoutSecondaryVisible = new Uint8Array(0);
 
@@ -119,8 +118,7 @@ export class DestructionRenderer {
     this.options = options;
     this.group.name = 'cascade-destruction';
     this.transformPool = new GPUTransformPool(options.transformCapacity ?? manifest.fragments.length + MAX_SECONDARY_FRAGMENTS + 1);
-    this.effects = new DestructionEffects(options.particleCapacity);
-    this.effects.group.visible = options.effects !== false;
+    this.effects = options.effects === false ? null : new DestructionEffects(options.particleCapacity);
     if (options.reducedMotion === undefined && typeof matchMedia === 'function') {
       this.motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
       this.motionQuery.addEventListener('change', this.motionListener);
@@ -202,7 +200,8 @@ export class DestructionRenderer {
         this.neighbours[b]!.push(a);
       }
     }
-    this.group.add(this.secondary.group, this.edges.group, this.effects.group, this.connections.object);
+    this.group.add(this.secondary.group, this.edges.group, this.connections.object);
+    if (this.effects) this.group.add(this.effects.group);
     this.update();
   }
 
@@ -325,8 +324,8 @@ export class DestructionRenderer {
       this.connectionsDirty = false;
     }
     this.markPhase('connections');
-    if (snapshotChanged) this.effects.update(frame, this.time, this.reducedMotion);
-    else this.effects.advance(this.time, this.reducedMotion);
+    if (snapshotChanged) this.effects?.update(frame, this.time, this.reducedMotion);
+    else this.effects?.advance(this.time, this.reducedMotion);
     this.lastSnapshotTick = snapshotTick;
     this.markPhase('effects');
     this.transformPool.flush();
@@ -347,10 +346,11 @@ export class DestructionRenderer {
       slots.length = 0;
     }
     this.secondary.dispose();
-    this.edges.dispose(); this.effects.dispose(); this.connections.dispose();
+    this.edges.dispose(); this.effects?.dispose(); this.connections.dispose();
     this.transformPool.dispose();
     this.motionQuery?.removeEventListener('change', this.motionListener);
-    this.group.remove(this.secondary.group, this.edges.group, this.effects.group, this.connections.object);
+    this.group.remove(this.secondary.group, this.edges.group, this.connections.object);
+    if (this.effects) this.group.remove(this.effects.group);
     for (const material of this.materials.values()) {
       material.dispose();
     }
@@ -370,29 +370,19 @@ export class DestructionRenderer {
     const sameLayout = this.layoutRevision === (frame?.hierarchyRevision ?? -1) && this.secondaryRevision === (frame?.secondary?.revision ?? -1);
     if (this.lastLayoutTick === tick && sameLayout) return false;
     const visibilityChanged = this.recordVisibility(frame);
-    if (frame && sameLayout && !visibilityChanged && frame.actors === this.layoutActors) { this.lastLayoutTick = tick; return false; }
-    this.layoutActors = frame?.actors;
     this.lastLayoutTick = tick;
+    if (frame && sameLayout && !visibilityChanged) return false;
     this.layoutRevision = frame?.hierarchyRevision ?? -1;
     this.secondaryRevision = frame?.secondary?.revision ?? -1;
-    const owners = new Map<string, string[]>();
-    const claimed = new Set<number>();
-    for (const actor of frame?.actors ?? []) {
-      const members = actor.visibleChunks.filter(index => frame!.states[index] !== FragmentState.Retired && frame!.states[index] !== FragmentState.Hidden);
-      owners.set(`actor:${actor.id}`, members.map(index => `primary:${index}`));
-      for (const index of members) claimed.add(index);
-    }
-    const unclaimed: string[] = [];
+    const keys = new Set<string>();
     for (let index = 0; index < this.manifest.fragments.length; index++) {
       const fragment = this.manifest.fragments[index]!;
-      const visible = frame ? frame.states[index] !== FragmentState.Retired && frame.states[index] !== FragmentState.Hidden : fragment.parent === undefined || fragment.parent === -1;
-      if (visible && !claimed.has(index)) unclaimed.push(`primary:${index}`);
+      if (frame ? this.layoutVisible[index] : fragment.parent === undefined || fragment.parent === -1) keys.add(`primary:${index}`);
     }
-    if (unclaimed.length) owners.set('unassigned', unclaimed);
     for (const [index, fragment] of (frame?.secondary?.fragments ?? []).entries()) {
-      if (frame!.secondary!.states[index] !== FragmentState.Retired) owners.set(`secondary:${fragment.id}`, [`secondary:${fragment.id}`]);
+      if (frame!.secondary!.states[index] !== FragmentState.Retired) keys.add(`secondary:${fragment.id}`);
     }
-    return this.transformPool.synchronize(owners);
+    return this.transformPool.synchronize(keys);
   }
 
   private recordVisibility(frame?: SimulationFrame | null): boolean {

@@ -1,17 +1,13 @@
 import { BatchedMesh, DataTexture, FloatType, Matrix4, RGBAFormat, Sphere, type Color, type Material, type Vector4 } from 'three';
 
-export interface TransformRange { start: number; count: number }
-export interface ActorTransformRange { members: ReadonlyArray<string>; ranges: ReadonlyArray<TransformRange> }
-
 /** One GPU matrix texture, shared by every primary and runtime draw. Slot zero is a tombstone. */
 export class GPUTransformPool {
   readonly matrices: DataTexture;
   readonly colors: DataTexture;
   readonly generationBySlot: Uint32Array;
-  readonly actors = new Map<string, ActorTransformRange>();
   readonly slots = new Map<string, number>();
   revision = 0;
-  private readonly free: TransformRange[];
+  private readonly free: number[];
   private readonly matrixDirty = new Set<number>();
   private readonly colorDirty = new Set<number>();
 
@@ -31,52 +27,28 @@ export class GPUTransformPool {
       texture.onUpdate = () => { texture.userData.fullUpload = false; };
     }
     this.generationBySlot = new Uint32Array(capacity);
-    this.free = [{ start: 1, count: capacity - 1 }];
+    this.free = Array.from({ length: capacity - 1 }, (_, index) => capacity - 1 - index);
   }
 
-  /** Release changed owners first, then claim free spans. Unchanged actors never move. */
-  synchronize(owners: ReadonlyMap<string, ReadonlyArray<string>>): boolean {
+  /** Release keys that are gone, then claim slots for new keys. Kept keys never move. */
+  synchronize(keys: ReadonlySet<string>): boolean {
     let changed = false;
-    for (const [owner, allocation] of this.actors) {
-      const next = owners.get(owner);
-      if (next && next.length === allocation.members.length && next.every((key, i) => key === allocation.members[i])) continue;
-      for (const key of allocation.members) {
-        const slot = this.slots.get(key)!;
-        this.slots.delete(key);
-        (this.matrices.image.data as Float32Array).fill(0, slot * 16, slot * 16 + 16);
-        this.generationBySlot[slot]++;
-        this.matrixDirty.add(slot);
-      }
-      this.free.push(...allocation.ranges.map(range => ({ ...range })));
-      this.actors.delete(owner);
+    for (const [key, slot] of this.slots) {
+      if (keys.has(key)) continue;
+      this.slots.delete(key);
+      (this.matrices.image.data as Float32Array).fill(0, slot * 16, slot * 16 + 16);
+      this.generationBySlot[slot]++;
+      this.matrixDirty.add(slot);
+      this.free.push(slot);
       changed = true;
     }
-    this.free.sort((a, b) => a.start - b.start);
-    for (let i = this.free.length - 1; i > 0; i--) {
-      const a = this.free[i - 1]!, b = this.free[i]!;
-      if (a.start + a.count === b.start) { a.count += b.count; this.free.splice(i, 1); }
-    }
-    for (const [owner, members] of owners) {
-      if (this.actors.has(owner) || !members.length) continue;
-      if (members.length > this.free.reduce((sum, range) => sum + range.count, 0)) throw new Error('GPU transform pool capacity exceeded');
-      const ranges: TransformRange[] = [];
-      let cursor = 0;
-      while (cursor < members.length) {
-        const available = this.free[0]!, count = Math.min(available.count, members.length - cursor);
-        const range = { start: available.start, count };
-        ranges.push(range);
-        for (let i = 0; i < count; i++) {
-          const key = members[cursor++]!;
-          if (this.slots.has(key)) throw new Error(`Transform ${key} belongs to more than one actor`);
-          const slot = range.start + i;
-          this.slots.set(key, slot);
-          (this.colors.image.data as Float32Array).fill(1, slot * 4, slot * 4 + 4);
-          this.colorDirty.add(slot);
-        }
-        available.start += count; available.count -= count;
-        if (!available.count) this.free.shift();
-      }
-      this.actors.set(owner, { members: [...members], ranges });
+    for (const key of keys) {
+      if (this.slots.has(key)) continue;
+      const slot = this.free.pop();
+      if (slot === undefined) throw new Error('GPU transform pool capacity exceeded');
+      this.slots.set(key, slot);
+      (this.colors.image.data as Float32Array).fill(1, slot * 4, slot * 4 + 4);
+      this.colorDirty.add(slot);
       changed = true;
     }
     if (changed) this.revision++;
@@ -114,7 +86,7 @@ export class GPUTransformPool {
     this.matrixDirty.clear(); this.colorDirty.clear();
   }
 
-  dispose(): void { this.matrices.dispose(); this.colors.dispose(); this.actors.clear(); this.slots.clear(); }
+  dispose(): void { this.matrices.dispose(); this.colors.dispose(); this.slots.clear(); }
 }
 
 function uploadRows(texture: DataTexture, dirty: ReadonlySet<number>, components: number): void {

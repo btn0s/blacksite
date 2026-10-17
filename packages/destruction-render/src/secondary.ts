@@ -128,13 +128,13 @@ export class SecondaryFragmentRenderer {
       }
       this.poseFrame = this.posePrevious = undefined;
       this.updateSlots.length = 0;
-      if (this.ownsPool) { this.pool.synchronize(new Map()); this.pool.flush(); }
+      if (this.ownsPool) { this.pool.synchronize(new Set()); this.pool.flush(); }
       return;
     }
     const fragments = frame.fragments;
-    if (this.ownsPool && frame !== this.poseFrame) this.pool.synchronize(new Map(fragments
+    if (this.ownsPool && frame !== this.poseFrame) this.pool.synchronize(new Set(fragments
       .filter((_, index) => frame.states[index] !== FragmentState.Retired)
-      .map(fragment => [`secondary:${fragment.id}`, [`secondary:${fragment.id}`]])));
+      .map(fragment => `secondary:${fragment.id}`)));
     const rebound = this.poolRevision !== this.pool.revision;
     this.poolRevision = this.pool.revision;
     if (
