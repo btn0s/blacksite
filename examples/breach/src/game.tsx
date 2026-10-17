@@ -781,7 +781,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     </Physics>
     <ArmsViewmodel state={arms} render="external" onPresentation={setPresentation} />
     <StandaloneSubject view={view} onIntent={writeIntent} onFire={useCallback((firing: boolean, aim: { origin: THREE.Vector3; direction: THREE.Vector3 }) => { game.current.firing = firing; game.current.aim.direction.copy(aim.direction) }, [])} onReload={useCallback(() => { game.current.reload = true }, [])} touch={touchInput} recoil={recoil} recoilFeel={RECOIL_TUNING[arms.weapon]} pose={override.current ? undefined : feel.pose} look={look} sensitivity={feel.lookScale} />
-    <CheckProbe driver={driver} audio={audio} ready={live} overlay={presentation} onWarmed={onFirstFrame} viewmodel={() => arms.debug.holder} />
+    <CheckProbe driver={driver} audio={audio} ready={live} overlay={presentation} onWarmed={onFirstFrame} viewmodel={() => [...arms.debug.holder, ...arms.debug.clip, ...arms.debug.feel]} />
   </>
 }
 

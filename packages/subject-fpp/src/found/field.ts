@@ -28,7 +28,7 @@ const pistol: FieldWeapon = {
   eye: { position: [0.03, 0.19, -0.12], forward: [0, 0, 1] },
   sight: { bone: 'pistol', rear: [0, 9.2, -0.6], front: [0, 9.25, 18.8] },
   eyeRelief: 0.28,
-  hip: { position: [0.06, 0.01, -0.22], rotation: [0.1, -0.06, 0] },
+  hip: { position: [0.06, -0.02, -0.08], rotation: [0.1, -0.06, 0] },
   sprint: { position: [0.03, -0.03, 0.03], rotation: [-0.28, 0.3, 0.15] },
   pivot: [0.04, -0.14, -0.38],
   recoil: { hip: 0.5, aim: 1 },
@@ -41,4 +41,4 @@ const pistol: FieldWeapon = {
 
 export const FIELD_WEAPONS: Record<ArmsWeapon, FieldWeapon> = { rifle, pistol }
 
-export const FIELD_PORTRAIT = { aspect: 4 / 3, aimAspect: 1, camera: [-0.03, 0.08, 0.1] as [number, number, number] }
+export const FIELD_PORTRAIT = { aspect: 1 }

@@ -1,7 +1,7 @@
 import { use, useEffect, useMemo } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { Euler, Quaternion } from 'three'
-import { compositePresentation, copyPresentationCrop, createPresentation, frameNarrow, type ArmsViewmodelProps } from '../arms/presentation'
+import { compositePresentation, createPresentation, framePresentation, type ArmsViewmodelProps } from '../arms/presentation'
 import { VIEWMODEL } from '../viewmodel/model'
 import { preloadFoundAssets } from './assets'
 import { createFoundRuntime } from './runtime'
@@ -26,15 +26,11 @@ export default function FoundViewmodel({ state, visible = true, render = 'compos
     onPresentation?.(presentation)
     return () => onPresentation?.(null)
   }, [presentation, onPresentation])
-  const size = useThree(state => state.size)
-  useEffect(() => { frameNarrow(presentation.camera, fov, size.width / size.height, 0, found.portrait.aspect, found.portrait.camera) }, [presentation, fov, size, found])
   useFrame(({ gl, scene, camera, size }, delta) => {
     camera.updateWorldMatrix(true, false)
     camera.getWorldQuaternion(view)
     runtime.update(delta, view)
-    const aim = state.debug.aimAmount
-    frameNarrow(presentation.camera, fov, size.width / size.height, aim, found.portrait.aspect + (found.portrait.aimAspect - found.portrait.aspect) * aim, found.portrait.camera)
-    copyPresentationCrop(presentation.camera, camera)
+    framePresentation(presentation.camera, camera, fov, size.width, size.height, found.portrait.aspect)
     presentation.camera.updateWorldMatrix(true, true)
     presentation.scene.environment = scene.environment
     presentation.scene.environmentIntensity = scene.environmentIntensity

@@ -119,6 +119,7 @@ export function createGunFeel() {
       const sprintSwing = walkBob * carried * heft
       const arc = Math.sin(Math.PI * ads) * (1 - ads * 0.5)
       const breathe = GUN_FEEL.breath * Math.max(1, heft) * (ads + GUN_FEEL.breathHip * (1 - ads))
+      const lift = Math.sin(breathing * 1.3) * GUN_FEEL.breathLift * (1 - (1 - GUN_FEEL.breathLiftAim) * ads)
       turn.set(
         -swayPitch.x + settle.x * 0.02 + stepDip * 0.0016 * aimWalk + Math.sin(breathing * 1.3) * breathe - cameraPitch.x,
         -swayYaw.x + stepSin * 0.0013 * aimWalk + Math.sin(breathing * 0.8) * breathe * 0.7,
@@ -132,7 +133,7 @@ export function createGunFeel() {
       const kicked = 1 - GUN_FEEL.aimKick * ads
       pose.pivot.position.set(
         -strafe.x * 0.025 * heft * hip + strideSin * 0.006 * hipWalk + lope * GUN_FEEL.sprint * sprintSwing + arc * GUN_FEEL.aimArc * 0.8,
-        drop.x * 0.3 * heft * hip + eight * 0.0018 * hipWalk - Math.abs(lope) * GUN_FEEL.sprint * 0.5 * sprintSwing - arc * GUN_FEEL.aimArc,
+        drop.x * 0.3 * heft * hip + eight * 0.0018 * hipWalk - Math.abs(lope) * GUN_FEEL.sprint * 0.5 * sprintSwing - arc * GUN_FEEL.aimArc + lift,
         -stepDip * 0.003 * aimWalk + gunBack.x * kicked + surging * lag,
       )
       pose.pivot.rotation.set(

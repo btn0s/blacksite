@@ -89,7 +89,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     bookmarks,
     camera(next) { override.current = next },
     player() { const position = control.current.position; return { position: [position.x, position.y, position.z], grounded: control.current.height <= 0 } },
-    view: () => sampleView(camera, arms.debug.holder),
+    view: () => sampleView(camera, [...arms.debug.holder, ...arms.debug.clip, ...arms.debug.feel]),
     audio: audio.sample,
     input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
     model: { feel: RANGE_FEEL, budget: RANGE_BUDGET },

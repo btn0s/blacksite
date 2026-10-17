@@ -13,6 +13,7 @@ export interface FoundWeapon {
   eye: { position: Vec3; forward: Vec3; up?: Vec3 }
   sight: { bone: string; rear: Vec3; front: Vec3; up?: Vec3 }
   eyeRelief: number
+  converge?: number
   hip: { position: Vec3; rotation: Vec3 }
   sprint: { position: Vec3; rotation: Vec3 }
   pivot: Vec3
@@ -26,7 +27,7 @@ export interface FoundWeapon {
 export interface FoundSet {
   name: string
   credit: string
-  portrait: { aspect: number; aimAspect: number; camera: Vec3 }
+  portrait: { aspect: number }
   weapons: Record<ArmsWeapon, FoundWeapon>
 }
 

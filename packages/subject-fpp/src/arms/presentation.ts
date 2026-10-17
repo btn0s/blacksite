@@ -42,6 +42,15 @@ export function frameNarrow(view: PerspectiveCamera, fov: number, aspect: number
   if (view.aspect !== aspect || view.fov !== vertical || view.filmOffset !== shift) { view.aspect = aspect; view.fov = vertical; view.filmOffset = shift; view.updateProjectionMatrix() }
 }
 
+export function framePresentation(view: PerspectiveCamera, source: Camera, fov: number, width: number, height: number, shortest = 1) {
+  const crop = (source as PerspectiveCamera).view
+  const aspect = crop?.enabled ? crop.fullWidth / crop.fullHeight : width / height
+  const vertical = portraitFov(fov, aspect, shortest)
+  view.position.set(0, 0, 0)
+  if (view.aspect !== aspect || view.fov !== vertical) { view.aspect = aspect; view.fov = vertical; view.updateProjectionMatrix() }
+  copyPresentationCrop(view, source)
+}
+
 export function copyPresentationCrop(view: PerspectiveCamera, source: Camera) {
   const crop = (source as PerspectiveCamera).view
   if (crop?.enabled) view.setViewOffset(crop.fullWidth, crop.fullHeight, crop.offsetX, crop.offsetY, crop.width, crop.height)

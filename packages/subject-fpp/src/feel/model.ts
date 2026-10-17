@@ -32,6 +32,8 @@ export const GUN_FEEL = {
   aimKick: 0.3,
   breath: 0.0012,
   breathHip: 0.5,
+  breathLift: 0.0015,
+  breathLiftAim: 0.4,
   dip: 0.25,
   kick: { reference: 0.0085, side: 0.0028, back: 2.6, rise: 0.8, roll: 0.7, rollBias: 0.25, camera: 0.3, cameraRoll: 0.12, first: 1.7 },
   reach: { lag: 0.55, pitch: 0.3, yaw: 0.38 },

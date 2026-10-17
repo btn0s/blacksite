@@ -30,7 +30,7 @@ describe('found timing model', () => {
     const set: FoundSet = {
       name: 'test',
       credit: 'CREDITS.md',
-      portrait: { aspect: 4 / 3, aimAspect: 1, camera: [0, 0, 0] },
+      portrait: { aspect: 4 / 3 },
       weapons: {
         rifle: weapon({ reload: { clip: 'all', from: 0, to: 60 }, draw: { clip: 'all', from: 60, to: 75 } }),
         pistol: weapon({ reload: { clip: 'all', from: 0, to: 45 }, reloadEmpty: { clip: 'all', from: 45, to: 105 } }),
