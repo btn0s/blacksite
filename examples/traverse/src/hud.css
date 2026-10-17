@@ -16,5 +16,5 @@
 .tr-finish-detail { font: 12px 'IBM Plex Mono', monospace; color: #a8a693; }
 @keyframes tr-split { 0% { opacity: 0; transform: translate(-50%, -6px); } 10% { opacity: 1; transform: translate(-50%, 0); } 80% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes tr-in { from { opacity: 0; transform: translate(-50%, -46%); } }
-@media (max-width: 640px) { .tr-time { font-size: 28px; } .tr-finish { top: 30%; } .tr-finish strong { font-size: 42px; } }
+@media (max-width: 640px) { .tr-clock { top: calc(34px + env(safe-area-inset-top)); left: calc(16px + env(safe-area-inset-left)); transform: none; justify-items: start; } .tr-time { font-size: 28px; } .tr-finish { top: 30%; } .tr-finish strong { font-size: 42px; } }
 @media (prefers-reduced-motion: reduce) { .tr-split, .tr-finish { animation: none; } }
