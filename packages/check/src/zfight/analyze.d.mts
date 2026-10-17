@@ -4,3 +4,4 @@ export type AnalyzeOptions = { radius?: number; densityMin?: number; link?: numb
 export function analyzeFrames(frames: Uint32Array[], width: number, height: number, options?: AnalyzeOptions): ZAnalysis
 export function decodeIds(data: ArrayLike<number>, width: number, height: number, floats: boolean): Uint32Array
 export function decodeDepth(data: ArrayLike<number>, width: number, height: number): Float32Array
+export function decodePackedDepth(data: ArrayLike<number>, width: number, height: number): Float32Array
