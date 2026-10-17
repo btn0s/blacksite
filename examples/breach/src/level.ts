@@ -247,6 +247,7 @@ function shaded(base: THREE.MeshStandardMaterial) {
 
 export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone: boolean }): BreachLevel {
   const level = new LevelBuilder()
+  const dressing = new LevelBuilder({ coplanar: 'ignore' })
   const group = new THREE.Group()
   group.name = 'breach-level'
   const heroes = new Map<string, THREE.Mesh>()
@@ -256,13 +257,13 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   const add = <T extends THREE.Object3D>(object: T, parent: THREE.Object3D = group) => { parent.add(still(object)); return object }
   const up = new THREE.Vector3(0, 1, 0), direction = new THREE.Vector3(), turn = new THREE.Quaternion(), euler = new THREE.Euler()
 
-  const put = (size: Vec3, paint: Paint, at: Vec3, rotate?: Vec3, cast = false) => level.box(size, tint(paint.name, paint.color, paint.ao), { at, rotate, collide: false, cast, shadow: false })
+  const put = (size: Vec3, paint: Paint, at: Vec3, rotate?: Vec3, cast = false) => (cast ? level : dressing).box(size, tint(paint.name, paint.color, paint.ao), { at, rotate, collide: false, cast, shadow: false })
   const rod = (from: Vec3, to: Vec3, radius: number, paint: Paint, segments = 6, cast = false) => {
     direction.set(to[0] - from[0], to[1] - from[1], to[2] - from[2])
     const length = direction.length()
     if (length < 1e-3) return
     euler.setFromQuaternion(turn.setFromUnitVectors(up, direction.normalize()))
-    level.cylinder(radius, length, tint(paint.name, paint.color, paint.ao), { at: [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, (from[2] + to[2]) / 2], rotate: [euler.x, euler.y, euler.z], collide: false, cast, shadow: false }, segments)
+    dressing.cylinder(radius, length, tint(paint.name, paint.color, paint.ao), { at: [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, (from[2] + to[2]) / 2], rotate: [euler.x, euler.y, euler.z], collide: false, cast, shadow: false }, segments)
   }
   const onFace = (face: Face, plane: number, along: number, y: number, out = 0): Vec3 => {
     const normal = AXES[face][2]
@@ -270,11 +271,12 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     return [base[0] + normal[0] * out, base[1] + normal[1] * out, base[2] + normal[2] * out]
   }
   const mount = (face: Face, plane: number, along: number, y: number, size: Vec3, paint: Paint, out = 0, tilt = 0, cast = false) => {
-    const [width, height, depth] = size
-    put(face[0] === 'x' ? [depth, height, width] : [width, height, depth], paint, onFace(face, plane, along, y, out + depth / 2), tilt ? (face[0] === 'x' ? [tilt, 0, 0] : [0, 0, tilt]) : undefined, cast)
+    const [width, height, visible] = size
+    const depth = out === 0 && !tilt ? visible + 0.015 : visible
+    put(face[0] === 'x' ? [depth, height, width] : [width, height, depth], paint, onFace(face, plane, along, y, out + visible - depth / 2), tilt ? (face[0] === 'x' ? [tilt, 0, 0] : [0, 0, tilt]) : undefined, cast)
   }
   const disc = (face: Face, plane: number, along: number, y: number, radius: number, depth: number, paint: Paint, out = 0) => {
-    level.cylinder(radius, depth, tint(paint.name, paint.color, paint.ao), { at: onFace(face, plane, along, y, out + depth / 2), rotate: face[0] === 'x' ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0], collide: false, cast: false, shadow: false }, 16)
+    dressing.cylinder(radius, depth, tint(paint.name, paint.color, paint.ao), { at: onFace(face, plane, along, y, out + depth / 2), rotate: face[0] === 'x' ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0], collide: false, cast: false, shadow: false }, 16)
   }
 
   const glows: THREE.BufferGeometry[] = []
@@ -399,8 +401,8 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
       const parts = customParts.get(material) ?? []
       parts.push(geometry)
       customParts.set(material, parts)
-    } else if (item.kind === 'box') level.box(item.size, paint, place)
-    else level.cylinder(item.size[0], item.size[1], paint, place, item.segments ?? 12)
+    } else if (item.kind === 'box') dressing.box(item.size, paint, place)
+    else dressing.cylinder(item.size[0], item.size[1], paint, place, item.segments ?? 12)
   }
   for (const [material, parts] of customParts) {
     const mesh = new THREE.Mesh(merge(parts), material)
@@ -414,8 +416,8 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     mount(face, plane, along, y - height / 2 - 0.035, [width + 0.26, 0.07, 0.2], trim, -0.02)
     for (const side of [-1, 1]) mount(face, plane, along + side * (width / 2 + 0.05), y, [0.1, height, 0.12], trim, -0.04)
     if (state === 1) {
-      mount(face, plane, along, y, [0.05, height, 0.04], frame, 0)
-      mount(face, plane, along, y + height * 0.22, [width, 0.05, 0.04], frame, 0)
+      mount(face, plane, along, y, [0.05, height - 0.01, 0.04], frame, 0)
+      mount(face, plane, along, y + height * 0.22, [width - 0.01, 0.05, 0.033], frame, 0.002)
     } else if (state === 2) {
       for (const [index, offset] of [-0.45, -0.05, 0.38].entries()) mount(face, plane, along, y + offset * height, [width + 0.08, 0.18, 0.03], plank, 0, (hash(along + index + y) - 0.5) * 0.16)
     } else {
@@ -426,15 +428,15 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   const front = 10.39
   put([6.59, 6.55, 8.68], panel, [-2.095, 6.725, 6.05], undefined, true)
   for (const y of [4.0, 7.0]) {
-    mount('z+', front, y < 5 ? -0.05 : -2.15, y, [y < 5 ? 10.9 : 6.7, 0.24, 0.1], trim, 0, 0, true)
-    mount('x-', -5.39, 6.05, y, [8.7, 0.24, 0.1], trim, 0, 0, true)
-    mount('z-', 1.71, -2.1, y, [6.6, 0.24, 0.1], trim)
+    mount('z+', front, y < 5 ? -0.05 : -2.16, y, [y < 5 ? 10.9 : 6.68, 0.24, 0.1], trim, 0, 0, true)
+    mount('x-', -5.39, 6.05, y, [8.7, 0.26, 0.1], trim, 0, 0, true)
+    mount('z-', 1.71, -2.11, y, [6.58, 0.24, 0.1], trim)
   }
   put([6.59, 0.6, 0.25], panel, [-2.095, 10.3, 10.265], undefined, true)
   put([0.25, 0.6, 8.68], panel, [-5.265, 10.3, 6.05], undefined, true)
   put([6.59, 0.6, 0.25], panel, [-2.095, 10.3, 1.835], undefined, true)
   put([6.75, 0.08, 0.36], trim, [-2.095, 10.64, 10.28])
-  put([0.36, 0.08, 8.8], trim, [-5.27, 10.64, 6.05])
+  put([0.36, 0.08, 8.76], trim, [-5.27, 10.65, 6.05])
   put([6.75, 0.08, 0.36], trim, [-2.095, 10.64, 1.83])
   ;[[-4.3, 5.65, 1], [-2.1, 5.65, 0], [0.1, 5.65, 2], [-4.3, 8.65, 0], [-2.1, 8.65, 1], [0.1, 8.65, 0]].forEach(([x, y, state]) => {
     windowBay('z+', front, x!, y!, 1.4, 1.5, state!)
@@ -489,7 +491,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   mount('z+', 10.4, -0.17, 3.12, [2.3, 0.62, 0.05], { name: 'paint', color: '#3c4a58' }, 0)
   sign.forEach((glyph, index) => glyph.forEach((on, pixel) => {
     if (!on) return
-    mount('z+', 10.4, -0.995 + index * 0.42 + (pixel % 3) * 0.085, 3.32 - Math.floor(pixel / 3) * 0.085, [0.075, 0.075, 0.02], paper, 0.04)
+    mount('z+', 10.4, -0.995 + index * 0.42 + (pixel % 3) * 0.085, 3.32 - Math.floor(pixel / 3) * 0.085, [0.075, 0.075, 0.02], paper, 0.045)
   }))
   wallDecal('streak', 'z+', 10.4, 0.6, 2.2, 0.8, 1.4)
   wallDecal('streak', 'z+', 10.4, -1.2, 2.3, 0.6, 1.2, true)
@@ -578,8 +580,8 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
       mount(face, plane, along, y - 0.09, [0.05, 0.05, 0.004], ink, 0.024)
     } else if (kind === 'board') {
       mount(face, plane, along, y, [0.92, 0.62, 0.02], iron, 0.014)
-      mount(face, plane, along, y, [0.84, 0.54, 0.01], plank, 0.024)
-      for (const [dx, dy, w] of [[-0.24, 0.08, 0.26], [0.1, 0.12, 0.2], [0.26, -0.1, 0.22], [-0.1, -0.12, 0.3]] as const) mount(face, plane, along + dx, y + dy, [w, w * 1.3, 0.004], { name: 'stained', color: '#cfc6a8' }, 0.034, (hash(seed + dx) - 0.5) * 0.2)
+      mount(face, plane, along, y, [0.84, 0.54, 0.01], plank, 0.03)
+      for (const [index, [dx, dy, w]] of ([[-0.24, 0.08, 0.26], [0.1, 0.12, 0.2], [0.26, -0.1, 0.22], [-0.1, -0.12, 0.3]] as const).entries()) mount(face, plane, along + dx, y + dy, [w, w * 1.3, 0.004], { name: 'stained', color: '#cfc6a8' }, 0.042 + index * 0.003, (hash(seed + dx) - 0.5) * 0.2)
     } else if (kind === 'clock') {
       disc(face, plane, along, y, 0.17, 0.04, ink, 0.014)
       disc(face, plane, along, y, 0.145, 0.01, paper, 0.054)
@@ -606,7 +608,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
       let cursor = edge.from
       for (const span of [...doors.map(gap => [gap.from, gap.to] as const), [edge.to, edge.to] as const]) {
         const end = Math.min(span[0], edge.to)
-        if (end - cursor > 0.05) mount(edge.face, edge.plane, (cursor + end) / 2, 0.06, [end - cursor, 0.12, 0.022], { name: 'paint', color: '#2e332c' })
+        if (end - cursor > 0.05) mount(edge.face, edge.plane, (cursor + end) / 2, edge.face[0] === 'x' ? 0.06 : 0.062, [end - cursor - 0.008, edge.face[0] === 'x' ? 0.12 : 0.124, 0.022], { name: 'paint', color: '#2e332c' })
         cursor = Math.max(cursor, span[1])
       }
       for (let along = edge.from + 0.7, step = 0; along < edge.to - 0.5; along += 1.6 + hash(along * 7 + step) * 0.8, step++) {
@@ -699,7 +701,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   }
   const outline = (x0: number, x1: number, z0: number, z1: number) => {
     for (const z of [z0, z1]) put([x1 - x0, 0.004, 0.08], { name: 'paint', color: '#a68a3a' }, [(x0 + x1) / 2, 0.016, z])
-    for (const x of [x0, x1]) put([0.08, 0.004, z1 - z0], { name: 'paint', color: '#a68a3a' }, [x, 0.016, (z0 + z1) / 2])
+    for (const x of [x0, x1]) put([0.08, 0.004, z1 - z0], { name: 'paint', color: '#a68a3a' }, [x, 0.0165, (z0 + z1) / 2])
   }
   outline(-6.3, -2.9, -8.4, -6.8)
   outline(-6.3, -2.9, -15.0, -13.4)
@@ -719,7 +721,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   poster('x+', -7.0, -20.4, 1.5, 'sign', 32)
   cable('x+', -7.0, -19.2, -17.5, 2.45)
   rod([-5.6, 0.02, -17.75], [-5.6, 1.8, -17.75], 0.02, iron, 5, true)
-  for (const yaw of [0, Math.PI / 2]) put([0.5, 0.03, 0.04], iron, [-5.6, 0.02, -17.75], [0, yaw, 0])
+  for (const yaw of [0, Math.PI / 2]) put([0.5, yaw ? 0.034 : 0.03, 0.04], iron, [-5.6, 0.02, -17.75], [0, yaw, 0])
   put([0.42, 0.9, 0.12], { name: 'paint', color: '#3e3a2a' }, [-5.6, 1.3, -17.67], [0.08, 0.2, 0.04], true)
   for (const [x, z] of [[-3.8, -20.0], [0.6, -22.0], [-5.5, -23.2]] as const) rod([x, 3.0, z], [x + 0.12, 2.25, z + 0.06], 0.008, wire, 4)
   put([1.0, 0.03, 0.6], panel, [-3.6, 0.06, -24.1], [0.05, 0.4, 0.08])
@@ -800,8 +802,8 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     let light: Vec3 = [x, y, z]
     if (spot.fixture === 'pendant') {
       glow(new THREE.SphereGeometry(0.045, 10, 8), [x, y, z], '#ffe3b0', 3)
-      level.cylinder(0.018, 0.06, iron, { at: [x, y + 0.06, z], collide: false, cast: false, shadow: false }, 8)
-      level.cylinder(0.15, 0.05, { name: 'metal', color: '#3a4a44', ao: false }, { at: [x, y + 0.1, z], collide: false, cast: false, shadow: false }, 14)
+      dressing.cylinder(0.018, 0.06, iron, { at: [x, y + 0.06, z], collide: false, cast: false, shadow: false }, 8)
+      dressing.cylinder(0.15, 0.05, { name: 'metal', color: '#3a4a44', ao: false }, { at: [x, y + 0.1, z], collide: false, cast: false, shadow: false }, 14)
       const cord = room.ceiling - y - 0.12
       if (cord > 0) rod([x, y + 0.12, z], [x, room.ceiling, z], 0.005, wire, 4)
     } else if (spot.fixture === 'cage') {
@@ -810,8 +812,8 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
         const angle = bar * Math.PI / 2 + 0.4
         rod([x + Math.cos(angle) * 0.065, y - 0.07, z + Math.sin(angle) * 0.065], [x + Math.cos(angle) * 0.065, y + 0.07, z + Math.sin(angle) * 0.065], 0.004, iron, 3)
       }
-      level.cylinder(0.07, 0.012, iron, { at: [x, y + 0.075, z], collide: false, cast: false, shadow: false }, 10)
-      level.cylinder(0.025, 0.012, iron, { at: [x, y - 0.075, z], collide: false, cast: false, shadow: false }, 8)
+      dressing.cylinder(0.07, 0.012, iron, { at: [x, y + 0.075, z], collide: false, cast: false, shadow: false }, 10)
+      dressing.cylinder(0.025, 0.012, iron, { at: [x, y - 0.075, z], collide: false, cast: false, shadow: false }, 8)
       rod([x, y + 0.08, z], [x, room.ceiling - 0.03, z], 0.012, iron, 5)
       put([0.14, 0.04, 0.14], iron, [x, room.ceiling - 0.02, z])
     } else if (spot.fixture === 'tube') {
@@ -825,12 +827,12 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
       const edges = [[x - room.min[0], room.min[0], 1, 0], [room.max[0] - x, room.max[0], -1, 0], [z - room.min[1], room.min[1], 0, 1], [room.max[1] - z, room.max[1], 0, -1]] as const
       const [, edge, nx, nz] = edges.reduce((best, item) => item[0] < best[0] ? item : best)
       const across = nx !== 0
-      level.box(across ? [0.1, 0.16, 0.26] : [0.26, 0.16, 0.1], { name: 'metal', color: '#2a2b26', ao: false }, { at: across ? [edge + nx * 0.05, y, z] : [x, y, edge + nz * 0.05], collide: false, cast: false, shadow: false })
+      dressing.box(across ? [0.1, 0.16, 0.26] : [0.26, 0.16, 0.1], { name: 'metal', color: '#2a2b26', ao: false }, { at: across ? [edge + nx * 0.05, y, z] : [x, y, edge + nz * 0.05], collide: false, cast: false, shadow: false })
       glow(new THREE.BoxGeometry(across ? 0.02 : 0.22, 0.12, across ? 0.22 : 0.02), across ? [edge + nx * 0.11, y, z] : [x, y, edge + nz * 0.11], spot.color ?? '#ff3a26', 2)
     } else if (spot.fixture === 'lamp') {
-      level.cylinder(0.07, 0.02, iron, { at: [x, y, z], collide: false, cast: false, shadow: false }, 10)
+      dressing.cylinder(0.07, 0.02, iron, { at: [x, y, z], collide: false, cast: false, shadow: false }, 10)
       rod([x, y + 0.01, z], [x + 0.04, y + 0.33, z + 0.02], 0.01, iron, 4)
-      level.cylinder(0.085, 0.12, { name: 'paint', color: '#4f5a46' }, { at: [x + 0.12, y + 0.33, z + 0.04], rotate: [0, 0, -0.6], collide: false, cast: false, shadow: false }, 12)
+      dressing.cylinder(0.085, 0.12, { name: 'paint', color: '#4f5a46' }, { at: [x + 0.12, y + 0.33, z + 0.04], rotate: [0, 0, -0.6], collide: false, cast: false, shadow: false }, 12)
       glow(new THREE.SphereGeometry(0.03, 8, 6), [x + 0.15, y + 0.28, z + 0.05], '#ffd9a0', 3)
       light = [x + 0.17, y + 0.22, z + 0.05]
     } else if (spot.fixture === 'sodium') {
@@ -1021,9 +1023,9 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   roof.name = 'hall-roof'
   add(roof)
 
-  const built = level.build()
+  const built = [...level.build().children, ...dressing.build().children]
   const shared = new Map<string, THREE.Mesh[]>()
-  for (const child of [...built.children]) {
+  for (const child of built) {
     if (!(child instanceof THREE.Mesh) || child.renderOrder !== 0) { add(child); continue }
     const key = `${(child.material as THREE.Material).uuid}|${Object.keys(child.geometry.attributes).sort().join()}`
     shared.set(key, [...shared.get(key) ?? [], child])
