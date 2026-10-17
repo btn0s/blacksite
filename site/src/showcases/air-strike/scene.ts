@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { DestructionRenderer, DestructionSession, FIXED_DT_30HZ, FragmentState, type FragmentDef, type FragmentSurface } from '@blacksite/cascade'
 import { attachPerfProbe, reportActiveBodies } from '@blacksite/ui/perf-overlay'
 import { createLook, type Look } from '@blacksite/look'
+import { applyCameraImpulse, createCameraImpulse, type ImpulsePoint } from '@blacksite/subject/feel'
 import { createAtmosphere, internalPixelRatio, isTouchDevice, meterSurface, preloadSurfaces } from '@blacksite/look/world'
 import { BLOCK, BLOCK_HEIGHT, BLOCK_LENGTH, createBlock } from './block'
 import { MUNITIONS, StrikeEffects, type Munition } from './fx'
@@ -44,6 +45,8 @@ class OrbitRig {
   pitch = 0.13
   distance = 64
   private readonly goal = { yaw: this.yaw, pitch: this.pitch, distance: this.distance }
+  private readonly impulse = createCameraImpulse()
+  private readonly forward = new THREE.Vector3()
   idle = 0
 
   constructor(readonly camera: THREE.PerspectiveCamera) {}
@@ -69,6 +72,16 @@ class OrbitRig {
     const c = Math.cos(this.pitch)
     this.camera.position.set(Math.sin(this.yaw) * c, Math.sin(this.pitch), Math.cos(this.yaw) * c).multiplyScalar(this.distance).add(this.target)
     this.camera.lookAt(this.target)
+    applyCameraImpulse(this.camera, this.impulse.step(dt))
+  }
+
+  blast(source: ImpulsePoint, strength: number) {
+    this.camera.getWorldDirection(this.forward)
+    this.impulse.blast(source, strength, this.camera.position, Math.atan2(-this.forward.x, -this.forward.z))
+  }
+
+  still() {
+    this.impulse.reset()
   }
 }
 
@@ -224,6 +237,7 @@ export class AirStrikeScene {
     const heading = target.clone().sub(this.camera.position).setY(0).applyAxisAngle(up, 0.35)
     this.fx.launch(target, heading, MUNITIONS[this.state.munition], (at: THREE.Vector3, direction: THREE.Vector3, munition: Munition) => {
       this.session?.impact('explosion', [at.x, at.y, at.z], [direction.x, direction.y, direction.z], munition.radius, munition.strength, undefined, munition.minRadius)
+      this.rig.blast(at, munition.radius / 10)
       this.set({ inbound: this.fx.inbound })
     })
     this.set({ inbound: this.fx.inbound })
@@ -243,6 +257,7 @@ export class AirStrikeScene {
     this.mark = null
     this.reticle.visible = this.beam.visible = false
     this.fx.clear()
+    this.rig.still()
     this.session.reset()
     this.set({ detached: 0, inbound: 0 })
   }
