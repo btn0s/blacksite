@@ -14,6 +14,11 @@ export type LevelBuilderOptions = { coplanar?: CoplanarMode; separation?: number
 
 const keyOf = (material: Material) => `${material.name}|${material.color ?? ''}|${material.scale ?? 1}|${material.ao === false ? 'noao' : JSON.stringify(material.ao ?? '')}|${material.decal ?? ''}`
 
+const extent = (plane: { width: number; depth: number; quaternion: THREE.Quaternion }) => {
+  const size = new THREE.Vector3(plane.width, 0, plane.depth).applyQuaternion(plane.quaternion)
+  return new THREE.Vector3(Math.abs(size.x), 0, Math.abs(size.z))
+}
+
 export class LevelBuilder {
   private parts = new Map<string, { material: Material; geometries: THREE.BufferGeometry[]; labels: string[]; cast: boolean }>()
   private contacts: Array<{ geometry: THREE.BufferGeometry; x: number; z: number }> = []
@@ -110,6 +115,28 @@ export class LevelBuilder {
     this.pushContact(contact, at[0], at[1])
   }
 
+  private layerPlanes() {
+    const gap = 0.012
+    const ordered = [...this.planes].sort((p, q) => p.source.position.y - q.source.position.y)
+    const bounds = (item: (typeof ordered)[number]) => new THREE.Box3().setFromCenterAndSize(item.source.position, extent(item.source))
+    const boxes = new Map(ordered.map(item => [item, bounds(item)] as const))
+    ordered.forEach((item, index) => {
+      let y = Math.max(item.source.position.y, gap)
+      for (let below = 0; below < index; below++) {
+        const other = ordered[below]!
+        const a = boxes.get(item)!
+        const b = boxes.get(other)!
+        if (a.min.x < b.max.x && a.max.x > b.min.x && a.min.z < b.max.z && a.max.z > b.min.z) y = Math.max(y, other.source.position.y + gap)
+      }
+      const lift = y - item.source.position.y
+      if (lift > 1e-6) {
+        item.geometry.translate(0, lift, 0)
+        item.source.position.y = y
+        boxes.get(item)!.translate(new THREE.Vector3(0, lift, 0))
+      }
+    })
+  }
+
   collider(collider: Collider) { this.colliders.push(collider) }
 
   mesh(mesh: THREE.Mesh) {
@@ -129,8 +156,8 @@ export class LevelBuilder {
         console.warn(message)
       }
     }
-    const levels = [...new Set(this.planes.map(item => Math.round(item.source.position.y * 1000)))].sort((a, b) => a - b)
-    for (const item of this.planes) this.register(item.geometry, { ...item.material, decal: item.material.decal ?? levels.indexOf(Math.round(item.source.position.y * 1000)) + 1 }, false, item.label)
+    this.layerPlanes()
+    for (const item of this.planes) this.register(item.geometry, { ...item.material, decal: item.material.decal ?? 1 / 3 }, false, item.label)
     const local = new THREE.Vector3()
     const inverse = new THREE.Quaternion()
     for (const contact of this.contacts) {
