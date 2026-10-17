@@ -21,6 +21,7 @@ export interface ForestOptions {
   readonly species: readonly ForestSpecies[]
   readonly density: (x: number, z: number) => number
   readonly choose: (x: number, z: number, random: number) => number
+  readonly priority?: (x: number, z: number) => number
   readonly heightAt: (x: number, z: number) => number
   readonly bounds: { readonly min: readonly [number, number]; readonly max: readonly [number, number] }
   readonly spacing: number
@@ -41,7 +42,7 @@ export interface Forest {
   readonly object: Group
   readonly materials: readonly Material[]
   readonly atlases: readonly ImpostorAtlas[]
-  readonly stats: { trees: number; near: number; proxies: number; bakeMs: number }
+  readonly stats: { trees: number; candidates: number; near: number; proxies: number; bakeMs: number }
   readonly positions: Float32Array
   update(camera: Camera): void
   dispose(): void
@@ -103,7 +104,7 @@ export function createForest(options: ForestOptions): Forest {
   const { wind, species } = options
   const seed = options.seed ?? 5
   const sun = options.sun
-  const stats = { trees: 0, near: 0, proxies: 0, bakeMs: 0 }
+  const stats = { trees: 0, candidates: 0, near: 0, proxies: 0, bakeMs: 0 }
   const [minX, minZ] = options.bounds.min
   const [maxX, maxZ] = options.bounds.max
   const spacing = options.spacing
@@ -117,9 +118,10 @@ export function createForest(options: ForestOptions): Forest {
       if (density <= 0.02 || hash2(gx, gz, seed + 2) > density) continue
       const kind = options.choose(x, z, hash2(gx, gz, seed + 3))
       const range = species[kind]?.scale ?? [0.8, 1.2]
-      candidates.push({ x, z, rank: hash2(gx, gz, seed + 4), species: kind, yaw: hash2(gx, gz, seed + 5) * Math.PI * 2, scale: range[0] + (range[1] - range[0]) * hash2(gx, gz, seed + 6) })
+      candidates.push({ x, z, rank: hash2(gx, gz, seed + 4) * (options.priority?.(x, z) ?? 1), species: kind, yaw: hash2(gx, gz, seed + 5) * Math.PI * 2, scale: range[0] + (range[1] - range[0]) * hash2(gx, gz, seed + 6) })
     }
   }
+  stats.candidates = candidates.length
   if (candidates.length > options.count) candidates.sort((a, b) => a.rank - b.rank).length = options.count
   const total = candidates.length
   stats.trees = total

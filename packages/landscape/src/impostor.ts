@@ -188,6 +188,8 @@ varying vec2 vImpostorGrid;
 varying vec2 vImpostorUv;
 varying vec3 vImpostorFade;
 varying vec2 vImpostorYaw;
+varying vec3 vImpostorOffset;
+varying vec3 vImpostorView;
 `
 
 const VERTEX_BODY = /* glsl */ `
@@ -217,6 +219,8 @@ vec3 transformed = bsCentre + (bsRightW * position.x + bsUpW * position.y) * bsS
 vImpostorUv = uv;
 vImpostorFade = vec3(bsIn, bsOut, smoothstep(impostorRange.y, impostorRange.w, bsRootDist));
 vImpostorYaw = vec2(bsC, bsS);
+vImpostorOffset = (transformed - bsCentre - vec3(0.0, 0.18, 0.0) * impostorShape.w * treeScale) / max(impostorShape.w * treeScale * 0.78, 0.001);
+vImpostorView = bsDir;
 `
 
 const FRAGMENT_HEAD = /* glsl */ `
@@ -224,10 +228,13 @@ uniform sampler2D impostorAlbedo;
 uniform sampler2D impostorNormal;
 uniform float impostorFrames;
 uniform vec3 impostorTint;
+uniform float impostorContact;
 varying vec2 vImpostorGrid;
 varying vec2 vImpostorUv;
 varying vec3 vImpostorFade;
 varying vec2 vImpostorYaw;
+varying vec3 vImpostorOffset;
+varying vec3 vImpostorView;
 vec2 bsFrameUv(vec2 frame) {
   return (frame + clamp(vImpostorUv, vec2(0.004), vec2(0.996))) / impostorFrames;
 }
@@ -266,7 +273,13 @@ if (bsDitherValue >= min(vImpostorFade.x, vImpostorFade.y)) discard;
 diffuseColor.rgb *= bsA.rgb / max(bsCoverage, 0.001) * impostorTint;
 diffuseColor.a = bsAlpha;
 vec3 bsLocalNormal = normalize(bsN.rgb / max(bsN.a, 0.001) * 2.0 - 1.0);
-vec3 bsWorldNormal = normalize(bsRotY(bsLocalNormal, vImpostorYaw.x, vImpostorYaw.y));
+vec3 bsBaked = normalize(bsRotY(bsLocalNormal, vImpostorYaw.x, vImpostorYaw.y));
+float bsDepth = sqrt(max(1.0 - dot(vImpostorOffset, vImpostorOffset), 0.0));
+vec3 bsSphere = normalize(vImpostorOffset + vImpostorView * bsDepth);
+float bsRelief = mix(0.55, 0.75, bsSmudge);
+vec3 bsWorldNormal = normalize(mix(bsBaked, bsSphere, bsRelief));
+float bsContact = mix(0.42, 1.0, smoothstep(-0.85, 0.35, vImpostorOffset.y)) * mix(0.78, 1.0, smoothstep(0.0, 0.55, bsDepth));
+diffuseColor.rgb *= mix(1.0, bsContact, impostorContact);
 `
 
 export interface ImpostorMaterialOptions {
@@ -276,6 +289,7 @@ export interface ImpostorMaterialOptions {
   readonly alphaToCoverage?: boolean
   readonly singleFrame?: boolean
   readonly tint?: readonly [number, number, number]
+  readonly contact?: number
 }
 
 export function createImpostorMaterial(options: ImpostorMaterialOptions): MeshStandardMaterial {
@@ -291,6 +305,7 @@ export function createImpostorMaterial(options: ImpostorMaterialOptions): MeshSt
     impostorShape: { value: new Vector4(atlas.centre.x, atlas.centre.y, atlas.centre.z, atlas.radius) },
     impostorRange: { value: new Vector4(...options.range) },
     impostorTint: { value: new Vector3(...(options.tint ?? [1, 1, 1])) },
+    impostorContact: { value: options.contact ?? 1 },
   }
   material.userData.impostor = uniforms
   patchMaterial(material, `world-impostor-${options.singleFrame ? 1 : 4}-${options.alphaToCoverage ? 'a2c' : 'cut'}`, shader => {
@@ -301,7 +316,7 @@ export function createImpostorMaterial(options: ImpostorMaterialOptions): MeshSt
     shader.fragmentShader = replaceChunk(shader.fragmentShader, 'map_fragment', FRAGMENT_SAMPLE)
     shader.fragmentShader = replaceChunk(shader.fragmentShader, 'alphatest_fragment', '')
     shader.fragmentShader = replaceChunk(shader.fragmentShader, 'normal_fragment_begin', `
-      vec3 normal = normalize((viewMatrix * vec4(normalize(mix(bsWorldNormal, vec3(0.0, 1.0, 0.0), 0.2)), 0.0)).xyz);
+      vec3 normal = normalize((viewMatrix * vec4(normalize(mix(bsWorldNormal, vec3(0.0, 1.0, 0.0), 0.08)), 0.0)).xyz);
       vec3 nonPerturbedNormal = normal;
       float faceDirection = 1.0;
     `)

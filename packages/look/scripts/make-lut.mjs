@@ -27,6 +27,17 @@ export const LUT_PRESETS = {
     warmGreen: 0.08,
     contrast: 0.3,
   },
+  nature: {
+    title: 'Nature grade',
+    shadow: [1.08, 1.02, 0.82],
+    mid: [1.08, 1.03, 0.82],
+    high: [1.08, 1.04, 0.86],
+    saturation: [0.62, 0.06, 0.06],
+    toe: 0.06,
+    warmGreen: 0,
+    olive: 0.5,
+    contrast: -0.04,
+  },
 }
 
 const smoothstep = (edge0, edge1, x) => {
@@ -46,6 +57,7 @@ export function grade(preset, rgb) {
   const saturation = base + midBoost * mid + warmBoost * warmth
   const out = rgb.map((channel, i) => (luma + (channel - luma) * saturation) * (shadow * preset.shadow[i] + mid * preset.mid[i] + high * preset.high[i]))
   out[1] += Math.max(0, out[0] - out[2]) * preset.warmGreen
+  out[0] += Math.max(0, out[1] - Math.max(out[0], out[2])) * (preset.olive ?? 0)
   const shoulder = 0.96
   return out.map(channel => {
     let value = preset.toe + (1 - preset.toe) * channel

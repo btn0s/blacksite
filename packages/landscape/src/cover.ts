@@ -15,6 +15,7 @@ export interface CoverFamily {
   readonly shape: CoverShape
   readonly perPatch: number
   readonly mask: string
+  readonly height?: string
   readonly size: readonly [number, number]
   readonly width?: number
   readonly quads?: number
@@ -187,7 +188,7 @@ float bsMask = clamp(${family.mask}, 0.0, 1.0);
 float bsDensity = bsMask * bsReach;
 float bsKeep = clamp((bsDensity - coverBlade.z) / 0.07, 0.0, 1.0);
 float bsWiden = mix(1.0, coverFade.z, 1.0 - bsReach);
-float bsScale = mix(coverShape.x, coverShape.y, coverRandom.y) * bsKeep;
+float bsScale = mix(coverShape.x, coverShape.y, coverRandom.y) * bsKeep * max(${family.height ?? '1.0'}, 0.0);
 vec3 bsP = position;
 bsP.xz *= bsWiden * bsScale;
 bsP.y *= bsScale;
@@ -252,6 +253,12 @@ diffuseColor.a = 1.0;
 #endif
 `
 
+const NORMAL_UP = /* glsl */ `
+float faceDirection = 1.0;
+vec3 normal = normalize(vNormal);
+vec3 nonPerturbedNormal = normal;
+`
+
 const TRANSLUCENCY = /* glsl */ `
 #include <emissivemap_fragment>
 vec3 bsSunView = normalize((viewMatrix * vec4(coverSunDirection, 0.0)).xyz);
@@ -312,7 +319,7 @@ export function createCover(options: CoverOptions): Cover {
       coverSunColor: { value: sun.color },
       coverTextureSize: { value: new Vector2((family.texture?.image as { width?: number } | undefined)?.width ?? 256, (family.texture?.image as { height?: number } | undefined)?.height ?? 256) },
     }
-    patchMaterial(material, `world-cover-${family.shape}-${textured ? 't' : 'p'}-${family.mask}`, shader => {
+    patchMaterial(material, `world-cover-${family.shape}-${textured ? 't' : 'p'}-${family.mask}-${family.height ?? ''}`, shader => {
       Object.assign(shader.uniforms, options.terrain, options.wind.uniforms, uniforms)
       shader.vertexShader = `${NOISE_GLSL}\n${WIND_GLSL}\n${TERRAIN_GLSL}\n${VERTEX_HEAD}\n${shader.vertexShader}`
       shader.vertexShader = replaceChunk(shader.vertexShader, 'beginnormal_vertex', family.shape === 'pebble' ? NORMAL_ROTATED : NORMAL_SOFT)
@@ -320,6 +327,7 @@ export function createCover(options: CoverOptions): Cover {
       shader.fragmentShader = `${NOISE_GLSL}\n${FRAGMENT_HEAD}\n${shader.fragmentShader}`
       shader.fragmentShader = replaceChunk(shader.fragmentShader, 'map_fragment', FRAGMENT_COLOR(textured))
       shader.fragmentShader = replaceChunk(shader.fragmentShader, 'alphatest_fragment', textured ? ALPHA_AA : '')
+      if (family.shape !== 'pebble') shader.fragmentShader = replaceChunk(shader.fragmentShader, 'normal_fragment_begin', NORMAL_UP)
       if ((family.translucency ?? 0) > 0) shader.fragmentShader = replaceChunk(shader.fragmentShader, 'emissivemap_fragment', TRANSLUCENCY)
     })
     materials.push(material)

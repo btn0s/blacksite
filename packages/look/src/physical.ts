@@ -31,6 +31,7 @@ export const ATMOSPHERE_CORE = `
   uniform float atAltitude;
   uniform vec3 atSun;
   uniform float atIlluminance;
+  uniform float atSkyGain;
 
   vec3 atExtinction(float h, out vec3 rayleigh, out float mie) {
     float height = max(h, 0.0);
@@ -353,7 +354,7 @@ const CLOUD_GLSL = `
     float rise = clamp((d - cloudAmount(q + along * 0.12, footprint, CLOUD_OCTAVES - 1) * fade) * 3.0 + 0.5, 0.0, 1.0);
     single *= mix(1.0, (0.75 + 0.6 * rim) * mix(0.8, 1.2, rise), side * 0.6);
     vec3 multiple = sun * (0.06 + 0.08 * rim + 0.04 * rise * side) * mix(1.0, shadow, 0.5) * alpha * (0.25 + 0.75 * smoothstep(-0.3, 0.9, c));
-    vec3 ambient = (atSky(normalize(vec3(direction.x, 0.03, direction.z))) * 0.26 + atSky(vec3(0.0, 1.0, 0.0)) * 0.42) * alpha * (1.0 - 0.35 * d) * mix(1.0, mix(0.9, 1.1, rise), side);
+    vec3 ambient = (atSky(normalize(vec3(direction.x, 0.03, direction.z))) * 0.26 + atSky(vec3(0.0, 1.0, 0.0)) * 0.42) * atSkyGain * alpha * (1.0 - 0.35 * d) * mix(1.0, mix(0.9, 1.1, rise), side);
     vec4 result = vec4(single + multiple + ambient, alpha);
     result *= smoothstep(0.0, aa * 1.5 + 1e-6, edge);
     float haze = exp(-t * 0.02);
@@ -396,7 +397,7 @@ const SKY_FRAGMENT = `
     vec3 view = normalize(vDirection);
     float pixel = max(length(fwidth(view)), 1e-5);
     vec3 direction = normalize(vec3(view.x, max(view.y, 0.0005), view.z));
-    vec3 colour = atSky(direction);
+    vec3 colour = atSky(direction) * atSkyGain;
     float visible = 1.0;
     #ifdef CLOUDS
       float edge;
@@ -422,6 +423,7 @@ export interface AtmosphereUniforms {
   readonly atAltitude: Uniform<number>;
   readonly atSun: Uniform<Vector3>;
   readonly atIlluminance: Uniform<number>;
+  readonly atSkyGain: Uniform<number>;
 }
 
 export interface AtmosphereLuts {
@@ -468,6 +470,7 @@ export function createAtmosphereLuts(renderer: WebGLRenderer, settings: QualityS
     atAltitude: new Uniform(0),
     atSun: new Uniform(new Vector3(0, 1, 0)),
     atIlluminance: new Uniform(1),
+    atSkyGain: new Uniform(1),
   };
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
@@ -513,6 +516,7 @@ export function createAtmosphereLuts(renderer: WebGLRenderer, settings: QualityS
       uniforms.atOzone.value.set(OZONE[0] * spec.ozone, OZONE[1] * spec.ozone, OZONE[2] * spec.ozone);
       uniforms.atAltitude.value = Math.max(spec.elevation, 1) * 0.001;
       uniforms.atIlluminance.value = spec.illuminance;
+      uniforms.atSkyGain.value = spec.sky ?? 1;
       sun.set(...atmosphere.sun.direction).normalize();
       const key = mediumKey(spec);
       if (key !== medium) {
@@ -659,7 +663,7 @@ export function bakePhysicalEnvironment(renderer: WebGLRenderer, sky: PhysicalSk
     depthWrite: false,
     fog: false,
     defines: { ...source.defines },
-    uniforms: { ...source.uniforms, exposure: { value: exposure }, atDisk: { value: 0 } },
+    uniforms: { ...source.uniforms, exposure: { value: exposure }, atDisk: { value: 0 }, atSkyGain: { value: 1 } },
   });
   const mesh = new Mesh(sky.mesh.geometry, material);
   mesh.frustumCulled = false;

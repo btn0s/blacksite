@@ -214,7 +214,7 @@ vec4 bsCrowns(vec2 p, uint salt) {
   for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
     ivec2 id = ivec2(cell) + ivec2(i, j);
     vec2 centre = vec2(float(i), float(j)) + 0.2 + 0.6 * vec2(bsHash(id, salt), bsHash(id, salt + 2u));
-    float radius = 0.46 + 0.36 * bsHash(id, salt + 4u);
+    float radius = 0.38 + 0.3 * bsHash(id, salt + 4u);
     vec2 r = local - centre;
     float d2 = dot(r, r) / (radius * radius);
     float h = sqrt(max(1.0 - d2, 0.0)) * radius + bsHash(id, salt + 6u) * 0.35;
@@ -278,7 +278,7 @@ vec3 bsWorldNormal = normalize(bsT * bsDetailNormal.x - bsB * bsDetailNormal.y +
 if (vTerrainCanopy > 0.001) {
   float footprint = length(fwidth(vTerrainWorld.xz));
   float level = log2(footprint / (canopyParams.w * 0.3));
-  float lumpFade = 1.0 - smoothstep(3.2, 4.2, level);
+  float lumpFade = 1.0 - smoothstep(3.6, 4.8, level);
   level = clamp(level, 0.0, 3.0);
   float l0 = min(floor(level), 2.0);
   float lf = level - l0;
@@ -295,10 +295,10 @@ if (vTerrainCanopy > 0.001) {
   float top = mix(c0.z, c1.z, lf);
   float tone = mix(fract(c0.w), fract(c1.w), lf);
   float covered = smoothstep(-0.6, 0.2, top);
-  float relief = 1.0 / (1.0 + level * 0.55);
+  float relief = 1.0 / (1.0 + level * 0.3);
   vec3 lump = normalize(vec3(dome.x, dome.z * 0.9, dome.y));
-  vec3 canopyNormal = normalize(mix(bsBase, lump, (0.5 * covered + 0.15) * lumpFade * relief + 0.1));
-  float crownAo = mix(0.82 - 0.55 * relief, 0.5 + 0.5 * dome.z, covered);
+  vec3 canopyNormal = normalize(mix(bsBase, lump, (0.68 * covered + 0.15) * lumpFade * relief + 0.1));
+  float crownAo = mix(0.78 - 0.62 * relief, mix(0.3, 1.0, smoothstep(0.0, 0.8, dome.z)), covered);
   vec3 cellAlbedo = mix(canopyShade, canopyColor * (0.62 + tone * 0.76), crownAo);
   vec3 meanAlbedo = mix(canopyShade, canopyColor * 0.95, 0.76);
   vec3 canopyAlbedo = mix(meanAlbedo, cellAlbedo, lumpFade);
