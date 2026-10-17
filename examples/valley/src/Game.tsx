@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { CuboidCollider, HeightfieldCollider, Physics, RigidBody } from '@react-three/rapier'
+import { CuboidCollider, HeightfieldCollider, Physics, RigidBody, type HeightfieldArgs } from '@react-three/rapier'
 import { InputProvider, makeInputDevices } from '@blacksite/input'
 import { depthDefaults } from '@blacksite/look'
 import { Look } from '@blacksite/look/r3f'
@@ -74,10 +74,10 @@ function Warmup({ onDone }: { onDone: () => void }) {
 function Ground({ world }: { world: ValleyWorld }) {
   const size = site.nearSize
   const extent = site.walkable
-  const heights = useMemo(() => colliderHeights(world, size, extent), [world, size, extent])
+  const args = useMemo<HeightfieldArgs>(() => [size - 1, size - 1, colliderHeights(world, size, extent) as unknown as number[], { x: extent, y: 1, z: extent }], [world, size, extent])
   const half = extent / 2
   return <RigidBody type="fixed" colliders={false}>
-    <HeightfieldCollider args={[size - 1, size - 1, heights as unknown as number[], { x: extent, y: 1, z: extent }]} />
+    <HeightfieldCollider args={args} />
     <CuboidCollider args={[half, 400, 1]} position={[0, 300, -half + 6]} />
     <CuboidCollider args={[half, 400, 1]} position={[0, 300, half - 6]} />
     <CuboidCollider args={[1, 400, half]} position={[-half + 6, 300, 0]} />

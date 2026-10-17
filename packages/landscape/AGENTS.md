@@ -11,6 +11,7 @@
 | Node | One CDLOD quadtree cell at a fixed world position. Vertices morph to the parent grid before the node hands over. |
 | Canopy | The terrain lifted and shaded as crowns under the forest mask, from `canopy.start` to `canopy.end`. It replaces impostors at distance. |
 | Family | One kind of ground cover: shape, per-patch count, GLSL mask, size, colours, bend, translucency. |
+| Cover ground | The terrain's colour wherever cover grows: the blades' root colour near, their far average past the fade, from the same masks and the same reach curve, so the edge of the blades never changes colour. |
 | Patch | An 8 m world-grid cell of cover. Each draws a prefix of one shared blade buffer, flipped by a seed from its cell. |
 | Ring | A distance band of patches that draws a shorter prefix. Rings save cost; blades thin individually. |
 | Impostor | One camera-facing quad per tree, sampled from a hemi-octahedral atlas baked from the same tree. |
@@ -32,7 +33,7 @@ Run this before the look renders (Valley uses `useFrame` priority 0.5; `<Look>` 
 
 ## Writing a cover mask
 
-A mask is a GLSL float expression evaluated per blade in the vertex shader. In scope: `bsSurface` (blended surface texture at the root), `bsSlope` (1 − normal.y), `bsRoot` (world xz), `bsGround` (height), `bsNoise(vec2, uint seed)`, `smoothstep` and the rest of GLSL. Return 0–1; the result multiplies density. Distinct masks compile distinct programs, so reuse one string per family rather than building it per frame. Give each new noise its own seed so masks don't line up with the terrain's macro variation.
+A mask is a GLSL float expression evaluated per blade in the vertex shader, and per pixel in the terrain for the cover ground. In scope: `bsSurface` (blended surface texture at the root), `bsSlope` (1 − normal.y), `bsRoot` (world xz), `bsGround` (height), `bsNoise(vec2, uint seed)`, `smoothstep` and the rest of GLSL; nothing else, since the terrain has only these. Return 0–1; the result multiplies density. Distinct masks compile distinct programs, so reuse one string per family rather than building it per frame. Give each new noise its own seed so masks don't line up with the terrain's macro variation.
 
 ## Tiers
 
@@ -42,7 +43,7 @@ Keep one object per tier in the game's model, as Valley's `tiers` does: tree cou
 
 | Symptom | Check |
 |---|---|
-| A visible line where grass thins | A family's `fade` is above 1, so its blades outlive the prefix a far ring draws, or custom `rings` cut a prefix too short. Keep `fade` at or below 1 and leave `rings` at the defaults. |
+| A visible line where grass thins | The terrain was built without `cover`, so the ground under the last blades is the splat layer, not the grass. Pass the `Cover` to `createTerrain`. Otherwise a family's `fade` is above 1, so its blades outlive the prefix a far ring draws, or custom `rings` cut a prefix too short. Keep `fade` at or below 1 and leave `rings` at the defaults. |
 | Grass sparkles or crawls in a still frame | `alphaToCoverage` is on without MSAA, or off with very thin blades. Match it to the look tier's MSAA. Freeze the wind to separate motion from aliasing. |
 | Cover floats or sinks on slopes | `heightAt` passed to cover is not `terrainHeightAt` on the same sources, or the terrain uniforms come from a different `TerrainSources`. Pass `terrain.uniforms`. |
 | Trees pop between mesh and impostor | `near` range too narrow, or a custom material lost the dither discard. Both sides must use `bsDither` over the same range. |

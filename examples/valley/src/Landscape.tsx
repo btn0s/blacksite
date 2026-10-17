@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { Color, DirectionalLight, PerspectiveCamera, Vector3 } from 'three'
 import {
   BIRCH, OAK, PINE, createCover, createForest, createSunShadows, createTerrain, flowerTexture, generateTree, grassTexture, leafClusterTexture,
-  litterTexture, needleClusterTexture, smoothstep, valueNoise, type Cover, type Forest, type SunShadows, type Terrain, type Wind,
+  litterTexture, needleClusterTexture, smoothstep, terrainUniforms, valueNoise, type Cover, type Forest, type SunShadows, type Terrain, type Wind,
 } from '@blacksite/landscape'
 import type { Texture } from 'three'
 import { canopy, tiers, type Tier } from './model'
@@ -27,22 +27,9 @@ export function Landscape({ world, tier, wind, sun, bark, handle }: { world: Val
   const [built, setBuilt] = useState<{ terrain: Terrain; cover: Cover; forest: Forest; shadows: SunShadows } | null>(null)
 
   useEffect(() => {
-    const terrain = createTerrain({
-      sources: world.sources,
-      layers: world.layers,
-      layerSpecs: [
-        { tile: 3.2, tint: [0.36, 0.48, 0.2], roughness: 0.95, normalScale: 0.8 },
-        { tile: 2.6, tint: [0.4, 0.4, 0.28], roughness: 0.92, normalScale: 1 },
-        { tile: 2.2, tint: [0.92, 0.84, 0.72], roughness: 0.9, normalScale: 1 },
-        { tile: 3.5, tint: [0.86, 0.84, 0.8], roughness: 0.85, normalScale: 1.2 },
-      ],
-      canopy: { height: canopy.height, start: settings.impostorFar[0] - canopy.lead, end: settings.impostorFar[1] - canopy.lead, crown: canopy.crown, color: [0.125, 0.15, 0.03], shade: [0.004, 0.007, 0.009], dither: tier === 'low' },
-      detailDistance: tier === 'low' ? 140 : 260,
-      coverShade: { distance: settings.coverDistance, strength: 0.4 },
-      shadowDistance: settings.shadowDistance,
-    })
+    const uniforms = terrainUniforms(world.sources)
     const cover = createCover({
-      terrain: terrain.uniforms,
+      terrain: uniforms,
       wind,
       heightAt: world.heightAt,
       sun: sunState,
@@ -58,6 +45,21 @@ export function Landscape({ world, tier, wind, sun, bark, handle }: { world: Val
         { name: 'litter', shape: 'card', perPatch: 54, mask: 'smoothstep(0.3, 0.65, bsSurface.b) * (1.0 - bsSurface.a)', size: [0.5, 0.95], texture: litterTexture(), colors: [[0.9, 0.82, 0.72], [0.8, 0.7, 0.55], [1, 0.82, 0.6]], ao: 1, fade: 0.6 },
         { name: 'pebbles', shape: 'pebble', perPatch: 16, mask: 'max(bsSurface.a * 0.9, smoothstep(0.3, 0.48, bsSlope) * 0.8) + 0.06', size: [0.06, 0.24], colors: [[0.5, 0.48, 0.45], [0.62, 0.6, 0.56], [0.42, 0.4, 0.37]], ao: 1, fade: 0.55, roughness: 0.75 },
       ],
+    })
+    const terrain = createTerrain({
+      sources: world.sources,
+      uniforms,
+      layers: world.layers,
+      layerSpecs: [
+        { tile: 3.2, tint: [0.36, 0.48, 0.2], roughness: 0.95, normalScale: 0.8 },
+        { tile: 2.6, tint: [0.4, 0.4, 0.28], roughness: 0.92, normalScale: 1 },
+        { tile: 2.2, tint: [0.92, 0.84, 0.72], roughness: 0.9, normalScale: 1 },
+        { tile: 3.5, tint: [0.86, 0.84, 0.8], roughness: 0.85, normalScale: 1.2 },
+      ],
+      canopy: { height: canopy.height, start: settings.impostorFar[0] - canopy.lead, end: settings.impostorFar[1] - canopy.lead, crown: canopy.crown, color: [0.125, 0.15, 0.03], shade: [0.004, 0.007, 0.009], dither: tier === 'low' },
+      detailDistance: tier === 'low' ? 140 : 260,
+      cover,
+      shadowDistance: settings.shadowDistance,
     })
     const species = [
       { model: generateTree(BROADLEAF), textures: { bark: bark.pine.color, barkNormal: bark.pine.normal, leaf: leafClusterTexture(256, 41) }, scale: [0.8, 1.25] as const },
