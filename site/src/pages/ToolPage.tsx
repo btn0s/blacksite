@@ -33,14 +33,11 @@ export function ToolPage({ tool }: { tool: Tool }) {
       <Suspense fallback={<div className="stage stage--loading" />}><DemoFrame demo={demo} autoplay={demos.length === 1} /></Suspense>
     </section>)}
 
-    {demos.length === 0 && <p className="soon">Demo coming.</p>}
-
     <section className="tool-notes" aria-labelledby="use-title">
       <h2 className="demo-name" id="use-title">Use it in your game</h2>
       <p><Inline text={tool.agent.note} /></p>
       {command && <div className="tool-command"><p className="tool-command-label">{command.label}</p><CopyLine code={command.code} /></div>}
       <p className="tool-packages">Packages: {tool.packages.map((name, position) => <span key={name}>{position > 0 && ', '}<code>{name}</code></span>)}</p>
-      <p className="tool-status"><strong>Status:</strong> {tool.statusNote}</p>
       <p className="tool-links">{guide && <a href={linkFor(base, guide.path)}>{guide.label} →</a>}<a href={link(`tools/${next.slug}`)}>Next: {next.name} →</a></p>
     </section>
   </div>

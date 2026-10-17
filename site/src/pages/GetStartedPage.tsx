@@ -30,7 +30,7 @@ export function GetStartedPage() {
 
     <section className="next">
       <h2>What you get</h2>
-      <p>The agent asks a few questions, one at a time, then proposes a Slice: one complete loop in one finished space, about 5 to 10 minutes of play. It builds it over a day or a few sessions, checks it on desktop and phone, and gives you a link to play with the check results.</p>
+      <p>The agent asks a few questions, one at a time, then proposes a size. The default is one finished space with about 5 to 10 minutes of play. It builds it over a day or a few sessions, checks it on desktop and phone, and gives you a link to play with the check results.</p>
       <p><a href={link('skills')}>How it works, step by step →</a></p>
     </section>
   </div>

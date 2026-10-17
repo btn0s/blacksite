@@ -1,12 +1,12 @@
 # Blacksite
 
-**A skill that lets your coding agent build browser games that feel shipped.**
+**A skill that helps your coding agent build 3D browser games.**
 
-Describe a game to Claude Code, Codex or Cursor. Blacksite has the agent size it, build it from tested parts, then measure the frame rate, the movement and the sound on desktop and phone before it hands you a link to play.
+Describe a game to Claude Code, Codex or Cursor. The agent plans it with you, builds it from tested parts, and checks on desktop and phone that no frame takes longer than 33 ms before it sends you a link to play.
 
 A coding agent can write a game loop. What it can't do in an afternoon is write a character with hundreds of animations, multiplayer that feels right, buildings that collapse, or squads that flank you, and keep all of it at 120 fps on a desktop and 60 fps on a phone. Blacksite gives the agent:
 
-- **One skill.** `SKILL.md` is what the agent reads for anything about a game. It tells the agent what the shipped version of each feature has: footsteps triggered by the feet, 3 to 5 samples per surface and never the same one twice; enemies with a 0.2 s reaction delay and aim that starts wide. 26 reference files hold the numbers for light, sound, movement, frame budgets and each building block.
+- **One skill.** `SKILL.md` is what the agent reads for anything about a game. It tells the agent what a finished version of each feature includes: footsteps triggered by the feet, 3 to 5 samples per surface and never the same one twice; enemies with a 0.2 s reaction delay and aim that starts wide. 26 reference files hold the numbers for light, sound, movement, frame budgets and each building block.
 - **Building blocks.** Finished game systems the agent puts together instead of writing from scratch.
 - **Templates, an open asset library and checks.** Four starting projects, 146 open-licence assets, and `blacksite check`, which measures a running game on desktop and phone.
 - **Example games.** Breach, Traverse and Valley, each built only on the public packages.
@@ -28,12 +28,12 @@ Then describe a game to your agent. The skill loads by itself for anything game-
 | Reference | What the agent does with it |
 | --- | --- |
 | `design`, `setup`, `prototype`, `combine`, `optimise`, `ship` | The workflow: interview one question at a time, create the project, build each risky mechanic alone, join what works, bring it within budget, and deploy only when you ask. |
-| `craft`, `feel`, `sound`, `performance` | How a shipped game is lit, dressed, tuned and mixed, with numbers, and what gives way first when the frame is over budget. |
+| `craft`, `feel`, `sound`, `performance` | How to light, dress, tune and mix a game, with numbers, and what to cut first when a frame takes too long. |
 | `characters`, `als`, `weapons`, `ai`, `destruction`, `multiplayer`, `input` | One per building block, pointing to its guide, with its numbers, its gaps and the failures that shaped it. |
 | `architecture`, `assets`, `catalog` | Who owns which state, how to use assets you already own, and every package and command. |
-| `verify` | `blacksite check`: frame time, hitches, pop-in, movement speed, repeated sounds and screenshots to review, on desktop and phone. |
+| `verify` | `blacksite check`: how long frames take, frames over 33 ms, objects that appear late, movement speed, sounds that repeat, and screenshots to review, on desktop and phone. |
 
-The agent asks one question at a time and sizes the job, writes the real numbers into one file, lists the parts a shipped game would have, builds the risky parts alone and joins them, makes the scene move and make sound, and checks its own work before it hands you a link. It deploys only when you ask. Each step writes a file into the game project, so you can stop and resume anywhere.
+The agent asks one question at a time and sizes the job, writes the real numbers into one file, lists the parts the finished scene needs, builds the risky parts alone and joins them, makes the scene move and make sound, and checks its own work before it hands you a link. It deploys only when you ask. Each step writes a file into the game project, so you can stop and resume anywhere.
 
 ## Building blocks
 

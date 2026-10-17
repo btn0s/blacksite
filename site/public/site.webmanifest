@@ -1,11 +1,11 @@
 {
   "name": "Blacksite",
   "short_name": "Blacksite",
-  "description": "A skill that lets your coding agent build browser games that feel shipped.",
+  "description": "A skill that helps your coding agent build 3D browser games.",
   "start_url": "/",
   "display": "browser",
-  "background_color": "#0c0e0b",
-  "theme_color": "#0c0e0b",
+  "background_color": "#0e0e0f",
+  "theme_color": "#0e0e0f",
   "icons": [
     { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" },
     { "src": "/apple-touch-icon.png", "type": "image/png", "sizes": "180x180" },

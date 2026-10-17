@@ -4,29 +4,29 @@ October 2026.
 
 ## What Blacksite is for
 
-Blacksite is a skill that lets your coding agent build browser games that feel shipped, plus the building blocks it builds them from. Everything on this page serves two promises:
+Blacksite is a skill that helps your coding agent build 3D browser games, plus the building blocks it builds them from. Everything on this page serves two promises:
 
 1. **Agents use the blocks correctly.** Every block has a guide and a skill that tell an agent how it works and how to do common things with it, so it uses the block the standard way instead of guessing.
 2. **Fast by default.** 120 fps on desktop and a sustained 60 fps on phones, without the agent having to remember to optimise. Desktop game engines turn on detail levels, streaming, budgets and background threads by default; browser games usually start with none of them. Blacksite's blocks do.
 
 ## What works today
 
-| Area | What you get | Status |
-|---|---|---|
-| Player templates | `fpp` (single-player first person, rigged arms), `tpp` (ALS third person), `mp` (multiplayer, first/third person switch), `blank` | Usable |
-| Multiplayer | Colyseus rooms plus an in-browser loopback, owner movement, server-checked hits, remote bodies replaying full ALS state | Usable v0 |
-| Characters | ALS Web: the ALS Refactored animation system ported to three.js, with an [agent guide](vendor/als-web/docs/guide/overview.md) and the `als` reference | Usable |
-| Weapons | Rifle and pistol with fire, reload, aim and recoil | Usable |
-| World | Terrain to the horizon, ground cover, forests with impostors, one wind field; the physically based sky and nature look | Experimental |
-| Destruction | Structural collapse in a worker, walk mode with tools | Experimental |
-| AI | Squad AI and tactical simulation | Experimental |
-| Input | Keyboard, mouse, gamepad, touch | Usable |
-| Agent tooling | `blacksite` CLI, the `blacksite` skill, `blacksite check`, budgets, owned-asset sync | Usable |
-| Docs and demos | [Site](https://blacksite-sable.vercel.app) with live demos and a performance overlay | Usable |
+| Area | What you get |
+|---|---|
+| Player templates | `fpp` (single-player first person, rigged arms), `tpp` (ALS third person), `mp` (multiplayer, first/third person switch), `blank` |
+| Multiplayer | Colyseus rooms plus an in-browser loopback, owner movement, server-checked hits, remote bodies replaying full ALS state |
+| Characters | ALS Web: the ALS Refactored animation system ported to three.js, with an [agent guide](vendor/als-web/docs/guide/overview.md) and the `als` reference |
+| Weapons | Rifle and pistol with fire, reload, aim and recoil |
+| World | Terrain to the horizon, ground cover, forests with impostors, one wind field; the physically based sky and nature look |
+| Destruction | Structural collapse in a worker, walk mode with tools |
+| AI | Squad AI and tactical simulation |
+| Input | Keyboard, mouse, gamepad, touch |
+| Agent tooling | `blacksite` CLI, the `blacksite` skill, `blacksite check`, budgets, owned-asset sync |
+| Docs and demos | [Site](https://blacksite-sable.vercel.app) with live demos and a performance overlay |
 
 ## Now
 
-Work in progress or next up. Each item is done when the line after the dash is true.
+Being built now, or next. Each item is done when the line after the dash is true.
 
 - **Showcase demos.** Polished scenes per capability (movement, demolition, firing range, squad AI, arena) built only on the public packages — the site's demos look like a game, not a lab.
 - **Agent guides for the remaining systems.** Cascade, Warden, Relay and Armory get what ALS now has: a mental model, units, the input contract, tested recipes and symptom-indexed gotchas, plus a skill — an agent can do a common task from the guide alone.
@@ -41,7 +41,7 @@ The foundations that make "fast by default" automatic. These run in order becaus
 - **Scale profiles.** One setting per game type (first person, third person, top-down, vehicle, air) that sets defaults for detail distances, shadows, destruction detail, animation and AI update rates ([numbers](docs/capture/scale-profiles.md)) — a new game gets sensible defaults for its genre.
 - **Scanner** (significance). One service every expensive thing asks "how much do I matter right now" (distance, screen size, visibility), then lowers its update rate and detail — far characters, bodies and emitters cost little.
 - **Workers by default.** Physics, AI and destruction off the main thread, with the right server headers in the dev and deploy templates.
-- **WebGPU first**, with WebGL2 fallback and shaders compiled at load so there are no hitches mid-game.
+- **WebGPU first**, with WebGL2 fallback and shaders compiled at load so the game never freezes for a moment the first time an effect appears.
 - **Automatic LOD at import.** Simplified meshes and compressed textures generated for every imported asset.
 
 **When the frame rate is at risk, things give way in this order**, so phones get fewer pixels rather than an uglier game: render resolution (with upscaling) → expensive screen effects at lower resolution → distance and density (LOD, foliage, shadows) → update rates for far things → materials and lighting last.

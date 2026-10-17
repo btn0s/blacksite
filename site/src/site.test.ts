@@ -68,11 +68,10 @@ describe('skills', () => {
 })
 
 describe('tools', () => {
-  it('gives every tool a page with guides, commands and honest status', () => {
+  it('gives every tool a page with guides and commands', () => {
     expect(tools.map(tool => tool.slug)).toEqual(['characters', 'world', 'destruction', 'weapons', 'multiplayer', 'ai', 'input'])
     for (const tool of tools) {
       expect(tool.guides.length).toBeGreaterThan(0)
-      expect(tool.statusNote.length).toBeGreaterThan(0)
       for (const demo of tool.demos) if (demo.live) expect(demo.frame).toBeTruthy()
     }
   })
@@ -100,5 +99,12 @@ describe('copy', () => {
   it('names no other engine or system codename in what visitors read', () => {
     const text = JSON.stringify([tools.map(({ packages: _, agent: { commands: __, ...agent }, ...tool }) => ({ ...tool, agent })), featured, parts, limits, steps, examples, referenceNotes, pages, showcases.map(({ summary, tryThis, title }) => ({ summary, tryThis, title }))])
     expect(text).not.toMatch(/Unreal|Unity|Godot|\bUE5\b|Armory|Warden|Relay|Cascade/)
+    expect(text).not.toMatch(/feel shipped|shipped game|shipped version|student project|\bSlice\b|first playable|hitch|pop-in|coyote|viewmodel/i)
+  })
+
+  it('shows no status labels', () => {
+    const text = JSON.stringify([tools, featured, parts, limits, steps, examples, referenceNotes, pages, showcases.map(({ summary, tryThis, title }) => ({ summary, tryThis, title }))])
+    expect(text).not.toMatch(/\b(usable|experimental|in progress|early version|v0|coming soon|beta|alpha)\b/i)
+    for (const page of ['Home', 'ToolPage', 'SkillsPage', 'GetStartedPage']) expect(readFileSync(resolve(import.meta.dirname, `pages/${page}.tsx`), 'utf8'), page).not.toMatch(/status|Usable|Experimental|In progress|Early version/i)
   })
 })

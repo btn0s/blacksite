@@ -7,9 +7,9 @@ const keyboard: Control[] = [
   { action: 'Sprint · tap to roll', keys: ['Shift'] },
   { action: 'Walk or run', keys: ['Alt'] },
   { action: 'Crouch', keys: ['Ctrl'] },
-  { action: 'Jump · mantle a ledge', keys: ['Space'] },
+  { action: 'Jump · climb a ledge', keys: ['Space'] },
   { action: 'Aim', keys: ['Right mouse'] },
-  { action: 'Ragdoll · get up', keys: ['X'] },
+  { action: 'Fall limp · get up', keys: ['X'] },
   { action: 'First or third person', keys: ['V'] },
   { action: 'Swap shoulder', keys: ['C'] },
 ]
@@ -17,11 +17,11 @@ const keyboard: Control[] = [
 const touch: Control[] = [
   { action: 'Move', keys: ['Left stick'] },
   { action: 'Look', keys: ['Drag right side'] },
-  { action: 'Jump · mantle', keys: ['Jump'] },
+  { action: 'Jump · climb', keys: ['Jump'] },
   { action: 'Sprint · tap to roll', keys: ['Sprint'] },
   { action: 'Crouch', keys: ['Crouch'] },
-  { action: 'Ragdoll', keys: ['Ragdoll'] },
+  { action: 'Fall limp', keys: ['Ragdoll'] },
   { action: 'First or third person', keys: ['View'] },
 ]
 
-export const showcase: Showcase = { tool: 'characters', title: 'Checkpoint', summary: 'A checkpoint in a ruined town to walk, sprint, crouch, mantle and roll through, in first or third person.', tryThis: 'Press V to switch between first and third person, then X to ragdoll and X again to get up.', thumbnail: 'thumbs/characters.webp', keyboard, touch }
+export const showcase: Showcase = { tool: 'characters', title: 'Checkpoint', summary: 'A checkpoint in a ruined town to walk, sprint, crouch, climb and roll through, in first or third person.', tryThis: 'Press V to switch between first and third person, then X to fall limp and X again to get up.', thumbnail: 'thumbs/characters.webp', keyboard, touch }

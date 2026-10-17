@@ -9,9 +9,9 @@ import { imageSize, themeColor } from '../site/src/seo'
 const root = resolve(import.meta.dirname, '..')
 const publicDir = resolve(root, 'site/public')
 const font = (file: string) => { const data = readFileSync(resolve(root, 'node_modules/@fontsource', file)); return opentype.parse(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)) }
-const display = font('barlow-condensed/files/barlow-condensed-latin-600-normal.woff')
-const body = font('barlow/files/barlow-latin-400-normal.woff')
-const accent = '#e2a23b'
+const display = font('inter/files/inter-latin-500-normal.woff')
+const body = font('inter/files/inter-latin-400-normal.woff')
+const accent = '#e0a64e'
 
 export function thumbnailsFromMeta(): Map<string, string> {
   const dir = resolve(root, 'site/src/showcases'), entries: { id: string; tool: string; thumbnail: string; order: number }[] = []
@@ -85,41 +85,35 @@ function text(face: Font, value: string, x: number, y: number, size: number, fil
 
 function overlay(spec: ImageSpec): string {
   const { width, height } = imageSize, left = 72
-  const titleSize = spec.subtitle ? 128 : 92, titleLines = wrap(display, spec.title.toUpperCase(), titleSize, spec.subtitle ? 1056 : 820, 0)
-  const subtitleLines = spec.subtitle ? wrap(body, spec.subtitle, 34, 860, 0) : []
+  const titleSize = spec.subtitle ? 76 : 60, titleLeading = titleSize * 1.12, titleLines = wrap(display, spec.title, titleSize, 1000, -0.02)
+  const subtitleLines = spec.subtitle ? wrap(body, spec.subtitle, 32, 900, 0) : []
   let y = height - 72 - (subtitleLines.length - 1) * 44
   const parts: string[] = []
-  for (const line of subtitleLines) { parts.push(text(body, line, left, y, 34, '#d2cfbf')); y += 44 }
-  y = height - 72 - (subtitleLines.length ? subtitleLines.length * 44 + 18 : 0) - (titleLines.length - 1) * titleSize * 0.92
-  const titleTop = y - titleSize * 0.78
-  for (const line of titleLines) { parts.push(text(display, line, left, y, titleSize, '#f1eee0')); y += titleSize * 0.92 }
+  for (const line of subtitleLines) { parts.push(text(body, line, left, y, 32, '#a3a3a8')); y += 44 }
+  y = height - 72 - (subtitleLines.length ? subtitleLines.length * 44 + 20 : 0) - (titleLines.length - 1) * titleLeading
+  for (const line of titleLines) { parts.push(text(display, line, left, y, titleSize, '#ececec', -0.02)); y += titleLeading }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
     <defs>
-      <linearGradient id="side" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="${themeColor}" stop-opacity="${spec.card ? 0.92 : 0.82}"/><stop offset="0.7" stop-color="${themeColor}" stop-opacity="${spec.card ? 0.55 : 0}"/></linearGradient>
-      <linearGradient id="foot" x1="0" x2="0" y1="1" y2="0"><stop offset="0" stop-color="${themeColor}" stop-opacity="0.9"/><stop offset="0.62" stop-color="${themeColor}" stop-opacity="0"/></linearGradient>
-      <linearGradient id="head" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${themeColor}" stop-opacity="0.7"/><stop offset="0.3" stop-color="${themeColor}" stop-opacity="0"/></linearGradient>
+      <linearGradient id="foot" x1="0" x2="0" y1="1" y2="0"><stop offset="0" stop-color="${themeColor}" stop-opacity="0.92"/><stop offset="0.6" stop-color="${themeColor}" stop-opacity="0"/></linearGradient>
+      <linearGradient id="head" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${themeColor}" stop-opacity="0.75"/><stop offset="0.3" stop-color="${themeColor}" stop-opacity="0"/></linearGradient>
     </defs>
-    <rect width="${width}" height="${height}" fill="url(#side)"/>
-    <rect width="${width}" height="${height}" fill="url(#foot)"/>
-    <rect width="${width}" height="${height}" fill="url(#head)"/>
-    <rect x="${left}" y="60" width="34" height="34" fill="#363e30"/><path d="M${left} 60h34L${left} 94z" fill="${accent}"/>
-    ${text(display, 'BLACKSITE', left + 50, 89, 38, '#dedbcb', 0.08)}
-    <rect x="${left}" y="${Math.round(titleTop - 30)}" width="64" height="5" fill="${accent}"/>
+    ${spec.card ? '' : `<rect width="${width}" height="${height}" fill="url(#foot)"/><rect width="${width}" height="${height}" fill="url(#head)"/>`}
+    <rect x="${left}" y="70" width="22" height="22" rx="4" fill="${accent}"/>
+    ${text(display, 'Blacksite', left + 36, 90, 30, '#ececec')}
     ${parts.join('\n    ')}
   </svg>`
 }
 
 async function render(spec: ImageSpec): Promise<Buffer> {
   const { width, height } = imageSize
-  let photo = sharp(resolve(publicDir, spec.source)).resize(width, height, { fit: 'cover', position: 'centre' })
-  if (spec.card) photo = photo.blur(6).modulate({ brightness: 0.5, saturation: 0.7 })
+  const photo = spec.card ? sharp({ create: { width, height, channels: 3, background: themeColor } }) : sharp(resolve(publicDir, spec.source)).resize(width, height, { fit: 'cover', position: 'centre' })
   const svg = overlay(spec)
   if (svg.includes('NaN')) throw new Error(`${spec.file}: text layout produced NaN`)
   return photo.composite([{ input: Buffer.from(svg) }]).jpeg({ quality: 84, mozjpeg: true, chromaSubsampling: '4:2:0' }).toBuffer()
 }
 
-const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="#363e30"/><path d="M0 0h32L0 32z" fill="${accent}"/></svg>\n`
-const touchIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect width="180" height="180" fill="${themeColor}"/><rect x="40" y="40" width="100" height="100" fill="#363e30"/><path d="M40 40h100L40 140z" fill="${accent}"/></svg>`
+const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="${accent}"/></svg>\n`
+const touchIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect width="180" height="180" fill="${themeColor}"/><rect x="50" y="50" width="80" height="80" rx="14" fill="${accent}"/></svg>`
 
 async function main() {
   const thumbnails = thumbnailsFromMeta(), specs = imageSpecs(tool => thumbnails.get(tool))

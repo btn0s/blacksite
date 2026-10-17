@@ -22,7 +22,7 @@ export function SkillsPage() {
 
     <section className="section" aria-labelledby="examples-title">
       <h2 className="section-title" id="examples-title">What you ask for, and what it builds</h2>
-      <p className="section-lede">A first version of a feature runs and passes its tests, and still looks like a student project. The skill tells the agent what the shipped version of each feature has.</p>
+      <p className="section-lede">A quick first attempt at a feature works, but looks and feels thin. For each feature, the skill lists what a finished version includes, with numbers.</p>
       <div className="compare-table" role="table">
         <div className="compare-row compare-row--head" role="row"><span role="columnheader">You ask for</span><span role="columnheader">A first attempt</span><span role="columnheader">What the agent builds</span></div>
         {examples.map(example => <div className="compare-row" role="row" key={example.ask}>

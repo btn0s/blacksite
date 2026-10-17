@@ -3,14 +3,14 @@ import { docList } from './doc-list'
 
 export const siteName = 'Blacksite'
 export const defaultSiteUrl = 'https://blacksite-sable.vercel.app'
-export const themeColor = '#0c0e0b'
-export const headline = 'A skill that lets your coding agent build browser games that feel shipped'
+export const themeColor = '#0e0e0f'
+export const headline = 'A skill that helps your coding agent build 3D browser games'
 export const imageSize = { width: 1200, height: 630 }
 
 export type PageMeta = { route: string; title: string; description: string; image: string; imageAlt: string; type: 'website' | 'article' }
 
 const toolDescriptions: Record<string, string> = {
-  characters: 'A player character that walks, sprints, mantles, rolls, ragdolls and aims in first or third person. Play Traverse, a timed rooftop run, in the browser.',
+  characters: 'A player character that walks, sprints, climbs over ledges, rolls and aims in first or third person. Play Traverse, a timed rooftop run, in the browser.',
   world: 'Terrain, grass, forests, wind and sky that hold up from your feet to mountains 16 km away. Walk a square kilometre of meadow in Valley.',
   destruction: 'Concrete buildings that crack, lose their supports and fall, with the physics in a web worker. Call in a strike on a six-storey block.',
   weapons: 'A rifle and a pistol on rigged first-person arms, with recoil and hits a server can check. Play Breach, a squad fight, or the firing range.',
@@ -29,7 +29,7 @@ const guideDescriptions: Record<string, string> = {
 }
 
 export const pages: PageMeta[] = [
-  { route: '', title: `${siteName} — ${headline}`, description: 'Describe a game to Claude Code, Codex or Cursor. Blacksite has the agent build it from tested parts and check frame rate, feel and sound before you play.', image: 'og/home.jpg', imageAlt: `${siteName}: ${headline}`, type: 'website' },
+  { route: '', title: `${siteName} — ${headline}`, description: 'Describe a game to Claude Code, Codex or Cursor. The agent builds it from tested parts and checks speed, movement and sound before you play.', image: 'og/home.jpg', imageAlt: `${siteName}: ${headline}`, type: 'website' },
   { route: 'get-started', title: `Get started — ${siteName}`, description: 'Install Blacksite with one command, open Claude Code, Codex or Cursor in an empty folder, and say what game you want. The agent builds it and sends a link.', image: 'og/get-started.jpg', imageAlt: `Get started with ${siteName}`, type: 'article' },
   { route: 'skills', title: `How it works — ${siteName}`, description: 'What your coding agent does when you ask for a game: it sizes the job, writes the numbers down, lists the parts, builds them and checks its own work.', image: 'og/skills.jpg', imageAlt: `How ${siteName} works`, type: 'article' },
   { route: 'roadmap', title: `Roadmap — ${siteName}`, description: 'What works in Blacksite today, what is being built now, and what comes after that, for the skill and its building blocks.', image: 'og/roadmap.jpg', imageAlt: `${siteName} roadmap`, type: 'article' },
