@@ -5,6 +5,8 @@ export type ArmsRig = 'blacksite' | 'als' | 'found'
 export interface ArmsState {
   weapon: ArmsWeapon
   aiming: boolean
+  aimSeconds?: number
+  poseHold?: boolean
   speed: number
   sprinting: boolean
   fireSequence: number

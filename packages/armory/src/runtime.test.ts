@@ -303,3 +303,70 @@ describe('determinism, ownership and validation', () => {
     expect(() => runtime.reset()).toThrow('disposed');
   });
 });
+
+describe('learnable recoil pattern and stance spread', () => {
+  const kicks = [{ pitch: 0.01, yaw: 0 }, { pitch: 0.02, yaw: 0.001 }, { pitch: 0.015, yaw: -0.004 }];
+  const patterned = (patch: Partial<WeaponDefinition> = {}) => rifle({ pattern: { kicks, resetSeconds: 0.4 }, ...patch });
+  const shots = (events: readonly ReturnType<WeaponRuntime['step']>[number][]) => events.flatMap(event => event.type === 'shot' ? [event] : []);
+
+  it('kicks by the authored pattern, holds the last entry and restarts after the reset time', () => {
+    const runtime = create([patterned()]);
+    const spray = shots(tickUntil(runtime, 29, { trigger: true }));
+    expect(spray.map(shot => shot.patternIndex)).toEqual([0, 1, 2, 3, 4]);
+    expect(spray.map(shot => shot.recoil)).toEqual([kicks[0], kicks[1], kicks[2], kicks[2], kicks[2]]);
+    tickUntil(runtime, 29 + 24);
+    expect(runtime.snapshot().patternIndex).toBe(0);
+    expect(shots(runtime.step(command(runtime.snapshot().nextTick, { trigger: true }), queries))[0]).toMatchObject({ patternIndex: 0, recoil: kicks[0] });
+  });
+
+  it('keeps the string going when the trigger is tapped faster than the reset time', () => {
+    const runtime = create([patterned({ fireMode: 'semi', roundsPerSecond: 10 })]);
+    const events = [];
+    for (let tick = 0; tick < 40; tick++) events.push(...runtime.step(command(tick, { trigger: tick % 8 === 0 }), queries));
+    expect(shots(events).map(shot => shot.patternIndex)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it('jitters within bounds and replays identically for a seed', () => {
+    const run = () => shots(tickUntil(create([patterned({ pattern: { kicks, resetSeconds: 0.4, jitter: 0.002 } })]), 29, { trigger: true })).map(shot => shot.recoil);
+    const first = run();
+    expect(run()).toEqual(first);
+    first.forEach((recoil, index) => {
+      const kick = kicks[Math.min(index, kicks.length - 1)]!;
+      expect(Math.abs(recoil.yaw - kick.yaw)).toBeLessThanOrEqual(0.002);
+      expect(Math.abs(recoil.pitch - kick.pitch)).toBeLessThanOrEqual(0.001);
+    });
+  });
+
+  it('draws spread from stance plus bloom, and bloom recovers linearly', () => {
+    const spread = { hip: 0.02, aim: 0.002, move: 0.03, crouch: 0.5, bloomPerShot: 0.004, bloomMax: 0.01, recoverySeconds: 0.5 };
+    const runtime = create([rifle({ spread })]);
+    expect(runtime.snapshot().spread).toBe(0.02);
+    runtime.step(command(0, { stance: { aiming: true } }), queries);
+    expect(runtime.snapshot().spread).toBeCloseTo(0.002);
+    runtime.step(command(1, { stance: { moving: 1, crouched: true } }), queries);
+    expect(runtime.snapshot().spread).toBeCloseTo(0.025);
+    const spray = shots(tickUntil(runtime, 31, { trigger: true }));
+    expect(spray.map(shot => shot.spread)).toEqual([0.02, 0.02 + 0.004 - 0.01 * 6 / 60 / 0.5 * 1, ...spray.slice(2).map(shot => shot.spread)]);
+    expect(Math.max(...spray.map(shot => shot.spread))).toBeLessThanOrEqual(0.02 + 0.01);
+    tickUntil(runtime, 31 + 30);
+    expect(runtime.snapshot().spread).toBeCloseTo(0.02);
+  });
+
+  it('preserves accumulated bloom through the authored firing cadence before recovering', () => {
+    const spread = { hip: 0.02, aim: 0.002, move: 0, bloomPerShot: 0.003, bloomMax: 0.04, recoverySeconds: 0.43, recoveryDelaySeconds: 0.1 };
+    const runtime = create([rifle({ spread })]);
+    const spray = shots(tickUntil(runtime, 59, { trigger: true }));
+    expect(spray).toHaveLength(10);
+    expect(spray[9]!.spread).toBeCloseTo(spread.hip + 9 * spread.bloomPerShot);
+    tickUntil(runtime, 91);
+    expect(runtime.snapshot().spread).toBeCloseTo(spread.hip);
+  });
+
+  it.each([
+    { pattern: { kicks: [], resetSeconds: 0.3 } }, { pattern: { kicks: [{ pitch: NaN, yaw: 0 }], resetSeconds: 0.3 } },
+    { spread: { hip: -1, aim: 0, move: 0, bloomPerShot: 0, bloomMax: 0, recoverySeconds: 1 } },
+  ])('rejects invalid patterns and spreads (%j)', patch => {
+    expect(() => create([rifle(patch as Partial<WeaponDefinition>)])).toThrow();
+  });
+});
+

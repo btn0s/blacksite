@@ -1,0 +1,48 @@
+{
+  "id": "gunfire-pistol-9mm",
+  "category": "sound",
+  "ship": [
+    "01.ogg",
+    "02.ogg",
+    "03.ogg"
+  ],
+  "files": {
+    "01.ogg": 15218,
+    "01.m4a": 32356,
+    "02.ogg": 15267,
+    "02.m4a": 32356,
+    "03.ogg": 15287,
+    "03.m4a": 32356
+  },
+  "bytes": 15287,
+  "budget": 80000,
+  "withinBudget": true,
+  "over": [],
+  "variations": [
+    {
+      "file": "01.ogg",
+      "fallback": "01.m4a",
+      "seconds": 2.506,
+      "source": "X_39P.wav",
+      "at": 1.395,
+      "peakDb": -1.1
+    },
+    {
+      "file": "02.ogg",
+      "fallback": "02.m4a",
+      "seconds": 2.506,
+      "source": "X_39P.wav",
+      "at": 6.432,
+      "peakDb": -1.01
+    },
+    {
+      "file": "03.ogg",
+      "fallback": "03.m4a",
+      "seconds": 2.506,
+      "source": "X_39P.wav",
+      "at": 10.648,
+      "peakDb": -1.04
+    }
+  ],
+  "channels": 1
+}

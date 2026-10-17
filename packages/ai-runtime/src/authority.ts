@@ -1,6 +1,8 @@
 import type { TacticalSpatialQueries } from '@blacksite/ai-nav';
 import type {
   AgentCommand,
+  AttackTokenRules,
+  IntentRules,
   Observation,
   SelfState,
   SimEvent,
@@ -29,6 +31,8 @@ export interface TacticalAuthority {
   readonly winner?: TeamId | 'draw';
 }
 export type TacticalRuntimeOptions = {
+  attackTokens?: AttackTokenRules;
+  intents?: IntentRules;
   authority?: TacticalAuthority;
   controlledAgentIds?: ReadonlyArray<string>;
   spatial?: TacticalSpatialQueries;

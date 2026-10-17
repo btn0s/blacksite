@@ -17,6 +17,11 @@ export interface WeaponDefinition {
   /** Half-angle of the uniform solid-angle spread cone, in radians. */
   readonly spreadRadians: number;
   readonly recoil: { readonly pitchMin: number; readonly pitchMax: number; readonly yawMax: number };
+  readonly pattern?: { readonly kicks: readonly { readonly pitch: number; readonly yaw: number }[]; readonly resetSeconds: number; readonly jitter?: number };
+  readonly spread?: {
+    readonly hip: number; readonly aim: number; readonly move: number; readonly crouch?: number;
+    readonly bloomPerShot: number; readonly bloomMax: number; readonly recoverySeconds: number; readonly recoveryDelaySeconds?: number;
+  };
   readonly ballistics:
     | { readonly kind: 'hitscan' }
     | {
@@ -39,6 +44,7 @@ export interface WeaponCommand {
   readonly muzzle: Vec3;
   /** The owner ID is always excluded, plus these host-physics collider IDs. */
   readonly excludedColliderIds?: readonly string[];
+  readonly stance?: { readonly aiming?: boolean; readonly moving?: number; readonly crouched?: boolean };
 }
 
 export interface QueryFilter {
@@ -101,6 +107,8 @@ export interface WeaponSnapshot {
   readonly nextTick: number;
   readonly equippedWeaponId: string;
   readonly status: WeaponStatus;
+  readonly spread: number;
+  readonly patternIndex: number;
   readonly weapons: readonly {
     readonly id: string;
     readonly magazine: number;
@@ -115,6 +123,8 @@ export type WeaponEvent =
       readonly type: 'shot'; readonly shotId: string; readonly kind: 'hitscan' | 'projectile';
       readonly origin: Vec3; readonly direction: Vec3; readonly end: Vec3;
       readonly recoil: { readonly pitch: number; readonly yaw: number };
+      readonly patternIndex: number;
+      readonly spread: number;
       readonly projectileId?: string;
     })
   | (EventBase & { readonly type: 'impact'; readonly shotId: string; readonly projectileId?: string; readonly hit: QueryHit })

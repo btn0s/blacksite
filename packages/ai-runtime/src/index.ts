@@ -2,8 +2,13 @@ import {
   DEFAULT_CONFIG,
   VERSIONS,
   validateRuntimeWorld,
+  Buttons,
   type AgentCommand,
   type AgentView,
+  type AttackTokenRules,
+  type Intent,
+  type IntentRules,
+  type Role,
   type DecisionSnapshot,
   type DecisionTrace,
   type ExecutionView,
@@ -69,6 +74,10 @@ type AgentCognition = {
   trace?: DecisionTrace;
   view: ExecutionView;
   watchKey?: string;
+  intent?: Intent;
+  holdUntil: number;
+  token?: { since: number; lastWanted: number };
+  tokenCooldownUntil: number;
 };
 type TeamCognition = {
   authorizedWatches: Map<string, WatchSector>;
@@ -136,6 +145,25 @@ function worldSetup(config: RuntimeConfig, world?: RuntimeWorld) {
     rules: world.rules,
   };
 }
+export function intentOf(view: ExecutionView, plan: Plan | undefined, role: Role | undefined): Intent | undefined {
+  switch (view.skill) {
+    case 'move':
+      if (plan?.goal === 'fulfill-role') {
+        return role === 'flank' ? 'flank' : role === 'point' ? 'advance' : 'cover';
+      }
+      return plan?.goal === 'survive' ? 'fallback' : 'cover';
+    case 'engage':
+    case 'suppress':
+    case 'reload':
+    case 'fallback':
+    case 'search':
+    case 'hold':
+      return view.skill;
+    default:
+      return undefined;
+  }
+}
+const LEADING: ReadonlySet<Intent> = new Set(['advance', 'flank']);
 const createTeam = (id: TeamId): TeamCognition => ({
   authorizedWatches: new Map(),
   casualties: new Map(),
@@ -152,6 +180,8 @@ export class TacticalRuntime {
   private readonly customWorld?: RuntimeWorld;
   private readonly sim: TacticalAuthority;
   private readonly controlledAgentIds: ReadonlySet<string>;
+  private readonly attackTokens?: AttackTokenRules;
+  private readonly intents?: IntentRules;
   private readonly agents = new Map<string, AgentCognition>();
   private readonly teams: Record<TeamId, TeamCognition>;
   private readonly radio: RadioNetwork;
@@ -195,6 +225,28 @@ export class TacticalRuntime {
         rules: 'rules' in scenario ? scenario.rules : undefined,
       });
     this.controlledAgentIds = new Set(options.controlledAgentIds);
+    const tokens = options.attackTokens;
+    if (
+      tokens &&
+      (!Number.isInteger(tokens.count) ||
+        tokens.count < 0 ||
+        tokens.count > 64 ||
+        ![tokens.holdTicks, tokens.cooldownTicks, tokens.idleTicks ?? 0].every(
+          (value) => Number.isInteger(value) && value >= 0 && value <= 36_000,
+        ))
+    ) {
+      throw new Error('Invalid attack token rules');
+    }
+    if (
+      options.intents &&
+      (!Number.isInteger(options.intents.leadTicks) ||
+        options.intents.leadTicks < 0 ||
+        options.intents.leadTicks > 300)
+    ) {
+      throw new Error('Invalid intent rules');
+    }
+    this.attackTokens = tokens && { ...tokens };
+    this.intents = options.intents && { ...options.intents };
     const initialStates = structuredClone(this.sim.states);
     const ids = new Set(initialStates.map((self) => self.id));
     if (
@@ -244,6 +296,8 @@ export class TacticalRuntime {
         sawThreat: false,
         stationaryTicks: 0,
         view: { progress: 0, skill: 'idle', state: 'idle' },
+        holdUntil: 0,
+        tokenCooldownUntil: 0,
       });
     }
     this.coordinate(0, initialStates, true);
@@ -444,12 +498,37 @@ export class TacticalRuntime {
       const motor = agent.motor.step(executionSnapshot, goal, agent.path);
       agent.attention = motor.attention;
       agent.fireGate = motor.fireGate;
-      agent.command = explicit.get(self.id) ?? motor.command;
+      let command = motor.command;
+      if (this.intents) {
+        const intent = intentOf(view, agent.plan, snapshot.assignment?.role);
+        if (intent && intent !== agent.intent) {
+          this.addEvent({
+            agentId: self.id,
+            id: `intent:${tick}:${self.id}`,
+            position: { ...self.position },
+            team: self.team,
+            text: intent,
+            tick,
+            type: 'intent',
+          });
+          if (LEADING.has(intent)) {
+            agent.holdUntil = tick + this.intents.leadTicks;
+          }
+        }
+        agent.intent = intent ?? agent.intent;
+        if (tick < agent.holdUntil && (command.move.x || command.move.y)) {
+          command = { ...command, move: { x: 0, y: 0 } };
+        }
+      }
+      agent.command = explicit.get(self.id) ?? command;
       agent.lastHealth = self.health;
       output.push(agent.command);
       if (this.config.policyMode !== 'symbolic') {
         this.metrics.policyFallbacks++;
       }
+    }
+    if (this.attackTokens) {
+      this.allocateAttackTokens(tick, states, output);
     }
     const result = this.sim.step(output);
     if (this.sim.tick !== tick) {
@@ -497,6 +576,60 @@ export class TacticalRuntime {
       this.teams.bravo.reservations.snapshot().length;
     this.performance.record(performance.now() - started);
     return this.snapshot();
+  }
+  attackTokenHolders(team: TeamId): Array<string> {
+    this.assertActive();
+    return [...this.agents]
+      .filter(([id, agent]) => agent.token && this.sim.states.some((state) => state.id === id && state.team === team))
+      .sort((a, b) => a[1].token!.since - b[1].token!.since || a[0].localeCompare(b[0]))
+      .map(([id]) => id);
+  }
+  private allocateAttackTokens(tick: number, states: ReadonlyArray<SelfState>, output: Array<AgentCommand>): void {
+    const rules = this.attackTokens!;
+    const idle = rules.idleTicks ?? 15;
+    for (const team of ['alpha', 'bravo'] as const) {
+      const holders: Array<AgentCognition> = [];
+      for (let index = 0; index < states.length; index++) {
+        const self = states[index]!;
+        if (self.team !== team || this.controlledAgentIds.has(self.id)) {
+          continue;
+        }
+        const agent = this.agents.get(self.id)!;
+        const wants = self.alive && (output[index]!.buttons & Buttons.fire) !== 0;
+        if (agent.token) {
+          if (wants) {
+            agent.token.lastWanted = tick;
+          }
+          const expired = tick - agent.token.since >= rules.holdTicks;
+          if (!self.alive || expired || tick - agent.token.lastWanted > idle) {
+            agent.token = undefined;
+            agent.tokenCooldownUntil = tick + (self.alive ? rules.cooldownTicks : 0);
+          } else {
+            holders.push(agent);
+          }
+        }
+      }
+      for (let index = 0; index < states.length; index++) {
+        const self = states[index]!;
+        if (self.team !== team || this.controlledAgentIds.has(self.id)) {
+          continue;
+        }
+        const agent = this.agents.get(self.id)!;
+        const command = output[index]!;
+        if (!self.alive || !(command.buttons & Buttons.fire) || agent.token) {
+          continue;
+        }
+        if (holders.length < rules.count && tick >= agent.tokenCooldownUntil) {
+          agent.token = { since: tick, lastWanted: tick };
+          holders.push(agent);
+          continue;
+        }
+        const held = { ...command, buttons: command.buttons & ~Buttons.fire };
+        output[index] = held;
+        agent.command = held;
+        agent.fireGate = 'attack-token';
+      }
+    }
   }
   decisionSnapshot(agentId: string): DecisionSnapshot | undefined {
     this.assertActive();

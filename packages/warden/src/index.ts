@@ -1,11 +1,17 @@
 export * from '@blacksite/ai-schema';
 export {
   TacticalRuntime,
+  intentOf,
   verifyReplay,
   type TacticalAuthority,
   type TacticalRuntimeOptions,
 } from '@blacksite/ai-runtime';
 export {
+  hashValue,
+  insideObstacle,
+  lineClear,
+  neutralCommand,
+  normalizeCommand,
   ObservationGenerator,
   type ObservationGeneratorOptions,
   type ObservationLineOfSightContext,

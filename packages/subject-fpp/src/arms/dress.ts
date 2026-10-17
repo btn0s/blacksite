@@ -229,7 +229,8 @@ function createMuzzleFlash(weapon: Object3D, texture: Texture, kind: ArmsWeapon)
   top.rotation.set(0, Math.PI / 2, Math.PI / 2)
   group.add(front, side, top)
   group.position.z = 0.012
-  group.visible = false
+  const planes = [front, side, top]
+  for (const plane of planes) plane.visible = false
   group.traverse(child => { child.frustumCulled = false; child.renderOrder = 10 })
   const light = new PointLight('#ffb766', 0, 1.6, 2)
   group.add(light)
@@ -244,7 +245,7 @@ function createMuzzleFlash(weapon: Object3D, texture: Texture, kind: ArmsWeapon)
     update(delta: number) {
       age += delta
       const life = 0.05
-      group.visible = age < life
+      for (const plane of planes) plane.visible = age < life
       const fade = Math.max(0, 1 - age / life)
       light.intensity = fade * (kind === 'rifle' ? 3.2 : 1.3)
       material.opacity = fade

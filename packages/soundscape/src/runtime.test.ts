@@ -26,7 +26,8 @@ class Source extends Node {
   type: OscillatorType = 'sine'
   playbackRate = new Param()
   frequency = new Param()
-  start() { }
+  startedAt = 0
+  start(at = 0) { this.startedAt = at }
   stop() { }
 }
 
@@ -44,6 +45,7 @@ class Context {
   }
   gains: Gain[] = []
   convolvers: Node[] = []
+  sources: Source[] = []
   buffers = 0
   createGain() { const gain = new Gain(); this.gains.push(gain); return gain }
   createDynamicsCompressor() { return Object.assign(new Node(), { threshold: new Param(), knee: new Param(), ratio: new Param(), attack: new Param(), release: new Param() }) }
@@ -55,8 +57,8 @@ class Context {
   createBiquadFilter() { return new Filter() }
   createStereoPanner() { return Object.assign(new Node(), { pan: new Param() }) }
   createPanner() { return Object.assign(new Node(), { panningModel: 'HRTF', distanceModel: 'linear', rolloffFactor: 0, positionX: new Param(), positionY: new Param(), positionZ: new Param() }) }
-  createBufferSource() { return new Source() }
-  createOscillator() { return new Source() }
+  createBufferSource() { const source = new Source(); this.sources.push(source); return source }
+  createOscillator() { const source = new Source(); this.sources.push(source); return source }
   createBuffer(channels: number, length: number, sampleRate: number) {
     this.buffers++
     const data = Array.from({ length: channels }, () => new Float32Array(length))
@@ -133,6 +135,27 @@ describe('soundscape voice lifecycle', () => {
     audio.dispose()
   })
 
+  it('selects nonrepeating variants in arrival order when nearby sounds overtake one another', async () => {
+    vi.useFakeTimers()
+    const context = new Context()
+    const audio = createSoundscape({ context: context as unknown as AudioContext, tier: 'phone', random: () => 0.5 })
+    audio.registerZone({ name: 'empty', impulse: 'outdoor', beds: [] })
+    audio.registerCue('arrival', { delayByDistance: true, selection: 'round-robin', variants: ['a', 'b'].map((id, index) => ({ id, layers: [{ kind: 'tone', frequency: 440 + index * 220, gain: 0.2, duration: 0.1 }] })) })
+    audio.setZone('empty')
+    await audio.start()
+    audio.play('arrival', { distance: 27.44 })
+    audio.play('arrival', { distance: 0 })
+    audio.play('arrival', { distance: 6.86 })
+    const plays = [...audio.sample().plays ?? []]
+    await vi.advanceTimersByTimeAsync(25)
+    plays.push(...audio.sample().plays ?? [])
+    await vi.advanceTimersByTimeAsync(60)
+    plays.push(...audio.sample().plays ?? [])
+    expect(plays.map(play => play.sample)).toEqual(['a', 'b', 'a'])
+    expect(context.sources.sort((a, b) => a.startedAt - b.startedAt).map(source => source.frequency.value)).toEqual([440, 660, 440])
+    audio.dispose()
+  })
+
   it('routes weapon reverb through the weapons bus fader', async () => {
     const context = new Context()
     const audio = createSoundscape({ context: context as unknown as AudioContext, tier: 'phone' })
@@ -143,5 +166,46 @@ describe('soundscape voice lifecycle', () => {
     audio.setBusVolume('weapons', 0)
     expect(context.gains[3].gain.value).toBe(0)
     audio.dispose()
+  })
+
+  it('does not allocate room reverbs for dry interface or music cues', () => {
+    const context = new Context()
+    const audio = createSoundscape({ context: context as unknown as AudioContext, tier: 'phone' })
+    audio.prepare()
+    const prepared = context.convolvers.length
+    for (const bus of ['ui', 'music'] as const) {
+      audio.registerCue(`dry.${bus}`, { class: 'ui', bus, reverbSend: 0, variants: [{ id: 'a', layers: [{ kind: 'tone', frequency: 440, gain: 0.1, duration: 0.1 }] }] })
+      audio.play(`dry.${bus}`)
+    }
+    expect(context.convolvers).toHaveLength(prepared)
+    expect(audio.sample().plays?.map(play => play.cue)).toEqual(['dry.ui', 'dry.music'])
+    audio.dispose()
+  })
+
+  it.each([16, 28])('holds a %i-voice firefight cap without repeating variants', async voiceCap => {
+    vi.useFakeTimers()
+    const context = new Context()
+    const audio = createSoundscape({ context: context as unknown as AudioContext, tier: 'phone', voiceCap, random: () => 0.999999 })
+    audio.registerCue('firefight', { class: 'weapons', bus: 'weapons', variants: ['a', 'b', 'c', 'd'].map(id => ({ id, layers: [{ kind: 'noise', gain: 0.8, duration: 0.3 }] })) })
+    await audio.start()
+    audio.sample()
+    let previous = ''
+    let plays = 0
+    for (let shot = 0; shot < 90; shot++) {
+      audio.play('firefight')
+      await vi.advanceTimersByTimeAsync(35)
+      audio.update()
+      const sample = audio.sample()
+      expect(sample.voices).toBeLessThanOrEqual(voiceCap)
+      for (const play of sample.plays ?? []) {
+        if (play.cue !== 'firefight') continue
+        expect(play.sample).not.toBe(previous)
+        previous = play.sample
+        plays++
+      }
+    }
+    expect(plays).toBe(90)
+    audio.dispose()
+    expect(audio.sample().voices).toBe(0)
   })
 })

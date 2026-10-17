@@ -1,0 +1,433 @@
+import * as THREE from 'three'
+import type { Hit } from './layout'
+import { supportHeight } from './geometry'
+
+type Surface = Hit
+type Decal = 'hole' | 'scuff' | 'blood'
+
+const dustTint: Record<Surface, string> = { concrete: '#b3ad9c', brick: '#a8826a', metal: '#8f8b80', wood: '#a48d68', dirt: '#857659', flesh: '#6e1610' }
+const chipTint: Record<Surface, string> = { concrete: '#9e998a', brick: '#8a5a44', metal: '#5a5b54', wood: '#a58b5f', dirt: '#5e5440', flesh: '#4a0d08' }
+const decalOf: Record<Surface, Decal | null> = { concrete: 'hole', brick: 'hole', metal: 'hole', wood: 'hole', dirt: 'scuff', flesh: null }
+const decalSize: Record<Decal, [number, number]> = { hole: [0.05, 0.035], scuff: [0.11, 0.06], blood: [0.32, 0.3] }
+
+function canvasTexture(size: number, draw: (context: CanvasRenderingContext2D, size: number) => void) {
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const context = canvas.getContext('2d')!
+  draw(context, size)
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
+
+function blob(context: CanvasRenderingContext2D, radius: number, jag: number, points = 14) {
+  context.beginPath()
+  for (let index = 0; index <= points; index++) {
+    const angle = index / points * Math.PI * 2
+    const r = radius * (1 - jag + Math.random() * jag * 2)
+    if (index === 0) context.moveTo(Math.cos(angle) * r, Math.sin(angle) * r)
+    else context.lineTo(Math.cos(angle) * r, Math.sin(angle) * r)
+  }
+  context.closePath()
+}
+
+const decalTextures: Record<Decal, () => THREE.Texture> = {
+  hole: () => canvasTexture(64, (context, size) => {
+    context.translate(size / 2, size / 2)
+    context.fillStyle = 'rgba(232,228,214,0.55)'
+    blob(context, size * 0.46, 0.35, 18)
+    context.fill()
+    context.fillStyle = 'rgba(120,114,100,0.85)'
+    blob(context, size * 0.3, 0.3)
+    context.fill()
+    context.fillStyle = 'rgba(18,16,13,1)'
+    blob(context, size * 0.15, 0.25)
+    context.fill()
+  }),
+  blood: () => canvasTexture(128, (context, size) => {
+    context.translate(size / 2, size / 2)
+    for (let index = 0; index < 14; index++) {
+      context.save()
+      const angle = Math.random() * Math.PI * 2
+      const reach = Math.random() * size * 0.34
+      context.translate(Math.cos(angle) * reach, Math.sin(angle) * reach)
+      context.fillStyle = `rgba(${70 + Math.random() * 30},8,6,${0.55 + Math.random() * 0.4})`
+      blob(context, size * (0.03 + Math.random() * 0.07), 0.4)
+      context.fill()
+      context.restore()
+    }
+    context.fillStyle = 'rgba(64,6,4,0.85)'
+    blob(context, size * 0.16, 0.45, 20)
+    context.fill()
+  }),
+  scuff: () => canvasTexture(64, (context, size) => {
+    const gradient = context.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+    gradient.addColorStop(0, 'rgba(30,26,20,0.95)')
+    gradient.addColorStop(0.35, 'rgba(48,42,32,0.7)')
+    gradient.addColorStop(1, 'rgba(60,52,40,0)')
+    context.fillStyle = gradient
+    context.fillRect(0, 0, size, size)
+  }),
+}
+
+const forward = new THREE.Vector3(0, 0, 1)
+const scratch = { matrix: new THREE.Matrix4(), quaternion: new THREE.Quaternion(), roll: new THREE.Quaternion(), position: new THREE.Vector3(), scale: new THREE.Vector3(), color: new THREE.Color(), vector: new THREE.Vector3() }
+
+export function createEffects(scene: THREE.Scene) {
+  const root = new THREE.Group()
+  root.name = 'effects'
+  scene.add(root)
+
+  const decals = Object.fromEntries((Object.keys(decalTextures) as Decal[]).map(kind => {
+    const count = kind === 'blood' ? 24 : kind === 'scuff' ? 80 : 220
+    const material = new THREE.MeshStandardMaterial({ map: decalTextures[kind](), transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })
+    const mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), material, count)
+    mesh.count = 0
+    mesh.visible = false
+    mesh.frustumCulled = false
+    mesh.renderOrder = 2
+    mesh.receiveShadow = true
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3).fill(1), 3)
+    mesh.instanceColor.setUsage(THREE.DynamicDrawUsage)
+    root.add(mesh)
+    return [kind, { mesh, next: 0, capacity: count }]
+  })) as unknown as Record<Decal, { mesh: THREE.InstancedMesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>; next: number; capacity: number }>
+
+  const sparkCount = 260
+  const sparkPositions = new Float32Array(sparkCount * 6)
+  const sparkColors = new Float32Array(sparkCount * 6)
+  const sparkGeometry = new THREE.BufferGeometry()
+  sparkGeometry.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3).setUsage(THREE.DynamicDrawUsage))
+  sparkGeometry.setAttribute('color', new THREE.BufferAttribute(sparkColors, 3).setUsage(THREE.DynamicDrawUsage))
+  const sparkLines = new THREE.LineSegments(sparkGeometry, new THREE.LineBasicMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, toneMapped: false, fog: false }))
+  sparkLines.frustumCulled = false
+  sparkLines.visible = false
+  root.add(sparkLines)
+  const sparks = Array.from({ length: sparkCount }, () => ({ life: 0, max: 1, position: new THREE.Vector3(), velocity: new THREE.Vector3(), heat: 1 }))
+  let sparkNext = 0
+
+  const tracerCount = 24
+  const tracerPositions = new Float32Array(tracerCount * 6)
+  const tracerColors = new Float32Array(tracerCount * 6)
+  const tracerGeometry = new THREE.BufferGeometry()
+  tracerGeometry.setAttribute('position', new THREE.BufferAttribute(tracerPositions, 3).setUsage(THREE.DynamicDrawUsage))
+  tracerGeometry.setAttribute('color', new THREE.BufferAttribute(tracerColors, 3).setUsage(THREE.DynamicDrawUsage))
+  const tracerLines = new THREE.LineSegments(tracerGeometry, sparkLines.material)
+  tracerLines.frustumCulled = false
+  tracerLines.visible = false
+  root.add(tracerLines)
+  const tracers = Array.from({ length: tracerCount }, () => ({ alive: false, from: new THREE.Vector3(), to: new THREE.Vector3(), travelled: 0, length: 0 }))
+  let tracerNext = 0
+
+  const dustTexture = canvasTexture(64, (context, size) => {
+    for (let index = 0; index < 9; index++) {
+      const x = size / 2 + (Math.random() - 0.5) * size * 0.35
+      const y = size / 2 + (Math.random() - 0.5) * size * 0.35
+      const gradient = context.createRadialGradient(x, y, 0, x, y, size * 0.32)
+      gradient.addColorStop(0, 'rgba(255,255,255,0.32)')
+      gradient.addColorStop(1, 'rgba(255,255,255,0)')
+      context.fillStyle = gradient
+      context.fillRect(0, 0, size, size)
+    }
+  })
+  const dust = Array.from({ length: 36 }, () => {
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustTexture, transparent: true, depthWrite: false, opacity: 0 }))
+    sprite.visible = false
+    root.add(sprite)
+    return { sprite, life: 0, max: 1, velocity: new THREE.Vector3(), grow: 1, opacity: 0.6 }
+  })
+  let dustNext = 0
+
+  const chipCount = 220
+  const chipMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ roughness: 1 }), chipCount)
+  chipMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+  chipMesh.frustumCulled = false
+  chipMesh.castShadow = false
+  chipMesh.visible = false
+  root.add(chipMesh)
+  const chips = Array.from({ length: chipCount }, () => ({ life: 0, max: 1, position: new THREE.Vector3(), velocity: new THREE.Vector3(), spin: new THREE.Vector3(), rotation: new THREE.Euler(), size: 0.02 }))
+  let chipNext = 0
+  for (let index = 0; index < chipCount; index++) { chipMesh.setMatrixAt(index, scratch.matrix.makeScale(0, 0, 0)); chipMesh.setColorAt(index, scratch.color.set('#888888')) }
+
+  const casingCount = 48
+  const casingGeometry = new THREE.CylinderGeometry(0.0048, 0.0048, 0.044, 8)
+  casingGeometry.rotateZ(Math.PI / 2)
+  const casingMesh = new THREE.InstancedMesh(casingGeometry, new THREE.MeshStandardMaterial({ color: '#b8904f', metalness: 0.85, roughness: 0.32 }), casingCount)
+  casingMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+  casingMesh.frustumCulled = false
+  casingMesh.visible = false
+  root.add(casingMesh)
+  const casings = Array.from({ length: casingCount }, () => ({ life: 0, alive: false, position: new THREE.Vector3(), velocity: new THREE.Vector3(), rotation: new THREE.Euler(), spin: new THREE.Vector3(), resting: false, bounced: false, scale: 1 }))
+  let casingNext = 0
+  for (let index = 0; index < casingCount; index++) casingMesh.setMatrixAt(index, scratch.matrix.makeScale(0, 0, 0))
+
+  const flashTexture = canvasTexture(64, (context, size) => {
+    context.translate(size / 2, size / 2)
+    const gradient = context.createRadialGradient(0, 0, 0, 0, 0, size / 2)
+    gradient.addColorStop(0, 'rgba(255,240,200,1)')
+    gradient.addColorStop(0.25, 'rgba(255,180,90,0.85)')
+    gradient.addColorStop(1, 'rgba(255,120,40,0)')
+    context.fillStyle = gradient
+    for (let index = 0; index < 5; index++) {
+      context.rotate(Math.PI * 2 / 5)
+      context.beginPath()
+      context.moveTo(-size * 0.07, 0)
+      context.lineTo(0, -size * 0.5)
+      context.lineTo(size * 0.07, 0)
+      context.fill()
+    }
+    context.beginPath()
+    context.arc(0, 0, size * 0.22, 0, Math.PI * 2)
+    context.fill()
+  })
+  const flashes = Array.from({ length: 10 }, () => {
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTexture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false }))
+    sprite.visible = false
+    root.add(sprite)
+    return { sprite, life: 0 }
+  })
+  let flashNext = 0
+
+  const random = (min: number, max: number) => min + Math.random() * (max - min)
+  const cone = (normal: THREE.Vector3, spread: number, target: THREE.Vector3) => {
+    target.set(random(-1, 1), random(-1, 1), random(-1, 1)).normalize().multiplyScalar(spread).add(normal).normalize()
+    return target
+  }
+
+  function decal(surface: Surface, point: THREE.Vector3, normal: THREE.Vector3, override?: Decal) {
+    const kind = override ?? decalOf[surface]
+    if (!kind) return
+    const pool = decals[kind]
+    const [base, variance] = decalSize[kind]
+    scratch.quaternion.setFromUnitVectors(forward, normal)
+    scratch.roll.setFromAxisAngle(forward, Math.random() * Math.PI * 2)
+    scratch.quaternion.multiply(scratch.roll)
+    scratch.position.copy(point).addScaledVector(normal, 0.002)
+    const size = base + Math.random() * variance
+    scratch.scale.set(size, size, size)
+    pool.mesh.setMatrixAt(pool.next, scratch.matrix.compose(scratch.position, scratch.quaternion, scratch.scale))
+    pool.mesh.setColorAt(pool.next, scratch.color.set(surface === 'metal' ? '#9aa0a0' : surface === 'wood' ? '#d8b98a' : surface === 'brick' ? '#e0b8a0' : '#ffffff'))
+    pool.next = (pool.next + 1) % pool.capacity
+    pool.mesh.count = Math.max(pool.mesh.count, pool.next === 0 ? pool.capacity : pool.next)
+    pool.mesh.visible = true
+    pool.mesh.instanceMatrix.needsUpdate = true
+    if (pool.mesh.instanceColor) pool.mesh.instanceColor.needsUpdate = true
+  }
+
+  function spark(point: THREE.Vector3, normal: THREE.Vector3, count: number, speed: number) {
+    for (let index = 0; index < count; index++) {
+      const item = sparks[sparkNext]!
+      sparkNext = (sparkNext + 1) % sparkCount
+      item.position.copy(point)
+      cone(normal, 0.9, item.velocity).multiplyScalar(speed * random(0.35, 1))
+      item.max = item.life = random(0.12, 0.42)
+      item.heat = random(0.7, 1.3)
+    }
+  }
+
+  function puff(point: THREE.Vector3, normal: THREE.Vector3, surface: Surface, scale: number) {
+    for (let index = 0; index < 2; index++) {
+      const item = dust[dustNext]!
+      dustNext = (dustNext + 1) % dust.length
+      item.sprite.visible = true
+      item.sprite.position.copy(point).addScaledVector(normal, 0.05)
+      item.sprite.material.color.set(dustTint[surface])
+      item.sprite.material.rotation = Math.random() * Math.PI * 2
+      item.velocity.copy(normal).multiplyScalar(random(0.5, 1.4) * scale).add(scratch.vector.set(random(-0.2, 0.2), random(0.1, 0.4), random(-0.2, 0.2)))
+      item.max = item.life = random(0.7, 1.3) * scale
+      item.grow = random(0.5, 0.9) * scale
+      item.opacity = surface === 'dirt' ? 0.75 : surface === 'flesh' ? 0.85 : 0.6
+      item.sprite.scale.setScalar(0.1)
+    }
+  }
+
+  function chip(point: THREE.Vector3, normal: THREE.Vector3, surface: Surface, count: number) {
+    for (let index = 0; index < count; index++) {
+      const item = chips[chipNext]!
+      chipMesh.setColorAt(chipNext, scratch.color.set(chipTint[surface]).multiplyScalar(random(0.75, 1.15)))
+      chipNext = (chipNext + 1) % chipCount
+      item.position.copy(point).addScaledVector(normal, 0.01)
+      cone(normal, 0.8, item.velocity).multiplyScalar(random(1.5, 5))
+      item.spin.set(random(-20, 20), random(-20, 20), random(-20, 20))
+      item.size = surface === 'flesh' ? random(0.006, 0.012) : random(0.008, 0.024)
+      item.max = item.life = random(1.4, 2.4)
+    }
+    if (chipMesh.instanceColor) chipMesh.instanceColor.needsUpdate = true
+  }
+
+  return {
+    impact(surface: Surface, point: THREE.Vector3, normal: THREE.Vector3, power: number) {
+      decal(surface, point, normal)
+      if (surface === 'metal') { spark(point, normal, 8 + Math.round(power * 6), 5); chip(point, normal, surface, 3); puff(point, normal, surface, 0.5); return }
+      if (surface === 'flesh') { puff(point, normal, surface, 0.55); chip(point, normal, surface, 5); return }
+      chip(point, normal, surface, surface === 'dirt' ? 6 : 9)
+      puff(point, normal, surface, surface === 'dirt' ? 1.25 : 0.9)
+    },
+    blood(point: THREE.Vector3, normal: THREE.Vector3) { decal('flesh', point, normal, 'blood') },
+    flash(at: THREE.Vector3, direction: THREE.Vector3) {
+      const item = flashes[flashNext]!
+      flashNext = (flashNext + 1) % flashes.length
+      item.sprite.visible = true
+      item.sprite.position.copy(at).addScaledVector(direction, 0.08)
+      item.sprite.material.rotation = Math.random() * Math.PI * 2
+      item.sprite.scale.setScalar(random(0.32, 0.46))
+      item.life = 0.05
+    },
+    tracer(from: THREE.Vector3, to: THREE.Vector3) {
+      const item = tracers[tracerNext]!
+      tracerNext = (tracerNext + 1) % tracerCount
+      item.alive = true
+      item.from.copy(from)
+      item.to.copy(to)
+      item.length = from.distanceTo(to)
+      item.travelled = 0
+    },
+    eject(camera: THREE.Camera, pistol: boolean) {
+      const item = casings[casingNext]!
+      casingNext = (casingNext + 1) % casingCount
+      const right = scratch.vector.set(1, 0, 0).applyQuaternion(camera.quaternion)
+      item.position.copy(camera.position).addScaledVector(right, 0.12).add(new THREE.Vector3(0, -0.08, 0)).add(new THREE.Vector3(0, 0, -0.3).applyQuaternion(camera.quaternion))
+      item.velocity.copy(right).multiplyScalar(random(1.6, 2.6)).add(new THREE.Vector3(random(-0.3, 0.3), random(1.4, 2.2), random(-0.2, 0.4)))
+      item.spin.set(random(-25, 25), random(-30, 30), random(-25, 25))
+      item.rotation.set(0, camera.rotation.y + Math.PI / 2, 0)
+      item.alive = true
+      item.resting = false
+      item.bounced = false
+      item.life = 9
+      item.scale = pistol ? 0.62 : 1
+    },
+    dispose() {
+      root.removeFromParent()
+      root.traverse(object => {
+        if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments || object instanceof THREE.Sprite) {
+          object.geometry.dispose()
+          const material = object.material as THREE.Material & { map?: THREE.Texture | null }
+          material.map?.dispose()
+          material.dispose()
+        }
+      })
+    },
+    update(dt: number, onCasing: (position: THREE.Vector3) => void) {
+      const step = Math.min(dt, 1 / 30)
+      let sparksAlive = false
+      for (let index = 0; index < sparkCount; index++) {
+        const item = sparks[index]!
+        const offset = index * 6
+        if (item.life <= 0) { if (sparkLines.visible) sparkPositions.fill(0, offset, offset + 6); continue }
+        sparksAlive = true
+        item.life -= step
+        item.velocity.y -= 9.8 * step
+        item.velocity.multiplyScalar(1 - 1.5 * step)
+        item.position.addScaledVector(item.velocity, step)
+        const fade = Math.max(0, item.life / item.max) * item.heat
+        sparkPositions[offset] = item.position.x
+        sparkPositions[offset + 1] = item.position.y
+        sparkPositions[offset + 2] = item.position.z
+        sparkPositions[offset + 3] = item.position.x - item.velocity.x * 0.016
+        sparkPositions[offset + 4] = item.position.y - item.velocity.y * 0.016
+        sparkPositions[offset + 5] = item.position.z - item.velocity.z * 0.016
+        sparkColors.set([7 * fade, 4.2 * fade, 1.4 * fade, 2.2 * fade, 0.7 * fade, 0.1 * fade], offset)
+      }
+      if (sparksAlive || sparkLines.visible) {
+        sparkGeometry.attributes.position!.needsUpdate = true
+        sparkGeometry.attributes.color!.needsUpdate = true
+      }
+      sparkLines.visible = sparksAlive
+
+      let tracersAlive = false
+      for (let index = 0; index < tracerCount; index++) {
+        const item = tracers[index]!
+        const offset = index * 6
+        if (!item.alive) { if (tracerLines.visible) tracerPositions.fill(0, offset, offset + 6); continue }
+        tracersAlive = true
+        item.travelled += 520 * step
+        const head = Math.min(item.travelled, item.length)
+        const tail = Math.max(0, item.travelled - 5)
+        if (tail >= item.length) { item.alive = false; tracerPositions.fill(0, offset, offset + 6); continue }
+        scratch.vector.subVectors(item.to, item.from).divideScalar(item.length || 1)
+        tracerPositions[offset] = item.from.x + scratch.vector.x * head
+        tracerPositions[offset + 1] = item.from.y + scratch.vector.y * head
+        tracerPositions[offset + 2] = item.from.z + scratch.vector.z * head
+        tracerPositions[offset + 3] = item.from.x + scratch.vector.x * tail
+        tracerPositions[offset + 4] = item.from.y + scratch.vector.y * tail
+        tracerPositions[offset + 5] = item.from.z + scratch.vector.z * tail
+        tracerColors.set([9, 6.5, 3, 1.2, 0.5, 0.15], offset)
+      }
+      if (tracersAlive || tracerLines.visible) {
+        tracerGeometry.attributes.position!.needsUpdate = true
+        tracerGeometry.attributes.color!.needsUpdate = true
+      }
+      tracerLines.visible = tracersAlive
+
+      for (const item of flashes) {
+        if (item.life <= 0) { item.sprite.visible = false; continue }
+        item.life -= step
+      }
+
+      for (const item of dust) {
+        if (item.life <= 0) { item.sprite.visible = false; continue }
+        item.life -= step
+        const t = 1 - item.life / item.max
+        item.velocity.multiplyScalar(1 - 2.6 * step)
+        item.velocity.y += 0.25 * step
+        item.sprite.position.addScaledVector(item.velocity, step)
+        item.sprite.scale.setScalar(0.12 + item.grow * Math.sqrt(t))
+        item.sprite.material.opacity = item.opacity * (1 - t) * Math.min(1, t * 8)
+      }
+
+      let chipsChanged = false
+      for (let index = 0; index < chipCount; index++) {
+        const item = chips[index]!
+        if (item.life <= 0) continue
+        chipsChanged = true
+        item.life -= step
+        item.velocity.y -= 9.8 * step
+        item.position.addScaledVector(item.velocity, step)
+        if (item.position.y < item.size / 2 && item.velocity.y < 0) { item.position.y = item.size / 2; item.velocity.y *= -0.3; item.velocity.x *= 0.6; item.velocity.z *= 0.6; item.spin.multiplyScalar(0.5) }
+        item.rotation.x += item.spin.x * step
+        item.rotation.y += item.spin.y * step
+        item.rotation.z += item.spin.z * step
+        const size = item.life <= 0 ? 0 : item.size * Math.min(1, item.life * 3)
+        scratch.quaternion.setFromEuler(item.rotation)
+        chipMesh.setMatrixAt(index, scratch.matrix.compose(item.position, scratch.quaternion, scratch.scale.set(size, size * 0.6, size * 0.8)))
+      }
+      if (chipsChanged) chipMesh.instanceMatrix.needsUpdate = true
+      chipMesh.visible = chipsChanged
+
+      let casingsChanged = false
+      for (let index = 0; index < casingCount; index++) {
+        const item = casings[index]!
+        if (!item.alive) continue
+        casingsChanged = true
+        item.life -= step
+        if (item.life <= 0) { item.alive = false; casingMesh.setMatrixAt(index, scratch.matrix.makeScale(0, 0, 0)); continue }
+        if (!item.resting) {
+          item.velocity.y -= 9.8 * step
+          item.position.addScaledVector(item.velocity, step)
+          item.rotation.x += item.spin.x * step
+          item.rotation.y += item.spin.y * step
+          item.rotation.z += item.spin.z * step
+          const floor = supportHeight(item.position.x, item.position.z, 0.02, item.position.y, 0.05) + 0.03
+          if (item.position.y < floor && item.velocity.y < 0) {
+            item.position.y = floor
+            if (!item.bounced || Math.abs(item.velocity.y) > 0.8) onCasing(item.position)
+            item.bounced = true
+            item.velocity.y *= -0.35
+            item.velocity.x *= 0.5
+            item.velocity.z *= 0.5
+            item.spin.multiplyScalar(0.4)
+            if (Math.abs(item.velocity.y) < 0.35) { item.resting = true; item.rotation.x = Math.PI / 2 * Math.round(item.rotation.x / (Math.PI / 2)); item.rotation.z = 0 }
+          }
+        }
+        const scale = item.scale * Math.min(1, item.life * 2)
+        scratch.quaternion.setFromEuler(item.rotation)
+        casingMesh.setMatrixAt(index, scratch.matrix.compose(item.position, scratch.quaternion, scratch.scale.set(scale, scale, scale)))
+      }
+      if (casingsChanged) casingMesh.instanceMatrix.needsUpdate = true
+      casingMesh.visible = casingsChanged
+    },
+  }
+}
+
+export type Effects = ReturnType<typeof createEffects>

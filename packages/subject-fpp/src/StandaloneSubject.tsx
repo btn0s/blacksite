@@ -7,6 +7,8 @@ export type { StandaloneIntent } from './intent'
 
 export type StandaloneTouch = { forward: number; right: number; lookX: number; lookY: number; fire: boolean }
 export type StandaloneRecoil = { pitch: number; yaw: number }
+export type StandaloneRecovery = { fraction: number; seconds: number }
+export type StandaloneView = { yaw: number; pitch: number; reset?: boolean }
 
 export const createStandaloneTouch = (): StandaloneTouch => ({ forward: 0, right: 0, lookX: 0, lookY: 0, fire: false })
 export const createStandaloneRecoil = (): StandaloneRecoil => ({ pitch: 0, yaw: 0 })
@@ -18,15 +20,16 @@ export type StandaloneSubjectProps = {
   touch?: StandaloneTouch
   recoil?: StandaloneRecoil
   sensitivity?: number
+  recoilKept?: number
+  recovery?: StandaloneRecovery
+  view?: StandaloneView
 }
 
-const recoilKept = 0.55
-
-export function StandaloneSubject({ onIntent, onFire, onReload, touch, recoil, sensitivity = 1 }: StandaloneSubjectProps) {
+export function StandaloneSubject({ onIntent, onFire, onReload, touch, recoil, sensitivity = 1, recoilKept = 0.55, recovery, view }: StandaloneSubjectProps) {
   const { camera, gl } = useThree()
   const keys = useRef(new Set<string>())
   const pointer = useRef({ locked: false, yaw: 0, pitch: 0, fire: false })
-  const kick = useRef({ pitch: 0, yaw: 0, climbPitch: 0, climbYaw: 0 })
+  const kick = useRef({ pitch: 0, yaw: 0, climbPitch: 0, climbYaw: 0, sprayPitch: 0, sprayYaw: 0, restorePitch: 0, restoreYaw: 0, firing: false })
   const scale = useRef(sensitivity)
   scale.current = sensitivity
   const rotation = useRef(new Euler(0, 0, 0, 'YXZ'))
@@ -38,7 +41,7 @@ export function StandaloneSubject({ onIntent, onFire, onReload, touch, recoil, s
     const doc = canvas.ownerDocument
     const lock = (event: MouseEvent) => { if ((event as PointerEvent).pointerType === 'touch') return; Promise.resolve(canvas.requestPointerLock()).catch(() => undefined) }
     const lockChange = () => { pointer.current.locked = doc.pointerLockElement === canvas; if (!pointer.current.locked) { keys.current.clear(); pointer.current.fire = false } }
-    const move = (event: PointerEvent) => { if (!pointer.current.locked) return; pointer.current.yaw -= event.movementX * 0.0022 * scale.current; pointer.current.pitch = Math.max(-1.48, Math.min(1.48, pointer.current.pitch - event.movementY * 0.0022 * scale.current)) }
+    const move = (event: PointerEvent) => { if (!pointer.current.locked) return; pointer.current.yaw -= event.movementX * 0.0022 * scale.current; pointer.current.pitch = Math.max(-1.48, Math.min(1.48, pointer.current.pitch - event.movementY * 0.0022 * scale.current)); compensate(kick.current, event.movementY * 0.0022 * scale.current) }
     const down = (event: KeyboardEvent) => { if (!pointer.current.locked) return; keys.current.add(event.code); if (event.code === 'KeyR' && !event.repeat) onReload() }
     const up = (event: KeyboardEvent) => keys.current.delete(event.code)
     const fire = (event: MouseEvent) => { if (event.button === 0 && pointer.current.locked) pointer.current.fire = true }
@@ -54,9 +57,17 @@ export function StandaloneSubject({ onIntent, onFire, onReload, touch, recoil, s
   }, [gl, onReload])
   useFrame((_, dt) => {
     const state = pointer.current
+    if (view?.reset) {
+      state.yaw = view.yaw
+      state.pitch = view.pitch
+      Object.assign(kick.current, { pitch: 0, yaw: 0, climbPitch: 0, climbYaw: 0, sprayPitch: 0, sprayYaw: 0, restorePitch: 0, restoreYaw: 0 })
+      if (recoil) recoil.pitch = recoil.yaw = 0
+      view.reset = false
+    }
     if (touch) {
       state.yaw -= touch.lookX * 0.0042 * scale.current
       state.pitch = Math.max(-1.48, Math.min(1.48, state.pitch - touch.lookY * 0.0042 * scale.current))
+      compensate(kick.current, touch.lookY * 0.0042 * scale.current)
       touch.lookX = touch.lookY = 0
     }
     const offset = kick.current
@@ -70,12 +81,31 @@ export function StandaloneSubject({ onIntent, onFire, onReload, touch, recoil, s
     const climb = 1 - Math.exp(-28 * dt)
     state.pitch = Math.max(-1.48, Math.min(1.48, state.pitch + offset.climbPitch * climb))
     state.yaw -= offset.climbYaw * climb
+    offset.sprayPitch += offset.climbPitch * climb
+    offset.sprayYaw += offset.climbYaw * climb
+    const firing = state.fire || !!touch?.fire
+    if (recovery && offset.firing && !firing) {
+      offset.restorePitch = Math.max(0, offset.sprayPitch) * recovery.fraction
+      offset.restoreYaw = offset.sprayYaw * recovery.fraction
+      offset.sprayPitch = offset.sprayYaw = 0
+    }
+    if (firing && !offset.firing) offset.sprayPitch = offset.sprayYaw = offset.restorePitch = offset.restoreYaw = 0
+    offset.firing = firing
+    if (recovery && (offset.restorePitch || offset.restoreYaw)) {
+      const back = 1 - Math.exp(-4 * dt / Math.max(0.01, recovery.seconds))
+      state.pitch = Math.max(-1.48, Math.min(1.48, state.pitch - offset.restorePitch * back))
+      state.yaw += offset.restoreYaw * back
+      offset.restorePitch *= 1 - back
+      offset.restoreYaw *= 1 - back
+      if (Math.abs(offset.restorePitch) < 1e-5 && Math.abs(offset.restoreYaw) < 1e-5) offset.restorePitch = offset.restoreYaw = 0
+    }
     offset.climbPitch *= 1 - climb
     offset.climbYaw *= 1 - climb
     const settle = Math.exp(-11 * dt)
     offset.pitch *= settle
     offset.yaw *= settle
     rotation.current.set(Math.max(-1.5, Math.min(1.5, state.pitch + offset.pitch)), state.yaw - offset.yaw, 0)
+    if (view) { view.yaw = state.yaw; view.pitch = state.pitch }
     quaternion.current.setFromEuler(rotation.current)
     camera.quaternion.copy(quaternion.current)
     const intent = readStandaloneIntent(keys.current)
@@ -91,4 +121,10 @@ export function StandaloneSubject({ onIntent, onFire, onReload, touch, recoil, s
     onFire(state.fire || !!touch?.fire, { origin: origin.current, direction: direction.current })
   })
   return null
+}
+
+function compensate(offset: { sprayPitch: number; restorePitch: number }, down: number) {
+  if (down <= 0) return
+  offset.sprayPitch = Math.max(0, offset.sprayPitch - down)
+  offset.restorePitch = Math.max(0, offset.restorePitch - down)
 }

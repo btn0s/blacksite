@@ -39,9 +39,14 @@ export function selectVariant(
   previous: number,
   selection: 'random-no-repeat' | 'round-robin',
   random: () => number,
+  avoid: readonly number[] = [],
 ): number {
   if (variants.length < 2) return 0
   if (selection === 'round-robin') return (previous + 1) % variants.length
+  if (avoid.length) {
+    const open = variants.map((_, index) => index).filter(index => !avoid.includes(index))
+    if (open.length) return open[Math.min(open.length - 1, Math.floor(random() * open.length))]!
+  }
   const choice = Math.min(variants.length - 2, Math.floor(random() * (variants.length - 1)))
   return choice >= previous ? choice + 1 : choice
 }

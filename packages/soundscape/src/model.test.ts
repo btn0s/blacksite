@@ -17,6 +17,14 @@ describe('cue selection', () => {
     }
   })
 
+  it('avoids the variants that start on either side of a delayed voice', () => {
+    for (const random of [() => 0, () => 0.49, () => 0.999999]) {
+      expect(selectVariant(variants, 2, 'random-no-repeat', random, [0, 1])).toBe(2)
+      expect([0, 1, 2].filter(index => index !== 1)).toContain(selectVariant(variants, 0, 'random-no-repeat', random, [1]))
+    }
+    expect(selectVariant(variants, 0, 'random-no-repeat', () => 0, [0, 1, 2])).not.toBe(0)
+  })
+
   it('walks the pool and wraps for round robin', () => {
     let selected = -1
     const sequence: number[] = []

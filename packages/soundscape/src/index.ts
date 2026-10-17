@@ -127,6 +127,7 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
   const voiceHandles = new WeakMap<VoiceHandle, Voice>()
   const loops = new Set<LoopRecord>()
   const cueSelection = new Map<string, number>()
+  const cueStarts = new Map<string, Array<{ at: number; variant: number }>>()
   const lastPlayed = new Map<string, number>()
   const ambienceNext = new Map<string, number>()
   const busVolumes = new Map<SoundBus, number>(BUS_NAMES.map(name => [name, 1]))
@@ -332,7 +333,8 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
     const soundClass = definition.class ?? 'sfx'
     const now = logicalNow()
     if (!looping && now - (lastPlayed.get(name) ?? -Infinity) < (definition.cooldown ?? 0)) return null
-    const score = voiceScore(soundClass, audibility * (play.volume ?? 1) * (definition.gain ?? 1))
+    const volume = Math.max(0, (play.volume ?? 1) * jitterGain(random, definition.volumeJitterDb ?? 1.5))
+    const score = voiceScore(soundClass, audibility * volume * (definition.gain ?? 1))
     let extraDelay = 0
     if (voices.size >= cap) {
       if ([...voices.values()].some(voice => voice.pendingSteal)) return null
@@ -341,13 +343,18 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
       stopVoice(victim, 0.024)
       extraDelay = 0.028
     }
-    const selected = selectVariant(definition.variants, cueSelection.get(name) ?? -1, definition.selection ?? 'random-no-repeat', random)
+    const startAt = context.currentTime + scheduledDelay + extraDelay
+    const timeline = (cueStarts.get(name) ?? []).filter((entry, index, list) => entry.at >= context!.currentTime || !list.some(other => other !== entry && other.at > entry.at && other.at <= context!.currentTime))
+    const before = timeline.reduce<{ at: number; variant: number } | undefined>((best, entry) => entry.at <= startAt && (!best || entry.at >= best.at) ? entry : best, undefined)
+    const after = timeline.reduce<{ at: number; variant: number } | undefined>((best, entry) => entry.at > startAt && (!best || entry.at < best.at) ? entry : best, undefined)
+    const avoid = [before, after].flatMap(entry => entry ? [entry.variant] : [])
+    const selected = selectVariant(definition.variants, cueSelection.get(name) ?? -1, definition.selection ?? 'random-no-repeat', random, avoid)
     cueSelection.set(name, selected)
+    timeline.push({ at: startAt, variant: selected })
+    cueStarts.set(name, timeline)
     lastPlayed.set(name, now)
     const variant = definition.variants[selected]
     const pitch = Math.max(0.05, (play.pitch ?? 1) * jitterPitch(random, definition.pitchJitter ?? 0.05))
-    const volume = Math.max(0, (play.volume ?? 1) * jitterGain(random, definition.volumeJitterDb ?? 1.5))
-    const startAt = context.currentTime + scheduledDelay + extraDelay
     const root = context.createGain()
     root.gain.value = 1
     const volumeGain = context.createGain()
@@ -373,8 +380,8 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
     lowpass.connect(spatial)
     const bus = busNodes.get(busFor(definition)) ?? busNodes.get('sfx')!
     spatial.connect(bus)
-    const zoneEffect = getZoneEffect(currentZone, busFor(definition))
-    const useWet = !!zoneEffect && (definition.reverbSend ?? 0.3) > 0
+    const zoneEffect = (definition.reverbSend ?? 0.3) > 0 ? getZoneEffect(currentZone, busFor(definition)) : null
+    const useWet = !!zoneEffect
     const wetRoot = useWet ? context.createGain() : null
     const wetVolumeGain = useWet ? context.createGain() : null
     const wetAttenuationGain = useWet ? context.createGain() : null
@@ -565,7 +572,7 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
       return handle
     }
     const travel = (playOptions.delay ?? definition.delayByDistance ?? false) ? distanceOf(playOptions) / SPEED_OF_SOUND : 0
-    if (travel > 0.1) {
+    if (travel > 0) {
       if (audibilityOf(definition, playOptions) < 0.003 || (playOptions.volume ?? 1) <= 0) return null
       let active: VoiceHandle | null = null
       let stopped = false
@@ -620,6 +627,7 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
     if (!definition.variants.length || definition.variants.some(variant => !variant.layers.length)) throw new Error(`Sound cue ${name} needs nonempty variants and layers`)
     cues.set(name, definition)
     cueSelection.delete(name)
+    cueStarts.delete(name)
   }
 
   const registerZone = (zone: SoundZone) => {

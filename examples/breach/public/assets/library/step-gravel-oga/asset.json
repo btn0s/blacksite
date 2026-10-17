@@ -1,0 +1,55 @@
+{
+  "id": "step-gravel-oga",
+  "category": "footstep",
+  "ship": [
+    "01.ogg",
+    "02.ogg",
+    "03.ogg",
+    "04.ogg"
+  ],
+  "files": {
+    "01.ogg": 2256,
+    "01.m4a": 3871,
+    "02.ogg": 1479,
+    "02.m4a": 2831,
+    "03.ogg": 2391,
+    "03.m4a": 4391,
+    "04.ogg": 1987,
+    "04.m4a": 3611
+  },
+  "bytes": 2391,
+  "budget": 60000,
+  "withinBudget": true,
+  "over": [],
+  "variations": [
+    {
+      "file": "01.ogg",
+      "fallback": "01.m4a",
+      "seconds": 0.195,
+      "source": "0.ogg",
+      "peakDb": -1.24
+    },
+    {
+      "file": "02.ogg",
+      "fallback": "02.m4a",
+      "seconds": 0.113,
+      "source": "1.ogg",
+      "peakDb": -1.58
+    },
+    {
+      "file": "03.ogg",
+      "fallback": "03.m4a",
+      "seconds": 0.233,
+      "source": "2.ogg",
+      "peakDb": -1.23
+    },
+    {
+      "file": "04.ogg",
+      "fallback": "04.m4a",
+      "seconds": 0.164,
+      "source": "3.ogg",
+      "peakDb": -1.33
+    }
+  ],
+  "channels": 1
+}

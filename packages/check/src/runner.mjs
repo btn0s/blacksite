@@ -251,7 +251,7 @@ export async function runChecks(options) {
       page.on('response', response => { if (response.status() >= 400 && !response.url().endsWith('/favicon.ico')) report.console.push({ profile: name, text: `${response.status()} ${response.url()}` }) })
       if (profile.cpu > 1) await (await context.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: profile.cpu })
       await page.goto(url, { waitUntil: 'load', timeout: 120000 })
-      const hasContract = await page.waitForFunction(() => window.__blacksite?.ready === true, null, { timeout: 90000, polling: 50 }).then(() => true, () => false)
+      const hasContract = await page.waitForFunction(() => window.__blacksite?.ready === true && window.__check?.readyAt !== null && window.__check?.readyAt !== undefined, null, { timeout: 90000, polling: 50 }).then(() => true, () => false)
       const contract = hasContract ? await page.evaluate(() => { const c = window.__blacksite; return { version: c.version, bookmarks: c.bookmarks, scripts: Object.keys(c.scripts ?? {}), player: typeof c.player === 'function', audio: typeof c.audio === 'function', input: c.input ?? null, model: c.model ?? null } }) : null
       const budget = { ...DEFAULTS, ...(contract?.model?.budget ?? {}) }
       const readyAt = await page.evaluate(() => window.__check.readyAt)

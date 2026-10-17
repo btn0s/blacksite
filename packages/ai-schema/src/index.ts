@@ -405,7 +405,7 @@ export type SimEvent = {
   team?: TeamId;
   text: string;
   tick: Tick;
-  type: 'contact' | 'radio' | 'shot' | 'kill' | 'order' | 'interrupt' | 'objective' | 'fallback';
+  type: 'contact' | 'radio' | 'shot' | 'kill' | 'order' | 'interrupt' | 'objective' | 'fallback' | 'intent';
 };
 export type RuntimeMetrics = {
   activeReservations: number;
@@ -439,6 +439,16 @@ export type RenderSnapshot = {
   tick: Tick;
   version: number;
   winner?: TeamId | 'draw';
+};
+export type Intent = 'advance' | 'flank' | 'cover' | 'engage' | 'suppress' | 'reload' | 'fallback' | 'search' | 'hold';
+export type AttackTokenRules = {
+  count: number;
+  holdTicks: number;
+  cooldownTicks: number;
+  idleTicks?: number;
+};
+export type IntentRules = {
+  leadTicks: number;
 };
 export type ScenarioId = 'crossfire' | 'breach' | 'search' | 'casualty' | 'low-ammo' | 'deadlock';
 export type RuntimeConfig = {
