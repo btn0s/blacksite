@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { Color, DirectionalLight, PerspectiveCamera, Vector3 } from 'three'
 import {
   BIRCH, OAK, PINE, createCover, createForest, createSunShadows, createTerrain, flowerTexture, generateTree, grassTexture, leafClusterTexture,
-  litterTexture, needleClusterTexture, type Cover, type Forest, type SunShadows, type Terrain, type Wind,
+  litterTexture, needleClusterTexture, smoothstep, valueNoise, type Cover, type Forest, type SunShadows, type Terrain, type Wind,
 } from '@blacksite/landscape'
 import type { Texture } from 'three'
 import { canopy, tiers, type Tier } from './model'
@@ -13,6 +13,7 @@ export type LandscapeHandle = { terrain: Terrain; cover: Cover; forest: Forest; 
 
 export type BarkSet = { pine: { color: Texture; normal: Texture } }
 
+const BROADLEAF = { ...OAK, crown: 5.6, leafSize: 1.75, leafCount: 780 }
 const MEADOW = '(1.0 - smoothstep(0.22, 0.55, bsSurface.b)) * (1.0 - smoothstep(0.2, 0.6, bsSurface.a)) * (1.0 - smoothstep(0.3, 0.46, bsSlope))'
 
 export function Landscape({ world, tier, wind, sun, bark, handle }: { world: ValleyWorld; tier: Tier; wind: Wind; sun: DirectionalLight; bark: BarkSet; handle: { current: LandscapeHandle | null } }) {
@@ -34,7 +35,7 @@ export function Landscape({ world, tier, wind, sun, bark, handle }: { world: Val
         { tile: 2.2, tint: [0.92, 0.84, 0.72], roughness: 0.9, normalScale: 1 },
         { tile: 3.5, tint: [0.86, 0.84, 0.8], roughness: 0.85, normalScale: 1.2 },
       ],
-      canopy: { height: canopy.height, start: settings.impostorFar[0] - canopy.lead, end: settings.impostorFar[1] - canopy.lead, crown: canopy.crown, color: [0.075, 0.105, 0.04], shade: [0.018, 0.028, 0.012] },
+      canopy: { height: canopy.height, start: settings.impostorFar[0] - canopy.lead, end: settings.impostorFar[1] - canopy.lead, crown: canopy.crown, color: [0.095, 0.125, 0.05], shade: [0.022, 0.032, 0.014] },
       detailDistance: tier === 'low' ? 140 : 260,
       shadowDistance: settings.shadowDistance,
     })
@@ -56,7 +57,7 @@ export function Landscape({ world, tier, wind, sun, bark, handle }: { world: Val
       ],
     })
     const species = [
-      { model: generateTree(OAK), textures: { bark: bark.pine.color, barkNormal: bark.pine.normal, leaf: leafClusterTexture(256, 41) }, scale: [0.8, 1.25] as const },
+      { model: generateTree(BROADLEAF), textures: { bark: bark.pine.color, barkNormal: bark.pine.normal, leaf: leafClusterTexture(256, 41) }, scale: [0.8, 1.25] as const },
       { model: generateTree(PINE), textures: { bark: bark.pine.color, barkNormal: bark.pine.normal, leaf: needleClusterTexture() }, scale: [0.75, 1.3] as const },
       { model: generateTree(BIRCH), textures: { bark: bark.pine.color, barkNormal: bark.pine.normal, leaf: leafClusterTexture(256, 47, [[132, 146, 64], [150, 160, 72], [112, 128, 52], [170, 168, 84]]) }, scale: [0.8, 1.2] as const },
     ]
@@ -68,9 +69,9 @@ export function Landscape({ world, tier, wind, sun, bark, handle }: { world: Val
       choose: (x, z, random) => {
         const density = world.forest(x, z)
         const height = world.heightAt(x, z)
-        if (density < 0.55 && random < 0.45) return 2
-        if (height < 150 && random < 0.6) return 0
-        return random < 0.62 ? 1 : 0
+        if (density < 0.55 && random < 0.3) return 2
+        const stand = smoothstep(0.58, 0.78, valueNoise(x / 110, z / 110, 509))
+        return random < 0.1 + 0.25 * smoothstep(140, 320, height) + 0.55 * stand ? 1 : 0
       },
       heightAt: world.heightAt,
       bounds: { min: [-980, -980], max: [980, 980] },
