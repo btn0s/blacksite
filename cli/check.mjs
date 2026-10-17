@@ -22,5 +22,5 @@ export async function runCheck(argv) {
     log: json ? undefined : line => process.stderr.write(`${line}\n`),
   })
   process.stdout.write(json ? `${JSON.stringify(report)}\n` : `${summarize(report)}\nreport: ${path.join(path.resolve(out), 'report.json')}\n`)
-  if (!report.pass) process.exitCode = 1
+  if (!report.pass) process.exitCode = report.verdict === 'inconclusive' ? 2 : 1
 }

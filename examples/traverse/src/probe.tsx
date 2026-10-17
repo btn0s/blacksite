@@ -650,7 +650,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
       },
       input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
       character: runner.check,
-      model: { feel: model.feel, budget: { ...model.budget, voices: shared.sound.cap } },
+      model: { feel: model.feel, budget: { ...model.budget, voices: shared.sound.cap }, scripts: { perf: model.route.parSeconds } },
     })
     exposed.current = check
 

@@ -14,18 +14,22 @@ blacksite check http://localhost:4173/ --out shots/check --seconds 20 --json
 blacksite check http://localhost:4173/ --only shimmer,flyover               # opt-in: foliage, thin lines, far field
 ```
 
-It starts headless Chrome with the GPU on (WebGL and WebGPU), loads the page once per profile and writes `report.json` and PNGs to `--out` (default `blacksite-check/<time>/`). It exits 1 if any check fails.
+It starts headless Chrome with the GPU on (WebGL and WebGPU), loads the page once per profile and writes `report.json` and PNGs to `--out` (default `blacksite-check/<time>/`). It exits 1 if any check fails and 2 if the only problem is a timing result inside the measurement noise.
+
+Every phase has a time limit of 4× what it should take: loading against `budget.firstPlayableMs`, the scripted run against `model.scripts.perf` or `--seconds`, and every capture phase against its frames at `budget.hitchMs` and its screenshots at the time the first one took. A phase that throws or runs out of time fails with the phase, the message, where `player()` was and how long it had been standing still, the first error, and a capture in `failures/`. After a phase runs out of time the page is closed, the rest of that profile is reported as not run, and the next profile starts. A check always finishes.
+
+Perf and hitch measure time, so they run one at a time on a machine. Before loading for them, the check takes a slot that every `blacksite check` on the machine respects, and prints who holds it while it waits in the queue. Every other check draws on the same GPU, so the others share the slot: they render together, but step aside while a timed run is in progress, and their page stays paused while it waits.
 
 | Check | What it does | Passes when |
 |---|---|---|
-| `perf` | Runs the game's `perf` script, or flies the camera through every bookmark for `--seconds` (12), then hands the camera back for 1.5 s. Records every frame. | Main-thread time per frame p95 ≤ `budget.frameMs` (8.3 desktop) or `budget.phoneFrameMs` (16.7 phone), and frame spacing p95 within 1.25× the vsync interval. |
-| `hitch` | Same run. Counts every frame slower than `budget.hitchMs` (33) after first playable, and times first playable from navigation start. | No frame over the threshold, and first playable ≤ `budget.firstPlayableMs` (5000). |
+| `perf` | Runs the game's `perf` script, or flies the camera through every bookmark for `--seconds` (12), then hands the camera back for 1.5 s. Records every frame. | Main-thread time per frame p95 ≤ `budget.frameMs` (8.3 desktop) or `budget.phoneFrameMs` (16.7 phone), and frame spacing p95 within 1.25× the vsync interval. The p95 of each quarter of the run gives the spread; when the p95 is closer to the budget than that spread, or it misses while the machine had more runnable work than cores, the result is `????` inconclusive instead of pass or fail. |
+| `hitch` | Same run. Counts every frame slower than `budget.hitchMs` (33) after first playable, and times first playable from navigation start. | No frame over the threshold, and first playable ≤ `budget.firstPlayableMs` (5000). A miss while the machine had more runnable work than cores is `????` inconclusive. |
 | `pop` | Moves the camera between consecutive bookmarks in 10 steps and photographs each step with the HUD hidden; then holds each bookmark still for one second, with `scripts.freeze` holding wind and animation if the game has it. Writes `pop-sheet.png` and `pop-still.png`. | No moving frame changes more than 2.5× its neighbours (more than the motion explains), and no still view changes more than 2% of its pixels in a second. Flagged frames are outlined red on the sheet. |
 | `feel` | Desktop only. Hands the camera back, runs `scripts.feelStart` if present, holds `input.move` for 3 s, adds `input.sprint` for 3 s, releases, then taps `input.jump`. Reads `player()` every frame and derives speed from positions. | Steady move speed, sprint speed, time to 90% of top speed and jump apex are each within `feel.tolerance` (10%) of `model.feel`. Numbers without a model value are reported, not judged. |
 | `critic` | At every bookmark: a 1× capture with the HUD on (desktop and phone), and on desktop a 4 × 4 grid of 4× crops rendered at full resolution through `camera.setViewOffset`, tiled into `critic/desktop-<name>-4x.png`. | Every capture is taken with no console errors and no failed requests. Passing proves only that the pictures exist. Reading them is your job. |
 | `zfight` | At every bookmark renders an object-ID buffer several times, each with a sub-pixel projection jitter and a 0.7 mm camera nudge, then again with the nudges alone, using the game's own materials, render target and depth format. Pixels whose winning ID flips between frames, and still flips under the nudges alone, are z-fighting. Pixels that flip only under jitter are edge aliasing, reported as `edgeFlicker` per bookmark but not counted. Writes `zfight/<profile>-<bookmark>.png` with the pixels ringed, and `-raw.png` beside it. | Ringed pixels at every bookmark ≤ max(32, 0.003% of the frame), and the ID pass covered at least 2% of the view (an empty buffer proves nothing). Edges don't count: a pixel only counts when it sits in a patch at least 4 px across, and when the two IDs that flip are within a few centimetres of each other in depth (the ID pass stores depth in alpha), so a thin bar flickering against the wall behind it is not reported. |
 | `audio` | Polls `audio()` every 250 ms through the perf and feel runs. | Peak active voices ≤ `budget.voices` (32), and no cue plays the same sample twice in a row. |
-| `stress` | Runs last, with the frame loop driven at 144 Hz, so frames come faster than a 60 Hz fixed physics step and some frames run no physics substep at all. Six pointer-lock and release rounds, which re-render the scene while the player stands still; six rounds of moving, sprinting and jumping that end with a respawn; the tab hidden for 2 s; a 2.5 s main-thread stall while sprinting; fullscreen and three viewport sizes; then the player sprinting and jumping into each corner of the world bounds. The respawn and edge steps drive `character`; without it they skip. Each step has 30 s to finish. | No error, unhandled rejection or `console.error` from first playable to the end. It stops at the first one and reports the step and the stack. |
+| `stress` | Runs last, with the frame loop driven at 144 Hz, so frames come faster than a 60 Hz fixed physics step and some frames run no physics substep at all. Six pointer-lock and release rounds, which re-render the scene while the player stands still; six rounds of moving, sprinting and jumping that end with a respawn; the tab hidden for 2 s; a 2.5 s main-thread stall while sprinting; fullscreen and three viewport sizes; then the player sprinting and jumping into each corner of the world bounds. The respawn and edge steps drive `character`; without it they skip. Each step has 4× its own length to finish. | No error, unhandled rejection or `console.error` from first playable to the end. It stops at the first one and reports the step and the stack. |
 | `shimmer` | Opt-in. At every bookmark, with `scripts.freeze` holding wind and animation: reads 8 consecutive frames with the camera still, then shifts the view by ¼, ½ and ¾ of a render pixel across and down through `camera.setViewOffset`. Still flicker is the per-pixel luminance change between frames. Motion shimmer is what is left after the shifted frame is compared with the still frames resampled by the same shift, both lightly blurred, so true motion cancels and only aliasing survives. Writes `shimmer/<profile>-<name>.png` heatmaps and `shimmer-<profile>.png`. | Mean still flicker ≤ `quality.shimmerStill` (0.01) and mean motion shimmer ≤ `quality.shimmerMotion` (0.03) at every bookmark, in 0–1 luminance. p99 and max are reported, not judged. |
 | `flyover` | Opt-in. Flies a smooth spline through `flyover` with 16 frames a segment, wind frozen, and records the mean squared luminance change between consecutive frames. Writes `flyover-<profile>.png`, a contact sheet with flagged frames outlined red, and `flyover-<profile>.json`. | No more than `quality.popLimit` (0) of the frames change more than 2.5× the median of the two frames either side. |
 
@@ -35,7 +39,7 @@ Read the numbers the way they were measured:
 
 - **Main-thread time is the frame budget you can measure headless.** Headless Chrome presents at the display's vsync (60 Hz on most hosts), so frame spacing can't show a 120 fps miss. Instead the check times every `requestAnimationFrame` callback, which is where React Three Fiber, the physics step, animation and the draw calls all run. GPU time isn't in it. A scene that is GPU-bound needs a real device.
 - **Never turn vsync off to see more frames.** Headless runs with `--disable-gpu-vsync` showed 300–600 ms stalls in Air Strike that never happened with vsync on: the GPU fell far behind and buffer reallocations waited on it. A team chased them for an afternoon.
-- **Headless is a lower bound.** The host shares its CPU with other agents. Say so in your report, give the load average, and leave 120 fps and phone claims to a playtest on the device.
+- **Headless is a lower bound.** The host shares its CPU with other agents and their builds. The timing slot keeps other checks out of a perf run, but not builds, so perf and hitch record the load average per core before and after the run. Load only makes frames slower, so a pass under load stands, but a miss at a load of one or more per core, or a p95 inside the run's own spread, comes back `????`. Rerun those when the machine is quieter instead of reading them. Give the load in your report, and leave 120 fps and phone claims to a playtest on the device.
 
 ## The contract
 
@@ -65,7 +69,8 @@ check.ready()                                  // when the first playable frame 
 | `camera(pose)` | While a pose is set, apply it every frame after the game's own camera and before render, with `applyCameraPose(camera, pose, size)`, which also handles the `view` crop the critic grid uses. `null` hands the camera back. The game keeps simulating. |
 | `player()` | `{ position }` of the controlled player, or `null`. Read the physics body, not the mesh. |
 | `audio()` | `{ voices, plays }`: voices playing now, and each sound started since the last call as `{ cue, sample }`. `createAudioLog()` keeps both if you call its `start(cue, sample)` and `end()` from your mixer. |
-| `scripts.perf` | A representative run that resolves when done: the busiest fight, the biggest explosion, the longest sightline. Without it the check flies through the bookmarks. |
+| `scripts.perf` | A representative run that resolves when done: the busiest fight, the biggest explosion, the longest sightline. Without it the check flies through the bookmarks. When it can't go on, throw with where it stopped (`stuck before waypoint 33 at [122.4, 5.6, -3.3]`); the check adds the capture. |
+| `model.scripts` | Seconds each script should take, such as `{ perf: route.parSeconds }`. A script without one should take `--seconds` (12). The check gives a script 4× its time. |
 | `scripts.feelStart` | Puts the player at rest with at least 30 m of flat, open ground along `input.move`. Without it the run starts wherever the player is. |
 | `input` | Key codes for the feel and stress runs. `move` is whatever runs the player along the open ground. Checkpoint uses `KeyS` because its runway lies behind the spawn. |
 | `character` | `controller.check` from the Character Controller: `respawn`, `move`, `face` and `bounds`. The stress run respawns the player mid-stride and drives it into each corner of the world. |
@@ -106,8 +111,8 @@ Fixes, in the order to try them: delete the hidden surface; trim the overlap; pu
 `report.json` has every number. Print a summary with `blacksite check … | tail`:
 
 ```
-pass  perf   desktop cpu p50 5.6 p95 6.9 p99 7.3 max 8 ms (budget 8.3); interval p95 16.7 max 16.8 ms
-pass  perf   phone   cpu p50 12.4 p95 15.7 p99 17.1 max 18.6 ms (budget 16.7); interval p95 16.8 max 33.4 ms
+pass  perf   desktop cpu p50 5.6 p95 6.9 p99 7.3 max 8 ms (budget 8.3, quarters ±0.4); interval p95 16.7 max 16.8 ms; load 0.31 → 0.33 per core
+????  perf   phone   cpu p95 15.7 ms (budget 16.7): cpu p95 is 1 ms from the budget and the four quarters of the run spread ±1.6 ms; rerun when the machine is quieter (load 0.52 → 0.61 per core)
 pass  hitch  desktop 0 frames over 33 ms, longest 16.8 ms; first playable 1102 ms (budget 5000)
 FAIL  hitch  phone   2 frames over 33 ms, longest 33.4 ms; first playable 2832 ms (budget 5000)
 pass  feel   desktop moveSpeed 3.74/3.75, sprintSpeed 6.49/6.5, timeToTopSpeed 0.23, jumpApex 0.82/0.9
@@ -116,7 +121,12 @@ pass  critic desktop 10 captures, 0 console errors
 FAIL  stress desktop first error during pointer: unreachable
 ```
 
-That is Checkpoint, with a stress failure from an early Valley build. Phone hitches are single missed vsyncs under a 4× throttle, and they still count: fix them or explain them in your report. Every check must reach zero before you call the game done.
+That is Checkpoint, with a stress failure from an early Valley build. A script that stops reads like this:
+
+```
+FAIL  perf   phone   scripted run failed: performance route failed: stuck before waypoint 33 [121.6, 5.8, -3.0] at [122.4, 5.6, -3.3]; player at [122.4, 5.6, -3.3], still for 11.8 s; capture failures/phone-scripted-run.png
+```
+ Phone hitches are single missed vsyncs under a 4× throttle, and they still count: fix them or explain them in your report. Every check must reach zero before you call the game done.
 
 Then read the pictures, critically:
 

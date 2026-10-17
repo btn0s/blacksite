@@ -25,6 +25,8 @@ check.ready()
 
 Each frame, while `override` is set, call `applyCameraPose(camera, override, size)` after the game's camera and before render.
 
+Every phase is bounded at 4× what it should take, and a failed phase leaves a capture in `failures/`. Perf and hitch take a machine-wide timing slot, so concurrent timed runs queue and every other check pauses its page until the timed run ends, and a perf p95 closer to its budget than the run's own spread is reported as inconclusive (exit code 2). Declare how long each script should take in `model.scripts`.
+
 Results go to `report.json` with `critic/`, `pop/`, `pop-sheet.png` and `pop-still.png` beside it. Chrome comes from the system install, or from `CHROME_PATH`. See `skills/blacksite/references/verify.md` for every check, its threshold and how to read it.
 
 ## Z-fighting
