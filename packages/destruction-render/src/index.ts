@@ -74,4 +74,4 @@ export { DestructionRenderer, type DestructionRendererOptions } from './renderer
 export { SecondaryFragmentRenderer } from './secondary';
 export { fragmentEdgeGeometry, fragmentSurfaceGeometry, type FragmentSurface } from './surfaces';
 
-export { GPUTransformPool, type ActorTransformRange, type TransformRange } from './gpu-pool';
+export { GPUTransformPool } from './gpu-pool';

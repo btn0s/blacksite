@@ -8,7 +8,7 @@ function App() {
   const host = useRef<HTMLDivElement>(null)
   const scene = useRef<AirStrikeScene | null>(null)
   const touch = useTouch()
-  const [state, setState] = useState<AirStrikeState>({ phase: 'loading', munition: 'missile', inbound: 0, progress: 0.05, detached: 0, error: null })
+  const [state, setState] = useState<AirStrikeState>({ phase: 'loading', munition: 'missile', inbound: 0, struck: false, progress: 0.05, detached: 0, error: null })
   useEffect(() => {
     const instance = new AirStrikeScene(host.current!)
     instance.onState = next => setState(next)
@@ -77,7 +77,7 @@ function App() {
     <TitleCard title="Destruction · Air Strike" />
     {status && <Status {...status} />}
     <Hints visible={!touch} items={[['Click', 'Strike'], ['Q', 'Munition'], ['Drag', 'Orbit'], ['Wheel', 'Zoom'], ['R', 'Rebuild']]} />
-    <Prompt text={touch ? 'Tap the block to call in a strike' : 'Click the block to call in a strike'} visible={state.phase === 'ready' && state.detached === 0 && state.inbound === 0} />
+    <Prompt text={touch ? 'Tap the block to call in a strike' : 'Click the block to call in a strike'} visible={state.phase === 'ready' && !state.struck} />
     <Actions items={[{ id: 'strike', label: 'Strike', disabled: state.phase === 'loading', onPress: () => scene.current?.callStrike() }, { id: 'munition', label: state.munition === 'missile' ? 'Missile' : 'Bomb', disabled: state.phase === 'loading', onPress: () => scene.current?.cycle() }, { id: 'rebuild', label: 'Rebuild', disabled: state.phase === 'loading', onPress: () => scene.current?.rebuild() }]} />
     <Loading title="Air Strike" detail={state.error ?? (state.progress < 0.35 ? 'Loading materials' : state.progress < 0.6 ? 'Casting 2,700 concrete pieces' : 'Starting the physics worker')} progress={state.progress} done={state.phase !== 'loading'} />
   </Screen>

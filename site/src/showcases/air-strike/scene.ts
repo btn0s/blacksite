@@ -2,17 +2,19 @@ import * as THREE from 'three'
 import { DestructionRenderer, DestructionSession, FIXED_DT_30HZ, FragmentState, type FragmentDef, type FragmentSurface } from '@blacksite/cascade'
 import { attachPerfProbe, reportActiveBodies } from '@blacksite/ui/perf-overlay'
 import { createLook, type Look } from '@blacksite/look'
+import { applyCameraPose, type CameraPose } from '@blacksite/check'
 import { applyCameraImpulse, createCameraImpulse, type ImpulsePoint } from '@blacksite/subject/feel'
 import { createAtmosphere, internalPixelRatio, isTouchDevice, meterSurface, preloadSurfaces } from '@blacksite/look/world'
 import { BLOCK, BLOCK_HEIGHT, BLOCK_LENGTH, createBlock } from './block'
 import { MUNITIONS, StrikeEffects, type Munition } from './fx'
 import { buildYard } from './yard'
+import { exposeAirStrikeCheck } from './check'
 
 const up = new THREE.Vector3(0, 1, 0)
 
 export type Phase = 'loading' | 'ready'
 export type MunitionId = keyof typeof MUNITIONS
-export type AirStrikeState = { phase: Phase; munition: MunitionId; inbound: number; progress: number; detached: number; error: string | null }
+export type AirStrikeState = { phase: Phase; munition: MunitionId; inbound: number; struck: boolean; progress: number; detached: number; error: string | null }
 
 function reticleTexture() {
   const size = 128
@@ -69,10 +71,14 @@ class OrbitRig {
     this.yaw += (this.goal.yaw - this.yaw) * k
     this.pitch += (this.goal.pitch - this.pitch) * k
     this.distance += (this.goal.distance - this.distance) * k
-    const c = Math.cos(this.pitch)
-    this.camera.position.set(Math.sin(this.yaw) * c, Math.sin(this.pitch), Math.cos(this.yaw) * c).multiplyScalar(this.distance).add(this.target)
+    this.place(this.yaw, this.pitch, this.distance, this.camera.position)
     this.camera.lookAt(this.target)
     applyCameraImpulse(this.camera, this.impulse.step(dt))
+  }
+
+  place(yaw: number, pitch: number, distance: number, out = new THREE.Vector3()) {
+    const c = Math.cos(pitch)
+    return out.set(Math.sin(yaw) * c, Math.sin(pitch), Math.cos(yaw) * c).multiplyScalar(distance).add(this.target)
   }
 
   blast(source: ImpulsePoint, strength: number) {
@@ -106,11 +112,15 @@ export class AirStrikeScene {
   private leaves: number[] = []
   private indexOf = new Map<number, number>()
   private hudAt = 0
+  private size = { width: 1, height: 1 }
+  private pose: CameraPose | null = null
+  private frozen = false
+  private readonly check = exposeAirStrikeCheck(this)
   private disposed = false
   private readonly clock = new THREE.Clock()
   private readonly materials = new Map<string, THREE.Material>()
   private fragmentSource: ReadonlyMap<number, string> = new Map()
-  state: AirStrikeState = { phase: 'loading', munition: 'missile', inbound: 0, progress: 0.05, detached: 0, error: null }
+  state: AirStrikeState = { phase: 'loading', munition: 'missile', inbound: 0, struck: false, progress: 0.05, detached: 0, error: null }
   onState: (state: AirStrikeState) => void = () => {}
 
   constructor(readonly host: HTMLElement) {
@@ -156,7 +166,7 @@ export class AirStrikeScene {
     this.set({ progress: 0.6 })
     this.session = new DestructionSession(manifest, {
       frame: frame => this.fx.ingest(frame),
-      ready: () => { this.warm(); this.set({ phase: 'ready', progress: 1 }) },
+      ready: () => { this.warm(); this.set({ phase: 'ready', progress: 1 }); this.check.ready() },
     }, { timestep: FIXED_DT_30HZ, rest: { forceAfterSeconds: 2.5, forceSpeed: 0.5, forceSpin: 0.9 } })
     this.view = new DestructionRenderer(manifest, { materialFor: this.materialFor, effects: false, secondaryAddsPerUpdate: 12, edgeFacesPerUpdate: 64 })
     this.scene.add(this.view.group)
@@ -190,10 +200,28 @@ export class AirStrikeScene {
   private resize = () => {
     const width = this.host.clientWidth || innerWidth
     const height = this.host.clientHeight || innerHeight
+    this.size = { width, height }
     this.look.setSize(width, height)
+    this.fit()
+  }
+
+  private fit() {
+    const { width, height } = this.size
+    this.camera.clearViewOffset()
     this.camera.aspect = width / height
     this.camera.fov = width < height ? Math.min(80, THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(22)) * height / width))) : 42
     this.camera.updateProjectionMatrix()
+  }
+
+  aim(pose: CameraPose | null) {
+    this.pose = pose
+    if (!pose) this.fit()
+  }
+
+  hold(frozen: boolean) {
+    this.frozen = frozen
+    const session = this.session
+    if (session && (session.getSnapshot().status === 'paused') !== frozen) session.togglePause()
   }
 
   private pick(clientX: number, clientY: number) {
@@ -240,7 +268,7 @@ export class AirStrikeScene {
       this.rig.blast(at, munition.radius / 10)
       this.set({ inbound: this.fx.inbound })
     })
-    this.set({ inbound: this.fx.inbound })
+    this.set({ inbound: this.fx.inbound, struck: true })
   }
 
   choose(munition: MunitionId) {
@@ -272,7 +300,8 @@ export class AirStrikeScene {
   }
 
   private loop = () => {
-    const dt = Math.min(0.05, this.clock.getDelta())
+    const delta = Math.min(0.05, this.clock.getDelta())
+    const dt = this.frozen ? 0 : delta
     if (this.mark) {
       this.mark.age += dt
       this.reticle.scale.setScalar(this.camera.position.distanceTo(this.mark.point) * 0.07 * (1 + Math.sin(this.mark.age * 18) * 0.08))
@@ -283,6 +312,7 @@ export class AirStrikeScene {
     }
     this.fx.update(dt)
     this.rig.update(dt)
+    if (this.pose) applyCameraPose(this.camera, this.pose, this.size)
     const session = this.session
     if (session?.frame && this.view) {
       this.view.update(session.frame, session.previous, session.interpolationAlpha())
@@ -314,6 +344,7 @@ export class AirStrikeScene {
 
   dispose() {
     this.disposed = true
+    this.check.dispose()
     removeEventListener('resize', this.resize)
     this.renderer.setAnimationLoop(null)
     this.view?.dispose()
