@@ -18,10 +18,11 @@ const scale = Number(option('scale', '1'))
 const only = option('only', '').split(',').filter(Boolean)
 const weaponFilter = option('weapon', '').split(',').filter(Boolean)
 const batch = option('batch', '')
+const labelFilter = option('labels', '').split(',').filter(Boolean)
 const measureOnly = args.includes('--measure-only')
 const maxStep = Number(option('step', String(1 / 60)))
 const GPU_ARGS = ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu', '--use-gl=angle', ...(process.platform === 'darwin' ? ['--use-angle=metal'] : []), '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows']
-const viewport = profile === 'phone' ? { width: 390, height: 844 } : { width: 1600, height: 900 }
+const viewport = { width: Number(option('width', profile === 'phone' ? '390' : '1600')), height: Number(option('height', profile === 'phone' ? '844' : '900')) }
 const step = (seconds, patch = {}) => ({ seconds, patch })
 const sampled = (times, patch) => times.map((time, index) => [`t${time}`, [step(index ? time - times[index - 1] : time, index ? {} : patch)]])
 const sequences = {
@@ -104,7 +105,7 @@ process.once('SIGTERM', () => { stopRequested = true })
 const persist = async complete => {
   const performanceSample = await page.evaluate(() => ({ firstPlayableMs: window.__captureReadyAt, render: window.__capturePerf }))
   await Promise.all(assetRequests)
-  await writeFile(path.join(out, `report-${rig}-${profile}-${scale}x${batch ? `-${batch}` : ''}.json`), JSON.stringify({ capturedAt: new Date().toISOString(), complete, batch: batch || 'full', url: url.href, assets, performance: performanceSample, model: modelSnapshot, errors, measurements, report }, null, 2))
+  await writeFile(path.join(out, `report-${rig}-${profile}-${scale}x${batch ? `-${batch}` : ''}.json`), JSON.stringify({ capturedAt: new Date().toISOString(), complete, batch: batch || 'full', url: url.href, viewport, deviceScaleFactor: scale, assets, performance: performanceSample, model: modelSnapshot, errors, measurements, report }, null, 2))
 }
 if (rig === 'blacksite' && (measureOnly || args.includes('--measure'))) {
   const model = await page.evaluate(() => window.__viewmodel.model)
@@ -152,6 +153,7 @@ capture: if (!measureOnly) for (const [name, build] of Object.entries(sequences)
     for (const [label, steps] of build(weapon)) {
       let debug
       for (const { seconds, patch } of steps) debug = await advance(seconds, patch)
+      if (labelFilter.length && !labelFilter.includes(label)) continue
       const file = path.join(dir, `${String(index++).padStart(2, '0')}-${label}.png`)
       await page.screenshot({ path: file, timeout: 90000 }).catch(async error => { await browser.close(); throw error })
       const entry = { sequence: name, weapon, label, file: path.relative(out, file), action: debug.action, time: debug.actionTime, aim: debug.aimAmount, handError: debug.handError, reach: debug.reach, recoil: debug.recoilOffset, sway: debug.swayRotation, offset: debug.weaponOffset, bones: debug.boneCount, viewmodelTriangles: debug.triangles }

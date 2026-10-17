@@ -30,6 +30,7 @@ export type LeftAnchor = 'support' | 'magazine' | 'charge' | 'free'
 export type WeaponModel = {
   readonly hip: { readonly position: Vec3; readonly rotation: Vec3 }
   readonly sight: Vec3
+  readonly rearSight: Vec3
   readonly eyeRelief: number
   readonly aimRotation: Vec3
   readonly aimSeconds: number
@@ -47,8 +48,8 @@ export type WeaponModel = {
 export const VIEWMODEL = {
   fov: 56,
   spring: { integrator: 'semi-implicit-euler', maxStepSeconds: 1 / 240 },
-  shoulders: { right: [0.16, -0.24, 0.0], left: [-0.15, -0.24, 0.0] },
-  upperArmStretch: 1.2,
+  shoulders: { right: [0.18, -0.3, 0.02], left: [-0.18, -0.3, 0.02] },
+  arms: { scale: 1.1, upperArmStretch: 1.6, forearmStretch: 1.15 },
   sway: { perRadianPerSecond: 0.016, maxRotation: 0.07, positionPerRadian: 0.045, stiffness: 140, damping: 19 },
   bob: { walkStride: 0.78, sprintStride: 1.05, walkSpeed: 3.1, vertical: 0.006, lateral: 0.009, roll: 0.014, pitch: 0.008, aimScale: 0.12, sprintScale: 1.9, blendRate: 9 },
   idle: { breathHz: 0.23, vertical: 0.0014, pitch: 0.004, aimScale: 0.35 },
@@ -62,9 +63,10 @@ export const VIEWMODEL = {
 export const VIEWMODEL_WEAPONS: Record<ArmsWeapon, WeaponModel> = {
   rifle: {
     hip: { position: [0.11, -0.165, -0.235], rotation: [0.015, 0.035, 0] },
-    sight: [0, 0.0892, 0.588],
-    eyeRelief: 0.778,
-    aimRotation: [0.012, 0, 0],
+    sight: [0, 0.08921, 0.5877],
+    rearSight: [0, 0.08924, 0.17739],
+    eyeRelief: 0.37,
+    aimRotation: [0, 0, 0],
     aimSeconds: 0.26,
     aimFov: 50,
     pivot: [0, 0.02, -0.05],
@@ -77,12 +79,13 @@ export const VIEWMODEL_WEAPONS: Record<ArmsWeapon, WeaponModel> = {
       magazine: { position: [-0.028, -0.065, -0.15], fingers: [0.05, -0.2, -1], palm: [1, 0.1, 0], grip: 'magazine' },
       charge: { position: [-0.025, 0.055, -0.08], fingers: [1, -0.15, -0.1], palm: [0.1, -1, 0], grip: 'pinch' },
     },
-    elbows: { right: [0.6, -0.8, 0.2], left: [-0.5, -0.85, 0.1] },
+    elbows: { right: [1, -0.25, 0.35], left: [-1, -0.25, 0.35] },
     magazine: { bone: 'magazine' },
   },
   pistol: {
     hip: { position: [0.1, -0.15, -0.34], rotation: [0.02, 0.05, 0] },
-    sight: [0, 0.0735, -0.025],
+    sight: [0, 0.07206, 0.17032],
+    rearSight: [0, 0.07369, -0.00314],
     eyeRelief: 0.36,
     aimRotation: [0, 0, 0],
     aimSeconds: 0.19,
@@ -91,13 +94,13 @@ export const VIEWMODEL_WEAPONS: Record<ArmsWeapon, WeaponModel> = {
     sprint: { position: [-0.035, -0.015, 0.01], rotation: [-0.3, 0.45, 0.2] },
     recoil: { back: 0.03, pitch: 0.12, yaw: 0.018, roll: 0.035, rise: 0.012, aimScale: 0.6 },
     cycle: { part: 'slide', travel: 0.034, seconds: 0.07, rack: 0.034, locksOpen: true },
-    right: { position: [-0.012, -0.028, 0.04], fingers: [0.85, -0.2, -0.5], palm: [-0.5, 0, -0.85], grip: 'pistolTrigger' },
+    right: { position: [0.015, -0.045, 0.02], fingers: [-0.28, 0.72, -0.64], palm: [-0.92, -0.14, 0.25], grip: 'pistolTrigger' },
     left: {
-      support: { position: [-0.025, -0.04, -0.008], fingers: [0.15, -0.25, -1], palm: [1, 0.1, 0.15], grip: 'pistolSupport' },
+      support: { position: [-0.025, -0.04, -0.008], fingers: [0.25, 0.55, -0.8], palm: [0.95, -0.2, 0.15], grip: 'pistolSupport' },
       magazine: { position: [-0.022, -0.058, 0.006], fingers: [0.1, 0.9, -0.25], palm: [1, 0.1, 0], grip: 'magazine' },
       charge: { position: [-0.004, 0.06, 0.07], fingers: [0.6, 0, -0.8], palm: [0.15, -0.2, 1], grip: 'pinch' },
     },
-    elbows: { right: [0.55, -0.85, 0.1], left: [-0.55, -0.85, 0.1] },
+    elbows: { right: [1, -0.25, 0.35], left: [-1, -0.25, 0.35] },
     magazine: { bone: 'magazine' },
   },
 }

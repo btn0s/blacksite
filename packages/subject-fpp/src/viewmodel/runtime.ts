@@ -29,6 +29,8 @@ type WeaponRig = {
   triggerRest: Quaternion
   flash?: MuzzleFlash
   sight: Vector3
+  rearSight: Vector3
+  aimRotation: Vec3
   anchors: Partial<Record<LeftAnchor, { bone: Bone; position: Vector3; fingers: Vector3; palm: Vector3 }>>
 }
 
@@ -60,13 +62,21 @@ export function createViewmodelRuntime(assets: ViewmodelAssets, state: ArmsState
   arms.rotation.y = Math.PI
   arms.traverse(child => { child.frustumCulled = false })
   if (assets.dress) assets.dress.fieldArms(arms)
-  for (const side of ['l', 'r']) arms.getObjectByName(`lowerarm_${side}`)?.position.multiplyScalar(VIEWMODEL.upperArmStretch)
+  arms.scale.setScalar(VIEWMODEL.arms.scale)
+  const stretch = (from: string, to: string, amount: number) => {
+    const start = arms.getObjectByName(from)
+    for (let bone = arms.getObjectByName(to); bone && bone !== start; bone = bone.parent ?? undefined) bone.position.multiplyScalar(amount)
+  }
+  for (const side of ['l', 'r']) {
+    stretch(`upperarm_${side}`, `lowerarm_${side}`, VIEWMODEL.arms.upperArmStretch)
+    stretch(`lowerarm_${side}`, `hand_${side}`, VIEWMODEL.arms.forearmStretch)
+  }
   root.add(arms)
   root.updateMatrixWorld(true)
-  const right = arms.getObjectByName('upperarm_r')!.getWorldPosition(new Vector3())
-  const left = arms.getObjectByName('upperarm_l')!.getWorldPosition(new Vector3())
-  const anchor = toPivot(VIEWMODEL.shoulders.right).add(toPivot(VIEWMODEL.shoulders.left)).multiplyScalar(0.5)
-  arms.position.copy(anchor).sub(right.add(left).multiplyScalar(0.5))
+  for (const side of ['right', 'left'] as const) {
+    const upper = arms.getObjectByName(`upperarm_${side === 'right' ? 'r' : 'l'}`)!
+    upper.position.copy(upper.parent!.worldToLocal(toPivot(VIEWMODEL.shoulders[side])))
+  }
   root.updateMatrixWorld(true)
   const rig = createArmsRig(arms)
   const boneCount = countArmsBones(arms)
@@ -98,6 +108,11 @@ export function createViewmodelRuntime(assets: ViewmodelAssets, state: ArmsState
       const rotation = bone.getWorldQuaternion(new Quaternion()).invert()
       anchors[anchor] = { bone, position: bone.worldToLocal(toPivot(socket.position)), fingers: toPivot(socket.fingers).applyQuaternion(rotation), palm: toPivot(socket.palm).applyQuaternion(rotation) }
     }
+    const sight = meshToPivot(model.sight)
+    const rearSight = meshToPivot(model.rearSight)
+    const aimQuaternion = new Quaternion().setFromUnitVectors(sight.clone().sub(rearSight).normalize(), new Vector3(0, 0, -1))
+    aimQuaternion.multiply(new Quaternion().setFromEuler(new Euler(...model.aimRotation)))
+    const aimEuler = new Euler().setFromQuaternion(aimQuaternion)
     weapons[weapon] = {
       weapon, model, pivot, mesh, magazine, part, hammer, trigger, anchors,
       magazineRest: { position: magazine?.position.clone() ?? new Vector3(), quaternion: magazine?.quaternion.clone() ?? new Quaternion(), scale: magazine?.scale.clone() ?? new Vector3(1, 1, 1), pivot: magazinePivot },
@@ -106,7 +121,7 @@ export function createViewmodelRuntime(assets: ViewmodelAssets, state: ArmsState
       hammerRest: hammer?.quaternion.clone() ?? new Quaternion(),
       triggerRest: trigger?.quaternion.clone() ?? new Quaternion(),
       flash: assets.dress?.flash(weapon, mesh),
-      sight: meshToPivot(model.sight),
+      sight, rearSight, aimRotation: [aimEuler.x, aimEuler.y, aimEuler.z],
     }
   }
 
@@ -291,8 +306,8 @@ export function createViewmodelRuntime(assets: ViewmodelAssets, state: ArmsState
 
       const hip = model.hip
       toPivot(model.pivot, pivotPoint)
-      quaternion.setFromEuler(rotation.set(...model.aimRotation))
-      aimedSight.copy(rigged.sight).sub(pivotPoint).applyQuaternion(quaternion).add(pivotPoint)
+      quaternion.setFromEuler(rotation.set(...rigged.aimRotation))
+      aimedSight.copy(rigged.rearSight).sub(pivotPoint).applyQuaternion(quaternion).add(pivotPoint)
       const ads = { x: -aimedSight.x, y: -aimedSight.y, z: -model.eyeRelief - aimedSight.z }
       const sprint = model.sprint
       const clipScale = 1
@@ -302,9 +317,9 @@ export function createViewmodelRuntime(assets: ViewmodelAssets, state: ArmsState
         hip.position[2] + (ads.z - hip.position[2]) * aim + sprint.position[2] * sprintAmount + sample.weaponPosition[2] * clipScale + recoil.position.value[2],
       )
       rotation.set(
-        hip.rotation[0] * (1 - aim) + model.aimRotation[0] * aim + sprint.rotation[0] * sprintAmount + sample.weaponRotation[0] + bobPitch + sway.rotation.value[0] + recoil.rotation.value[0],
-        hip.rotation[1] * (1 - aim) + model.aimRotation[1] * aim + sprint.rotation[1] * sprintAmount + sample.weaponRotation[1] + sway.rotation.value[1] + recoil.rotation.value[1],
-        hip.rotation[2] * (1 - aim) + model.aimRotation[2] * aim + sprint.rotation[2] * sprintAmount + sample.weaponRotation[2] + bobRoll + sway.rotation.value[2] + recoil.rotation.value[2],
+        hip.rotation[0] * (1 - aim) + rigged.aimRotation[0] * aim + sprint.rotation[0] * sprintAmount + sample.weaponRotation[0] + bobPitch + sway.rotation.value[0] + recoil.rotation.value[0],
+        hip.rotation[1] * (1 - aim) + rigged.aimRotation[1] * aim + sprint.rotation[1] * sprintAmount + sample.weaponRotation[1] + sway.rotation.value[1] + recoil.rotation.value[1],
+        hip.rotation[2] * (1 - aim) + rigged.aimRotation[2] * aim + sprint.rotation[2] * sprintAmount + sample.weaponRotation[2] + bobRoll + sway.rotation.value[2] + recoil.rotation.value[2],
       )
       for (const entry of Object.values(weapons)) entry.pivot.visible = entry === rigged
       quaternion.setFromEuler(rotation)

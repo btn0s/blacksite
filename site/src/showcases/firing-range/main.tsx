@@ -273,8 +273,8 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     if (jumping && !state.jumpHeld && state.height <= 0) state.vertical = jumpSpeed
     state.jumpHeld = jumping
     if (state.height > 0 || state.vertical > 0) {
+      state.height += state.vertical * dt - 0.5 * gravity * dt * dt
       state.vertical -= gravity * dt
-      state.height += state.vertical * dt
       if (state.height <= 0) { arms.landSpeed = -state.vertical; arms.landSequence++; audio.land(-state.vertical); state.height = 0; state.vertical = 0 }
     }
     position.y = eye + state.height

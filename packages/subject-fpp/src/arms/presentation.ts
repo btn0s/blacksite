@@ -33,9 +33,9 @@ export function createPresentation(fov: number) {
   return { scene, camera }
 }
 
-export function frameNarrow(view: PerspectiveCamera, fov: number, aspect: number, aim: number) {
-  const vertical = portraitFov(fov, aspect, NARROWEST_ASPECT)
-  const narrow = Math.min(1, Math.max(0, (NARROWEST_ASPECT - aspect) / (NARROWEST_ASPECT - 0.5)))
+export function frameNarrow(view: PerspectiveCamera, fov: number, aspect: number, aim: number, minimum = NARROWEST_ASPECT) {
+  const vertical = portraitFov(fov, aspect, minimum)
+  const narrow = Math.min(1, Math.max(0, (minimum - aspect) / (minimum - 0.5)))
   const shift = Math.round(narrow * (1 - aim) * 0.16 * view.getFilmWidth() * 1000) / 1000
   if (view.aspect !== aspect || view.fov !== vertical || view.filmOffset !== shift) { view.aspect = aspect; view.fov = vertical; view.filmOffset = shift; view.updateProjectionMatrix() }
 }
