@@ -1,0 +1,34 @@
+{
+  "name": "@blacksite/materials",
+  "version": "0.3.0",
+  "private": true,
+  "description": "A material graph that makes PBR textures: noises, shapes, filters and weathering, evaluated on the GPU for previews and baked to KTX2 and WebP at build time",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./graph": "./src/graph.ts",
+    "./cpu": "./src/cpu.ts",
+    "./gpu": "./src/gpu.ts",
+    "./three": "./src/three.ts",
+    "./bake": "./src/bake.ts",
+    "./node": "./src/node.ts",
+    "./library/*": "./library/*"
+  },
+  "bin": { "blacksite-materials": "./scripts/bake.ts" },
+  "scripts": {
+    "bake": "tsx scripts/bake.ts",
+    "bake:library": "tsx scripts/bake-library.ts",
+    "preview": "tsx scripts/preview.ts",
+    "build:proof": "vite build --config proof/vite.config.ts",
+    "budget:proof": "cd proof && node ../../../cli/index.mjs budget"
+  },
+  "peerDependencies": {
+    "three": "^0.186.1"
+  },
+  "dependencies": {
+    "ktx2-encoder": "^0.6.0",
+    "sharp": "^0.35.5",
+    "tsx": "^4.23.15"
+  },
+  "license": "FSL-1.1-ALv2"
+}

@@ -11,7 +11,7 @@ const inverse = new Quaternion()
 const euler = new Euler()
 const environment = new Quaternion()
 
-export default function BlacksiteViewmodel({ state, visible = true, manifestUrl, render = 'composite', onPresentation, overlay = false }: ArmsViewmodelProps) {
+export default function BlacksiteViewmodel({ state, visible = true, manifestUrl, render = 'composite', onPresentation }: ArmsViewmodelProps) {
   const assets = use(preloadViewmodelAssets(manifestUrl))
   const runtime = useMemo(() => createViewmodelRuntime(assets, state), [assets, state])
   const fov = assets.manifest.fov ?? VIEWMODEL.fov
@@ -40,7 +40,7 @@ export default function BlacksiteViewmodel({ state, visible = true, manifestUrl,
     presentation.scene.environmentRotation.copy(euler.setFromQuaternion(inverse.multiply(environment.setFromEuler(scene.environmentRotation))))
     presentation.scene.visible = visible
     if (render === 'external') return
-    compositePresentation(gl, { scene, camera }, presentation, visible, overlay)
-  }, overlay ? 2 : 0.5)
+    compositePresentation(gl, { scene, camera }, presentation, visible)
+  }, 0.5)
   return null
 }

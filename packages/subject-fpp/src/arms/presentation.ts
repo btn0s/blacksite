@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, DirectionalLight, HemisphereLight, PerspectiveCamera, Scene, type Camera, type WebGLRenderer } from 'three'
+import { DirectionalLight, HemisphereLight, PerspectiveCamera, Scene, type Camera, type WebGLRenderer } from 'three'
 import type { ArmsRig, ArmsState } from './state'
 
 export function portraitFov(fov: number, aspect: number, minimum = 0.8) {
@@ -18,7 +18,6 @@ export interface ArmsViewmodelProps {
   rig?: ArmsRig
   render?: 'composite' | 'external'
   onPresentation?: (presentation: ArmsPresentation | null) => void
-  overlay?: boolean
 }
 
 export const NARROWEST_ASPECT = 4 / 3
@@ -46,19 +45,14 @@ export function copyPresentationCrop(view: PerspectiveCamera, source: Camera) {
   else if (view.view?.enabled) view.clearViewOffset()
 }
 
-export function compositePresentation(gl: WebGLRenderer, world: { scene: Scene; camera: Camera }, presentation: ArmsPresentation, visible: boolean, overlay: boolean) {
+export function compositePresentation(gl: WebGLRenderer, world: { scene: Scene; camera: Camera }, presentation: ArmsPresentation, visible: boolean) {
   const autoClear = gl.autoClear
-  if (!overlay) {
-    gl.autoClear = true
-    gl.render(world.scene, world.camera)
-  }
+  gl.autoClear = true
+  gl.render(world.scene, world.camera)
   if (visible) {
-    const toneMapping = gl.toneMapping
-    if (overlay) gl.toneMapping = ACESFilmicToneMapping
     gl.autoClear = false
     gl.clearDepth()
     gl.render(presentation.scene, presentation.camera)
-    gl.toneMapping = toneMapping
   }
   gl.autoClear = autoClear
 }

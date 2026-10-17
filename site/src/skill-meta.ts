@@ -7,7 +7,7 @@ export const workflow = ['Size', 'Truth', 'Parts list', 'Build', 'Make it live',
 export const referenceGroups = [
   { title: 'Workflow', names: ['design', 'setup', 'prototype', 'combine', 'verify', 'optimise', 'ship'] },
   { title: 'Craft', names: ['craft', 'feel', 'sound', 'performance'] },
-  { title: 'Building blocks', names: ['characters', 'als', 'weapons', 'ai', 'destruction', 'multiplayer', 'input'] },
+  { title: 'Building blocks', names: ['characters', 'als', 'weapons', 'ai', 'destruction', 'multiplayer', 'input', 'materials'] },
   { title: 'Wiring and assets', names: ['architecture', 'assets', 'catalog'] },
 ]
 

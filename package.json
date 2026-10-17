@@ -30,12 +30,15 @@
     "dev:warden": "vite --host 0.0.0.0"
   },
   "dependencies": {
+    "7z-wasm": "^1.2.0",
     "@blacksite/armory": "workspace:*",
     "@blacksite/cascade": "workspace:*",
     "@blacksite/check": "workspace:*",
     "@blacksite/input": "workspace:*",
     "@blacksite/look": "workspace:*",
+    "@blacksite/materials": "workspace:*",
     "@blacksite/relay": "workspace:*",
+    "@blacksite/soundscape": "workspace:*",
     "@blacksite/subject": "workspace:*",
     "@blacksite/subject-fpp": "workspace:*",
     "@blacksite/ui": "workspace:*",

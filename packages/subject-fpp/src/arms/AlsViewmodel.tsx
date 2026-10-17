@@ -4,7 +4,7 @@ import { preloadArmsAssets } from './manifest'
 import { compositePresentation, copyPresentationCrop, createPresentation, frameNarrow, type ArmsViewmodelProps } from './presentation'
 import { createArmsRuntime, measureArmsAttachment } from './runtime'
 
-export default function AlsViewmodel({ state, visible = true, manifestUrl, render = 'composite', onPresentation, overlay = false }: ArmsViewmodelProps) {
+export default function AlsViewmodel({ state, visible = true, manifestUrl, render = 'composite', onPresentation }: ArmsViewmodelProps) {
   const renderer = useThree(state => state.gl)
   const assets = use(preloadArmsAssets(manifestUrl, renderer))
   const runtime = useMemo(() => createArmsRuntime(assets, state), [assets, state])
@@ -35,7 +35,7 @@ export default function AlsViewmodel({ state, visible = true, manifestUrl, rende
     state.debug.cameraRelativeError = error
     state.debug.maxCameraRelativeError = Math.max(state.debug.maxCameraRelativeError, error)
     if (render === 'external') return
-    compositePresentation(gl, { scene, camera }, presentation, visible, overlay)
-  }, overlay ? 2 : 0.5)
+    compositePresentation(gl, { scene, camera }, presentation, visible)
+  }, 0.5)
   return null
 }

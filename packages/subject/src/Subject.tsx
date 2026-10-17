@@ -10,7 +10,7 @@ import {
   type SubjectState,
 } from './controller'
 
-export interface SubjectProps { controller: SubjectState }
+export interface SubjectProps { controller: SubjectState; input?: 'dom' | 'external' }
 const isTextInput = (target: EventTarget | null) => target !== null
   && typeof target === 'object'
   && 'tagName' in target
@@ -24,7 +24,7 @@ const isPerspectiveCamera = (camera: Camera): camera is PerspectiveCamera =>
  * Mount inside StriderScene player={controller.player}. Owns classic input and the stable FPP eye, never physics. TPP remains the native ALS camera.
  * Frame data publishes after ALS_FRAME_PRIORITY.Camera; fire simulation can sample at -0.1 or later.
  */
-export function Subject({ controller }: SubjectProps) {
+export function Subject({ controller, input = 'dom' }: SubjectProps) {
   const { camera, gl } = useThree()
   const scratch = useMemo(() => ({
     rotation: new Euler(0, 0, 0, 'YXZ'), right: new Vector3(), up: new Vector3(0, 1, 0),
@@ -35,6 +35,7 @@ export function Subject({ controller }: SubjectProps) {
   const previousView = useRef(controller.view)
 
   useEffect(() => {
+    if (input === 'external') return
     const canvas = gl.domElement
     const doc = canvas.ownerDocument
     const previousTabIndex = canvas.getAttribute('tabindex')
@@ -114,7 +115,7 @@ export function Subject({ controller }: SubjectProps) {
       else canvas.setAttribute('tabindex', previousTabIndex)
       if (doc.pointerLockElement === canvas) doc.exitPointerLock()
     }
-  }, [controller, gl])
+  }, [controller, gl, input])
 
   useEffect(() => {
     if (!isPerspectiveCamera(camera)) throw new Error('Subject requires a PerspectiveCamera')
@@ -127,7 +128,7 @@ export function Subject({ controller }: SubjectProps) {
     return () => { camera.near = original.near; camera.fov = original.fov; camera.updateProjectionMatrix() }
   }, [camera, controller])
 
-  useFrame(() => { updateFpsMovementInput(controller) }, ALS_FRAME_PRIORITY.ControlRotation - 0.1)
+  useFrame(() => { if (input === 'dom') updateFpsMovementInput(controller) }, ALS_FRAME_PRIORITY.ControlRotation - 0.1)
 
   useFrame((_, rawDelta) => {
     const sample = controller.player.pose.current

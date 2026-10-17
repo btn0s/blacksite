@@ -9,3 +9,5 @@ __pycache__/
 *.pyc
 .venv/
 blacksite-check/
+assets/.build/
+assets/.build-site/

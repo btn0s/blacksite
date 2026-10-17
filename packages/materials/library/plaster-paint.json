@@ -1,0 +1,217 @@
+{
+  "name": "plaster-paint",
+  "title": "Plaster with peeling paint",
+  "description": "Lime plaster under an old distemper coat that has flaked away in islands.",
+  "size": 2.0,
+  "depth": 0.006,
+  "seed": 3,
+  "orientation": "wall",
+  "wear": {
+    "color": "#a9a598",
+    "roughness": 0.92
+  },
+  "nodes": {
+    "lumps": {
+      "op": "fbm",
+      "cell": 0.18,
+      "octaves": 6,
+      "gain": 0.5
+    },
+    "trowel": {
+      "op": "fbm",
+      "cell": [
+        0.25,
+        0.08
+      ],
+      "octaves": 4
+    },
+    "fine": {
+      "op": "fbm",
+      "cell": 0.004,
+      "octaves": 2,
+      "basis": "value"
+    },
+    "peelField": {
+      "op": "fbm",
+      "cell": [
+        0.4,
+        0.22
+      ],
+      "octaves": 7,
+      "gain": 0.62
+    },
+    "peelWarp": {
+      "op": "fbm",
+      "cell": 0.06,
+      "octaves": 3
+    },
+    "peelW": {
+      "op": "warp",
+      "input": "peelField",
+      "by": "peelWarp",
+      "amount": 0.012
+    },
+    "paint": {
+      "op": "levels",
+      "input": "peelMix",
+      "in": [
+        0.45,
+        0.465
+      ]
+    },
+    "paintSoft": {
+      "op": "blur",
+      "input": "paint",
+      "radius": 0.0015
+    },
+    "rim": {
+      "op": "levels",
+      "input": "peelMix",
+      "in": [
+        0.45,
+        0.475
+      ]
+    },
+    "rimBand": {
+      "op": "blend",
+      "a": "rim",
+      "b": "paint",
+      "mode": "difference"
+    },
+    "plasterH": {
+      "op": "blend",
+      "a": "lumps",
+      "b": "trowel",
+      "mode": "overlay",
+      "opacity": 0.4
+    },
+    "plasterH2": {
+      "op": "blend",
+      "a": "plasterH",
+      "b": "fine",
+      "mode": "overlay",
+      "opacity": 0.4
+    },
+    "plasterLow": {
+      "op": "levels",
+      "input": "plasterH2",
+      "out": [
+        0.2,
+        0.55
+      ]
+    },
+    "height": {
+      "op": "blend",
+      "a": "plasterLow",
+      "b": "paintSoft",
+      "mode": "add",
+      "opacity": 0.35
+    },
+    "plasterTone": {
+      "op": "blend",
+      "a": "lumps",
+      "b": "fine",
+      "mode": "overlay",
+      "opacity": 0.5
+    },
+    "plaster": {
+      "op": "ramp",
+      "input": "plasterTone",
+      "stops": [
+        [
+          0,
+          "#7d7a70"
+        ],
+        [
+          0.5,
+          "#9c988c"
+        ],
+        [
+          1,
+          "#b5b0a3"
+        ]
+      ]
+    },
+    "paintTone": {
+      "op": "fbm",
+      "cell": 0.2,
+      "octaves": 5
+    },
+    "paintC": {
+      "op": "ramp",
+      "input": "paintTone",
+      "stops": [
+        [
+          0,
+          "#6c7a66"
+        ],
+        [
+          0.5,
+          "#83927c"
+        ],
+        [
+          1,
+          "#99a690"
+        ]
+      ]
+    },
+    "paintC2": {
+      "op": "blend",
+      "a": "paintC",
+      "b": "fine",
+      "mode": "overlay",
+      "opacity": 0.15
+    },
+    "color0": {
+      "op": "blend",
+      "a": "plaster",
+      "b": "paintC2",
+      "mode": "mix",
+      "mask": "paint"
+    },
+    "color": {
+      "op": "blend",
+      "a": "color0",
+      "b": "#4b463b",
+      "mode": "mix",
+      "mask": "rimBand",
+      "opacity": 0.5
+    },
+    "roughness": {
+      "op": "blend",
+      "a": 0.93,
+      "b": 0.72,
+      "mode": "mix",
+      "mask": "paint"
+    },
+    "flakes": {
+      "op": "cellular",
+      "cell": 0.025,
+      "mode": "id"
+    },
+    "peelMix": {
+      "op": "blend",
+      "a": "peelW",
+      "b": "flakes",
+      "mode": "mix",
+      "opacity": 0.12
+    }
+  },
+  "outputs": {
+    "color": "color",
+    "height": "height",
+    "roughness": "roughness",
+    "metalness": 0
+  },
+  "finish": {
+    "normal": 1.2,
+    "ao": {
+      "radius": 0.02,
+      "strength": 0.8
+    }
+  },
+  "weather": {
+    "age": 0.5,
+    "dirt": 0.3
+  }
+}

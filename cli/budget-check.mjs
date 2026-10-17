@@ -15,6 +15,8 @@ async function walk(dir) {
   }
 }
 try { await walk(dist) } catch { errors.push(`Build directory missing: ${dist}`) }
+const legacy = (config.legacyAssetPaths || []).map(item => item.includes('*') ? new RegExp(`^${item.split('*').map(part => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')}$`) : item)
+const isLegacy = relative => legacy.some(item => typeof item === 'string' ? item === relative : item.test(relative))
 const js = files.filter(file => /\.(?:js|mjs)$/.test(file))
 let totalJs = 0
 for (const file of files) {
@@ -25,7 +27,7 @@ for (const file of files) {
     totalJs += bytes
     if (bytes > config.maxChunkBytes) errors.push(`JS chunk ${relative}: ${bytes} > ${config.maxChunkBytes} bytes`)
   }
-  if ((config.legacyAssetPaths || []).includes(relative)) continue
+  if (isLegacy(relative)) continue
   if (/\.(?:png|jpe?g|webp|avif|basis|dds)$/i.test(file)) errors.push(`Texture ${relative} is not KTX2`)
   if (/\.(?:fbx|obj|dae)$/i.test(file)) errors.push(`Model ${relative} is not meshopt glTF`)
   if (/\.(?:glb|gltf)$/i.test(file)) {

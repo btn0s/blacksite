@@ -4,7 +4,7 @@ A post-processing and atmosphere stack for three.js: HDR composer, ambient occlu
 
 ## Pipeline
 
-`EffectComposer` (HalfFloat buffers, MSAA by tier) runs `RenderPass`, `N8AOPostPass` (half resolution, depth-aware upsampling, radius 0.35, intensity 1.8, one denoise iteration), `BloomEffect` (intensity 0.8, threshold 1.35, smoothing 0.2, radius 0.45, mipmap blur), then `GradeEffect`. The grade applies exposure, a shoulder tonemap (linear to 0.72, exponential roll-off above), an optional 3D LUT in display space, night split toning, vignette, chromatic aberration and film grain. `createLook` sets `renderer.toneMapping = NoToneMapping`, because the shoulder is the tonemapper, and restores the previous value on `dispose()`.
+`EffectComposer` (HalfFloat buffers, MSAA by tier) runs `RenderPass`, `N8AOPostPass` (half resolution, depth-aware upsampling, radius 0.35, intensity 1.8, one denoise iteration), `BloomEffect` (intensity 0.8, threshold 1.35, smoothing 0.2, radius 0.45, mipmap blur), then `GradeEffect`. The grade applies exposure, a shoulder tonemap (linear to 0.72, exponential roll-off above), an optional 3D LUT in display space, night split toning, vignette, chromatic aberration and film grain. The grade is the only tonemapper and `atmosphere.exposure` the only exposure: `createLook` sets `renderer.toneMapping = NoToneMapping` and restores the previous value on `dispose()`, and nothing else in the package touches tone mapping. To change exposure, pass an atmosphere with your own value, such as `{ ...ZONE, exposure: 1.22 }`. `renderer.toneMappingExposure` has no effect while the composer runs, because the scene renders into the composer's buffers.
 
 ## Vanilla three
 
@@ -24,6 +24,29 @@ look.dispose()
 ```
 
 `createLook` returns `{ composer, grade, sky, atmosphere, quality, render(dt), setSize(w, h, updateStyle?), setAtmosphere(atmosphere | name), setQuality(tier), setAberration(extra), addOverlay(scene, camera), dispose() }`. Options: `atmosphere` (default `'zone'`), `quality` (default `autoQuality()`), `sky` (default true; adds the dome to the scene), `environment` (default false; PMREM-bakes the sky into `scene.environment`), `fog` (default true), `sun` (a `DirectionalLight` to drive) and `fill` (a `HemisphereLight` to drive).
+
+## Broad textured surfaces
+
+Use `applyStochasticTiling` by default on broad unstructured surfaces such as mud, concrete, asphalt, rust, plaster and forest floor. Repeating one photographed patch over a large floor produces an obvious grid even when the source is seamless. Keep the source's metre scale and break its repetition with transformed patches:
+
+```ts
+import { applyStochasticTiling } from '@blacksite/look'
+
+const ground = new MeshStandardMaterial({ map: colour, normalMap: normal, roughnessMap: orm, metalnessMap: orm, aoMap: orm })
+const removeStochasticTiling = applyStochasticTiling(ground)
+```
+
+All maps must use `RepeatWrapping`, the same UV channel and the same repeat/offset/rotation transform. Set those transforms before applying the helper. Colour uses the usual sRGB texture setting; normal and ORM use no colour space. The material keeps its physical texture scale. Three fixed patches blend on a triangular grid, with the same offsets, rotations and weights for colour, tangent-space normal and ORM. Each sampled normal's tangent XY is inverse-rotated after applying `normalScale`, including signed or unequal scales. Explicit rotated derivatives retain mip selection and anisotropic filtering across patch edges. Nothing changes over time.
+
+`tileSpan` defaults to 1 source repeat per lattice edge; `blendSharpness` defaults to 4 to keep one patch dominant and limit blending softness; `seed` defaults to 0. `rotation` defaults to `'quarter-turn'` for irregular surfaces; `'half-turn'` permits only 0°/180°, and `'none'` uses offsets alone. Use `'none'` or `'half-turn'` on directional bark or grain so it never turns sideways. This is a lightweight three-patch blend, not histogram-preserving synthesis: transition regions can still soften high-contrast detail. Use `tileSpan` 0.5–2 and avoid excessive sharpness, which exposes patch edges. No additional texture files or dependencies are needed. Colour + normal + packed ORM costs 9 texture reads per fragment, versus 5 for the stock material; shared ORM sources with matching sampling settings are sampled once. Separate ORM sources cost up to 15 reads. Use it on broad surfaces where repetition is visible and retain ordinary sampling on small props and material swatches.
+
+Keep authored brick, tile, paver, plank, corrugated sheet and grate patterns ordered. The directional modes preserve course orientation, but random offsets can still break joints. For continuous authored joints, keep ordinary sampling and break repetition through material variants, macro wear or decals. The asset viewer enables **Reduce tiling** by default for unstructured floors and disables it for ordered surfaces; the switch supports a comparison at the same camera position.
+
+The helper supports `MeshStandardMaterial` with colour, tangent normal and ORM maps in `WebGLRenderer`. Separate bump, displacement, alpha and emissive maps are rejected because their features would lose alignment. It chains existing `onBeforeCompile` and cache hooks, accepts already-expanded stock sampling chunks, and returns an idempotent removal function. Hooks are not copied by Three's material cloning; apply the helper after cloning and after installing other hooks. Reapply after changing the material's map layout. Existing hooks must retain standard map UV/sampler names and the normal mapping expressions; unsupported replacements fail explicitly.
+
+Float colour textures from `liveMaterial` use `DECODE_VIDEO_TEXTURE` to decode stored sRGB in the shader. The helper detects that define: it decodes each sampled colour before blending, then re-encodes the blend for the existing decode stage. This preserves both linear-light blending and the existing material hook's effect. Hardware-decoded sRGB textures use the cheaper ordinary path. If an older/custom hook decodes `sampledDiffuseColor` without that define, pass `{ shaderDecodesSRGB: true }`; this option describes an existing decode stage and does not add one. Every rotation/decode variant and the previous hook's cache identifier contribute to `customProgramCacheKey`.
+
+The sampling layout follows the three-patch construction described by [Heitz and Neyret](https://eheitzresearch.wordpress.com/722-2/); the full histogram-preserving method and its preprocessing are described by [Deliot and Heitz](https://eheitzresearch.wordpress.com/738-2/). Shader integration uses Three's documented [material compilation and cache hooks](https://threejs.org/docs/pages/Material.html).
 
 ## Overlays
 
@@ -67,7 +90,7 @@ await texturesReady()
 - `groundMaterial()` blends dirt, grass and gravel by world-space noise; `puddleMaterial()` is a dark mirror for decals on it.
 - `LevelBuilder` merges every box, cylinder and plane by material into one mesh each, adds contact shadows, and collects box and cylinder colliders for your physics.
 - Props: `apartmentBlock`, `lada`, `shed`, `waterTower`, `apc`, `deadTree`.
-- `createAtmosphere(scene, renderer)` is the plain-three overcast sky, sun and fog the showcases use without the composer; `internalPixelRatio()`, `isTouchDevice()`, `setAnisotropy()`, `preloadSurfaces()` and `texturesReady()` cover loading and resolution.
+- `createAtmosphere(scene, renderer)` is the world kit's photographic overcast sky dome, sun with a texel-snapped shadow that `follow(target)` moves, hemisphere fill and exponential fog. It leaves tone mapping and exposure to the look: pair it with `createLook(…, { sky: false, fog: false })` or `<Look sky={false} fog={false} />`. `internalPixelRatio()`, `isTouchDevice()`, `setAnisotropy()`, `preloadSurfaces()` and `texturesReady()` cover loading and resolution.
 
 Credits for the textures are in `assets/world/CREDITS.md`.
 

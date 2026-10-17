@@ -223,14 +223,12 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     const strength = event.weaponId === 'pistol' ? 1 : 0.8
     effects.impact(solid.surface, point, normal, strength)
     const distance = point.distanceTo(camera.position)
-    scratch.right.set(1, 0, 0).applyQuaternion(camera.quaternion)
-    const pan = THREE.MathUtils.clamp(scratch.local.subVectors(point, camera.position).normalize().dot(scratch.right), -0.8, 0.8)
     const view = drill.get()
     const counting = view.phase === 'running'
     const steel = hit.targetId ? steelById.get(hit.targetId) : undefined
     if (steel) {
       steel.hit(steel.plate.worldToLocal(point.clone()), strength)
-      audio.steel(steel.pitch, strength, distance, pan)
+      audio.steel(steel.pitch, strength, point)
       drill.set({ marker: view.marker + 1 })
       if (counting) {
         const fresh = !steel.cleared
@@ -240,7 +238,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
       }
       return
     }
-    audio.impact(solid.surface, distance, pan)
+    audio.impact(solid.surface, point, distance)
     const paper = hit.targetId ? paperById.get(hit.targetId) : undefined
     if (paper) {
       const ring = point.distanceTo(paper.center) / (paper.radius / 5)
@@ -307,7 +305,8 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
   useFrame(({ size }, dt) => {
     const state = control.current
     for (const target of steelSet.steel) target.update(dt)
-    effects.update(dt, position => audio.casing(position.distanceTo(camera.position)))
+    effects.update(dt, position => audio.casing(position))
+    audio.update(dt, camera.position, scratch.forward.set(0, 0, -1).applyQuaternion(camera.quaternion))
     state.flash = Math.max(0, state.flash - dt)
     lights.flash.intensity = state.flash > 0 ? 14 * state.flash / 0.05 : 0
     if (worldReady && presentation && readyFrames.current++ > 2) check.ready()

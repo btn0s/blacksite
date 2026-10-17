@@ -11,5 +11,5 @@
     "noEmit": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "vendor/blacksite/vendor/als-web/src/app/globals.d.ts"]
+  "include": ["src", "vendor/blacksite/packages/look/src/n8ao.d.ts", "vendor/blacksite/vendor/als-web/src/app/globals.d.ts"]
 }

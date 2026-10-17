@@ -15,6 +15,9 @@ importers:
 
   .:
     dependencies:
+      7z-wasm:
+        specifier: ^1.2.0
+        version: 1.2.0
       '@blacksite/armory':
         specifier: workspace:*
         version: link:packages/armory
@@ -30,9 +33,15 @@ importers:
       '@blacksite/look':
         specifier: workspace:*
         version: link:packages/look
+      '@blacksite/materials':
+        specifier: workspace:*
+        version: link:packages/materials
       '@blacksite/relay':
         specifier: workspace:*
         version: link:packages/relay
+      '@blacksite/soundscape':
+        specifier: workspace:*
+        version: link:packages/soundscape
       '@blacksite/subject':
         specifier: workspace:*
         version: link:packages/subject
@@ -526,6 +535,18 @@ importers:
         specifier: ^6.39.5
         version: 6.39.5(three@0.186.1)
 
+  packages/materials:
+    dependencies:
+      ktx2-encoder:
+        specifier: ^0.6.0
+        version: 0.6.0
+      sharp:
+        specifier: ^0.35.5
+        version: 0.35.5(@types/node@24.19.2)
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+
   packages/protocol: {}
 
   packages/relay:
@@ -575,6 +596,12 @@ importers:
       koota:
         specifier: ^0.6.0
         version: 0.6.6(@types/react@19.3.0)(react@19.3.1)
+
+  packages/soundscape:
+    dependencies:
+      '@blacksite/check':
+        specifier: workspace:*
+        version: link:../check
 
   packages/subject:
     dependencies:
@@ -800,6 +827,11 @@ importers:
         version: 4.1.11(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(tsx@4.23.15))
 
 packages:
+
+  7z-wasm@1.2.0:
+    resolution: {integrity: sha512-AZjtWXFleAe5nQ27JYISs70cICjO0zZr4LU45I9pXKcrhG0qiEWgq3Vjwr9JHHihFLuqgc7uSHYVn/z3vXCjdw==}
+    engines: {node: '>=8.0.0'}
+    hasBin: true
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -3846,6 +3878,10 @@ packages:
     resolution: {integrity: sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw==}
     engines: {node: '>=0.10.0'}
 
+  readline-sync@1.4.10:
+    resolution: {integrity: sha512-gNva8/6UAe8QYepIQH/jQ2qn91Qj0B9sYjMBBs3QOB8F2CXcKgLxQaJRP76sWVRQt+QU+8fAkCbCvjjMFu7Ycw==}
+    engines: {node: '>= 0.8.0'}
+
   recast@0.23.21:
     resolution: {integrity: sha512-mFAyJq9vUbSTARLZUvAEf1z3YxlvAwswbmxMx2mPA/MSm4KmpwvwvhsH/NIrZhyOuwD60Lzyw2qh83uCbgTPYw==}
     engines: {node: '>= 4'}
@@ -4549,6 +4585,10 @@ packages:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
 snapshots:
+
+  7z-wasm@1.2.0:
+    dependencies:
+      readline-sync: 1.4.10
 
   '@babel/code-frame@7.29.7':
     dependencies:
@@ -7630,6 +7670,8 @@ snapshots:
       react-dom: 19.3.1(react@19.3.1)
 
   react@19.3.1: {}
+
+  readline-sync@1.4.10: {}
 
   recast@0.23.21:
     dependencies:
