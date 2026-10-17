@@ -41,11 +41,11 @@ Then describe a game to your agent. The skill loads by itself for anything game-
 
 | Reference | What the agent does with it |
 | --- | --- |
-| `design`, `setup`, `prototype`, `combine`, `optimise`, `ship` | The workflow: interview one question at a time, create the project, build each risky mechanic alone, join what works, bring it within budget, and deploy only when you ask. |
-| `craft`, `feel`, `sound`, `performance` | How to light, dress, tune and mix a game, with exact values, and what to cut first when a frame takes too long. |
-| `characters`, `als`, `weapons`, `ai`, `destruction`, `multiplayer`, `input` | One per building block, pointing to its guide, with its settings, its gaps and the failures that shaped it. |
-| `architecture`, `assets`, `catalog` | Who owns which state, how to use assets you already own, and every package and command. |
-| `verify` | `blacksite check`: how long frames take, frames over 33 ms, objects that appear late, movement speed, sounds that repeat, and screenshots to review, on desktop and phone. |
+| `process`, `architecture` | The workflow from idea to deploy: one question at a time, the design you approve, each risky mechanic built alone, then joined; and which library owns which state. |
+| `feel`, `combat`, `enemies`, `sound`, `multiplayer` | How fast the player moves and how the camera follows, what every action shows and plays, squads with a human reaction delay, sound placed in the world, and server-owned hits. |
+| `craft`, `worlds` | Light, materials and layout, and a sky, terrain and forests that reach the horizon. |
+| `performance`, `verify` | 120 fps on desktop and 60 on phones, what to cut first, and `blacksite check` on desktop and phone. |
+| `building-blocks`, `catalog` | How to wire each building block, and every template, package and command. |
 
 The agent asks one question at a time and sizes the job, writes the game's speeds, ranges and frame times into one file, lists the parts the finished scene needs, builds the risky parts alone and joins them, makes the scene move and make sound, and checks its own work before it hands you a link. It deploys only when you ask. Each step writes a file into the game project, so you can stop and resume anywhere.
 
