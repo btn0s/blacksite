@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useRef, useSyncExternalStore } from 'react'
 import { PLAYER, WEAPONS } from './model'
 
 export type Subtitle = { id: number; speaker: string; text: string; until: number }
@@ -52,4 +52,15 @@ export const hud = {
   subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
 }
 
-export const useHud = () => useSyncExternalStore(hud.subscribe, hud.get, hud.get)
+export function useHud<K extends keyof View>(...keys: K[]): Pick<View, K> {
+  const cache = useRef<Pick<View, K> | null>(null)
+  const get = () => {
+    const previous = cache.current
+    if (previous && keys.every(key => previous[key] === view[key])) return previous
+    const next = {} as Pick<View, K>
+    for (const key of keys) next[key] = view[key]
+    cache.current = next
+    return next
+  }
+  return useSyncExternalStore(hud.subscribe, get, get)
+}

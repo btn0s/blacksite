@@ -1,26 +1,37 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Status } from '@blacksite/ui/hud'
-import { useHud } from './store'
+import { hud, useHud } from './store'
 import { FEEDBACK, PLAYER } from './model'
 import creditsUrl from '../CREDITS.md?url'
 
 const ROOMS = ['Lobby', 'Hall', 'Records']
 
 function Reticle() {
-  const view = useHud()
+  const view = useHud('marker', 'markerKind', 'aiming')
+  const reticle = useRef<HTMLDivElement>(null)
   const [flash, setFlash] = useState(false)
+  useEffect(() => {
+    let gap = -1
+    const apply = () => {
+      const next = Math.round((4 + hud.get().spread * 7) * 4) / 4
+      if (next === gap || !reticle.current) return
+      gap = next
+      reticle.current.style.setProperty('--gap', `${next}px`)
+    }
+    apply()
+    return hud.subscribe(apply)
+  }, [])
   useEffect(() => {
     if (!view.marker) return
     setFlash(true)
     const timer = setTimeout(() => setFlash(false), 1000 * (view.markerKind === 'kill' ? FEEDBACK.killMarkerSeconds : FEEDBACK.hitMarkerSeconds))
     return () => clearTimeout(timer)
   }, [view.marker, view.markerKind])
-  const gap = 4 + view.spread * 7
-  return <div className={`breach-reticle${view.aiming ? ' breach-reticle--aim' : ''}${flash ? ` breach-reticle--${view.markerKind}` : ''}`} style={{ ['--gap' as string]: `${gap}px` }} aria-hidden="true"><i /><i /><i /><i /><b /></div>
+  return <div ref={reticle} className={`breach-reticle${view.aiming ? ' breach-reticle--aim' : ''}${flash ? ` breach-reticle--${view.markerKind}` : ''}`} aria-hidden="true"><i /><i /><i /><i /><b /></div>
 }
 
 function Damage() {
-  const view = useHud()
+  const view = useHud('health', 'damage')
   const hurt = 1 - view.health / PLAYER.health
   return <>
     <div className="breach-vignette" style={{ opacity: Math.min(0.85, hurt * 1.1) }} aria-hidden="true" />
@@ -29,7 +40,7 @@ function Damage() {
 }
 
 function Subtitles() {
-  const view = useHud()
+  const view = useHud('subtitles')
   if (!view.subtitles.length) return null
   return <div className="breach-subtitles" role="status" aria-live="polite">
     {view.subtitles.map(line => <p key={line.id}><b>{line.speaker}</b>{line.text}</p>)}
@@ -37,7 +48,7 @@ function Subtitles() {
 }
 
 function Ending() {
-  const view = useHud()
+  const view = useHud('phase', 'shots', 'hits', 'kills', 'time', 'restartIn')
   if (view.phase === 'play') return null
   const accuracy = view.shots ? Math.round(view.hits / view.shots * 100) : 0
   const minutes = Math.floor(view.time / 60), seconds = Math.floor(view.time % 60)
@@ -49,7 +60,7 @@ function Ending() {
 }
 
 export function Hud({ touch }: { touch: boolean }) {
-  const view = useHud()
+  const view = useHud('cleared', 'exfil', 'objective', 'health', 'weapon', 'reloading', 'magazine', 'reserve')
   const done = view.cleared.filter(Boolean).length
   return <div className="breach-hud">
     <a className="breach-credits" href={creditsUrl} target="_blank" rel="noreferrer">Credits</a>

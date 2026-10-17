@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type RefObject } from 'react'
 import * as THREE from 'three'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { CuboidCollider, Physics, RigidBody } from '@react-three/rapier'
+import { CuboidCollider, Physics, RigidBody, useAfterPhysicsStep } from '@react-three/rapier'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import type { AlsRagdollHandle } from 'als-ue5-r3f/app/AlsRemoteActor'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
@@ -29,7 +29,7 @@ import { AI, DEG, FEEDBACK, MOVE, PLAYER, PRESENTATION, VIEW, WEAPONS, animation
 import { createBody, eyePosition, placeBody, stepBody } from './player'
 import { Soldiers, corpseOf, lod, releaseWeaponAim } from './soldiers'
 import { SquadClient, type TimedEvent } from './squad'
-import { hud } from './store'
+import { hud, useHud } from './store'
 import './breach.css'
 
 type WeaponId = 'rifle' | 'pistol'
@@ -37,6 +37,7 @@ type WeaponId = 'rifle' | 'pistol'
 const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
 const definitions = armoryDefinitions()
 const HOLD = 1 << 20
+const ADMISSION = -2.25
 type Commands = { reload: boolean; swap: boolean; aim: boolean; crouch: boolean; jump: boolean; sprint: boolean }
 type TouchInput = ReturnType<typeof createStandaloneTouch>
 const atmosphere: Atmosphere = {
@@ -143,7 +144,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     eye: { x: 0, y: 0, z: 0 } as V3, right: new THREE.Vector3(), forward: new THREE.Vector3(), muzzle: new THREE.Vector3(), point: new THREE.Vector3(), normal: new THREE.Vector3(),
     from: new THREE.Vector3(), to: new THREE.Vector3(), sample: { x: 0, z: 0, crouch: false, alive: true, yaw: 0 }, targets: [] as Target[], zones: new Map<string, HitZone>(),
     frustum: new THREE.Frustum(), matrix: new THREE.Matrix4(), sphere: new THREE.Sphere(new THREE.Vector3(), 1.2), visible: new Set<RoomId>(), corpses: new THREE.Group(), lightEye: new THREE.Vector3(),
-    animation: new Map<string, number>(), credit: new Map<string, number>(), due: new Set<string>(), budget: 0, parity: false,
+    animation: new Map<string, number>(), credit: new Map<string, number>(), due: new Set<string>(), budget: 0, parity: false, waiting: [] as string[], arriving: 0, falling: 0, stepped: false,
   }), [])
 
   useEffect(() => { scene.add(scratch.corpses); return () => { scene.remove(scratch.corpses) } }, [scene, scratch])
@@ -187,6 +188,8 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     lod.clear()
     scratch.animation.clear()
     scratch.credit.clear()
+    scratch.waiting.length = 0
+    scratch.arriving = 0
     syncPlayer()
     squad.reset(state.seed, { ...playerState })
     hud.reset({ objective: OBJECTIVES[0]! })
@@ -514,6 +517,30 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     return eye
   }
 
+  useFrame(() => {
+    const device = phone ? 'phone' : 'desktop'
+    scratch.budget = Math.min(PRESENTATION.animationBudget[device], scratch.budget + animationBudget(device, scratch.falling))
+    const interleave = PRESENTATION.armsPoseInterleave[device]
+    if (interleave) scratch.parity = !scratch.stepped
+    scratch.stepped = false
+    arms.poseHold = interleave && scratch.parity
+    const slots = interleave && !scratch.parity ? 0 : Math.max(0, Math.floor(scratch.budget) - scratch.arriving)
+    const due = scheduleAnimation(scratch.credit, scratch.animation, slots, scratch.due)
+    scratch.budget -= due.size + scratch.arriving
+    scratch.arriving = 0
+    for (const id of due) {
+      const entry = lod.get(id)
+      if (entry) { entry.minInterval = 1; entry.maxInterval = 1 }
+    }
+    const admit = interleave ? scratch.parity ? 0 : Math.floor(scratch.budget) : Math.floor(scratch.budget)
+    while (scratch.arriving < admit && scratch.waiting.length) {
+      const id = scratch.waiting.shift()!
+      squad.admit(id)
+      scratch.credit.set(id, 0)
+      scratch.arriving++
+    }
+  }, ADMISSION)
+
   useFrame((_, dt) => {
     const state = game.current
     const step = Math.min(dt, 0.1)
@@ -555,7 +582,14 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
       } else state.footsteps.set(soldier.id, 0)
       const handleRef = handles.get(soldier.id)?.current
       const isDown = state.down.has(soldier.id)
-      if (sample.alive && !isDown) targets.push({ id: soldier.id, x: sample.x, y: 0, z: sample.z, crouch: sample.crouch })
+      const waiting = squad.waiting(soldier.id)
+      if (waiting && !sample.alive) {
+        const index = scratch.waiting.indexOf(soldier.id)
+        if (index >= 0) scratch.waiting.splice(index, 1)
+        if (!soldier.alive && !state.dead.has(soldier.id)) { state.dead.add(soldier.id); state.kills++ }
+        continue
+      }
+      if (sample.alive && !isDown && !waiting) targets.push({ id: soldier.id, x: sample.x, y: 0, z: sample.z, crouch: sample.crouch })
       if (!soldier.alive && !state.dead.has(soldier.id)) { state.dead.add(soldier.id); state.kills++; audio.hitMarker(true, false); const screen = hud.get(); hud.set({ marker: screen.marker + 1, markerKind: 'kill' }) }
       if (!sample.alive && !isDown && PRESENTATION.ragdolls[phone ? 'phone' : 'desktop'] === 0) {
         drop(soldier.id)
@@ -577,25 +611,13 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
       const distance = camera.position.distanceTo(scratch.sphere.center)
       const inRoom = scratch.visible.has(roomAt(sample.x, sample.z).id)
       const visible = inRoom && scratch.frustum.intersectsSphere(scratch.sphere)
-      if (sample.alive && !isDown) scratch.animation.set(soldier.id, animationInterval(phone ? 'phone' : 'desktop', distance, visible))
+      if (waiting) { if (!scratch.waiting.includes(soldier.id)) scratch.waiting.push(soldier.id) }
+      else if (sample.alive && !isDown) scratch.animation.set(soldier.id, animationInterval(phone ? 'phone' : 'desktop', distance, visible))
       else scratch.animation.delete(soldier.id)
       lod.set(soldier.id, { distance, visible, focused: false, minInterval: HOLD, maxInterval: HOLD })
     }
-    let falling = 0
-    for (const id of state.down) if (!state.laid.has(id)) falling++
-    const device = phone ? 'phone' : 'desktop'
-    scratch.budget = Math.min(PRESENTATION.animationBudget[device], scratch.budget + animationBudget(device, falling))
-    const interleave = PRESENTATION.armsPoseInterleave[device]
-    if (interleave) {
-      scratch.parity = !scratch.parity
-      arms.poseHold = scratch.parity
-    }
-    const due = scheduleAnimation(scratch.credit, scratch.animation, interleave && !arms.poseHold ? 0 : Math.floor(scratch.budget), scratch.due)
-    scratch.budget -= due.size
-    for (const id of due) {
-      const entry = lod.get(id)
-      if (entry) { entry.minInterval = 1; entry.maxInterval = 1 }
-    }
+    scratch.falling = 0
+    for (const id of state.down) if (!state.laid.has(id)) scratch.falling++
     if (state.phase === 'play') {
       ENCOUNTERS.forEach((encounter, index) => {
         if (state.cleared[index] || !squad.roster.length || alive[index]! > 0) return
@@ -665,6 +687,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     <primitive object={level.group} />
     <Physics gravity={[0, -9.81, 0]} timeStep={1 / (phone ? PRESENTATION.physicsHz.phone : PRESENTATION.physicsHz.desktop)} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <LevelColliders />
+      <StepProbe onStep={useCallback(() => { scratch.stepped = true }, [scratch])} />
       <Soldiers roster={roster} frozen={frozen} client={squad} handles={handles} phone={phone} />
     </Physics>
     <ArmsViewmodel state={arms} render="external" onPresentation={setPresentation} />
@@ -702,7 +725,7 @@ export function Game() {
   const [progress, setProgress] = useState(0.05)
   const [playing, setPlaying] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const locked = useHudLocked()
+  const { locked } = useHud('locked')
   const ready = armsReady && world
   useEffect(() => () => audio.dispose(), [audio])
   useEffect(() => {
@@ -727,8 +750,7 @@ export function Game() {
   </Screen>
 }
 
-function useHudLocked() {
-  const [locked, setLocked] = useState(false)
-  useEffect(() => hud.subscribe(() => setLocked(hud.get().locked)), [])
-  return locked
+function StepProbe({ onStep }: { onStep: () => void }) {
+  useAfterPhysicsStep(onStep)
+  return null
 }

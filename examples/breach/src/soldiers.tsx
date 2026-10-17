@@ -139,7 +139,7 @@ function Soldier({ id, client, handles, phone }: { id: string; client: SquadClie
     if (!wrap.current) return
     const view = lod.get(id)
     wrap.current.visible = view?.visible !== false || ragdoll.current?.active === true
-    wrap.current.matrixWorldAutoUpdate = wrap.current.visible
+    wrap.current.matrixWorldAutoUpdate = ragdoll.current?.active === true
     if (state.frames > 120) return
     const meshes = dress(wrap.current, phone)
     state.frames = meshes === state.meshes ? state.frames + 1 : 0
