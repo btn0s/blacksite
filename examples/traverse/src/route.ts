@@ -9,6 +9,47 @@ import { dress } from './dressing'
 type Vec3 = [number, number, number]
 type Mat = { name: SurfaceName; color?: string; ao?: false }
 
+function shadowProxies(group: THREE.Group, span = 32) {
+  const chunks = new Map<number, number[]>()
+  for (const child of [...group.children]) {
+    const mesh = child as THREE.Mesh
+    const material = mesh.material as THREE.Material
+    if (!mesh.isMesh || !mesh.castShadow || (mesh as THREE.InstancedMesh).isInstancedMesh || material.alphaTest > 0 || material.transparent || material.side !== THREE.FrontSide) continue
+    mesh.updateMatrix()
+    const geometry = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry
+    const position = geometry.getAttribute('position')
+    const vertex = new THREE.Vector3()
+    for (let index = 0; index < position.count; index += 3) {
+      let x = 0
+      const triangle: number[] = []
+      for (let corner = 0; corner < 3; corner++) {
+        vertex.fromBufferAttribute(position, index + corner).applyMatrix4(mesh.matrix)
+        x += vertex.x / 3
+        triangle.push(vertex.x, vertex.y, vertex.z)
+      }
+      const key = Math.floor(x / span)
+      let chunk = chunks.get(key)
+      if (!chunk) chunks.set(key, chunk = [])
+      chunk.push(...triangle)
+    }
+    if (geometry !== mesh.geometry) geometry.dispose()
+    mesh.castShadow = false
+  }
+  const material = new THREE.MeshBasicMaterial({ colorWrite: false })
+  return [...chunks.values()].map(values => {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(values, 3))
+    geometry.computeBoundingSphere()
+    const proxy = new THREE.Mesh(geometry, material)
+    proxy.name = 'shadow-proxy'
+    proxy.castShadow = true
+    proxy.receiveShadow = false
+    proxy.matrixAutoUpdate = false
+    proxy.intersectsFrustum = (frustum: THREE.Frustum) => frustum.planes[0]!.normal.dot(frustum.planes[1]!.normal) < -0.999 && frustum.intersectsObject(proxy)
+    return proxy
+  })
+}
+
 export type Ledge = { height: number; base: number; approach: Vec3; yaw: number; label: string }
 export type Ramp = { degrees: number; from: Vec3; to: Vec3; label: string }
 export type Bookmark = { name: string; position: Vec3; target: Vec3; fov: number; stand: Vec3; yaw: number }
@@ -281,12 +322,12 @@ export function buildRoute() {
   ]
 
   const bookmarks: Bookmark[] = [
-    { name: 'gate', position: [17.6, 2.1, 5.6], target: [8.5, 2.2, -0.6], fov: 55, stand: [12.5, 0, 0], yaw: 0 },
+    { name: 'gate', position: [19, 3.4, 3], target: [6, 1.6, -1], fov: 55, stand: [12.5, 0, 0], yaw: 0 },
     { name: 'garages', position: [30, 2.6, 6], target: [42, 1.8, -4], fov: 55, stand: [38, 0, -0.4], yaw: -Math.PI / 2 },
     { name: 'roofs', position: [36.5, 4.6, -5.6], target: [50, 3, -5.6], fov: 55, stand: [39, garageRoof, -5.6], yaw: 0 },
     { name: 'boiler-yard', position: [64, 3.6, 5.5], target: [78, 1.4, -5], fov: 55, stand: [69, 0, -1], yaw: 0 },
     { name: 'stairwell', position: [inner.x0 + 0.5, 3.4, inner.z1 - 0.4], target: [inner.x1 - 1, 1.2, inner.z0 + 1], fov: 62, stand: [flightStartX + 1.2, 0.7, -5.2], yaw: 0 },
-    { name: 'rooftop', position: [104.6, 6.6, 3.2], target: [116, 6.4, -5], fov: 55, stand: [107, roof, -3], yaw: 0 },
+    { name: 'rooftop', position: [104.6, 8.2, 3.2], target: [118, 5.4, -6], fov: 55, stand: [107, roof, -3], yaw: 0 },
     { name: 'finish', position: [143, 3.4, 6], target: [finishX, 3, -1], fov: 55, stand: [150, 0, -2], yaw: 0 },
     { name: 'hero', position: [36.6, 2.2, 1.6], target: [39.6, 1.3, -1.4], fov: 50, stand: [39.6, 0, -0.2], yaw: -Math.PI / 2 },
   ]
@@ -311,6 +352,7 @@ export function buildRoute() {
   dress(level, { rand, lights, emitters, line, garageRoof, garages, tower, inner, roof, boiler, upper, plant, finishX, slabEnd, dockStart, dockTop })
 
   const group = level.build()
+  group.add(...shadowProxies(group))
   const surfaceAt = (x: number, y: number, z: number): Surface => {
     if (y < 0.25 && puddleSpots.some(([px, pz, w, d]) => { const dx = (x - px) * 2 / w; const dz = (z - pz) * 2 / d; return dx * dx + dz * dz < 1 })) return 'water'
     if (y > garageRoof - 0.1 && y < garageRoof + 0.6 && z > -8.8 && z < -2.3 && garages.some(gx => x > gx - 0.1 && x < gx + 3.3)) return 'metal'

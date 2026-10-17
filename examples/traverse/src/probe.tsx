@@ -469,7 +469,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
             travel.push(distance)
             let settled = -1
             for (let index = 1; index < points.length; index++) {
-              steps.push(points[index]!.distanceTo(points[index - 1]!))
+              steps.push(points[index]!.distanceTo(points[index - 1]!) * model.locomotion.physicsStep / Math.max(model.locomotion.physicsStep, record.times[index]! - record.times[index - 1]!))
               if (record.times[index]! >= swapped && settled < 0 && points[index]!.distanceTo(to) < distance * 0.1) settled = record.times[index]! - swapped
             }
             settle.push(settled)
@@ -511,8 +511,11 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         return result('ghost', { bones: take.bones, moving: take.moving, frames: take.frames, bytesPerMinute, poseMs, sourceWorldScale, sourceLocalScale, ghostScale, scaleError }, { bytesPerMinute: model.route.ghostBytesPerMinute, poseMs: model.route.ghostMsPerFrame, scaleError: 0.001 }, take.frames >= 30 && bytesPerMinute <= model.route.ghostBytesPerMinute && poseMs <= model.route.ghostMsPerFrame && scaleError <= 0.001)
       },
       async route(measure = true) {
-        await place(route.spawn, route.spawnYaw)
-        api.restart()
+        const fresh = shared.race.current.state === 'ready' && character()?.locomotionMode === 'Grounded' && position().distanceTo(new THREE.Vector3(...route.spawn)) < 0.25
+        if (!fresh) {
+          await place(route.spawn, route.spawnYaw)
+          api.restart()
+        }
         await wait(0.4)
         if (measure) start()
         drawCalls.current = []

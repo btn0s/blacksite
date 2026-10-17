@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Physics, useRapier } from '@react-three/rapier'
 import { InputProvider, makeInputDevices } from '@blacksite/input'
@@ -138,7 +138,7 @@ function SoundOcclusion({ sound }: { sound: TraverseAudio }) {
   return null
 }
 
-function Scene({ shared, spawn, onAction, onEvent, ghostVisible, api }: { shared: Shared; spawn: Spawn; onAction: (action: string) => void; onEvent: (event: RaceEvent, now: number) => void; ghostVisible: boolean; api: ProbeApi }) {
+const Scene = memo(function Scene({ shared, spawn, onAction, onEvent, ghostVisible, api }: { shared: Shared; spawn: Spawn; onAction: (action: string) => void; onEvent: (event: RaceEvent, now: number) => void; ghostVisible: boolean; api: ProbeApi }) {
   const time = useMemo(createWorldTimeState, [])
   const [compiled, setCompiled] = useState(false)
   const done = useCallback(() => setCompiled(true), [])
@@ -156,7 +156,7 @@ function Scene({ shared, spawn, onAction, onEvent, ghostVisible, api }: { shared
     <Effects route={shared.route} pose={shared.pose} handle={shared.effects} sound={shared.sound} />
     <RaceDriver shared={shared} onEvent={onEvent} ghostVisible={ghostVisible} />
   </>
-}
+})
 
 type Banner = { title: string; detail: string; tone: 'ahead' | 'behind' | 'even'; key: number }
 

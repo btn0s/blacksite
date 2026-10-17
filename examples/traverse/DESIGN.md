@@ -55,7 +55,7 @@ The contact probe measures the final rendered foot against an independent physic
 | Probe | sphere, 0.15 m | ALS camera trace (spring-arm sweep). |
 | Pull-in / ease-out | in one frame / eased over about 0.4 s | GDC 2014, John Nesky, "50 Game Camera Mistakes": snap in to avoid a wall, ease out to avoid a pop. |
 | Clip budget | 0 frames with geometry inside the near plane | Measured by a sphere query of radius `near × tan(fov/2) × √(1 + aspect²)` at the camera each frame of every scripted run. |
-| Shoulder | 0.5 m offset, 0.5 s swap, no frame step over 0.12 m | ALS `CF_Als_CameraBlend_Quick` is 0.5 s. A swap that teleports reads as a cut. |
+| Shoulder | 0.5 m offset, 0.5 s swap, no step over 0.12 m per 1/60 s frame (longer frames are scaled down to that rate) | ALS `CF_Als_CameraBlend_Quick` is 0.5 s. A swap that teleports reads as a cut. |
 | Lag | location lag from ALS, no visible stutter at 120 fps | ALS camera settings. |
 
 ### Input
@@ -143,7 +143,7 @@ Each scripted run drives input the way a player does and measures against the mo
 - `ramp-foot`: run and sprint into the foot of each rising ramp from 12 sub-step start offsets; none stalls.
 - `actions`: roll, ragdoll and get up, drop and land, and cross a low wall without stopping.
 - `camera-wall`: walk along walls and into corners while turning the camera; zero clip frames.
-- `shoulder`: swap shoulders while running; no frame step over the bar.
+- `shoulder`: swap shoulders at idle, walk, run and sprint; no 1/60 s step over the bar.
 - `ghost`: a recorded take stays under the storage and pose-cost budgets at the player's scale.
 - `route`: the reference run of the whole route finishes under par with zero clip frames and draw calls under budget.
 
@@ -152,6 +152,6 @@ Each scripted run drives input the way a player does and measures against the mo
 
 The route contains eight garage bays, seven apartment blocks, a boiler house and chimney, the stairwell, two arches and two sheds. The six trim families and eight decal families listed above are present. Props include 15 crates, 24 pallets, 23 stacked tyres, four cars, a transport hull, water tank, three benches, three radiators and six roof vents, in addition to the original barrels, trees and rubble. These are merged by material through the public world kit.
 
-Eight practical sources (three sodium lamps, three fluorescent tubes, two fires) share a maximum of four nearby point lights. The sun is the sole shadow caster. Nine located audio spots, including the steam outlet, use outdoor, corridor and hall acoustic zones. Recorded concrete, metal, gravel and water footsteps each have five variants; the source and processing record is in `CREDITS.md` and `assets.credits.json`.
+Eight practical sources (three sodium lamps, three fluorescent tubes, two fires) share a maximum of four nearby point lights. The sun is the sole shadow caster. Level geometry casts through depth-only proxies in 32 m strips that only the sun's orthographic frustum draws, so the shadow pass costs a few draw calls instead of one per material. Nine located audio spots, including the steam outlet, use outdoor, corridor and hall acoustic zones. Recorded concrete, metal, gravel and water footsteps each have five variants; the source and processing record is in `CREDITS.md` and `assets.credits.json`.
 
 Checkpoint respawn poses are authored on safe floor surfaces independently of trigger bounds. The phone stick sprints at full travel; the six action buttons provide jump/mantle, roll, crouch, shoulder, ragdoll/get-up and checkpoint retry. After finishing, Retry starts the next race against the saved ghost.
