@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
+import { useRapier } from '@react-three/rapier'
 import { Euler, Group, Mesh, Quaternion, Vector3, type Object3D, type PerspectiveCamera } from 'three'
 import type { WeaponEvent, WeaponQueries } from '@blacksite/armory'
 import { createAimAssist, type AimCandidate, type InputDevice } from '@blacksite/input'
@@ -14,9 +15,10 @@ import { ArmsViewmodel, portraitFov, type ArmsPresentation } from '../ArmsViewmo
 import type { ArmsWeapon } from '../arms/state'
 import { WorldWeapon } from '../found/WorldWeapon'
 import { RECOIL_TUNING } from '../feel/recoil'
-import { aimCandidates, fppInput, padLookDegrees, type AimTarget } from '../input'
+import { aimCandidates, characterInput, padLookDegrees, type AimTarget } from '../input'
 import { readActionIntent } from '../intent'
-import type { CharacterHandle as Controller } from './state'
+import { ROLL_TAP_SECONDS, WALK_STICK, type CharacterHandle as Controller } from './state'
+import { createCharacterWorld } from './world'
 
 export const BODY_LAYER = 3
 
@@ -55,7 +57,8 @@ export function CharacterController({ controller, queries, events, aimTargets, o
   const targets = useRef(aimTargets)
   targets.current = aimTargets
   const als = controller.als
-  const context = useMemo(() => fppInput(controller.config.bindings), [controller])
+  const context = useMemo(() => characterInput({ armed: controller.armed, views: controller.config.views }, controller.config.bindings), [controller])
+  const physics = useRapier()
   const worldTime = useMemo(createWorldTimeState, [])
   const body = useRef<Group>(null)
   const revision = useSpawnRevision(controller)
@@ -64,6 +67,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     right: new Vector3(), up: new Vector3(0, 1, 0),
     latch: { sprint: false, crouch: false }, mouse: { fire: false }, candidates: [] as AimCandidate[],
     aimed: false, crouched: false, grounded: true, fall: 0, height: controller.eyeConfig.stand, jumpHeld: false, walk: false, settled: false,
+    sprintHeld: false, sprintSince: 0, rollSequence: 0, jumpBuffer: 0,
     assist: createAimAssist(controller.aimAssist || undefined),
     offset: { pitch: 0, yaw: 0 }, fireReadyAt: 0, accumulated: 0,
   }), [controller])
@@ -77,22 +81,26 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     const yaw = command.yaw * DEG
     const forward = command.active ? command.forward : 0
     const right = command.active ? command.right : 0
+    const tilt = Math.hypot(forward, right)
     return {
       active: command.active,
       jumpSequence: command.jumpSequence,
+      coyoteSeconds: controller.jumpConfig.coyoteSeconds,
+      rollSequence: scratch.rollSequence,
       ragdollSequence: command.ragdollSequence,
       movementDirection: { x: forward * Math.cos(yaw) - right * Math.sin(yaw), z: forward * Math.sin(yaw) + right * Math.cos(yaw) },
-      desiredGait: command.sprint ? 'Sprinting' : scratch.walk ? 'Walking' : 'Running',
+      desiredGait: scratch.walk || (tilt > 0 && tilt < WALK_STICK) ? 'Walking' : command.sprint ? 'Sprinting' : 'Running',
       desiredStance: command.crouch ? 'Crouching' : 'Standing',
-      desiredRotationMode: 'ViewDirection',
+      desiredRotationMode: controller.armed ? 'ViewDirection' : 'VelocityDirection',
       viewYawAngle: command.yaw,
       viewPitchAngle: command.pitch,
       aiming: command.aim,
       overlayMode: command.overlay,
     }
-  }, [als, scratch])
+  }, [als, controller, scratch])
   const bodyLod = useMemo(() => () => ({ visible: camera.layers.isEnabled(BODY_LAYER), shadow: true }), [camera])
   const controlRotation = useMemo(() => () => ({ yaw: als.command.yaw, pitch: als.command.pitch }), [als])
+  const rightShoulder = useMemo(() => () => controller.rightShoulder, [controller])
 
   useEffect(() => controller.input.mount(), [controller])
   useEffect(() => controller.input.actions.addContext(context), [controller, context])
@@ -100,10 +108,19 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     controller.input.setGameplay(true)
     return () => controller.input.setGameplay(false)
   }, [controller])
+  useEffect(() => {
+    controller.world.current = createCharacterWorld(physics)
+    return () => { controller.world.current = null }
+  }, [controller, physics])
+
   useEffect(() => controller.input.actions.subscribe(({ action, device }) => {
     if (action === 'pause') { controller.setPaused(!controller.status().paused); return }
-    if (controller.status().paused) return
-    if (action === 'reload') controller.reload()
+    if (controller.status().paused || controller.driver) return
+    if ((action === 'roll' || action === 'ragdoll') && device === 'gamepad') controller.input.rumble(140, 0.5, 0.3)
+    if (action === 'roll') controller.roll()
+    else if (action === 'ragdoll') controller.ragdoll()
+    else if (action === 'shoulder') controller.swapShoulder()
+    else if (action === 'reload') controller.reload()
     else if (action === 'swap') controller.cycle()
     else if (action === 'primary' && controller.config.weapons?.[0]) controller.select(controller.config.weapons[0].definition.id)
     else if (action === 'secondary' && controller.config.weapons?.[1]) controller.select(controller.config.weapons[1].definition.id)
@@ -131,7 +148,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
       controller.setStatus({ locked: on })
     }
     const move = (event: PointerEvent) => {
-      if (!locked() || controller.status().paused) return
+      if (!locked() || controller.status().paused || controller.driver) return
       const scale = controller.look.mouse * controller.sensitivity * controller.feel.lookScale
       turn(event.movementX * scale, event.movementY * scale)
     }
@@ -156,7 +173,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
   const turn = (yaw: number, down: number) => {
     const control = controller.control
     control.yaw -= yaw
-    control.pitch = Math.max(-controller.look.pitchLimit, Math.min(controller.look.pitchLimit, control.pitch - down))
+    control.pitch = Math.max(controller.look.pitchMin, Math.min(controller.look.pitchMax, control.pitch - down))
     controller.sway.yaw -= yaw
     controller.sway.pitch -= down
   }
@@ -189,7 +206,8 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     const control = controller.control
     const touch = controller.touch
     const hub = controller.input.actions
-    const limit = controller.look.pitchLimit
+    const look = controller.look
+    const drive = controller.driver
     if (control.reset) {
       scratch.fireReadyAt = scratch.accumulated = 0
       controller.kick.pitch = controller.kick.yaw = 0
@@ -200,14 +218,14 @@ export function CharacterController({ controller, queries, events, aimTargets, o
       control.reset = false
     }
     const lookScale = controller.sensitivity * controller.feel.lookScale
-    if (touch.lookX || touch.lookY) {
+    if (!drive && (touch.lookX || touch.lookY)) {
       turn(touch.lookX * controller.look.touch * lookScale, touch.lookY * controller.look.touch * lookScale)
       touch.lookX = touch.lookY = 0
     }
     const stick = hub.value('look')
-    const aimHeld = hub.isHeld('aim')
-    const pad = controller.input.snapshot().source === 'gamepad'
-    if (stick.x || stick.y || (pad && controller.aimAssist && targets.current)) {
+    const aimHeld = drive ? drive.aim : hub.isHeld('aim')
+    const pad = !drive && controller.input.snapshot().source === 'gamepad'
+    if (pad && (stick.x || stick.y || (controller.aimAssist && targets.current))) {
       const shaped = padLookDegrees(stick.x, stick.y, controller.padLook, delta)
       let yaw = shaped.yaw * lookScale, pitch = shaped.pitch * lookScale
       const source = targets.current
@@ -222,7 +240,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     scratch.aimed = aimHeld
     if (scratch.offset.pitch || scratch.offset.yaw) {
       const kept = controller.recoil.shot(scratch.offset.pitch, scratch.offset.yaw, RECOIL_TUNING[controller.arms.weapon])
-      control.pitch = Math.max(-limit, Math.min(limit, control.pitch + kept.pitch))
+      control.pitch = Math.max(look.pitchMin, Math.min(look.pitchMax, control.pitch + kept.pitch))
       control.yaw -= kept.yaw
       scratch.offset.pitch = scratch.offset.yaw = 0
     }
@@ -231,34 +249,47 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     controller.kick.yaw = settled.yaw
     scratch.rotation.set(Math.max(-1.5, Math.min(1.5, control.pitch + settled.pitch)), control.yaw - settled.yaw, 0)
 
-    const intent = readActionIntent(hub.value('move'), held, scratch.latch)
-    if (touch.forward || touch.right) {
+    const intent = drive
+      ? { forward: drive.forward, right: drive.right, jump: drive.jump, sprint: drive.sprint, crouch: !!drive.crouch, walk: !!drive.walk, aim: drive.aim }
+      : readActionIntent(hub.value('move'), held, scratch.latch)
+    if (!drive && (touch.forward || touch.right)) {
       const length = Math.max(1, Math.hypot(touch.forward, touch.right))
       intent.forward = touch.forward / length
       intent.right = touch.right / length
     }
-    const drive = controller.driver
     const active = controller.active
-    const forward = drive ? drive.forward : intent.forward
-    const right = drive ? drive.right : intent.right
-    const aiming = active && (aimHeld || status.touchAim || !!drive?.aim)
-    controller.firing = scratch.mouse.fire || touch.fire || hub.isHeld('fire')
-    const firing = active && (controller.firing || !!drive?.fire)
-    const jumpHeld = intent.jump || !!drive?.jump
-    if ((jumpHeld && !scratch.jumpHeld) || controller.queued.jump) command.jumpSequence++
-    scratch.jumpHeld = jumpHeld
+    const aiming = active && (aimHeld || (!drive && status.touchAim))
+    controller.firing = drive ? drive.fire : scratch.mouse.fire || touch.fire || hub.isHeld('fire')
+    const firing = active && controller.firing
+    const character = als.pose.current.character
+    const clock = controller.clock
+    const sprintHeld = !drive && hub.isHeld('sprint')
+    if (sprintHeld && !scratch.sprintHeld) scratch.sprintSince = clock
+    if (!sprintHeld && scratch.sprintHeld && clock - scratch.sprintSince < ROLL_TAP_SECONDS) controller.queued.roll = true
+    scratch.sprintHeld = sprintHeld
+    if (controller.queued.roll && active) scratch.rollSequence++
+    controller.queued.roll = false
+    const jumpPressed = (intent.jump && !scratch.jumpHeld) || controller.queued.jump
+    if (jumpPressed && active) {
+      command.jumpSequence++
+      if (character?.locomotionMode === 'InAir') scratch.jumpBuffer = clock + controller.jumpConfig.bufferSeconds
+    }
+    if (scratch.jumpBuffer > clock && character?.locomotionMode === 'Grounded' && !character.locomotionAction) {
+      scratch.jumpBuffer = 0
+      command.jumpSequence++
+    }
+    scratch.jumpHeld = intent.jump
     controller.queued.jump = false
     if (drive) drive.jump = false
     command.active = active
-    command.forward = active ? forward : 0
-    command.right = active ? right : 0
-    command.crouch = active && (intent.crouch || status.touchCrouch)
-    command.sprint = active && (intent.sprint || touch.forward > 0.92 || !!drive?.sprint) && forward > 0.3 && !aiming && !firing
+    command.forward = active ? intent.forward : 0
+    command.right = active ? intent.right : 0
+    command.crouch = active && (intent.crouch || (!drive && status.touchCrouch))
+    command.sprint = active && (intent.sprint || (!drive && touch.forward > 0.92)) && intent.forward > 0.3 && !aiming && !firing
     command.aim = aiming && !command.sprint
     scratch.walk = intent.walk || command.aim
     command.yaw = -(scratch.rotation.y + Math.PI / 2) / DEG
     command.pitch = scratch.rotation.x / DEG
-    const character = als.pose.current.character
     const mode = status.view === 'shoulder' ? 'ThirdPerson' : 'FirstPerson'
     if (character && character.viewMode !== mode) character.viewMode = mode
   }, ALS_FRAME_PRIORITY.ControlRotation - 0.2)
@@ -350,8 +381,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     const runtime = controller.weapon
     if (runtime) {
       if (sprinting) scratch.fireReadyAt = controller.clock + controller.sprintOutSeconds
-      const drive = controller.driver
-      const firing = active && (controller.firing || !!drive?.fire)
+      const firing = active && controller.firing
       scratch.accumulated = Math.min(scratch.accumulated + step, 0.1)
       let reloading = active && controller.queued.reload
       controller.queued.reload = false
@@ -373,12 +403,12 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     <group ref={body}>
       <Suspense fallback={null}>
         <Character key={revision} initialPosition={als.spawn} poseSample={als.pose} worldTime={worldTime} footstepSoundSink={sink}
-          onSizeChange={noop} onOverlayModeBridgeChange={noop} inputEnabled={false} ragdollInputEnabled={false} inputSource={inputSource}
+          onSizeChange={noop} onOverlayModeBridgeChange={noop} inputEnabled={false} inputSource={inputSource} terrainFootLock
           ragdollRef={ragdollRef} teleportRef={controller.teleporter} gaitSpeedOverrides={controller.config.gaits} animationLod={bodyLod} renderOverlayObject={renderWeapon ?? (scene => <Suspense fallback={null}><WorldWeapon characterScene={scene} weapon={() => controller.arms.weapon} /></Suspense>)}
           onSnapshot={events?.onSnapshot} snapshotRateHz={snapshotRateHz} gamepadEnabled={false} toggleRotationModeKey={null} showDebugControls={false} exposeDebugGlobals={false} />
       </Suspense>
     </group>
-    <AlsCamera poseSample={als.pose} worldTime={worldTime} footstepAudioRuntime={sink} toggleViewModeKey={null} gamepadEnabled={false} controlRotationSource={controlRotation} nearClipPlane={null} />
+    <AlsCamera poseSample={als.pose} worldTime={worldTime} footstepAudioRuntime={sink} toggleViewModeKey={null} gamepadEnabled={false} controlRotationSource={controlRotation} rightShoulder={rightShoulder} shoulderOffset={controller.shoulderOffset} aspectRatioAxisConstraint="MajorAxisFOV" nearClipPlane={null} />
     {views.includes('arms') && <ArmsView controller={controller} onPresentation={onPresentation} manifestUrl={manifestUrl} />}
   </>
 }

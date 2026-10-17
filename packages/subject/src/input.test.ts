@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MENU, makeInputDevices, type ActionEvent } from '@blacksite/input'
-import { FPP_GLYPHS, PAD_LOOK, fppInput, padLookDegrees } from './input'
+import { CHARACTER_GLYPHS, PAD_LOOK, characterActions, characterInput, padLookDegrees } from './input'
+
+const SHOOTER = { armed: true, views: ['arms', 'shoulder'] } as const
+const RUNNER = { armed: false, views: ['shoulder', 'head'] } as const
 
 afterEach(() => vi.unstubAllGlobals())
 
-function pad() {
+function pad(capabilities: { armed: boolean; views: ReadonlyArray<'arms' | 'head' | 'shoulder'> } = SHOOTER) {
   const axes = [0, 0, 0, 0]
   const buttons = Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 }))
   const gamepad: Gamepad = {
@@ -21,7 +24,7 @@ function pad() {
   vi.stubGlobal('cancelAnimationFrame', () => {})
   const runtime = makeInputDevices()
   const stop = runtime.mount()
-  runtime.actions.addContext(fppInput())
+  runtime.actions.addContext(characterInput(capabilities))
   runtime.setGameplay(true)
   const events: ActionEvent[] = []
   runtime.actions.subscribe(event => events.push(event))
@@ -55,7 +58,7 @@ describe('character gamepad bindings', () => {
     } finally { test.stop() }
   })
 
-  it.each([['sprintToggle', 10], ['crouchToggle', 1], ['reload', 2], ['swap', 3], ['pause', 9], ['view', 15], ['inspect', 12]] as const)('presses %s on button %i', (action, index) => {
+  it.each([['sprintToggle', 10], ['crouchToggle', 1], ['reload', 2], ['swap', 3], ['pause', 9], ['view', 15], ['inspect', 12], ['roll', 5], ['ragdoll', 14], ['shoulder', 11]] as const)('presses %s on button %i', (action, index) => {
     const test = pad()
     try {
       expect(test.tap(index)).toContain(action)
@@ -78,7 +81,27 @@ describe('character gamepad bindings', () => {
   })
 
   it('has a pad glyph for every hinted action', () => {
-    for (const spec of Object.values(FPP_GLYPHS)) expect(spec.gamepad?.xbox).toBeTruthy()
+    for (const spec of Object.values(CHARACTER_GLYPHS)) expect(spec.gamepad?.xbox).toBeTruthy()
+    for (const action of characterActions(SHOOTER)) expect(CHARACTER_GLYPHS[action] ?? ['primary', 'secondary', 'sprintToggle', 'crouchToggle'].includes(action), action).toBeTruthy()
+  })
+
+  it('binds only what the character can do', () => {
+    const runner = characterActions(RUNNER)
+    for (const action of ['move', 'look', 'jump', 'sprint', 'crouch', 'walk', 'roll', 'ragdoll', 'aim', 'shoulder', 'view', 'pause']) expect(runner, action).toContain(action)
+    for (const action of ['fire', 'reload', 'swap', 'inspect']) expect(runner, action).not.toContain(action)
+    const arms = characterActions({ armed: true, views: ['arms'] })
+    expect(arms).toContain('fire')
+    expect(arms).not.toContain('shoulder')
+    expect(arms).not.toContain('view')
+  })
+
+  it('frees the runner pad buttons a shooter uses for weapons', () => {
+    const test = pad(RUNNER)
+    try {
+      expect(test.tap(2)).not.toContain('reload')
+      expect(test.tap(3)).not.toContain('swap')
+      expect(test.tap(5)).toContain('roll')
+    } finally { test.stop() }
   })
 })
 

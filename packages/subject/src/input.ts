@@ -14,7 +14,9 @@ const flipY: Modifier = { type: 'negate', y: true }
 const hold = (action: string, ...controls: Control[]): Binding[] => controls.map(control => ({ action, control }))
 const press = (action: string, ...controls: Control[]): Binding[] => controls.map(control => ({ action, control, trigger: 'pressed' }))
 
-export const FPP_BINDINGS: ReadonlyArray<Binding> = [
+export type CharacterCapabilities = { readonly armed: boolean; readonly views: ReadonlyArray<'arms' | 'head' | 'shoulder'> }
+
+const MOVEMENT: ReadonlyArray<Binding> = [
   ...GAMEPLAY.bindings,
   ...[key('KeyW'), key('ArrowUp')].map(control => ({ action: 'move', control, modifiers: [swizzle] })),
   ...[key('KeyS'), key('ArrowDown')].map(control => ({ action: 'move', control, modifiers: [swizzle, flipY] })),
@@ -22,7 +24,6 @@ export const FPP_BINDINGS: ReadonlyArray<Binding> = [
   ...[key('KeyA'), key('ArrowLeft')].map(control => ({ action: 'move', control, modifiers: [flipX] })),
   { action: 'move', control: { device: 'gamepad', stick: 'left' }, modifiers: [{ type: 'deadZone', lower: PAD_MOVE_DEAD_ZONE }, flipY] },
   { action: 'look', control: { device: 'gamepad', stick: 'right' } },
-  ...hold('fire', { device: 'mouse', button: 0 }, pad(7)),
   ...hold('aim', { device: 'mouse', button: 2 }, pad(6)),
   ...hold('sprint', key('ShiftLeft'), key('ShiftRight')),
   ...press('sprintToggle', pad(10)),
@@ -30,26 +31,46 @@ export const FPP_BINDINGS: ReadonlyArray<Binding> = [
   ...press('crouchToggle', pad(1)),
   ...hold('walk', key('AltLeft')),
   ...hold('jump', key('Space'), pad(0)),
+  ...press('roll', pad(5)),
+  ...press('ragdoll', key('KeyX'), pad(14)),
+]
+
+const WEAPONS: ReadonlyArray<Binding> = [
+  ...hold('fire', { device: 'mouse', button: 0 }, pad(7)),
   ...press('reload', key('KeyR'), pad(2)),
   ...press('swap', key('KeyQ'), pad(3)),
   ...press('inspect', key('KeyF'), pad(12)),
-  ...press('view', key('KeyV'), pad(15)),
   ...press('primary', key('Digit1')),
   ...press('secondary', key('Digit2')),
 ]
 
-export function fppInput(extra: ReadonlyArray<Binding> = [], id = 'fpp'): InputContext {
-  return createGameplayContext([...extra, ...FPP_BINDINGS], id)
+const SHOULDER: ReadonlyArray<Binding> = press('shoulder', key('KeyE'), { device: 'mouse', button: 1 }, pad(11))
+const VIEW: ReadonlyArray<Binding> = press('view', key('KeyV'), pad(15))
+
+export function characterBindings({ armed, views }: CharacterCapabilities): Binding[] {
+  return [...MOVEMENT, ...(armed ? WEAPONS : []), ...(views.includes('shoulder') ? SHOULDER : []), ...(views.length > 1 ? VIEW : [])]
 }
 
-export const FPP_GLYPHS: GlyphMap = {
+export function characterInput(capabilities: CharacterCapabilities, extra: ReadonlyArray<Binding> = [], id = 'character'): InputContext {
+  return createGameplayContext([...extra, ...characterBindings(capabilities)], id)
+}
+
+export function characterActions(capabilities: CharacterCapabilities) {
+  return [...new Set(characterBindings(capabilities).map(binding => binding.action))]
+}
+
+export const CHARACTER_GLYPHS: GlyphMap = {
   move: { label: 'Move', keyboard: 'WASD', gamepad: { xbox: 'LS', playstation: 'L', generic: 'LS' } },
   look: { label: 'Look', keyboard: 'Mouse', gamepad: { xbox: 'RS', playstation: 'R', generic: 'RS' } },
   fire: { label: 'Fire', keyboard: 'LMB', gamepad: { xbox: 'RT', playstation: 'R2', generic: 'RT' } },
   aim: { label: 'Aim', keyboard: 'RMB', gamepad: { xbox: 'LT', playstation: 'L2', generic: 'LT' } },
   sprint: { label: 'Sprint', keyboard: 'Shift', gamepad: { xbox: 'L3', playstation: 'L3', generic: 'L3' } },
   crouch: { label: 'Crouch', keyboard: 'C', gamepad: { xbox: 'B', playstation: '○', generic: 'B' } },
+  walk: { label: 'Walk', keyboard: 'Alt', gamepad: { xbox: 'LS ½', playstation: 'L ½', generic: 'LS ½' } },
   jump: { label: 'Jump', keyboard: 'Space', gamepad: { xbox: 'A', playstation: '✕', generic: 'A' } },
+  roll: { label: 'Roll', keyboard: 'Shift tap', gamepad: { xbox: 'RB', playstation: 'R1', generic: 'RB' } },
+  ragdoll: { label: 'Fall / up', keyboard: 'X', gamepad: { xbox: 'D-pad ←', playstation: 'D-pad ←', generic: 'D-pad ←' } },
+  shoulder: { label: 'Shoulder', keyboard: 'E', gamepad: { xbox: 'R3', playstation: 'R3', generic: 'R3' } },
   reload: { label: 'Reload', keyboard: 'R', gamepad: { xbox: 'X', playstation: '□', generic: 'X' } },
   swap: { label: 'Swap', keyboard: 'Q', gamepad: { xbox: 'Y', playstation: '△', generic: 'Y' } },
   inspect: { label: 'Inspect', keyboard: 'F', gamepad: { xbox: 'D-pad ↑', playstation: 'D-pad ↑', generic: 'D-pad ↑' } },

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createEvaluator, type Binding, type Control, type DeviceSnapshot, type Vec2 } from '@blacksite/input'
-import { FPP_BINDINGS, PAD_LOOK, aimCandidates, fppInput, padLookDegrees } from './input'
+import { PAD_LOOK, aimCandidates, characterBindings, characterInput, padLookDegrees } from './input'
+
+const BINDINGS = characterBindings({ armed: true, views: ['arms'] })
 import { readActionIntent } from './intent'
 
 function evaluate(bindings: ReadonlyArray<Binding>, read: (control: Control) => Vec2) {
@@ -18,7 +20,7 @@ const pad = (axes: number[], buttons: number[] = []) => (control: Control): Vec2
 
 describe('standalone subject intent', () => {
   it('normalizes diagonal keyboard movement and keeps jump held', () => {
-    const { values } = evaluate(FPP_BINDINGS, keys('KeyW', 'KeyD', 'Space'))
+    const { values } = evaluate(BINDINGS, keys('KeyW', 'KeyD', 'Space'))
     const intent = readActionIntent(values.get('move')!, action => Boolean(values.get(action)?.x || values.get(action)?.y))
     expect(intent.forward).toBeCloseTo(Math.SQRT1_2)
     expect(intent.right).toBeCloseTo(Math.SQRT1_2)
@@ -26,19 +28,19 @@ describe('standalone subject intent', () => {
   })
 
   it('cancels opposing movement keys', () => {
-    const { values } = evaluate(FPP_BINDINGS, keys('KeyW', 'KeyS', 'KeyA', 'KeyD'))
+    const { values } = evaluate(BINDINGS, keys('KeyW', 'KeyS', 'KeyA', 'KeyD'))
     expect(values.get('move')).toEqual({ x: 0, y: 0 })
   })
 
   it('maps the twin-stick layout', () => {
-    const { values } = evaluate(FPP_BINDINGS, pad([0, -1, 0.5, 0], [7, 6, 0, 10, 1, 2, 3, 9]))
+    const { values } = evaluate(BINDINGS, pad([0, -1, 0.5, 0], [7, 6, 0, 10, 1, 2, 3, 9]))
     expect(values.get('move')!.y).toBeCloseTo(1)
     expect(values.get('look')).toEqual({ x: 0.5, y: 0 })
     for (const action of ['fire', 'aim', 'jump', 'sprintToggle', 'crouchToggle', 'reload', 'swap', 'pause']) expect(values.get(action)?.x, action).toBe(1)
   })
 
   it('lets a game add bindings ahead of the defaults', () => {
-    const context = fppInput([{ action: 'inspect', control: { device: 'gamepad', button: 12 }, trigger: 'pressed' }])
+    const context = characterInput({ armed: true, views: ['arms'] }, [{ action: 'inspect', control: { device: 'gamepad', button: 12 }, trigger: 'pressed' }])
     expect(context.bindings[0]!.action).toBe('inspect')
     expect(context.bindings.some(binding => binding.action === 'fire')).toBe(true)
   })
