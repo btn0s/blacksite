@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, type MutableRefObject } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useActionEvents, useInputContext, useInputRuntime } from '@blacksite/input'
 import { isTouchDevice } from '@blacksite/look/world'
-import { Character, type AlsRagdollHandle } from 'als-ue5-r3f/app/Character'
+import { Character, type AlsCharacterTeleport, type AlsRagdollHandle } from 'als-ue5-r3f/app/Character'
 import { AlsCamera } from 'als-ue5-r3f/app/AlsCamera'
 import type { CharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
 import type { WorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
@@ -30,10 +30,20 @@ export function Player({ command, pose, time, audio, spawn, scripted, touchLook,
   const hub = runtime.actions
   const { gl } = useThree()
   const ragdoll = useRef<AlsRagdollHandle | null>(null)
+  const teleport = useRef<AlsCharacterTeleport | null>(null)
+  const spawned = useRef(spawn.revision)
+  const origin = useRef(spawn.position)
   const shift = useRef<{ down: boolean; at: number }>({ down: false, at: 0 })
   const jumpBuffer = useRef(0)
   const airborneSince = useRef(0)
   useInputContext(TRAVERSE_INPUT)
+
+  useEffect(() => {
+    if (spawned.current === spawn.revision) return
+    spawned.current = spawn.revision
+    jumpBuffer.current = 0
+    teleport.current?.TeleportTo(spawn.position, spawn.yaw * 180 / Math.PI)
+  }, [spawn])
 
   useEffect(() => {
     runtime.setGameplay(true)
@@ -112,7 +122,7 @@ export function Player({ command, pose, time, audio, spawn, scripted, touchLook,
   const shoulder = useMemo(() => () => command.rightShoulder, [command])
 
   return <>
-    <Character key={spawn.revision} initialPosition={spawn.position} inputEnabled={false} inputSource={inputSource}
+    <Character initialPosition={origin.current} teleportRef={teleport} inputEnabled={false} inputSource={inputSource}
       terrainFootLock
       poseSample={pose} worldTime={time} footstepSoundSink={audio} ragdollRef={ragdoll}
       onSizeChange={noop} onOverlayModeBridgeChange={noop} toggleRotationModeKey={null}
