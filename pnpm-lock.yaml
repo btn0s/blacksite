@@ -847,9 +847,6 @@ importers:
       als-ue5-r3f:
         specifier: workspace:*
         version: link:../../vendor/als-web
-      koota:
-        specifier: ^0.6.6
-        version: 0.6.6(@types/react@19.3.0)(react@19.3.1)
       react:
         specifier: ^19.3.1
         version: 19.3.1

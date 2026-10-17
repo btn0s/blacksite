@@ -4,10 +4,4 @@ export { CHARACTER_AIM_ASSIST, CHARACTER_EYE, CHARACTER_JUMP, CHARACTER_LOOK, CH
 export { CHARACTER_GLYPHS, PAD_LOOK, PAD_MOVE_DEAD_ZONE, aimCandidates, characterActions, characterBindings, characterInput, padLookDegrees, type AimTarget, type CharacterCapabilities, type PadLook } from './input'
 export { createLocalClock, useLocalSession, type LocalClock } from './session'
 export { readActionIntent, type ActionIntent, type IntentLatch } from './intent'
-export { Subject, type SubjectProps } from './Subject'
-export { MultiplayerSubject, MultiplayerScene, LoopbackSplitView, REMOTE_INTERPOLATION_MS, SNAPSHOT_RATE_HZ, type MultiplayerSceneProps, type MultiplayerReplica, type MultiplayerShot, type MultiplayerStatus } from './MultiplayerSubject'
-export {
-  createSubject, driveSubject, pressSubject, wrapYaw, FPS_WEAPONS, hasControl, keySubject, lookSubject,
-  type SubjectOptions, type SubjectState, type SubjectSnapshot, type SubjectIntent, type SubjectPress,
-  MP_CAMERA_INPUT, type CameraMode, type FpsFrame, type FpsInput, type FpsView, type FpsWeapon,
-} from './controller'
+export { Replication, REMOTE_INTERPOLATION_MS, SNAPSHOT_RATE_HZ, pawnYaw, type Replica, type ReplicationProps, type ReplicationStatus } from './character/Replication'

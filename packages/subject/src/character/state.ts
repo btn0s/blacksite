@@ -1,5 +1,5 @@
 import { Vector3 } from 'three'
-import { createWeaponRuntime, type WeaponDefinition, type WeaponRuntime } from '@blacksite/armory'
+import { createWeaponRuntime, type WeaponDefinition, type WeaponQueries, type WeaponRuntime } from '@blacksite/armory'
 import { aimAssistDefaults, makeInputDevices, type AimAssistSettings, type Binding, type InputRuntime } from '@blacksite/input'
 import { createAlsPlayer, type AlsPlayerCommand } from 'als-ue5-r3f/app/AlsPlayer'
 import type { CharacterProps } from 'als-ue5-r3f/app/Character'
@@ -23,7 +23,7 @@ export type CharacterLook = { readonly mouse: number; readonly touch: number; re
 export type CharacterEye = { readonly stand: number; readonly crouch: number; readonly smoothing: number }
 export type CharacterJump = { readonly bufferSeconds: number; readonly coyoteSeconds: number }
 export type CharacterStart = { readonly position: Vec3; readonly yaw: number; readonly pitch?: number }
-export type CharacterWorld = { bounds(): { min: Vec3; max: Vec3 } | null; groundAt(x: number, z: number): number | null }
+export type CharacterWorld = WeaponQueries & { bounds(): { min: Vec3; max: Vec3 } | null; groundAt(x: number, z: number): number | null }
 export type CharacterCheckMove = { forward?: number; right?: number; sprint?: boolean; jump?: boolean }
 
 export type CharacterConfig = {

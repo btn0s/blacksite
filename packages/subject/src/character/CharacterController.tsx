@@ -51,7 +51,7 @@ const DEG = Math.PI / 180
 const noop = () => {}
 const NO_HITS: WeaponQueries = { castRay: () => null, sweepSphere: () => null }
 
-export function CharacterController({ controller, queries = NO_HITS, events, aimTargets, onPresentation, ragdollRef, renderWeapon, snapshotRateHz, manifestUrl }: CharacterControllerProps) {
+export function CharacterController({ controller, queries, events, aimTargets, onPresentation, ragdollRef, renderWeapon, snapshotRateHz, manifestUrl }: CharacterControllerProps) {
   const camera = useThree(state => state.camera) as PerspectiveCamera
   const gl = useThree(state => state.gl)
   const hooks = useRef(events)
@@ -111,12 +111,11 @@ export function CharacterController({ controller, queries = NO_HITS, events, aim
     return () => controller.input.setGameplay(false)
   }, [controller])
   useEffect(() => {
-    controller.world.current = createCharacterWorld(physics)
+    controller.world.current = createCharacterWorld(physics, () => als.pose.current.ownerRigidBody)
     return () => { controller.world.current = null }
-  }, [controller, physics])
+  }, [controller, physics, als])
 
   useEffect(() => controller.input.actions.subscribe(({ action, device }) => {
-    if (action === 'pause') { controller.setPaused(!controller.status().paused); return }
     if (controller.status().paused || controller.driver) return
     if ((action === 'roll' || action === 'ragdoll') && device === 'gamepad') controller.input.rumble(140, 0.5, 0.3)
     if (action === 'roll') controller.roll()
@@ -147,7 +146,6 @@ export function CharacterController({ controller, queries = NO_HITS, events, aim
     const lockChange = () => {
       const on = locked()
       if (!on) scratch.mouse.fire = false
-      if (!on && controller.status().locked) controller.setPaused(true)
       controller.setStatus({ locked: on })
     }
     const move = (event: PointerEvent) => {
@@ -388,10 +386,11 @@ export function CharacterController({ controller, queries = NO_HITS, events, aim
       scratch.accumulated = Math.min(scratch.accumulated + step, 0.1)
       let reloading = active && controller.queued.reload
       controller.queued.reload = false
+      const hits = queries ?? controller.world.current ?? NO_HITS
       while (scratch.accumulated >= runtime.fixedDeltaSeconds) {
         scratch.accumulated -= runtime.fixedDeltaSeconds
         const stance = { aiming: arms.aiming, moving: Math.min(1, speed / 3.75), crouched }
-        const out = runtime.step({ tick: runtime.snapshot().nextTick, trigger: firing && !sprinting && controller.clock >= scratch.fireReadyAt, reload: reloading, selectWeaponId: controller.selected, aim, muzzle: controller.muzzle, stance }, queries)
+        const out = runtime.step({ tick: runtime.snapshot().nextTick, trigger: firing && !sprinting && controller.clock >= scratch.fireReadyAt, reload: reloading, selectWeaponId: controller.selected, aim, muzzle: controller.muzzle, stance }, hits)
         reloading = false
         for (const event of out) handle(event)
       }

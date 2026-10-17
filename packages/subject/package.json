@@ -5,8 +5,6 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./Subject": "./src/Subject.tsx",
-    "./controller": "./src/controller.ts",
     "./intent": "./src/intent.ts",
     "./arms": "./src/ArmsViewmodel.tsx",
     "./arms/model": "./src/arms/model.ts",
@@ -21,7 +19,6 @@
     "@react-three/fiber": "^9.8.2",
     "@react-three/rapier": "^2.2.0",
     "als-ue5-r3f": "workspace:*",
-    "koota": "^0.6.6",
     "react": "^19.3.1",
     "three": "^0.186.1"
   },

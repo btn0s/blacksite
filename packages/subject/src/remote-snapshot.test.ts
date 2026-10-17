@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { AlsCharacterSnapshot } from 'als-ue5-r3f/als/AlsCharacterSnapshot'
-import { createSubject, hasControl, keySubject, updateFpsMovementInput } from './controller'
 import { createPawnMoveMessage, toAlsRemoteSnapshot } from './remote-snapshot'
 
 const snapshot: AlsCharacterSnapshot = {
@@ -18,22 +17,5 @@ describe('remote snapshot adapter', () => {
     expect(remote.actionSeq).toBe(4)
     expect(remote.animation?.mantle).toEqual({ settings: 'High', position: 0.35 })
     expect(remote.pos[1]).toBeCloseTo(0.9)
-  })
-})
-
-describe('virtual input', () => {
-  it('lets a touch pad or script move the player without pointer lock', () => {
-    const controller = createSubject()
-    keySubject(controller, 'KeyW', true)
-    updateFpsMovementInput(controller)
-    expect(controller.player.command.forward).toBe(0)
-    controller.setVirtual(true)
-    expect(hasControl(controller)).toBe(true)
-    keySubject(controller, 'KeyW', true)
-    updateFpsMovementInput(controller)
-    expect(controller.player.command.forward).toBe(1)
-    expect(controller.player.command.active).toBe(true)
-    controller.setVirtual(false)
-    expect(controller.keys.size).toBe(0)
   })
 })
