@@ -30,13 +30,14 @@ export function Landscape({ world, tier, wind, sun, bark, handle }: { world: Val
       sources: world.sources,
       layers: world.layers,
       layerSpecs: [
-        { tile: 3.2, tint: [0.44, 0.5, 0.29], roughness: 0.95, normalScale: 0.8 },
+        { tile: 3.2, tint: [0.36, 0.48, 0.2], roughness: 0.95, normalScale: 0.8 },
         { tile: 2.6, tint: [0.4, 0.4, 0.28], roughness: 0.92, normalScale: 1 },
         { tile: 2.2, tint: [0.92, 0.84, 0.72], roughness: 0.9, normalScale: 1 },
         { tile: 3.5, tint: [0.86, 0.84, 0.8], roughness: 0.85, normalScale: 1.2 },
       ],
-      canopy: { height: canopy.height, start: settings.impostorFar[0] - canopy.lead, end: settings.impostorFar[1] - canopy.lead, crown: canopy.crown, color: [0.095, 0.125, 0.05], shade: [0.022, 0.032, 0.014] },
+      canopy: { height: canopy.height, start: settings.impostorFar[0] - canopy.lead, end: settings.impostorFar[1] - canopy.lead, crown: canopy.crown, color: [0.105, 0.135, 0.042], shade: [0.016, 0.026, 0.01] },
       detailDistance: tier === 'low' ? 140 : 260,
+      coverShade: { distance: settings.coverDistance, strength: 0.4 },
       shadowDistance: settings.shadowDistance,
     })
     const cover = createCover({
@@ -48,9 +49,9 @@ export function Landscape({ world, tier, wind, sun, bark, handle }: { world: Val
       density: settings.coverDensity,
       alphaToCoverage: settings.a2c,
       families: [
-        { name: 'grass', shape: 'clump', perPatch: 420, mask: MEADOW, size: [0.28, 0.62], width: 1.3, quads: 3, texture: grassTexture(), colors: [[0.5, 0.62, 0.3], [0.62, 0.68, 0.36], [0.86, 0.8, 0.5]], bend: 0.42, translucency: 0.4, ao: 0.4, roughness: 0.82 },
-        { name: 'sward', shape: 'clump', perPatch: 520, mask: MEADOW, size: [0.13, 0.28], width: 1.5, quads: 2, texture: grassTexture(128, 29), colors: [[0.46, 0.58, 0.28], [0.56, 0.64, 0.32], [0.72, 0.7, 0.42]], bend: 0.3, translucency: 0.35, ao: 0.5, fade: 0.7, roughness: 0.85 },
-        { name: 'flowers', shape: 'flower', perPatch: 40, mask: `${MEADOW} * smoothstep(0.52, 0.7, bsNoise(bsRoot * 0.045, 71u))`, size: [0.32, 0.56], width: 0.55, texture: flowerTexture(), colors: [[1, 0.84, 0.3], [1, 1, 1], [1, 0.78, 0.36]], bend: 0.3, translucency: 0.25, ao: 0.6, fade: 0.8 },
+        { name: 'grass', shape: 'clump', perPatch: 820, mask: MEADOW, size: [0.22, 0.44], width: 0.9, quads: 3, texture: grassTexture(), colors: [[0.5, 0.62, 0.3], [0.62, 0.68, 0.36], [0.86, 0.8, 0.5]], bend: 0.42, translucency: 0.4, ao: 0.4, roughness: 0.82 },
+        { name: 'sward', shape: 'clump', perPatch: 1100, mask: MEADOW, size: [0.13, 0.27], width: 1.3, quads: 2, texture: grassTexture(128, 29), colors: [[0.46, 0.58, 0.28], [0.56, 0.64, 0.32], [0.72, 0.7, 0.42]], bend: 0.3, translucency: 0.35, ao: 0.5, fade: 0.7, roughness: 0.85 },
+        { name: 'flowers', shape: 'flower', perPatch: 80, mask: `${MEADOW} * smoothstep(0.42, 0.66, bsNoise(bsRoot * 0.045, 71u))`, size: [0.2, 0.38], width: 0.45, texture: flowerTexture(), colors: [[1, 0.84, 0.3], [1, 1, 1], [0.78, 0.62, 1]], bend: 0.3, translucency: 0.25, ao: 0.6, fade: 0.8 },
         { name: 'understory', shape: 'clump', perPatch: 70, mask: 'smoothstep(0.35, 0.7, bsSurface.b) * smoothstep(0.35, 0.6, bsNoise(bsRoot * 0.06, 73u)) * (1.0 - bsSurface.a)', size: [0.35, 0.65], width: 1.1, quads: 3, texture: grassTexture(256, 19), colors: [[0.42, 0.5, 0.26], [0.55, 0.58, 0.3], [0.7, 0.62, 0.36]], bend: 0.3, translucency: 0.3, ao: 0.35, fade: 0.75 },
         { name: 'litter', shape: 'card', perPatch: 54, mask: 'smoothstep(0.3, 0.65, bsSurface.b) * (1.0 - bsSurface.a)', size: [0.5, 0.95], texture: litterTexture(), colors: [[0.9, 0.82, 0.72], [0.8, 0.7, 0.55], [1, 0.82, 0.6]], ao: 1, fade: 0.6 },
         { name: 'pebbles', shape: 'pebble', perPatch: 16, mask: 'max(bsSurface.a * 0.9, smoothstep(0.3, 0.48, bsSlope) * 0.8) + 0.06', size: [0.06, 0.24], colors: [[0.5, 0.48, 0.45], [0.62, 0.6, 0.56], [0.42, 0.4, 0.37]], ao: 1, fade: 0.55, roughness: 0.75 },

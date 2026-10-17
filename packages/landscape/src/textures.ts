@@ -39,12 +39,13 @@ function blade(context: OffscreenCanvasRenderingContext2D, x: number, base: numb
 
 export function grassTexture(size = 256, seed = 11): CanvasTexture {
   return canvasTexture(size, seed, (context, s, random) => {
-    for (let index = 0; index < 54; index++) {
+    for (let index = 0; index < 64; index++) {
       const spread = random() - 0.5
       const x = s * (0.5 + spread * 0.86)
-      const height = s * (0.4 + random() * 0.58)
+      const edge = 1 - 0.62 * (spread * 2) ** 2
+      const height = s * (0.22 + random() * 0.76) * edge
       const lean = spread * s * 0.3 + (random() - 0.5) * s * 0.2
-      blade(context, x, s, height, s * (0.016 + random() * 0.018), lean, 0.7 + random() * 0.45)
+      blade(context, x, s, height, s * (0.011 + random() * 0.014), lean, 0.7 + random() * 0.45)
     }
     for (let index = 0; index < 5; index++) {
       const x = s * (0.15 + random() * 0.7)

@@ -21,7 +21,7 @@ export const site = {
 export const tiers = {
   high: { trees: 64000, nearTrees: 70, nearFade: [48, 70] as const, impostorFar: [640, 940] as const, frameSize: 192, coverDistance: 75, coverDensity: 1, cascades: 3, shadowDistance: 180, shadowMap: 2048, a2c: true, singleFrame: false },
   medium: { trees: 44000, nearTrees: 58, nearFade: [40, 58] as const, impostorFar: [560, 820] as const, frameSize: 160, coverDistance: 60, coverDensity: 0.8, cascades: 2, shadowDistance: 130, shadowMap: 2048, a2c: true, singleFrame: false },
-  low: { trees: 28000, nearTrees: 42, nearFade: [28, 42] as const, impostorFar: [440, 660] as const, frameSize: 128, coverDistance: 45, coverDensity: 0.55, cascades: 2, shadowDistance: 90, shadowMap: 1024, a2c: false, singleFrame: true },
+  low: { trees: 28000, nearTrees: 42, nearFade: [28, 42] as const, impostorFar: [440, 660] as const, frameSize: 128, coverDistance: 45, coverDensity: 0.8, cascades: 2, shadowDistance: 90, shadowMap: 1024, a2c: false, singleFrame: true },
 } as const
 
 export const canopy = { height: 13, crown: 5.5, lead: 90 } as const
