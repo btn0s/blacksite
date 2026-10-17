@@ -67,7 +67,7 @@ export function installPage() {
           reject: error => { clearTimeout(timer); reject(error) },
           run: (renderer, original, scene, camera) => {
             const result = runIdProbe(renderer, original, scene, camera, options)
-            const analysis = analyzeFrames(result.frames, result.width, result.height, { ...options, depths: result.depths, depth: depthSetupOf(renderer, camera) })
+            const analysis = analyzeFrames(result.frames, result.width, result.height, { ...options, depths: result.depths, nudged: result.nudged, depth: depthSetupOf(renderer, camera) })
             const used = new Set()
             for (const pair of analysis.pairs) for (const id of pair.pair) used.add(id)
             for (const region of analysis.regions) for (const entry of region.ids) for (const id of entry.pair) used.add(id)

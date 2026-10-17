@@ -62,8 +62,20 @@ export function analyzeFrames(frames, width, height, options = {}) {
       integral[(y + 1) * stride + x + 1] = integral[y * stride + x + 1] + row
     }
   }
+  const nudged = options.nudged && options.nudged.length > 1 ? options.nudged : null
+  const flipsUnderNudge = p => {
+    let reference = MIXED
+    for (let f = 0; f < nudged.length && reference === MIXED; f++) reference = nudged[f][p]
+    if (reference === MIXED) return false
+    for (let f = 0; f < nudged.length; f++) {
+      const value = nudged[f][p]
+      if (value !== reference && value !== MIXED) return true
+    }
+    return false
+  }
   const dense = new Uint8Array(total)
   let denseCount = 0
+  let edgeFlicker = 0
   for (let y = 0; y < height; y++) {
     const y0 = Math.max(0, y - radius)
     const y1 = Math.min(height, y + radius + 1)
@@ -72,7 +84,10 @@ export function analyzeFrames(frames, width, height, options = {}) {
       const x0 = Math.max(0, x - radius)
       const x1 = Math.min(width, x + radius + 1)
       const sum = integral[y1 * stride + x1] - integral[y0 * stride + x1] - integral[y1 * stride + x0] + integral[y0 * stride + x0]
-      if (sum >= densityMin) { dense[y * width + x] = 1; denseCount++ }
+      if (sum < densityMin) continue
+      if (nudged && !flipsUnderNudge(y * width + x)) { edgeFlicker++; continue }
+      dense[y * width + x] = 1
+      denseCount++
     }
   }
   const labels = new Int32Array(total)
@@ -128,6 +143,7 @@ export function analyzeFrames(frames, width, height, options = {}) {
     width, height, frames: frames.length,
     unstable: unstableCount,
     edges,
+    edgeFlicker,
     covered: covered / total,
     pixels: denseCount,
     regions,
