@@ -27,7 +27,7 @@ export interface TreeModel {
 }
 
 export const OAK: TreeSpecies = { name: 'oak', form: 'broadleaf', height: 15, trunk: 0.42, crown: 5.2, leafSize: 1.5, leafCount: 520, bark: [0.78, 0.72, 0.66], leaves: [1, 1, 1], seed: 3 }
-export const PINE: TreeSpecies = { name: 'pine', form: 'conifer', height: 21, trunk: 0.36, crown: 3.6, leafSize: 1.25, leafCount: 640, bark: [0.82, 0.7, 0.6], leaves: [1, 1, 1], seed: 7 }
+export const PINE: TreeSpecies = { name: 'pine', form: 'conifer', height: 21, trunk: 0.36, crown: 3.8, leafSize: 1.6, leafCount: 1000, bark: [0.7, 0.62, 0.56], leaves: [1, 1, 1], seed: 7 }
 export const BIRCH: TreeSpecies = { name: 'birch', form: 'birch', height: 16, trunk: 0.22, crown: 3.4, leafSize: 1.05, leafCount: 460, bark: [1.7, 1.66, 1.58], leaves: [1, 1, 1], seed: 11 }
 
 interface Builder {

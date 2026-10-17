@@ -29,12 +29,12 @@ export function Landscape({ world, tier, wind, sun, bark, handle }: { world: Val
       sources: world.sources,
       layers: world.layers,
       layerSpecs: [
-        { tile: 3.2, tint: [0.78, 0.86, 0.62], roughness: 0.95, normalScale: 0.8 },
-        { tile: 2.6, tint: [0.72, 0.66, 0.58], roughness: 0.92, normalScale: 1 },
+        { tile: 3.2, tint: [0.54, 0.54, 0.34], roughness: 0.95, normalScale: 0.8 },
+        { tile: 2.6, tint: [0.4, 0.4, 0.28], roughness: 0.92, normalScale: 1 },
         { tile: 2.2, tint: [0.92, 0.84, 0.72], roughness: 0.9, normalScale: 1 },
         { tile: 3.5, tint: [0.86, 0.84, 0.8], roughness: 0.85, normalScale: 1.2 },
       ],
-      canopy: { height: canopy.height, start: canopy.start, end: canopy.end, crown: canopy.crown, color: [0.11, 0.15, 0.06], shade: [0.035, 0.05, 0.025] },
+      canopy: { height: canopy.height, start: settings.impostorFar[0] - canopy.lead, end: settings.impostorFar[1] - canopy.lead, crown: canopy.crown, color: [0.075, 0.105, 0.04], shade: [0.018, 0.028, 0.012] },
       detailDistance: tier === 'low' ? 140 : 260,
       shadowDistance: settings.shadowDistance,
     })
@@ -47,7 +47,7 @@ export function Landscape({ world, tier, wind, sun, bark, handle }: { world: Val
       density: settings.coverDensity,
       alphaToCoverage: settings.a2c,
       families: [
-        { name: 'grass', shape: 'clump', perPatch: 300, mask: MEADOW, size: [0.42, 0.8], width: 0.95, quads: 3, texture: grassTexture(), colors: [[0.62, 0.66, 0.36], [0.86, 0.8, 0.5], [0.95, 0.86, 0.56]], bend: 0.42, translucency: 0.4, ao: 0.4, roughness: 0.82 },
+        { name: 'grass', shape: 'clump', perPatch: 420, mask: MEADOW, size: [0.3, 0.6], width: 1.05, quads: 3, texture: grassTexture(), colors: [[0.62, 0.66, 0.36], [0.86, 0.8, 0.5], [0.95, 0.86, 0.56]], bend: 0.42, translucency: 0.4, ao: 0.4, roughness: 0.82 },
         { name: 'flowers', shape: 'flower', perPatch: 28, mask: `${MEADOW} * smoothstep(0.52, 0.7, bsNoise(bsRoot * 0.045, 71u))`, size: [0.32, 0.56], width: 0.55, texture: flowerTexture(), colors: [[1, 1, 1], [1, 0.86, 0.4], [0.78, 0.64, 1]], bend: 0.3, translucency: 0.25, ao: 0.6, fade: 0.8 },
         { name: 'understory', shape: 'clump', perPatch: 70, mask: 'smoothstep(0.35, 0.7, bsSurface.b) * smoothstep(0.35, 0.6, bsNoise(bsRoot * 0.06, 73u)) * (1.0 - bsSurface.a)', size: [0.35, 0.65], width: 1.1, quads: 3, texture: grassTexture(256, 19), colors: [[0.42, 0.5, 0.26], [0.55, 0.58, 0.3], [0.7, 0.62, 0.36]], bend: 0.3, translucency: 0.3, ao: 0.35, fade: 0.75 },
         { name: 'litter', shape: 'card', perPatch: 54, mask: 'smoothstep(0.3, 0.65, bsSurface.b) * (1.0 - bsSurface.a)', size: [0.5, 0.95], texture: litterTexture(), colors: [[0.9, 0.82, 0.72], [0.8, 0.7, 0.55], [1, 0.82, 0.6]], ao: 1, fade: 0.6 },
@@ -73,7 +73,7 @@ export function Landscape({ world, tier, wind, sun, bark, handle }: { world: Val
       },
       heightAt: world.heightAt,
       bounds: { min: [-980, -980], max: [980, 980] },
-      spacing: 6.4,
+      spacing: 5.2,
       count: settings.trees,
       near: settings.nearFade,
       far: settings.impostorFar,

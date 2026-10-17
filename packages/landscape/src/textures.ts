@@ -39,11 +39,12 @@ function blade(context: OffscreenCanvasRenderingContext2D, x: number, base: numb
 
 export function grassTexture(size = 256, seed = 11): CanvasTexture {
   return canvasTexture(size, seed, (context, s, random) => {
-    for (let index = 0; index < 46; index++) {
-      const x = s * (0.06 + random() * 0.88)
-      const height = s * (0.45 + random() * 0.53)
-      const lean = (random() - 0.5) * s * 0.28
-      blade(context, x, s, height, s * (0.018 + random() * 0.02), lean, 0.75 + random() * 0.4)
+    for (let index = 0; index < 54; index++) {
+      const spread = random() - 0.5
+      const x = s * (0.5 + spread * 0.42)
+      const height = s * (0.4 + random() * 0.58)
+      const lean = spread * s * 0.75 + (random() - 0.5) * s * 0.16
+      blade(context, x, s, height, s * (0.016 + random() * 0.018), lean, 0.7 + random() * 0.45)
     }
     for (let index = 0; index < 5; index++) {
       const x = s * (0.15 + random() * 0.7)
@@ -169,16 +170,16 @@ export function needleClusterTexture(size = 256, seed = 53): CanvasTexture {
       context.moveTo(sx, sy)
       context.lineTo(ex, ey)
       context.stroke()
-      for (let needle = 0; needle < 34; needle++) {
-        const t = 0.15 + needle / 34 * 0.85
+      for (let needle = 0; needle < 52; needle++) {
+        const t = 0.1 + needle / 52 * 0.9
         const px = sx + (ex - sx) * t
         const py = sy + (ey - sy) * t
         const side = needle % 2 ? 1 : -1
         const nAngle = angle + side * (0.9 + random() * 0.3)
-        const nLength = s * (0.05 + random() * 0.03) * (1.1 - t * 0.4)
+        const nLength = s * (0.07 + random() * 0.04) * (1.1 - t * 0.4)
         const shade = 0.7 + random() * 0.4
         context.strokeStyle = `rgb(${Math.round(52 * shade)},${Math.round(76 * shade)},${Math.round(46 * shade)})`
-        context.lineWidth = s * 0.008
+        context.lineWidth = s * 0.016
         context.beginPath()
         context.moveTo(px, py)
         context.lineTo(px + Math.cos(nAngle) * nLength, py + Math.sin(nAngle) * nLength)

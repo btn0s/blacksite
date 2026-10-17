@@ -6,6 +6,7 @@ import type { Camera, DataArrayTexture, Material } from 'three'
 import { heightAt as fieldHeight, heightTexture, type Heightfield } from './heightfield'
 import { patchMaterial, replaceChunk } from './patch'
 import { NOISE_GLSL } from './wind'
+import { ANTI_TILING_GLSL } from './tiling'
 
 export interface TerrainSources {
   readonly near: Heightfield
@@ -206,16 +207,6 @@ uniform vec3 canopyShade;
 uniform float terrainDetail;
 varying vec3 vTerrainWorld;
 varying float vTerrainCanopy;
-vec4 bsLayerSample(sampler2DArray tex, vec2 uv, float layer, float variation) {
-  vec2 offsetA = vec2(bsHash(ivec2(floor(variation * 8.0), 3), 5u), bsHash(ivec2(floor(variation * 8.0), 9), 5u));
-  vec2 offsetB = vec2(bsHash(ivec2(floor(variation * 8.0) + 1.0, 3), 5u), bsHash(ivec2(floor(variation * 8.0) + 1.0, 9), 5u));
-  vec2 dx = dFdx(uv);
-  vec2 dy = dFdy(uv);
-  vec4 a = textureGrad(tex, vec3(uv + offsetA, layer), dx, dy);
-  vec4 b = textureGrad(tex, vec3(uv + offsetB, layer), dx, dy);
-  float blend = smoothstep(0.2, 0.8, fract(variation * 8.0));
-  return mix(a, b, blend);
-}
 `
 
 const FRAGMENT_SPLAT = /* glsl */ `
@@ -228,7 +219,7 @@ float bsSlope = 1.0 - bsBase.y;
 vec4 bsWeights = vec4(1.0, 0.0, 0.0, 0.0);
 bsWeights.y = smoothstep(0.3, 0.75, bsSurface.b + (bsVariation - 0.5) * 0.25);
 bsWeights.z = smoothstep(0.25, 0.65, bsSurface.a + (bsVariation - 0.5) * 0.2);
-bsWeights.w = smoothstep(0.24, 0.42, bsSlope + (bsMacro - 0.5) * 0.12);
+bsWeights.w = smoothstep(0.24, 0.42, bsSlope + (bsMacro - 0.5) * 0.12) * (1.0 - 0.85 * smoothstep(0.3, 0.6, bsSurface.b));
 bsWeights.x = 1.0;
 bsWeights.x *= (1.0 - bsWeights.y);
 bsWeights.y *= (1.0 - bsWeights.z);
@@ -238,7 +229,7 @@ bsWeights /= max(dot(bsWeights, vec4(1.0)), 1e-4);
 vec3 bsAlbedo = vec3(0.0);
 vec3 bsDetailNormal = vec3(0.0, 0.0, 1.0);
 float bsRough = dot(bsWeights, layerRoughness);
-float bsDetailFade = 1.0 - smoothstep(terrainDetail * 0.6, terrainDetail, bsDist);
+float bsDetailFade = 1.0 - smoothstep(terrainDetail * 0.3, terrainDetail, bsDist);
 if (bsDetailFade > 0.0) {
   vec3 tn = vec3(0.0);
   vec3 col = vec3(0.0);
@@ -246,8 +237,9 @@ if (bsDetailFade > 0.0) {
     float w = bsWeights[layer];
     if (w < 0.01) continue;
     vec2 uv = vTerrainWorld.xz / layerTile[layer];
-    col += bsLayerSample(layerColor, uv, float(layer), bsVariation + float(layer) * 0.31).rgb * layerTint[layer] * w;
-    vec3 n = bsLayerSample(layerNormal, uv, float(layer), bsVariation + float(layer) * 0.31).xyz * 2.0 - 1.0;
+    BsTiles tiles = bsTilesAt(uv, float(layer));
+    col += bsTileSample(layerColor, uv, float(layer), tiles, vec4(layerAverage[layer], 1.0)).rgb * layerTint[layer] * w;
+    vec3 n = bsTileSample(layerNormal, uv, float(layer), tiles, vec4(0.5, 0.5, 1.0, 1.0)).xyz * 2.0 - 1.0;
     tn += vec3(n.xy * layerNormalScale[layer], n.z) * w;
   }
   vec3 avg = vec3(0.0);
@@ -258,20 +250,36 @@ if (bsDetailFade > 0.0) {
   for (int layer = 0; layer < 4; layer++) bsAlbedo += layerAverage[layer] * layerTint[layer] * bsWeights[layer];
 }
 bsAlbedo *= 0.82 + bsMacro * 0.36;
+float bsDry = smoothstep(0.45, 0.85, bsNoise(vTerrainWorld.xz * 0.018, 31u) * 0.7 + bsNoise(vTerrainWorld.xz * 0.09, 37u) * 0.3);
+bsAlbedo = mix(bsAlbedo, bsAlbedo * vec3(1.3, 1.04, 0.6), bsDry * bsWeights.x * 0.7);
 vec3 bsT = normalize(cross(bsBase, vec3(0.0, 0.0, 1.0)));
 vec3 bsB = cross(bsT, bsBase);
 vec3 bsWorldNormal = normalize(bsT * bsDetailNormal.x - bsB * bsDetailNormal.y + bsBase * bsDetailNormal.z);
 if (vTerrainCanopy > 0.001) {
   float footprint = length(fwidth(vTerrainWorld.xz));
-  float lumpFade = 1.0 - smoothstep(canopyParams.w * 0.35, canopyParams.w * 1.1, footprint);
+  float lumpFade = 1.0 - smoothstep(canopyParams.w * 0.25, canopyParams.w * 0.9, footprint);
   vec2 p = vTerrainWorld.xz / canopyParams.w;
-  float h0 = bsNoise(p, 41u);
-  float hx = bsNoise(p + vec2(0.35, 0.0), 41u);
-  float hz = bsNoise(p + vec2(0.0, 0.35), 41u);
-  float crowns = bsNoise(p * 0.37, 43u);
-  vec3 lump = normalize(vec3(-(hx - h0) * 3.2 * lumpFade, 1.0, -(hz - h0) * 3.2 * lumpFade));
-  vec3 canopyNormal = normalize(mix(bsBase, lump, 0.85));
-  vec3 canopyAlbedo = mix(canopyShade, canopyColor, mix(0.55, h0 * 0.8 + crowns * 0.4, lumpFade));
+  vec2 cell = floor(p);
+  vec2 local = p - cell;
+  float top = -1.0;
+  vec3 dome = vec3(0.0, 1.0, 0.0);
+  float tone = 0.5;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    ivec2 id = ivec2(cell) + ivec2(i, j);
+    vec2 centre = vec2(float(i), float(j)) + 0.2 + 0.6 * vec2(bsHash(id, 51u), bsHash(id, 53u));
+    float radius = 0.5 + 0.45 * bsHash(id, 55u);
+    vec2 r = local - centre;
+    float d2 = dot(r, r) / (radius * radius);
+    float h = sqrt(max(1.0 - d2, 0.0)) * radius + bsHash(id, 57u) * 0.35;
+    if (d2 < 1.0 && h > top) { top = h; dome = normalize(vec3(r / radius, sqrt(max(1.0 - d2, 0.02)))); tone = bsHash(id, 59u); }
+  }
+  float covered = step(0.0, top);
+  vec3 lump = normalize(vec3(dome.x, dome.z * 0.9, dome.y));
+  vec3 canopyNormal = normalize(mix(bsBase, lump, 0.65 * lumpFade * covered + 0.2));
+  float crownAo = mix(0.42, 0.62 + 0.38 * dome.z, covered);
+  vec3 cellAlbedo = mix(canopyShade, canopyColor * (0.78 + tone * 0.44), crownAo);
+  vec3 meanAlbedo = mix(canopyShade, canopyColor, 0.62);
+  vec3 canopyAlbedo = mix(meanAlbedo, cellAlbedo, lumpFade);
   canopyAlbedo *= 0.85 + bsMacro * 0.3;
   bsAlbedo = mix(bsAlbedo, canopyAlbedo, vTerrainCanopy);
   bsWorldNormal = normalize(mix(bsWorldNormal, canopyNormal, vTerrainCanopy));
@@ -358,12 +366,12 @@ export function createTerrain(options: TerrainOptions): Terrain {
   }
 
   const material = new MeshStandardMaterial({ name: 'world-terrain', color: new Color(1, 1, 1), roughness: 1, metalness: 0, envMapIntensity: 0.55 })
-  patchMaterial(material, 'world-terrain-v1', shader => {
+  patchMaterial(material, 'world-terrain-v3', shader => {
     Object.assign(shader.uniforms, uniforms, shared, fragmentUniforms)
     shader.vertexShader = `${NOISE_GLSL}\n${TERRAIN_GLSL}\n${VERTEX_HEAD}\n${shader.vertexShader}`
-    shader.vertexShader = replaceChunk(shader.vertexShader, 'beginnormal_vertex', 'vec3 objectNormal = vec3(0.0, 1.0, 0.0);')
-    shader.vertexShader = replaceChunk(shader.vertexShader, 'begin_vertex', VERTEX_BODY)
-    shader.fragmentShader = `${NOISE_GLSL}\n${TERRAIN_GLSL}\n${FRAGMENT_HEAD}\n${shader.fragmentShader}`
+    shader.vertexShader = replaceChunk(shader.vertexShader, 'beginnormal_vertex', `${VERTEX_BODY}\nvec3 objectNormal = mix(terrainNormalOf(terrainSurfaceLod(bsXZ, 0.0)), vec3(0.0, 1.0, 0.0), bsCanopy);`)
+    shader.vertexShader = replaceChunk(shader.vertexShader, 'begin_vertex', '')
+    shader.fragmentShader = `${NOISE_GLSL}\n${TERRAIN_GLSL}\n${ANTI_TILING_GLSL}\n${FRAGMENT_HEAD}\n${shader.fragmentShader}`
     shader.fragmentShader = replaceChunk(shader.fragmentShader, 'map_fragment', FRAGMENT_SPLAT)
     shader.fragmentShader = replaceChunk(shader.fragmentShader, 'roughnessmap_fragment', 'float roughnessFactor = roughness * bsRough;')
     shader.fragmentShader = replaceChunk(shader.fragmentShader, 'normal_fragment_begin', `
