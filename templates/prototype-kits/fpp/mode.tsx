@@ -3,7 +3,7 @@ import { useFrame, useThree, type RootState } from '@react-three/fiber'
 import { useRapier } from '@react-three/rapier'
 import * as THREE from 'three'
 import { ALS_WEAPONS, createWeaponRuntime, type QueryHit, type WeaponQueries } from '@blacksite/armory'
-import { ArmsViewmodel, createArmsState, type ArmsPresentation, type ArmsState, type ArmsWeapon } from '@blacksite/subject-fpp/arms'
+import { ArmsViewmodel, createArmsState, FIELD_SET, foundTimings, type ArmsPresentation, type ArmsState, type ArmsWeapon } from '@blacksite/subject-fpp/arms'
 import { CheckProbe } from '../../game-shell/src/game/check'
 import { PlayHud } from '../../game-shell/src/game/hud'
 import { held, take, value } from '../../game-shell/src/game/input'
@@ -11,6 +11,10 @@ import { FIXED_STEP } from '../../game-shell/src/game/model'
 import { sound } from '../../game-shell/src/game/sound'
 import { Stage, surfacesReady, useSurfaces } from '../../game-shell/src/game/stage'
 import { WalkerBody, createWalker, type Walker } from '../../game-shell/src/game/walker'
+
+const definitions = ALS_WEAPONS.map(weapon => weapon.id === 'rifle' || weapon.id === 'pistol'
+  ? { ...weapon, ...foundTimings(FIELD_SET, weapon.id) }
+  : weapon)
 
 function useQueries(walker: Walker): WeaponQueries {
   const { world, rapier } = useRapier()
@@ -35,7 +39,7 @@ function useQueries(walker: Walker): WeaponQueries {
 function Rifle({ walker, arms }: { walker: Walker; arms: ArmsState }) {
   const camera = useThree(state => state.camera)
   const queries = useQueries(walker)
-  const weapon = useMemo(() => createWeaponRuntime({ ownerId: 'local', seed: 1, definitions: ALS_WEAPONS }), [])
+  const weapon = useMemo(() => createWeaponRuntime({ ownerId: 'local', seed: 1, definitions }), [])
   const state = useRef({ accumulated: 0, selected: 'rifle' as ArmsWeapon, reload: false })
   const aim = useMemo(() => ({ origin: new THREE.Vector3(), direction: new THREE.Vector3() }), [])
   useFrame((_, delta) => {
@@ -54,6 +58,7 @@ function Rifle({ walker, arms }: { walker: Walker; arms: ArmsState }) {
       current.accumulated -= FIXED_STEP
       const events = weapon.step({ tick: weapon.snapshot().nextTick, trigger: held('fire') && !arms.sprinting, reload: current.reload, selectWeaponId: current.selected, aim, muzzle: aim.origin }, queries)
       current.reload = false
+      arms.empty = weapon.snapshot().weapons.find(entry => entry.id === arms.debug.weapon)?.magazine === 0
       for (const event of events) {
         if (event.type === 'shot') { arms.fireSequence++; sound.play(`weapon.${current.selected}`, { position: [aim.origin.x, aim.origin.y, aim.origin.z] }) }
         if (event.type === 'impact') sound.play('impact.concrete', { position: [event.hit.point.x, event.hit.point.y, event.hit.point.z], delay: true })

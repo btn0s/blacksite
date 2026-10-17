@@ -23,12 +23,45 @@ export interface FillSpec {
   readonly strength: number;
 }
 
+export type ToneCurve = 'shoulder' | 'filmic';
+
 export interface GradeSpec {
   readonly lut: string | null;
   readonly vignette: number;
   readonly split: number;
   readonly aberration: number;
   readonly grain: number;
+  readonly curve?: ToneCurve;
+  readonly saturation?: number;
+  readonly bloom?: number;
+}
+
+export interface HeightFogSpec {
+  readonly density: number;
+  readonly base: number;
+  readonly falloff: number;
+  readonly tint: Rgb;
+}
+
+export interface CloudSpec {
+  readonly coverage: number;
+  readonly altitude: number;
+  readonly density: number;
+  readonly scale: number;
+  readonly wind: number;
+}
+
+export interface PhysicalSkySpec {
+  readonly rayleigh: number;
+  readonly mie: number;
+  readonly mieAnisotropy: number;
+  readonly ozone: number;
+  readonly illuminance: number;
+  readonly elevation: number;
+  readonly aerial: number;
+  readonly disk: number;
+  readonly heightFog: HeightFogSpec | null;
+  readonly clouds: CloudSpec | null;
 }
 
 export interface Atmosphere {
@@ -38,6 +71,7 @@ export interface Atmosphere {
   readonly sun: SunSpec;
   readonly fill: FillSpec;
   readonly grade: GradeSpec;
+  readonly physical?: PhysicalSkySpec;
 }
 
 export function normalize([x, y, z]: Rgb): Rgb {

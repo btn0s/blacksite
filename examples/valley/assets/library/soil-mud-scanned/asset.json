@@ -1,0 +1,36 @@
+{
+  "id": "soil-mud-scanned",
+  "category": "material",
+  "ship": [
+    "1k/c.webp",
+    "1k/n.webp",
+    "1k/orm.webp"
+  ],
+  "files": {
+    "1k/c.webp": 225694,
+    "1k/n.webp": 394722,
+    "1k/orm.webp": 176908,
+    "1k/c.ktx2": 185097,
+    "1k/n.ktx2": 1298629,
+    "1k/orm.ktx2": 644406,
+    "512/c.webp": 29640,
+    "512/n.webp": 81758,
+    "512/orm.webp": 27928,
+    "512/c.ktx2": 53333,
+    "512/n.ktx2": 306482,
+    "512/orm.ktx2": 135459
+  },
+  "bytes": 797324,
+  "ktx2Bytes": 2128132,
+  "budget": 900000,
+  "withinBudget": true,
+  "over": [],
+  "maps": {
+    "color": "Ground054_2K-JPG_Color.jpg",
+    "normal": "Ground054_2K-JPG_NormalGL.jpg",
+    "normalDX": "Ground054_2K-JPG_NormalDX.jpg",
+    "roughness": "Ground054_2K-JPG_Roughness.jpg",
+    "ao": "Ground054_2K-JPG_AmbientOcclusion.jpg"
+  },
+  "packed": "orm"
+}

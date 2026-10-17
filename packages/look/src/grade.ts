@@ -8,6 +8,7 @@ const GRADE_FRAGMENT = `
   uniform float split;
   uniform float aberration;
   uniform float grain;
+  uniform float saturation;
   uniform float lutSize;
   uniform mediump sampler3D lut;
 
@@ -15,6 +16,16 @@ const GRADE_FRAGMENT = `
     vec3 over = max(x - 0.72, 0.0);
     return min(x, vec3(0.72)) + 0.28 * (1.0 - exp(-over / 0.28));
   }
+
+  #ifdef LOOK_FILMIC
+    vec3 filmicCurve(vec3 x) {
+      return (x * (0.22 * x + 0.03) + 0.002) / (x * (0.22 * x + 0.3) + 0.06) - 0.033333;
+    }
+
+    vec3 filmic(vec3 x) {
+      return filmicCurve(x * 1.6) / filmicCurve(vec3(9.0));
+    }
+  #endif
 
   float grainNoise(vec2 uv) {
     vec2 cell = floor(uv * resolution) + floor(fract(time * 24.0) * 97.0);
@@ -33,7 +44,11 @@ const GRADE_FRAGMENT = `
     #else
       vec3 source = inputColor.rgb;
     #endif
-    vec3 colour = pow(shoulder(max(source, 0.0) * exposure), vec3(1.0 / 2.2));
+    #ifdef LOOK_FILMIC
+      vec3 colour = pow(clamp(filmic(max(source, 0.0) * exposure), 0.0, 1.0), vec3(1.0 / 2.2));
+    #else
+      vec3 colour = pow(shoulder(max(source, 0.0) * exposure), vec3(1.0 / 2.2));
+    #endif
     vec3 base = colour;
     #ifdef LOOK_LUT
       colour = texture(lut, clamp(colour, 0.0, 1.0) * ((lutSize - 1.0) / lutSize) + 0.5 / lutSize).rgb;
@@ -45,6 +60,9 @@ const GRADE_FRAGMENT = `
     );
     vec3 tone = mix(vec3(0.78, 0.94, 1.3), vec3(1.14, 1.0, 0.8), lit);
     colour = mix(colour, colour * tone + vec3(0.004, 0.012, 0.03) * (1.0 - lit), split);
+    #ifdef LOOK_SATURATION
+      colour = mix(vec3(dot(colour, vec3(0.2126, 0.7152, 0.0722))), colour, saturation);
+    #endif
     colour *= 1.0 - dot(centred, centred) * vignette;
     #ifdef LOOK_GRAIN
       colour += grainNoise(uv) * grain;
@@ -66,6 +84,7 @@ export class GradeEffect extends Effect {
         ['split', new Uniform(0)],
         ['aberration', new Uniform(0)],
         ['grain', new Uniform(0)],
+        ['saturation', new Uniform(1)],
         ['lutSize', new Uniform(1)],
         ['lut', new Uniform(null)],
       ]),
@@ -101,6 +120,9 @@ export class GradeEffect extends Effect {
     this.uniforms.get('split')!.value = grade.split;
     this.uniforms.get('aberration')!.value = grade.aberration;
     this.uniforms.get('grain')!.value = grade.grain;
+    this.uniforms.get('saturation')!.value = grade.saturation ?? 1;
+    this.toggle('LOOK_FILMIC', grade.curve === 'filmic');
+    this.toggle('LOOK_SATURATION', grade.saturation !== undefined && grade.saturation !== 1);
   }
 
   setLut(texture: Data3DTexture | null, size = texture?.image.width ?? 1): void {

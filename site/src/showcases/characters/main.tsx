@@ -11,6 +11,7 @@ import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
 import { Look } from '@blacksite/look/r3f'
+import { autoQuality, depthDefaults } from '@blacksite/look/quality'
 import { createAtmosphere, internalPixelRatio, texturesReady } from '@blacksite/look/world'
 import { Hints, Loading, Prompt, Screen, TitleCard, TouchPad, useTouch } from '@blacksite/ui/hud'
 import { buildCheckpoint } from './checkpoint'
@@ -115,7 +116,7 @@ function App() {
     return () => { cancelled = true; document.removeEventListener('pointerlockchange', onLock); audio.dispose() }
   }, [audio])
   return <Screen>
-    <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 70, near: 0.05, far: 600, position: [-4, 2, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }} onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
+    <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 70, near: depthDefaults(autoQuality()).near, far: 600, position: [-4, 2, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }} onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
       {ready && <Scene onFirstPerson={setFirstPerson} audio={audio} />}
     </Canvas>
     <TitleCard title="ALS Web · Checkpoint" />

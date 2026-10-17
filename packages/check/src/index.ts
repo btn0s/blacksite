@@ -22,7 +22,9 @@ export type BudgetModel = {
   voices?: number
 }
 
-export type CheckModel = { feel?: FeelModel; budget?: BudgetModel }
+export type QualityModel = { shimmerStill?: number; shimmerMotion?: number; popLimit?: number }
+
+export type CheckModel = { feel?: FeelModel; budget?: BudgetModel; quality?: QualityModel }
 
 export type PlayerSample = { position: Vec3; velocity?: Vec3; grounded?: boolean }
 
@@ -36,6 +38,7 @@ export type BlacksiteCheck = {
   version: 1
   ready: boolean
   bookmarks: Bookmark[]
+  flyover?: CameraPose[]
   camera(pose: CameraPose | null): void
   scripts?: Record<string, () => Promise<void>>
   player?(): PlayerSample | null
@@ -87,3 +90,8 @@ export function createAudioLog() {
     sample(): AudioSample { const drained = plays; plays = []; return { voices, plays: drained } },
   }
 }
+
+export { formatProblem, lintTriangles, lintZFighting, summarizeLint } from './zfight/lint.mjs'
+export type { LintCamera, LintOptions, LintReport, ZFightProblem } from './zfight/lint.mjs'
+export { extractTriangles } from './zfight/triangles.mjs'
+export { depthStep, gapNeeded } from './zfight/depth.mjs'

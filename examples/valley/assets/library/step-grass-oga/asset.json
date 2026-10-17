@@ -1,0 +1,105 @@
+{
+  "id": "step-grass-oga",
+  "category": "footstep",
+  "ship": [
+    "01.ogg",
+    "02.ogg",
+    "03.ogg",
+    "04.ogg",
+    "05.ogg",
+    "06.ogg",
+    "07.ogg",
+    "08.ogg",
+    "09.ogg"
+  ],
+  "files": {
+    "01.ogg": 2442,
+    "01.m4a": 4651,
+    "02.ogg": 2499,
+    "02.m4a": 4651,
+    "03.ogg": 2454,
+    "03.m4a": 4651,
+    "04.ogg": 2438,
+    "04.m4a": 4651,
+    "05.ogg": 2468,
+    "05.m4a": 4651,
+    "06.ogg": 2477,
+    "06.m4a": 4651,
+    "07.ogg": 2459,
+    "07.m4a": 4651,
+    "08.ogg": 2462,
+    "08.m4a": 4651,
+    "09.ogg": 2453,
+    "09.m4a": 4651
+  },
+  "bytes": 2499,
+  "budget": 60000,
+  "withinBudget": true,
+  "over": [],
+  "variations": [
+    {
+      "file": "01.ogg",
+      "fallback": "01.m4a",
+      "seconds": 0.253,
+      "source": "0.ogg",
+      "peakDb": -1.24
+    },
+    {
+      "file": "02.ogg",
+      "fallback": "02.m4a",
+      "seconds": 0.253,
+      "source": "1.ogg",
+      "peakDb": -1
+    },
+    {
+      "file": "03.ogg",
+      "fallback": "03.m4a",
+      "seconds": 0.253,
+      "source": "2.ogg",
+      "peakDb": -1.24
+    },
+    {
+      "file": "04.ogg",
+      "fallback": "04.m4a",
+      "seconds": 0.253,
+      "source": "3.ogg",
+      "peakDb": -1.18
+    },
+    {
+      "file": "05.ogg",
+      "fallback": "05.m4a",
+      "seconds": 0.253,
+      "source": "4.ogg",
+      "peakDb": -1.04
+    },
+    {
+      "file": "06.ogg",
+      "fallback": "06.m4a",
+      "seconds": 0.253,
+      "source": "5.ogg",
+      "peakDb": -1.16
+    },
+    {
+      "file": "07.ogg",
+      "fallback": "07.m4a",
+      "seconds": 0.253,
+      "source": "6.ogg",
+      "peakDb": -1.29
+    },
+    {
+      "file": "08.ogg",
+      "fallback": "08.m4a",
+      "seconds": 0.253,
+      "source": "7.ogg",
+      "peakDb": -1.17
+    },
+    {
+      "file": "09.ogg",
+      "fallback": "09.m4a",
+      "seconds": 0.253,
+      "source": "8.ogg",
+      "peakDb": -1.3
+    }
+  ],
+  "channels": 1
+}

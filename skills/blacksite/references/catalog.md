@@ -68,6 +68,7 @@ Every profile, prototype kit, system, package and command in Blacksite, generate
 | @blacksite/destruction-server | destruction server |
 | @blacksite/destruction-testkit | destruction testkit |
 | @blacksite/input | Keyboard, mouse, gamepad and touch input |
+| @blacksite/landscape | Terrain to the horizon, ground cover, forests and one wind |
 | @blacksite/look | Post stack, atmosphere and the ruins world kit |
 | @blacksite/materials | materials |
 | @blacksite/protocol | Shared room messages |
