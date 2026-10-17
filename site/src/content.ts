@@ -146,26 +146,19 @@ export const featured = [
 ]
 
 export const parts = [
-  { name: 'The skill', text: '`SKILL.md` and 26 reference files. Your agent reads `SKILL.md` for anything about a game and opens a reference when the work calls for it.', path: 'skills/blacksite/SKILL.md' },
-  { name: 'Building blocks', text: 'Finished game systems the agent puts together instead of writing from scratch: characters, weapons, enemy AI, destruction, multiplayer, open worlds, input and menus.', path: 'packages' },
-  { name: 'Templates', text: 'Four starting projects: first person, third person, multiplayer and blank. Each one passes every desktop check on its first build.', path: 'docs/player-templates.md' },
-  { name: 'Open asset library', text: '146 textures, props, skies, plants, sounds and room reverbs under CC0, CC BY, MIT or public-domain licences. `blacksite assets library` lists them; the agent fetches only what the game uses and writes the credits.', path: 'assets/README.md' },
-  { name: 'Checks', text: '`blacksite check` measures a running game on desktop and phone: how long each frame takes, any frame over 33 ms, objects that appear late as you approach, movement speed, sounds that repeat back to back and surfaces that flicker, plus screenshots to review.', path: 'skills/blacksite/references/verify.md' },
-  { name: 'Example games', text: 'Breach, Traverse and Valley, each built only on the public packages. The agent opens the closest one before it starts yours.', path: 'examples/README.md' },
+  { name: '`SKILL.md`', text: 'is what the agent reads for anything about a game. Its 26 reference files hold the numbers it builds to.', path: 'skills/blacksite/SKILL.md' },
+  { name: 'Building blocks', text: 'are finished systems for characters, weapons, enemy AI, destruction, multiplayer, open worlds and input.', path: 'packages' },
+  { name: 'Templates', text: 'are four starting projects: first person, third person, multiplayer and blank.', path: 'docs/player-templates.md' },
+  { name: 'The open asset library', text: 'has 146 textures, props, skies, plants and sounds under open licences.', path: 'assets/README.md' },
+  { name: '`blacksite check`', text: 'measures a running game on desktop and phone and saves screenshots to review.', path: 'skills/blacksite/references/verify.md' },
 ]
 
 export const limits = [
-  'Desktop browsers are the main target. On phones the games aim for 60 fps and leave out two lighting effects, ambient occlusion and bloom.',
-  'Characters share one mannequin body, coloured per game. Your own rigged character isn’t supported yet.',
+  'Desktop browsers come first. Phones aim for 60 fps and leave out two lighting effects.',
+  'Characters share one mannequin body. Your own rigged character isn’t supported yet.',
   'Weapons cover a rifle and a pistol. Any other weapon needs new animation.',
-  'Multiplayer sends the whole game state on every update and has no lag compensation yet.',
-  'Very large destructible buildings slow the physics down. Bullet holes that chip walls and city-sized collapse aren’t built yet.',
-  'The enemy AI doesn’t drive the shared player character yet, so each game draws its own soldiers.',
-  'Touch controls for the first-person, third-person and multiplayer templates aren’t finished.',
-  'Breach and Traverse aren’t finished. There is no horror or multiplayer example game yet.',
-  'A first game takes a day or a few sessions, not minutes. The agent finishes one space before it adds another.',
-  'Purchased assets aren’t included. The agent can install packs you own from Fab or itch.io into your game, but never copies them into a shared repository.',
-  'The checks run in a headless browser. Only you can confirm 120 fps on your display, touch on your phone and the mix in your headphones.',
+  'Multiplayer has no lag compensation yet.',
+  'The checks run in a headless browser, so only you can confirm 120 fps on your display and the mix in your headphones.',
 ]
 
 export const legacyRoutes: Record<string, string> = {

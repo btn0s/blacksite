@@ -4,12 +4,12 @@ export type Reference = { name: string; title: string; summary: string; path: st
 export type ReferenceNote = { label: string; summary: string }
 
 export const steps = [
-  { title: 'It asks, then sizes the job', text: 'One question at a time: single-player or multiplayer, which camera, what the player does. Then it picks a size. The default is one finished space with 5 to 10 minutes of play: a start, a way to lose and an end.' },
-  { title: 'It writes the numbers down first', text: 'Walk speed 1.75 m/s, sprint 6.5 m/s, fire rate, damage, ranges and how long a frame may take go into one file, `src/game/model.ts`. The rest of the game reads from it, so a wrong number has one place to fix.' },
-  { title: 'It lists the parts before it builds', text: 'For a ruined yard that means at least 3 light sources, 4 surface materials, 12 kinds of prop in clusters and 3 layers of sound. You approve the list, and nothing goes in that isn’t on it.' },
-  { title: 'It builds the risky parts alone, then joins them', text: 'A gun, a jump or an enemy is built in its own prototype from the building blocks, played, and kept only if it works. The ones that work are joined into one loop.' },
-  { title: 'It makes the scene move and make sound', text: 'Wind in the grass, dust in the light, a flickering lamp, distant ambience, and for every player action a sound, something to see and a camera response.' },
-  { title: 'It checks its own work and hands you a link', text: '`blacksite check` runs the game on desktop and on a slowed-down phone profile. It checks that no frame takes longer than 33 ms, that objects don’t appear late as you approach, that the player moves at the speeds in the numbers file and that no sound repeats back to back, and saves screenshots that the agent reviews. It fixes what fails, then gives you a URL to play.' },
+  { title: 'It asks, then sizes the job', text: 'It asks you one question at a time, then proposes one finished space with 5 to 10 minutes of play.' },
+  { title: 'It writes the numbers down first', text: 'Speeds, damage and ranges go into one file the whole game reads, so a wrong number has one place to fix.' },
+  { title: 'It lists the parts first', text: 'You approve a list of the lights, materials, props and sounds the scene needs, and nothing goes in that isn’t on it.' },
+  { title: 'It tries the risky parts alone', text: 'A gun, a jump or an enemy is built and played on its own first, and only the ones that work go into the game.' },
+  { title: 'It adds motion and sound', text: 'Wind, dust and ambience go in, and every player action gets a sound, something to see and a camera response.' },
+  { title: 'It checks its work and sends a link', text: 'It runs the game on desktop and a slowed-down phone, fixes what fails, such as any frame over 33 ms, then sends you a link to play.' },
 ]
 
 export const examples = [
