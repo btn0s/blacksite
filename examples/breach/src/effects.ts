@@ -1,11 +1,14 @@
 import * as THREE from 'three'
 import type { Hit } from './layout'
 import { supportHeight } from './geometry'
+import { SoftParticles } from '@blacksite/look/soft'
 
 type Surface = Hit
 type Decal = 'hole' | 'scuff' | 'blood'
 
-const dustTint: Record<Surface, string> = { concrete: '#b3ad9c', brick: '#a8826a', metal: '#8f8b80', wood: '#a48d68', dirt: '#857659', flesh: '#6e1610' }
+const dustTint = Object.fromEntries(Object.entries({ concrete: '#b3ad9c', brick: '#a8826a', metal: '#8f8b80', wood: '#a48d68', dirt: '#857659', flesh: '#6e1610' }).map(([surface, hex]) => [surface, new THREE.Color(hex)])) as Record<Surface, THREE.Color>
+const dustOpacity: Record<Surface, number> = { concrete: 0.8, brick: 0.8, metal: 0.7, wood: 0.8, dirt: 0.9, flesh: 0.85 }
+const sparkTint = { r: 3, g: 1.7, b: 0.5 }
 const chipTint: Record<Surface, string> = { concrete: '#9e998a', brick: '#8a5a44', metal: '#5a5b54', wood: '#a58b5f', dirt: '#5e5440', flesh: '#4a0d08' }
 const decalOf: Record<Surface, Decal | null> = { concrete: 'hole', brick: 'hole', metal: 'hole', wood: 'hole', dirt: 'scuff', flesh: null }
 const decalSize: Record<Decal, [number, number]> = { hole: [0.05, 0.035], scuff: [0.11, 0.06], blood: [0.32, 0.3] }
@@ -94,18 +97,8 @@ export function createEffects(scene: THREE.Scene) {
     return [kind, { mesh, next: 0, capacity: count }]
   })) as unknown as Record<Decal, { mesh: THREE.InstancedMesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>; next: number; capacity: number }>
 
-  const sparkCount = 260
-  const sparkPositions = new Float32Array(sparkCount * 6)
-  const sparkColors = new Float32Array(sparkCount * 6)
-  const sparkGeometry = new THREE.BufferGeometry()
-  sparkGeometry.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3).setUsage(THREE.DynamicDrawUsage))
-  sparkGeometry.setAttribute('color', new THREE.BufferAttribute(sparkColors, 3).setUsage(THREE.DynamicDrawUsage))
-  const sparkLines = new THREE.LineSegments(sparkGeometry, new THREE.LineBasicMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, toneMapped: false, fog: false }))
-  sparkLines.frustumCulled = false
-  sparkLines.visible = false
-  root.add(sparkLines)
-  const sparks = Array.from({ length: sparkCount }, () => ({ life: 0, max: 1, position: new THREE.Vector3(), velocity: new THREE.Vector3(), heat: 1 }))
-  let sparkNext = 0
+  const media = new SoftParticles({ capacity: 512 })
+  root.add(media)
 
   const tracerCount = 24
   const tracerPositions = new Float32Array(tracerCount * 6)
@@ -113,31 +106,12 @@ export function createEffects(scene: THREE.Scene) {
   const tracerGeometry = new THREE.BufferGeometry()
   tracerGeometry.setAttribute('position', new THREE.BufferAttribute(tracerPositions, 3).setUsage(THREE.DynamicDrawUsage))
   tracerGeometry.setAttribute('color', new THREE.BufferAttribute(tracerColors, 3).setUsage(THREE.DynamicDrawUsage))
-  const tracerLines = new THREE.LineSegments(tracerGeometry, sparkLines.material)
+  const tracerLines = new THREE.LineSegments(tracerGeometry, new THREE.LineBasicMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, toneMapped: false, fog: false }))
   tracerLines.frustumCulled = false
   tracerLines.visible = false
   root.add(tracerLines)
   const tracers = Array.from({ length: tracerCount }, () => ({ alive: false, from: new THREE.Vector3(), to: new THREE.Vector3(), travelled: 0, length: 0 }))
   let tracerNext = 0
-
-  const dustTexture = canvasTexture(64, (context, size) => {
-    for (let index = 0; index < 9; index++) {
-      const x = size / 2 + (Math.random() - 0.5) * size * 0.35
-      const y = size / 2 + (Math.random() - 0.5) * size * 0.35
-      const gradient = context.createRadialGradient(x, y, 0, x, y, size * 0.32)
-      gradient.addColorStop(0, 'rgba(255,255,255,0.32)')
-      gradient.addColorStop(1, 'rgba(255,255,255,0)')
-      context.fillStyle = gradient
-      context.fillRect(0, 0, size, size)
-    }
-  })
-  const dust = Array.from({ length: 36 }, () => {
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustTexture, transparent: true, depthWrite: false, opacity: 0 }))
-    sprite.visible = false
-    root.add(sprite)
-    return { sprite, life: 0, max: 1, velocity: new THREE.Vector3(), grow: 1, opacity: 0.6 }
-  })
-  let dustNext = 0
 
   const chipCount = 220
   const chipMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ roughness: 1 }), chipCount)
@@ -217,28 +191,15 @@ export function createEffects(scene: THREE.Scene) {
 
   function spark(point: THREE.Vector3, normal: THREE.Vector3, count: number, speed: number) {
     for (let index = 0; index < count; index++) {
-      const item = sparks[sparkNext]!
-      sparkNext = (sparkNext + 1) % sparkCount
-      item.position.copy(point)
-      cone(normal, 0.9, item.velocity).multiplyScalar(speed * random(0.35, 1))
-      item.max = item.life = random(0.12, 0.42)
-      item.heat = random(0.7, 1.3)
+      cone(normal, 0.9, scratch.vector).multiplyScalar(speed * random(0.35, 1))
+      media.emit({ position: scratch.position.copy(point).addScaledVector(normal, 0.01), velocity: scratch.vector, acceleration: { x: 0, y: -9.8, z: 0 }, drag: 1.5, life: random(0.12, 0.42), size: random(0.02, 0.035), tint: sparkTint, glow: random(0.8, 1.2), stretch: 0.03 })
     }
   }
 
   function puff(point: THREE.Vector3, normal: THREE.Vector3, surface: Surface, scale: number) {
-    for (let index = 0; index < 2; index++) {
-      const item = dust[dustNext]!
-      dustNext = (dustNext + 1) % dust.length
-      item.sprite.visible = true
-      item.sprite.position.copy(point).addScaledVector(normal, 0.05)
-      item.sprite.material.color.set(dustTint[surface])
-      item.sprite.material.rotation = Math.random() * Math.PI * 2
-      item.velocity.copy(normal).multiplyScalar(random(0.5, 1.4) * scale).add(scratch.vector.set(random(-0.2, 0.2), random(0.1, 0.4), random(-0.2, 0.2)))
-      item.max = item.life = random(0.7, 1.3) * scale
-      item.grow = random(0.5, 0.9) * scale
-      item.opacity = surface === 'dirt' ? 0.75 : surface === 'flesh' ? 0.85 : 0.6
-      item.sprite.scale.setScalar(0.1)
+    for (let index = 0; index < 3; index++) {
+      scratch.vector.copy(normal).multiplyScalar(random(0.5, 1.4) * scale).add(scratch.position.set(random(-0.2, 0.2), random(0.1, 0.4), random(-0.2, 0.2)))
+      media.emit({ position: scratch.position.copy(point).addScaledVector(normal, 0.05), velocity: scratch.vector, acceleration: { x: 0, y: 0.3, z: 0 }, drag: 2.2, life: random(0.7, 1.3) * scale, size: random(0.18, 0.24), grow: random(2.5, 4) * scale, opacity: dustOpacity[surface], tint: dustTint[surface] })
     }
   }
 
@@ -310,30 +271,7 @@ export function createEffects(scene: THREE.Scene) {
     },
     update(dt: number, onCasing: (position: THREE.Vector3) => void) {
       const step = Math.min(dt, 1 / 30)
-      let sparksAlive = false
-      for (let index = 0; index < sparkCount; index++) {
-        const item = sparks[index]!
-        const offset = index * 6
-        if (item.life <= 0) { if (sparkLines.visible) sparkPositions.fill(0, offset, offset + 6); continue }
-        sparksAlive = true
-        item.life -= step
-        item.velocity.y -= 9.8 * step
-        item.velocity.multiplyScalar(1 - 1.5 * step)
-        item.position.addScaledVector(item.velocity, step)
-        const fade = Math.max(0, item.life / item.max) * item.heat
-        sparkPositions[offset] = item.position.x
-        sparkPositions[offset + 1] = item.position.y
-        sparkPositions[offset + 2] = item.position.z
-        sparkPositions[offset + 3] = item.position.x - item.velocity.x * 0.016
-        sparkPositions[offset + 4] = item.position.y - item.velocity.y * 0.016
-        sparkPositions[offset + 5] = item.position.z - item.velocity.z * 0.016
-        sparkColors.set([7 * fade, 4.2 * fade, 1.4 * fade, 2.2 * fade, 0.7 * fade, 0.1 * fade], offset)
-      }
-      if (sparksAlive || sparkLines.visible) {
-        sparkGeometry.attributes.position!.needsUpdate = true
-        sparkGeometry.attributes.color!.needsUpdate = true
-      }
-      sparkLines.visible = sparksAlive
+      media.advance(step)
 
       let tracersAlive = false
       for (let index = 0; index < tracerCount; index++) {
@@ -363,17 +301,6 @@ export function createEffects(scene: THREE.Scene) {
       for (const item of flashes) {
         if (item.life <= 0) { item.sprite.visible = false; continue }
         item.life -= step
-      }
-
-      for (const item of dust) {
-        if (item.life <= 0) { item.sprite.visible = false; continue }
-        item.life -= step
-        const t = 1 - item.life / item.max
-        item.velocity.multiplyScalar(1 - 2.6 * step)
-        item.velocity.y += 0.25 * step
-        item.sprite.position.addScaledVector(item.velocity, step)
-        item.sprite.scale.setScalar(0.12 + item.grow * Math.sqrt(t))
-        item.sprite.material.opacity = item.opacity * (1 - t) * Math.min(1, t * 8)
       }
 
       let chipsChanged = false

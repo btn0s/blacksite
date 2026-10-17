@@ -56,6 +56,29 @@ The sampling layout follows the three-patch construction described by [Heitz and
 const removeViewmodel = look.addOverlay(viewmodelScene, viewmodelCamera)
 ```
 
+## Soft particles
+
+`SoftParticles` from `@blacksite/look/soft` is the one way to draw dust, smoke, steam, ash, sparks and embers. It is a mesh of camera-facing quads; add it to your scene like any other object and the look's soft pass draws it after the scene render, depth-tested and faded against a copy of the frame's depth.
+
+```ts
+const dust = new SoftParticles({ capacity: 256 })
+scene.add(dust)
+dust.emit({ position, velocity, acceleration: { x: 0, y: 0.35, z: 0 }, drag: 2.2, life: 1.2, size: 0.3, grow: 2.7, opacity: 0.55, tint })
+dust.advance(dt)
+```
+
+- Lighting: every particle is lit by the same lights as the surfaces around it (directional, point, spot, hemisphere, ambient and light probes, through three's light uniforms). Directional lights that cast shadows shade each particle by their shadow map, sampled once at its centre, so a puff in shade is not sunlit. Each quad is shaded as a soft sphere with wrapped diffuse and mild forward scattering, then fogged with `scene.fog`.
+- Self-shadowing: each `SoftParticles` gathers its live particles into a 16³ density volume every frame and attenuates every light, and the sky and ground terms, by the transmittance through that volume between the particle and the light. A dense cloud lit by a fire inside it is bright on the fire-facing side and near the flames, and keeps its own colour in its body. Particles in different `SoftParticles` do not shadow each other, so one cloud is one instance. A field that is optically thin (under 1% mean optical depth through its thickest view, such as ash or motes) skips the volume. The cost is linear in live particles plus a fixed blur over the grid.
+- Motion runs on the GPU from the spawn state: `velocity`, constant `acceleration` (gravity or buoyancy), and exponential `drag`, which damps all motion, so a particle settles at the terminal velocity `acceleration / drag`; dust that falls 5 m in 3 s at drag 1.4 has an acceleration of -3.05. `emit` writes one slot of a ring of `capacity` slots and uploads only the slots written that frame; `advance(dt)` moves the clock.
+- Life: with `life > 0` a particle fades in over the first 8% of its life and out as `(1 - t)^1.5`, and its diameter grows from `size` to `size * (1 + grow)`.
+- Over-life curves: `curve(keys)` registers a curve and returns its id; `emit({ ..., curve: id })` uses it. Each key has `at` (0 to 1 of life) and any of `color` (multiplies `tint`), `glow` and `opacity` (multiply the particle's values). Each channel interpolates linearly between the keys that set it; a channel no key sets keeps the default (colour 1, glow and opacity the fade above). With a white `tint`, colour keys are absolute: a flame goes white-hot, orange, then dark smoke by keying `color` and handing `glow` over to `opacity`. Curve 0 is the default. With `life <= 0` it lives until overwritten, for fields such as ash or motes. `delay` (seconds) starts its life later, for effects known ahead of time, such as a puff where a bullet will land.
+- `opacity` is how much the particle hides what is behind it; `glow` adds `tint * glow` of emitted light, unlit and unshadowed. Dust has opacity and no glow; sparks and embers have glow and no opacity; both blend in one premultiplied pass.
+- `stretch` (seconds) elongates the quad along its screen-space velocity, for sparks. `flutter` (metres) adds a slow seeded sway, for ash.
+- `wrap(center, size)` keeps particles inside a box in the object's space, wrapping each axis with a non-zero size and fading them near its faces; pass `null` to stop. `still = true` freezes motion and growth for reduced motion. `reset()` empties the ring.
+- Options: `capacity` (default 256), `softness` (contact fade depth as a fraction of the radius, default 1) and `scatter` (forward-scatter gain toward the light, default 0.8).
+
+`surfaceAlbedo(hit)` from `@blacksite/look/world` returns the linear albedo under a raycast hit (material colour × texture mean × instance or vertex colour), for tinting what comes off a surface.
+
 ## React Three Fiber
 
 ```tsx

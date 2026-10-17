@@ -1,4 +1,4 @@
-import { createDestructibleBoxes, DESTRUCTION_MATERIALS, type DestructibleBox, type MaterialDef } from '@blacksite/cascade'
+import { createDestructibleBoxes, type DestructibleBox } from '@blacksite/cascade'
 
 type Vec3 = [number, number, number]
 
@@ -59,11 +59,8 @@ export function blockBoxes() {
   return boxes
 }
 
-const aged = (material: MaterialDef, k: number): MaterialDef => ({ ...material, tensionStrength: (material.tensionStrength ?? 0) * k, bendingStrength: (material.bendingStrength ?? 0) * k, shearStrength: (material.shearStrength ?? 0) * k })
-const materials = DESTRUCTION_MATERIALS.map(material => material.id === 0 || material.id === 1 ? aged(material, 0.4) : material)
-
 export function createBlock(maxFragments = 4200) {
-  const { manifest, fragmentSource } = createDestructibleBoxes(blockBoxes(), { id: 'air-strike-block', cellSize: 1.6, maxFragments, materials, storeyHeight: BLOCK.storey, panelWidth: BLOCK.bay * 2 })
+  const { manifest, fragmentSource } = createDestructibleBoxes(blockBoxes(), { id: 'air-strike-block', cellSize: 1.6, maxFragments, storeyHeight: BLOCK.storey, panelWidth: BLOCK.bay * 2 })
   manifest.level = { boxes: [], camera: { position: [-34, 10, 64], target: [0, 8, 0] }, spawn: { position: [0, 0.05, 30], yaw: 0 } }
   return { manifest, fragmentSource }
 }

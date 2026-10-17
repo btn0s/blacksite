@@ -2,15 +2,17 @@ import * as THREE from 'three'
 import { DestructionRenderer, DestructionSession, FIXED_DT_30HZ, FragmentState, type FragmentDef, type FragmentSurface } from '@blacksite/cascade'
 import { attachPerfProbe, reportActiveBodies } from '@blacksite/ui/perf-overlay'
 import { createLook, type Look } from '@blacksite/look'
+import { applyCameraImpulse, createCameraImpulse, type ImpulsePoint } from '@blacksite/subject/feel'
 import { createAtmosphere, internalPixelRatio, isTouchDevice, meterSurface, preloadSurfaces } from '@blacksite/look/world'
 import { BLOCK, BLOCK_HEIGHT, BLOCK_LENGTH, createBlock } from './block'
-import { STRIKE, StrikeEffects } from './fx'
+import { MUNITIONS, StrikeEffects, type Munition } from './fx'
 import { buildYard } from './yard'
 
-export type Phase = 'loading' | 'ready' | 'designating' | 'inbound' | 'impact'
-export type AirStrikeState = { phase: Phase; countdown: number; progress: number; detached: number; error: string | null }
+const up = new THREE.Vector3(0, 1, 0)
 
-const designateSeconds = 1.4
+export type Phase = 'loading' | 'ready'
+export type MunitionId = keyof typeof MUNITIONS
+export type AirStrikeState = { phase: Phase; munition: MunitionId; inbound: number; progress: number; detached: number; error: string | null }
 
 function reticleTexture() {
   const size = 128
@@ -43,6 +45,8 @@ class OrbitRig {
   pitch = 0.13
   distance = 64
   private readonly goal = { yaw: this.yaw, pitch: this.pitch, distance: this.distance }
+  private readonly impulse = createCameraImpulse()
+  private readonly forward = new THREE.Vector3()
   idle = 0
 
   constructor(readonly camera: THREE.PerspectiveCamera) {}
@@ -58,7 +62,7 @@ class OrbitRig {
     this.idle = 0
   }
 
-  update(dt: number, shake: number) {
+  update(dt: number) {
     this.idle += dt
     if (this.idle > 8) this.goal.yaw += dt * 0.025
     const k = 1 - Math.exp(-dt * 6)
@@ -68,12 +72,16 @@ class OrbitRig {
     const c = Math.cos(this.pitch)
     this.camera.position.set(Math.sin(this.yaw) * c, Math.sin(this.pitch), Math.cos(this.yaw) * c).multiplyScalar(this.distance).add(this.target)
     this.camera.lookAt(this.target)
-    if (shake > 0) {
-      const amount = shake * shake * 0.6
-      this.camera.position.x += (Math.random() - 0.5) * amount
-      this.camera.position.y += (Math.random() - 0.5) * amount
-      this.camera.rotateZ((Math.random() - 0.5) * amount * 0.01)
-    }
+    applyCameraImpulse(this.camera, this.impulse.step(dt))
+  }
+
+  blast(source: ImpulsePoint, strength: number) {
+    this.camera.getWorldDirection(this.forward)
+    this.impulse.blast(source, strength, this.camera.position, Math.atan2(-this.forward.x, -this.forward.z))
+  }
+
+  still() {
+    this.impulse.reset()
   }
 }
 
@@ -91,7 +99,7 @@ export class AirStrikeScene {
   private readonly beam = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1, 6, 1, true).translate(0, 0.5, 0), new THREE.MeshBasicMaterial({ color: '#ff3a1a', transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }))
   private readonly ray = new THREE.Raycaster()
   private readonly pointer = new THREE.Vector2()
-  private designation: { point: THREE.Vector3; age: number } | null = null
+  private mark: { point: THREE.Vector3; age: number } | null = null
   private shadowAt = 0
   private lastShadow = -1
   private mass = 1
@@ -102,7 +110,7 @@ export class AirStrikeScene {
   private readonly clock = new THREE.Clock()
   private readonly materials = new Map<string, THREE.Material>()
   private fragmentSource: ReadonlyMap<number, string> = new Map()
-  state: AirStrikeState = { phase: 'loading', countdown: 0, progress: 0.05, detached: 0, error: null }
+  state: AirStrikeState = { phase: 'loading', munition: 'missile', inbound: 0, progress: 0.05, detached: 0, error: null }
   onState: (state: AirStrikeState) => void = () => {}
 
   constructor(readonly host: HTMLElement) {
@@ -150,7 +158,7 @@ export class AirStrikeScene {
       frame: frame => this.fx.ingest(frame),
       ready: () => { this.warm(); this.set({ phase: 'ready', progress: 1 }) },
     }, { timestep: FIXED_DT_30HZ, rest: { forceAfterSeconds: 2.5, forceSpeed: 0.5, forceSpin: 0.9 } })
-    this.view = new DestructionRenderer(manifest, { materialFor: this.materialFor, cameraShake: 1, effects: false, secondaryAddsPerUpdate: 12, edgeFacesPerUpdate: 64 })
+    this.view = new DestructionRenderer(manifest, { materialFor: this.materialFor, effects: false, secondaryAddsPerUpdate: 12, edgeFacesPerUpdate: 64 })
     this.scene.add(this.view.group)
     this.session.subscribe(() => { const error = this.session?.getSnapshot().error; if (error && error !== this.state.error) this.set({ error }) })
   }
@@ -200,7 +208,7 @@ export class AirStrikeScene {
   }
 
   hover(clientX: number, clientY: number) {
-    if (this.state.phase !== 'ready' && this.state.phase !== 'impact') return
+    if (this.state.phase !== 'ready') return
     const point = this.pick(clientX, clientY)
     this.reticle.visible = !!point
     if (point) this.placeReticle(point)
@@ -220,43 +228,42 @@ export class AirStrikeScene {
   }
 
   callStrike(point = new THREE.Vector3(-1, 4, BLOCK.depth / 2)) {
-    if (!this.session || this.designation || this.fx.busy || this.state.phase === 'loading') return
+    if (!this.session || this.state.phase === 'loading') return
     const target = point.clone()
-    target.y = THREE.MathUtils.clamp(target.y, 2, BLOCK_HEIGHT - 3)
-    this.designation = { point: target, age: 0 }
+    target.y = THREE.MathUtils.clamp(target.y, 0.6, BLOCK_HEIGHT)
+    this.mark = { point: target, age: 0 }
     this.placeReticle(target)
     this.reticle.visible = this.beam.visible = true
-    this.set({ phase: 'designating', countdown: designateSeconds })
+    const heading = target.clone().sub(this.camera.position).setY(0).applyAxisAngle(up, 0.35)
+    this.fx.launch(target, heading, MUNITIONS[this.state.munition], (at: THREE.Vector3, direction: THREE.Vector3, munition: Munition) => {
+      this.session?.impact('explosion', [at.x, at.y, at.z], [direction.x, direction.y, direction.z], munition.radius, munition.strength, undefined, munition.minRadius)
+      this.rig.blast(at, munition.radius / 10)
+      this.set({ inbound: this.fx.inbound })
+    })
+    this.set({ inbound: this.fx.inbound })
+  }
+
+  choose(munition: MunitionId) {
+    this.set({ munition })
+  }
+
+  cycle() {
+    const ids = Object.keys(MUNITIONS) as MunitionId[]
+    this.choose(ids[(ids.indexOf(this.state.munition) + 1) % ids.length]!)
   }
 
   rebuild() {
     if (!this.session || this.state.phase === 'loading') return
-    this.designation = null
+    this.mark = null
     this.reticle.visible = this.beam.visible = false
     this.fx.clear()
+    this.rig.still()
     this.session.reset()
-    this.set({ phase: 'ready', detached: 0 })
-  }
-
-  private release() {
-    const designation = this.designation!
-    const along = new THREE.Vector3(1, 0, 0)
-    const half = BLOCK_LENGTH / 2 - 3
-    const center = designation.point.clone()
-    center.x = THREE.MathUtils.clamp(center.x, -half + STRIKE.spacing, half - STRIKE.spacing)
-    const targets = [-1, 0, 1].map(offset => center.clone().addScaledVector(along, offset * STRIKE.spacing))
-    this.fx.launch(targets, (hit, direction) => {
-      const at = hit.clone().addScaledVector(direction, STRIKE.penetration)
-      at.y = Math.max(1.2, at.y)
-      this.session?.impact('explosion', [at.x, at.y, at.z], [direction.x, direction.y, direction.z], STRIKE.radius, STRIKE.strength, undefined, STRIKE.minRadius)
-      this.fx.detonate(at, direction, this.camera)
-      this.set({ phase: 'impact' })
-    })
-    this.set({ phase: 'inbound', countdown: STRIKE.altitude / Math.sin(STRIKE.dive) / STRIKE.speed })
+    this.set({ detached: 0, inbound: 0 })
   }
 
   private warm() {
-    this.fx.warm(this.camera, this.rig.target.clone(), () => {
+    this.fx.warm(this.rig.target.clone(), () => {
       this.reticle.visible = this.beam.visible = true
       this.reticle.position.copy(this.rig.target)
       this.look.render(0)
@@ -266,26 +273,16 @@ export class AirStrikeScene {
 
   private loop = () => {
     const dt = Math.min(0.05, this.clock.getDelta())
-    if (this.designation) {
-      this.designation.age += dt
-      const pulse = 1 + Math.sin(this.designation.age * 18) * 0.08
-      this.reticle.scale.setScalar(this.camera.position.distanceTo(this.designation.point) * 0.07 * pulse)
-      ;(this.beam.material as THREE.MeshBasicMaterial).opacity = this.designation.age > designateSeconds * 0.6 ? (Math.sin(this.designation.age * 40) > 0 ? 0.85 : 0.25) : 0.45
-      if (this.state.phase === 'designating') {
-        const countdown = Math.max(0, designateSeconds - this.designation.age)
-        if (countdown <= 0) this.release()
-        else if (Math.abs(countdown - this.state.countdown) > 0.1) this.set({ countdown })
-      } else if (this.state.phase === 'inbound') {
-        const countdown = Math.max(0, this.state.countdown - dt)
-        this.state.countdown = countdown
-      }
-      if (this.state.phase === 'impact') {
-        this.designation = null
+    if (this.mark) {
+      this.mark.age += dt
+      this.reticle.scale.setScalar(this.camera.position.distanceTo(this.mark.point) * 0.07 * (1 + Math.sin(this.mark.age * 18) * 0.08))
+      if (this.fx.inbound === 0) {
+        this.mark = null
         this.reticle.visible = this.beam.visible = false
       }
     }
-    this.fx.update(dt, this.camera)
-    this.rig.update(dt, this.fx.shake)
+    this.fx.update(dt)
+    this.rig.update(dt)
     const session = this.session
     if (session?.frame && this.view) {
       this.view.update(session.frame, session.previous, session.interpolationAlpha())
@@ -321,7 +318,7 @@ export class AirStrikeScene {
     this.renderer.setAnimationLoop(null)
     this.view?.dispose()
     void this.session?.dispose()
-    this.fx.clear()
+    this.fx.dispose()
     this.look.dispose()
     this.renderer.dispose()
     this.renderer.domElement.remove()

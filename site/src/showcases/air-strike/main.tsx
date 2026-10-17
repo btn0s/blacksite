@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Actions, Hints, Loading, Prompt, Screen, Status, TitleCard, useTouch } from '@blacksite/ui/hud'
 import { AirStrikeScene, type AirStrikeState } from './scene'
+import { MUNITIONS } from './fx'
 
 function App() {
   const host = useRef<HTMLDivElement>(null)
   const scene = useRef<AirStrikeScene | null>(null)
   const touch = useTouch()
-  const [state, setState] = useState<AirStrikeState>({ phase: 'loading', countdown: 0, progress: 0.05, detached: 0, error: null })
+  const [state, setState] = useState<AirStrikeState>({ phase: 'loading', munition: 'missile', inbound: 0, progress: 0.05, detached: 0, error: null })
   useEffect(() => {
     const instance = new AirStrikeScene(host.current!)
     instance.onState = next => setState(next)
@@ -50,6 +51,9 @@ function App() {
     const key = (event: KeyboardEvent) => {
       if (event.code === 'Space') { event.preventDefault(); instance.callStrike() }
       if (event.code === 'KeyR') instance.rebuild()
+      if (event.code === 'KeyQ') instance.cycle()
+      if (event.code === 'Digit1') instance.choose('missile')
+      if (event.code === 'Digit2') instance.choose('bomb')
     }
     canvas.addEventListener('pointerdown', down)
     canvas.addEventListener('pointermove', move)
@@ -63,18 +67,18 @@ function App() {
       scene.current = null
     }
   }, [])
-  const busy = state.phase === 'designating' || state.phase === 'inbound'
-  const status = state.phase === 'designating' ? { label: 'Target designated', value: `Release in ${state.countdown.toFixed(1)} s`, tone: 'alert' as const }
-    : state.phase === 'inbound' ? { label: 'Salvo released', value: 'Strike inbound', tone: 'alert' as const }
+  const munition = MUNITIONS[state.munition].name
+  const status = state.inbound > 0 ? { label: munition, value: 'Inbound', tone: 'alert' as const }
     : state.detached > 0 ? { label: 'Structure down', value: `${state.detached}%` }
+    : state.phase === 'ready' ? { label: 'Armed', value: munition }
     : null
   return <Screen>
     <div ref={host} />
     <TitleCard title="Destruction · Air Strike" />
     {status && <Status {...status} />}
-    <Hints visible={!touch} items={[['Click', 'Strike'], ['Drag', 'Orbit'], ['Wheel', 'Zoom'], ['R', 'Rebuild']]} />
-    <Prompt text={touch ? 'Tap the block to call a strike' : 'Click the block to call a strike'} visible={state.phase === 'ready' && state.detached === 0} />
-    <Actions items={[{ id: 'strike', label: 'Strike', disabled: busy || state.phase === 'loading', onPress: () => scene.current?.callStrike() }, { id: 'rebuild', label: 'Rebuild', disabled: state.phase === 'loading', onPress: () => scene.current?.rebuild() }]} />
+    <Hints visible={!touch} items={[['Click', 'Strike'], ['Q', 'Munition'], ['Drag', 'Orbit'], ['Wheel', 'Zoom'], ['R', 'Rebuild']]} />
+    <Prompt text={touch ? 'Tap the block to call in a strike' : 'Click the block to call in a strike'} visible={state.phase === 'ready' && state.detached === 0 && state.inbound === 0} />
+    <Actions items={[{ id: 'strike', label: 'Strike', disabled: state.phase === 'loading', onPress: () => scene.current?.callStrike() }, { id: 'munition', label: state.munition === 'missile' ? 'Missile' : 'Bomb', disabled: state.phase === 'loading', onPress: () => scene.current?.cycle() }, { id: 'rebuild', label: 'Rebuild', disabled: state.phase === 'loading', onPress: () => scene.current?.rebuild() }]} />
     <Loading title="Air Strike" detail={state.error ?? (state.progress < 0.35 ? 'Loading materials' : state.progress < 0.6 ? 'Casting 2,700 concrete pieces' : 'Starting the physics worker')} progress={state.progress} done={state.phase !== 'loading'} />
   </Screen>
 }

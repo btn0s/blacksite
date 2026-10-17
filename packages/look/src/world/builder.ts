@@ -12,6 +12,24 @@ type Place = { at: [number, number, number]; rotate?: number | [number, number, 
 
 export type LevelBuilderOptions = { coplanar?: CoplanarMode; separation?: number }
 
+export type LevelPart = { start: number; count: number; label: string; box: THREE.Box3 }
+
+const partRay = new THREE.Ray()
+const partInverse = new THREE.Matrix4()
+
+function raycastParts(this: THREE.Mesh, raycaster: THREE.Raycaster, intersects: THREE.Intersection[]) {
+  const parts = this.userData.parts as LevelPart[]
+  const range = this.geometry.drawRange
+  const [start, count] = [range.start, range.count]
+  partRay.copy(raycaster.ray).applyMatrix4(partInverse.copy(this.matrixWorld).invert())
+  for (const part of parts) {
+    if (!partRay.intersectsBox(part.box)) continue
+    this.geometry.setDrawRange(part.start * 3, part.count * 3)
+    THREE.Mesh.prototype.raycast.call(this, raycaster, intersects)
+  }
+  this.geometry.setDrawRange(start, count)
+}
+
 const keyOf = (material: Material) => `${material.name}|${material.color ?? ''}|${material.scale ?? 1}|${material.ao === false ? 'noao' : JSON.stringify(material.ao ?? '')}|${material.decal ?? ''}`
 
 const extent = (plane: { width: number; depth: number; quaternion: THREE.Quaternion }) => {
@@ -173,9 +191,10 @@ export class LevelBuilder {
       const pieces = part.geometries.map(item => item.index ? item.toNonIndexed() : item)
       const geometry = mergeGeometries(pieces, false)
       let start = 0
-      const labelled = pieces.map((item, index) => {
+      const labelled = pieces.map((item, index): LevelPart => {
         const count = item.getAttribute('position').count / 3
-        const entry = { start, count, label: part.labels[index]! }
+        item.computeBoundingBox()
+        const entry = { start, count, label: part.labels[index]!, box: item.boundingBox!.clone().expandByScalar(1e-3) }
         start += count
         return entry
       })
@@ -184,6 +203,7 @@ export class LevelBuilder {
       const mesh = new THREE.Mesh(geometry, surface(part.material.name, part.material))
       mesh.name = `level ${part.material.name}`
       mesh.userData.parts = labelled
+      mesh.raycast = raycastParts
       mesh.castShadow = part.cast
       mesh.receiveShadow = true
       mesh.matrixAutoUpdate = false
