@@ -19,7 +19,7 @@ export interface WeaponDefinition {
   readonly pattern?: { readonly kicks: readonly { readonly pitch: number; readonly yaw: number }[]; readonly resetSeconds: number; readonly jitter?: number };
   readonly spread?: {
     readonly hip: number; readonly aim: number; readonly move: number; readonly crouch?: number;
-    readonly bloomPerShot: number; readonly bloomMax: number; readonly recoverySeconds: number;
+    readonly bloomPerShot: number; readonly bloomMax: number; readonly recoverySeconds: number; readonly recoveryDelaySeconds?: number;
   };
   readonly ballistics:
     | { readonly kind: 'hitscan' }

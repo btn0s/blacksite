@@ -332,7 +332,8 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
     const soundClass = definition.class ?? 'sfx'
     const now = logicalNow()
     if (!looping && now - (lastPlayed.get(name) ?? -Infinity) < (definition.cooldown ?? 0)) return null
-    const score = voiceScore(soundClass, audibility * (play.volume ?? 1) * (definition.gain ?? 1))
+    const volume = Math.max(0, (play.volume ?? 1) * jitterGain(random, definition.volumeJitterDb ?? 1.5))
+    const score = voiceScore(soundClass, audibility * volume * (definition.gain ?? 1))
     let extraDelay = 0
     if (voices.size >= cap) {
       if ([...voices.values()].some(voice => voice.pendingSteal)) return null
@@ -346,7 +347,6 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
     lastPlayed.set(name, now)
     const variant = definition.variants[selected]
     const pitch = Math.max(0.05, (play.pitch ?? 1) * jitterPitch(random, definition.pitchJitter ?? 0.05))
-    const volume = Math.max(0, (play.volume ?? 1) * jitterGain(random, definition.volumeJitterDb ?? 1.5))
     const startAt = context.currentTime + scheduledDelay + extraDelay
     const root = context.createGain()
     root.gain.value = 1
@@ -373,8 +373,8 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
     lowpass.connect(spatial)
     const bus = busNodes.get(busFor(definition)) ?? busNodes.get('sfx')!
     spatial.connect(bus)
-    const zoneEffect = getZoneEffect(currentZone, busFor(definition))
-    const useWet = !!zoneEffect && (definition.reverbSend ?? 0.3) > 0
+    const zoneEffect = (definition.reverbSend ?? 0.3) > 0 ? getZoneEffect(currentZone, busFor(definition)) : null
+    const useWet = !!zoneEffect
     const wetRoot = useWet ? context.createGain() : null
     const wetVolumeGain = useWet ? context.createGain() : null
     const wetAttenuationGain = useWet ? context.createGain() : null

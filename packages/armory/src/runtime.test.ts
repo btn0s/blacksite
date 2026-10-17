@@ -340,6 +340,16 @@ describe('learnable recoil pattern and stance spread', () => {
     expect(runtime.snapshot().spread).toBeCloseTo(0.02);
   });
 
+  it('preserves accumulated bloom through the authored firing cadence before recovering', () => {
+    const spread = { hip: 0.02, aim: 0.002, move: 0, bloomPerShot: 0.003, bloomMax: 0.04, recoverySeconds: 0.43, recoveryDelaySeconds: 0.1 };
+    const runtime = create([rifle({ spread })]);
+    const spray = shots(tickUntil(runtime, 59, { trigger: true }));
+    expect(spray).toHaveLength(10);
+    expect(spray[9]!.spread).toBeCloseTo(spread.hip + 9 * spread.bloomPerShot);
+    tickUntil(runtime, 91);
+    expect(runtime.snapshot().spread).toBeCloseTo(spread.hip);
+  });
+
   it.each([
     { pattern: { kicks: [], resetSeconds: 0.3 } }, { pattern: { kicks: [{ pitch: NaN, yaw: 0 }], resetSeconds: 0.3 } },
     { spread: { hip: -1, aim: 0, move: 0, bloomPerShot: 0, bloomMax: 0, recoverySeconds: 1 } },

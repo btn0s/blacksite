@@ -52,7 +52,7 @@ export function createWeaponRuntime(options: WeaponRuntimeOptions): WeaponRuntim
     }
     if (definition.spread) {
       const spread = definition.spread;
-      assert([spread.hip, spread.aim, spread.move, spread.bloomPerShot, spread.bloomMax].every(value => finite(value, 0, Math.PI / 4)) && finite(spread.recoverySeconds, 0, 60) && (spread.crouch === undefined || finite(spread.crouch, 0, 4)), `${definition.id}: invalid spread`);
+      assert([spread.hip, spread.aim, spread.move, spread.bloomPerShot, spread.bloomMax].every(value => finite(value, 0, Math.PI / 4)) && finite(spread.recoverySeconds, 0, 60) && (spread.recoveryDelaySeconds === undefined || finite(spread.recoveryDelaySeconds, 0, 60)) && (spread.crouch === undefined || finite(spread.crouch, 0, 4)), `${definition.id}: invalid spread`);
     }
     if (definition.ballistics.kind === 'projectile') {
       const ballistic = definition.ballistics;
@@ -155,7 +155,11 @@ export function createWeaponRuntime(options: WeaponRuntimeOptions): WeaponRuntim
     stance = { ...command.stance };
     for (const [id, state] of ammunition) {
       const owner = definitions.get(id)!;
-      if (owner.spread && state.bloom > 0) state.bloom = owner.spread.recoverySeconds > 0 ? Math.max(0, state.bloom - owner.spread.bloomMax * dt / owner.spread.recoverySeconds) : 0;
+      if (owner.spread && state.bloom > 0) {
+        const elapsed = (tick - state.lastShotTick) * dt;
+        const recovering = Math.min(dt, Math.max(0, elapsed - (owner.spread.recoveryDelaySeconds ?? 0)));
+        if (recovering > EPSILON) state.bloom = owner.spread.recoverySeconds > 0 ? Math.max(0, state.bloom - owner.spread.bloomMax * recovering / owner.spread.recoverySeconds) : 0;
+      }
       if (owner.pattern && state.patternIndex > 0 && (tick - state.lastShotTick) * dt >= owner.pattern.resetSeconds - EPSILON) state.patternIndex = 0;
     }
     const exclusions = [...(command.excludedColliderIds ?? [])];

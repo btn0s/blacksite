@@ -144,4 +144,45 @@ describe('soundscape voice lifecycle', () => {
     expect(context.gains[3].gain.value).toBe(0)
     audio.dispose()
   })
+
+  it('does not allocate room reverbs for dry interface or music cues', () => {
+    const context = new Context()
+    const audio = createSoundscape({ context: context as unknown as AudioContext, tier: 'phone' })
+    audio.prepare()
+    const prepared = context.convolvers.length
+    for (const bus of ['ui', 'music'] as const) {
+      audio.registerCue(`dry.${bus}`, { class: 'ui', bus, reverbSend: 0, variants: [{ id: 'a', layers: [{ kind: 'tone', frequency: 440, gain: 0.1, duration: 0.1 }] }] })
+      audio.play(`dry.${bus}`)
+    }
+    expect(context.convolvers).toHaveLength(prepared)
+    expect(audio.sample().plays?.map(play => play.cue)).toEqual(['dry.ui', 'dry.music'])
+    audio.dispose()
+  })
+
+  it.each([16, 28])('holds a %i-voice firefight cap without repeating variants', async voiceCap => {
+    vi.useFakeTimers()
+    const context = new Context()
+    const audio = createSoundscape({ context: context as unknown as AudioContext, tier: 'phone', voiceCap, random: () => 0.999999 })
+    audio.registerCue('firefight', { class: 'weapons', bus: 'weapons', variants: ['a', 'b', 'c', 'd'].map(id => ({ id, layers: [{ kind: 'noise', gain: 0.8, duration: 0.3 }] })) })
+    await audio.start()
+    audio.sample()
+    let previous = ''
+    let plays = 0
+    for (let shot = 0; shot < 90; shot++) {
+      audio.play('firefight')
+      await vi.advanceTimersByTimeAsync(35)
+      audio.update()
+      const sample = audio.sample()
+      expect(sample.voices).toBeLessThanOrEqual(voiceCap)
+      for (const play of sample.plays ?? []) {
+        if (play.cue !== 'firefight') continue
+        expect(play.sample).not.toBe(previous)
+        previous = play.sample
+        plays++
+      }
+    }
+    expect(plays).toBe(90)
+    audio.dispose()
+    expect(audio.sample().voices).toBe(0)
+  })
 })
