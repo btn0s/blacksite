@@ -148,9 +148,9 @@ Flagship games in `examples/`, each built only on public packages. Read the one 
 |---|---|---|---|
 | Breach | First-person shooter | Gun feel, impact, squad AI | In progress |
 | Traverse | Third-person action | Character feel, camera | In progress |
+| Valley | Open world | Terrain to the horizon, foliage, wind, scale | Experimental |
 | Blackout | Horror | Lighting, sound, atmosphere | Coming |
 | Arena | Multiplayer | Netcode that feels local | Coming |
-| Valley | Open world | Streaming, scale | Coming |
 
 The site's showcases are smaller proofs of one block each: Checkpoint (characters), Firing Range (weapons), Squad (AI), Air Strike (destruction) and Arena (multiplayer), in `site/src/showcases/`.
 
