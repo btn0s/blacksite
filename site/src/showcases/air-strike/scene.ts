@@ -11,6 +11,8 @@ import { buildYard } from './yard'
 import { exposeAirStrikeCheck } from './check'
 
 const up = new THREE.Vector3(0, 1, 0)
+const PHONE_FRAME_MS = 1000 / 60
+const COLLAPSE_FRAME_MS = 13.3
 
 export type Phase = 'loading' | 'ready'
 export type MunitionId = keyof typeof MUNITIONS
@@ -168,7 +170,7 @@ export class AirStrikeScene {
       frame: frame => this.fx.ingest(frame),
       ready: () => { this.warm(); this.set({ phase: 'ready', progress: 1 }); this.check.ready() },
     }, { timestep: FIXED_DT_30HZ, rest: { forceAfterSeconds: 2.5, forceSpeed: 0.5, forceSpin: 0.9 } })
-    this.view = new DestructionRenderer(manifest, { materialFor: this.materialFor, effects: false, secondaryAddsPerUpdate: 12, edgeFacesPerUpdate: 64 })
+    this.view = new DestructionRenderer(manifest, { materialFor: this.materialFor, effects: false, buildMs: PHONE_FRAME_MS - COLLAPSE_FRAME_MS })
     this.scene.add(this.view.group)
     this.session.subscribe(() => { const error = this.session?.getSnapshot().error; if (error && error !== this.state.error) this.set({ error }) })
   }

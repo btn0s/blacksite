@@ -67,8 +67,8 @@ export class ExposedFractureEdges {
   private readonly entries = new Map<number, EdgeEntry>();
   private poolRevision = -1;
   private backlog = false;
-  private grownVertices = 0;
-  private grownInstances = 0;
+  private readonly touched: number[] = [];
+  private readonly signatures = new Map<number, number>();
   private faceCount = 0;
   private bonds = new WeakMap<BondDef, { a: number; b: number; shape: number }>();
   private stamp = 0;
@@ -100,7 +100,7 @@ export class ExposedFractureEdges {
     return info;
   }
 
-  constructor(private readonly manifest: DestructibleManifest, private readonly pool: GPUTransformPool, private readonly materialFor: (fragment: FragmentDef) => Material, private readonly profile = false, private readonly facesPerUpdate = Number.POSITIVE_INFINITY, private readonly segmentLength = 0.1) {
+  constructor(private readonly manifest: DestructibleManifest, private readonly pool: GPUTransformPool, private readonly materialFor: (fragment: FragmentDef) => Material, private readonly profile = false, private readonly segmentLength = 0.1) {
     this.group.name = 'cascade-exposed-fracture-edges';
     this.byId = new Map(manifest.fragments.map((fragment, index) => [fragment.id, index]));
     const count = manifest.fragments.length;
@@ -117,15 +117,59 @@ export class ExposedFractureEdges {
     this.stats.edgeFacesAddedThisUpdate = this.stats.edgeFacesRemovedThisUpdate = 0;
   }
 
-  update(frame?: SimulationFrame | null): void {
+  get backlogged(): boolean { return this.backlog; }
+
+  update(frame?: SimulationFrame | null, until = Number.POSITIVE_INFINITY): void {
     this.resetUpdateStats();
     if (!frame) { this.clear(); return; }
     if (!this.backlog && this.lastBondRevision === (frame.bondRevision ?? 0) && this.poolRevision === this.pool.revision &&
       (this.lastTick === frame.tick || sameBytes(this.lastBondStates, frame.bondStates))) { this.lastTick = frame.tick; return; }
+    let phaseAt = this.profile ? performance.now() : 0;
+    const bonds = frame.bonds ?? this.manifest.bonds;
+    if (!this.backlog || this.lastTick !== frame.tick || this.lastBondRevision !== (frame.bondRevision ?? 0)) phaseAt = this.scan(frame, bonds, phaseAt);
+    let built = 0;
+    this.backlog = false;
+    for (const chunk of this.touched) {
+      if (this.entries.has(chunk)) continue;
+      if (built > 0 && performance.now() >= until) { this.backlog = true; break; }
+      built++;
+      const faceCount = this.faceCountOf[chunk]!;
+      const fragment = this.manifest.fragments[chunk]!;
+      const parts: BufferGeometry[] = [];
+      for (let slot = this.head[chunk]!; slot >= 0; slot = this.faceNext[slot]!) {
+        const face = { bond: bonds[this.faceBond[slot]!]!, side: this.faceSide[slot]! };
+        const { point, tangent1, tangent2, half1, half2 } = connectionRectangle(face.bond, fragment);
+        const points: Vec3[] = [[-1,-1], [1,-1], [1,1], [-1,1]].map(([u, v]) => [
+          point[0] + tangent1[0] * u! * half1 + tangent2[0] * v! * half2 - fragment.position[0],
+          point[1] + tangent1[1] * u! * half1 + tangent2[1] * v! * half2 - fragment.position[1],
+          point[2] + tangent1[2] * u! * half1 + tangent2[2] * v! * half2 - fragment.position[2],
+        ]);
+        const normal = face.bond.normal.map(value => value * face.side) as Vec3;
+        const geometry = damagedEdgeGeometry(points, normal, face.bond.id, Math.min(0.025, half1 * 0.15, half2 * 0.15), this.segmentLength);
+        if (geometry) parts.push(geometry);
+      }
+      const geometry = mergeEdges(parts);
+      if (this.profile) { const now = performance.now(); this.timings.geometryMs += now - phaseAt; phaseAt = now; }
+      if (!geometry) continue;
+      this.insert(chunk, this.signatures.get(chunk)!, faceCount, geometry, this.materialFor(fragment));
+      if (this.profile) { const now = performance.now(); this.timings.insertionMs += now - phaseAt; phaseAt = now; }
+    }
+    if (this.poolRevision !== this.pool.revision) {
+      for (const entry of this.entries.values()) entry.batch.mesh.bind(entry.instance, this.pool.slots.get(`primary:${entry.chunk}`) ?? 0);
+      this.poolRevision = this.pool.revision;
+    }
+    this.batches = this.batches.filter(batch => {
+      if (batch.instances) return true;
+      this.group.remove(batch.mesh); batch.mesh.dispose(); return false;
+    });
+    this.stats.edgeFaces = this.faceCount;
+    this.stats.edgeBatches = this.batches.length;
+  }
+
+  private scan(frame: SimulationFrame, bonds: ReadonlyArray<BondDef>, phaseAt: number): number {
     this.lastTick = frame.tick; this.lastBondRevision = frame.bondRevision ?? 0;
     if (this.lastBondStates?.length === frame.bondStates.length) this.lastBondStates.set(frame.bondStates);
     else this.lastBondStates = frame.bondStates.slice();
-    let phaseAt = this.profile ? performance.now() : 0;
     const stamp = ++this.stamp;
     for (const owner of frame.actors ?? []) for (const chunk of owner.visibleChunks) { this.actorOf[chunk] = owner.id; this.actorStamp[chunk] = stamp; }
     const visibleAncestor = (index: number): number => {
@@ -136,11 +180,11 @@ export class ExposedFractureEdges {
       return current;
     };
     const actorOf = (chunk: number) => this.actorStamp[chunk] === stamp ? this.actorOf[chunk]! : -1;
-    const bonds = frame.bonds ?? this.manifest.bonds;
     if (this.faceNext.length < bonds.length * 2) {
       this.faceNext = new Int32Array(bonds.length * 4); this.faceBond = new Int32Array(bonds.length * 4); this.faceSide = new Int8Array(bonds.length * 4);
     }
-    const touched: number[] = [];
+    const touched = this.touched;
+    touched.length = 0;
     let faces = 0;
     const add = (chunk: number, bond: number, side: number, key: number, shape: number) => {
       if (this.chunkStamp[chunk] !== stamp) { this.chunkStamp[chunk] = stamp; this.head[chunk] = -1; this.sumA[chunk] = 0; this.sumB[chunk] = 0; this.faceCountOf[chunk] = 0; touched.push(chunk); }
@@ -158,7 +202,8 @@ export class ExposedFractureEdges {
       if (va >= 0) add(va, i, 1, bond.id * 2, known.shape);
       if (vb >= 0) add(vb, i, -1, bond.id * 2 + 1, known.shape);
     }
-    const signatures = new Map<number, number>();
+    const signatures = this.signatures;
+    signatures.clear();
     for (const chunk of touched) signatures.set(chunk, this.sumA[chunk]! + this.sumB[chunk]! * 1e-7 + this.faceCountOf[chunk]! * 1e3);
     if (this.profile) { const now = performance.now(); this.timings.scanMs = now - phaseAt; phaseAt = now; }
     // Retain every unchanged chunk. A single exposure change must not recreate the
@@ -173,78 +218,35 @@ export class ExposedFractureEdges {
       this.stats.edgeFacesRemovedThisUpdate += entry.faces;
     }
     if (this.profile) { const now = performance.now(); this.timings.removalMs = now - phaseAt; phaseAt = now; }
-    const pending = new Map<Material, Array<{ chunk: number; shape: number; faces: number; geometry: BufferGeometry; vertices: number }>>();
-    let budget = this.facesPerUpdate, built = 0;
-    this.backlog = false;
-    for (const chunk of touched) {
-      if (this.entries.has(chunk)) continue;
-      const faceCount = this.faceCountOf[chunk]!;
-      if (built > 0 && faceCount > budget) { this.backlog = true; break; }
-      budget -= faceCount; built += faceCount;
-      const fragment = this.manifest.fragments[chunk]!;
-      const parts: BufferGeometry[] = [];
-      for (let slot = this.head[chunk]!; slot >= 0; slot = this.faceNext[slot]!) {
-        const face = { bond: bonds[this.faceBond[slot]!]!, side: this.faceSide[slot]! };
-        const { point, tangent1, tangent2, half1, half2 } = connectionRectangle(face.bond, fragment);
-        const points: Vec3[] = [[-1,-1], [1,-1], [1,1], [-1,1]].map(([u, v]) => [
-          point[0] + tangent1[0] * u! * half1 + tangent2[0] * v! * half2 - fragment.position[0],
-          point[1] + tangent1[1] * u! * half1 + tangent2[1] * v! * half2 - fragment.position[1],
-          point[2] + tangent1[2] * u! * half1 + tangent2[2] * v! * half2 - fragment.position[2],
-        ]);
-        const normal = face.bond.normal.map(value => value * face.side) as Vec3;
-        const geometry = damagedEdgeGeometry(points, normal, face.bond.id, Math.min(0.025, half1 * 0.15, half2 * 0.15), this.segmentLength);
-        if (geometry) parts.push(geometry);
-      }
-      const geometry = mergeEdges(parts);
-      if (!geometry) continue;
-      const material = this.materialFor(fragment), group = pending.get(material) ?? [];
-      group.push({ chunk, shape: signatures.get(chunk)!, faces: faceCount, geometry, vertices: geometry.getAttribute('position').count });
-      pending.set(material, group);
-    }
-    if (this.profile) { const now = performance.now(); this.timings.geometryMs = now - phaseAt; phaseAt = now; }
-    for (const [material, additions] of pending) {
-      let remainingVertices = additions.reduce((sum, item) => sum + item.vertices, 0);
-      for (let i = 0; i < additions.length; i++) {
-        const { chunk, shape, faces, geometry, vertices } = additions[i]!;
-        let batch = this.batches.find(batch => batch.material === material &&
-          batch.instances < batch.mesh.maxInstanceCount && batch.vertices + vertices <= batch.capacity);
-        if (!batch) batch = this.createBatch(material, additions.length - i, remainingVertices);
-        // Deleted spans remain holes until compacted; reuse them before allocating
-        // another batch. Geometries and instance IDs survive this compaction.
-        if (batch.mesh.unusedVertexCount < vertices) {
-          const started = this.profile ? performance.now() : 0;
-          batch.mesh.optimize();
-          if (this.profile) this.timings.compactionMs += performance.now() - started;
-        }
-        const geometryId = batch.mesh.addGeometry(geometry);
-        const instance = batch.mesh.addInstance(geometryId);
-        geometry.dispose();
-        batch.mesh.bind(instance, this.pool.slots.get(`primary:${chunk}`) ?? 0);
-        batch.instances++; batch.vertices += vertices;
-        this.entries.set(chunk, { shape, faces, chunk, batch, geometry: geometryId, instance, vertices });
-        this.faceCount += faces;
-        this.stats.edgeGeometryBuilds += faces; this.stats.edgeFacesAddedThisUpdate += faces;
-        remainingVertices -= vertices;
-      }
-    }
-    if (this.profile) this.timings.insertionMs = performance.now() - phaseAt;
-    if (this.poolRevision !== this.pool.revision) {
-      for (const entry of this.entries.values()) entry.batch.mesh.bind(entry.instance, this.pool.slots.get(`primary:${entry.chunk}`) ?? 0);
-      this.poolRevision = this.pool.revision;
-    }
-    this.batches = this.batches.filter(batch => {
-      if (batch.instances) return true;
-      this.group.remove(batch.mesh); batch.mesh.dispose(); return false;
-    });
-    this.stats.edgeFaces = this.faceCount;
-    this.stats.edgeBatches = this.batches.length;
+    return phaseAt;
   }
 
-  private createBatch(material: Material, instances: number, vertices: number): EdgeBatch {
-    const capacity = Math.max(4096, Math.ceil(vertices * 1.5), this.grownVertices * 2);
-    const instanceCapacity = Math.max(32, Math.ceil(instances * 1.5), this.grownInstances * 2);
-    this.grownVertices = capacity; this.grownInstances = instanceCapacity;
-    const mesh = new PooledBatchedMesh(this.pool, instanceCapacity, capacity, material);
+  private insert(chunk: number, shape: number, faces: number, geometry: BufferGeometry, material: Material): void {
+    const vertices = geometry.getAttribute('position').count;
+    const batch = this.batches.find(batch => batch.material === material) ?? this.createBatch(material, vertices);
+    if (batch.instances + 1 > batch.mesh.maxInstanceCount) batch.mesh.setInstanceCount((batch.instances + 1) * 2);
+    if (batch.vertices + vertices > batch.capacity) {
+      batch.capacity = (batch.vertices + vertices) * 2;
+      batch.mesh.setGeometrySize(batch.capacity, 0);
+    }
+    if (batch.mesh.unusedVertexCount < vertices) {
+      const started = this.profile ? performance.now() : 0;
+      batch.mesh.optimize();
+      if (this.profile) this.timings.compactionMs += performance.now() - started;
+    }
+    const geometryId = batch.mesh.addGeometry(geometry);
+    const instance = batch.mesh.addInstance(geometryId);
+    geometry.dispose();
+    batch.mesh.bind(instance, this.pool.slots.get(`primary:${chunk}`) ?? 0);
+    batch.instances++; batch.vertices += vertices;
+    this.entries.set(chunk, { shape, faces, chunk, batch, geometry: geometryId, instance, vertices });
+    this.faceCount += faces;
+    this.stats.edgeGeometryBuilds += faces; this.stats.edgeFacesAddedThisUpdate += faces;
+  }
+
+  private createBatch(material: Material, vertices: number): EdgeBatch {
+    const capacity = Math.max(4096, vertices * 2);
+    const mesh = new PooledBatchedMesh(this.pool, 32, capacity, material);
     mesh.name = 'cascade-damaged-edges'; mesh.frustumCulled = false; mesh.perObjectFrustumCulled = false; mesh.sortObjects = false;
     mesh.castShadow = false; mesh.receiveShadow = true;
     const batch = { mesh, material, instances: 0, vertices: 0, capacity };
@@ -256,7 +258,7 @@ export class ExposedFractureEdges {
   private clear(): void {
     for (const { mesh } of this.batches) { this.group.remove(mesh); mesh.dispose(); }
     this.batches = []; this.entries.clear();
-    this.backlog = false; this.grownVertices = this.grownInstances = this.faceCount = 0;
+    this.backlog = false; this.faceCount = 0;
     this.stats.edgeFaces = this.stats.edgeBatches = 0;
     this.lastTick = -Infinity; this.lastBondRevision = this.poolRevision = -1; this.lastBondStates = undefined;
   }
