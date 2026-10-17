@@ -77,6 +77,38 @@ The corresponding `packages/materials/library/*-image.json` graphs make the sour
 
 The ALS mannequin and animations come from [ALS Web](https://github.com/btn0s/als-web) (MIT), served from `vendor/als-web/public/assets`.
 
+## Valley
+
+The Valley showcase (`examples/valley`) ships these open library assets from `examples/valley/assets/library/`, processed for the web: materials as 1k WebP, sounds as Ogg and M4A, and the terrain cropped and resampled to a 16-bit PNG heightmap. Trees, grass, flowers, litter and leaf textures are procedural code in `@blacksite/landscape` and contain no third-party art.
+
+### CC0 1.0
+
+Licence: https://creativecommons.org/publicdomain/zero/1.0/
+
+| Asset | Category | Author | Source |
+| --- | --- | --- | --- |
+| `bark-pine` Pine Bark | material | Dimitrios Savva (Poly Haven) | [polyhaven.com](https://polyhaven.com/a/pine_bark) |
+| `soil-mud-scanned` Ground 054 | material | Lennart Demes (ambientCG) | [ambientcg.com](https://ambientcg.com/a/Ground054) |
+
+### CC BY 3.0
+
+Licence: https://creativecommons.org/licenses/by/3.0/
+
+| Asset | Category | Author | Source | Attribution |
+| --- | --- | --- | --- | --- |
+| `step-grass-oga` Footsteps on different surfaces: grass | footstep | congusbongus | [opengameart.org](https://opengameart.org/content/footsteps-on-different-surfaces) | "Footsteps on different surfaces: grass" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from "footstep-grass.wav" by swuing (https://freesound.org/s/38874/), CC BY 3.0 |
+
+### Public domain
+
+Works of the U.S. federal government. Licence: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+
+| Asset | Category | Author | Source | Attribution |
+| --- | --- | --- | --- | --- |
+| `bed-wind-alpine` Wind Soundscape from Gem Lake | ambience | J. Job, Rocky Mountain National Park (National Park Service) | [www.nps.gov](https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm) | "Wind Soundscape from Gem Lake" by J. Job, Rocky Mountain National Park (National Park Service), public domain |
+| `terrain-ridge-valley` USGS 3DEP 1/3 arc-second n41w079 | terrain | U.S. Geological Survey | [www.usgs.gov](https://www.usgs.gov/3d-elevation-program) | Elevation data: U.S. Geological Survey 3D Elevation Program (public domain) |
+
+The Valley also reuses the look world kit's `world/grass_*`, `world/dirt_*` and `world/gravel_*` surfaces (ambientCG, CC0), listed under Materials above and credited in `packages/look/assets/world/CREDITS.md`.
+
 ## Fonts (SIL Open Font License)
 
 Barlow and Barlow Condensed by Jeremy Tribby; IBM Plex Mono by IBM. Bundled through Fontsource.
