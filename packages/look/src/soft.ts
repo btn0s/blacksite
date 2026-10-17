@@ -1,12 +1,15 @@
 import { Pass } from 'postprocessing';
 import {
-  DynamicDrawUsage, Float32BufferAttribute, InstancedBufferGeometry, InstancedInterleavedBuffer, InterleavedBufferAttribute,
-  Mesh, NormalBlending, Scene, ShaderMaterial, UniformsLib, UniformsUtils, Vector3, Vector4,
+  ClampToEdgeWrapping, Data3DTexture, DataTexture, DynamicDrawUsage, Float32BufferAttribute, FloatType, InstancedBufferGeometry, InstancedInterleavedBuffer,
+  InterleavedBufferAttribute, LinearFilter, Matrix4, Mesh, NearestFilter, NormalBlending, RGBAFormat, RedFormat, Scene, ShaderMaterial, UniformsLib,
+  UniformsUtils, UnsignedByteType, Vector3, Vector4,
   type Camera, type Light, type Object3D, type PerspectiveCamera, type Texture, type WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
 
 const SOFT_LAYER = 30;
 const STRIDE = 24;
+const SAMPLES = 64;
+const CELLS = 16;
 
 const frame = {
   softDepth: { value: null as Texture | null },
@@ -28,6 +31,11 @@ uniform float time;
 uniform float still;
 uniform vec3 wrapCenter;
 uniform vec3 wrapSize;
+uniform sampler2D curves;
+uniform sampler3D volumeMap;
+uniform mat4 volumeMatrix;
+uniform float volumeDensity;
+uniform float volumeReach;
 varying vec2 vCorner;
 varying vec3 vTint;
 varying float vAlpha;
@@ -67,6 +75,23 @@ varying vec3 vGround;
     }
   #endif
 #endif
+float softTransmit( vec3 from, vec3 dir, float reach ) {
+  if ( volumeDensity <= 0.0 || reach <= 0.0 ) return 1.0;
+  reach = min( reach, volumeReach );
+  vec3 a = ( volumeMatrix * vec4( from, 1.0 ) ).xyz;
+  vec3 d = ( volumeMatrix * vec4( from + dir * reach, 1.0 ) ).xyz - a;
+  vec3 inv = 1.0 / mix( d, vec3( 1e-6 ), step( abs( d ), vec3( 1e-6 ) ) );
+  vec3 t0 = - a * inv;
+  vec3 t1 = ( 1.0 - a ) * inv;
+  vec3 lo = min( t0, t1 );
+  vec3 hi = max( t0, t1 );
+  float s0 = max( max( max( lo.x, lo.y ), lo.z ), 0.0 );
+  float s1 = min( min( min( hi.x, hi.y ), hi.z ), 1.0 );
+  if ( s1 <= s0 ) return 1.0;
+  float sum = 0.0;
+  for ( int i = 0; i < 6; i ++ ) sum += texture( volumeMap, a + d * mix( s0, s1, ( float( i ) + 0.5 ) / 6.0 ) ).r;
+  return exp( - sum * volumeDensity * reach * ( s1 - s0 ) / 6.0 );
+}
 void softAdd( const in IncidentLight light, inout vec3 direct, inout vec3 lean ) {
   direct += light.color;
   lean += light.direction * dot( light.color, vec3( 0.2126, 0.7152, 0.0722 ) );
@@ -95,7 +120,16 @@ void main() {
     vec3 edge = mix( vec3( 1.0 ), clamp( min( local, span - local ) / ( 0.12 * span ), 0.0, 1.0 ), axes );
     fade = edge.x * edge.y * edge.z;
   }
-  float envelope = life > 0.0 ? smoothstep( 0.0, 0.08, t ) * pow( 1.0 - t, 1.5 ) : 1.0;
+  vec4 shade = vec4( 1.0 );
+  float cover = 1.0;
+  if ( life > 0.0 ) {
+    float u = clamp( t, 0.0, 1.0 ) * float( SOFT_SAMPLES - 1 );
+    int i0 = int( u );
+    int i1 = min( i0 + 1, SOFT_SAMPLES - 1 );
+    int row = int( drift.z + 0.5 ) * 2;
+    shade = mix( texelFetch( curves, ivec2( i0, row ), 0 ), texelFetch( curves, ivec2( i1, row ), 0 ), u - float( i0 ) );
+    cover = mix( texelFetch( curves, ivec2( i0, row + 1 ), 0 ).r, texelFetch( curves, ivec2( i1, row + 1 ), 0 ).r, u - float( i0 ) );
+  }
   float radius = 0.5 * shape.x * ( 1.0 + shape.y * mix( t, 0.5, still ) );
   vec4 mvPosition = modelViewMatrix * vec4( center, 1.0 );
   vec4 worldPosition = modelMatrix * vec4( center, 1.0 );
@@ -104,9 +138,9 @@ void main() {
   vec2 axis = speed > 1e-4 ? flow / speed : vec2( 1.0, 0.0 );
   vec2 offset = axis * position.x * ( radius + 0.5 * drift.y * speed ) + vec2( - axis.y, axis.x ) * position.y * radius;
   vCorner = position.xy;
-  vTint = tint.rgb;
-  vAlpha = shape.z * envelope * fade;
-  vGlow = tint.w * envelope * fade;
+  vTint = tint.rgb * shade.rgb;
+  vAlpha = shape.z * cover * fade;
+  vGlow = tint.w * shade.a * fade;
   vSeed = shape.w;
   vRadius = radius;
   vDistance = - mvPosition.z;
@@ -131,6 +165,7 @@ void main() {
         directionalLightShadow = directionalLightShadows[ i ];
         light.color *= receiveShadow ? softShadow( directionalShadowMap[ i ], directionalShadowMatrix[ i ] * worldPosition, directionalLightShadow.shadowBias, directionalLightShadow.shadowIntensity ) : 1.0;
       #endif
+      light.color *= softTransmit( mvPosition.xyz + light.direction * radius, light.direction, volumeReach );
       softAdd( light, direct, lean );
     }
     #pragma unroll_loop_end
@@ -139,6 +174,7 @@ void main() {
     #pragma unroll_loop_start
     for ( int i = 0; i < NUM_SUN_LIGHTS; i ++ ) {
       getSunLightInfo( sunLights[ i ], light );
+      light.color *= softTransmit( mvPosition.xyz + light.direction * radius, light.direction, volumeReach );
       softAdd( light, direct, lean );
     }
     #pragma unroll_loop_end
@@ -147,6 +183,7 @@ void main() {
     #pragma unroll_loop_start
     for ( int i = 0; i < NUM_POINT_LIGHTS; i ++ ) {
       getPointLightInfo( pointLights[ i ], mvPosition.xyz, light );
+      light.color *= softTransmit( mvPosition.xyz + light.direction * radius, light.direction, length( pointLights[ i ].position - mvPosition.xyz ) - radius );
       softAdd( light, direct, lean );
     }
     #pragma unroll_loop_end
@@ -155,6 +192,7 @@ void main() {
     #pragma unroll_loop_start
     for ( int i = 0; i < NUM_SPOT_LIGHTS; i ++ ) {
       getSpotLightInfo( spotLights[ i ], mvPosition.xyz, light );
+      light.color *= softTransmit( mvPosition.xyz + light.direction * radius, light.direction, length( spotLights[ i ].position - mvPosition.xyz ) - radius );
       softAdd( light, direct, lean );
     }
     #pragma unroll_loop_end
@@ -169,8 +207,8 @@ void main() {
   #endif
   vDirect = direct;
   vLean = lean;
-  vSky = sky;
-  vGround = ground;
+  vSky = sky * softTransmit( mvPosition.xyz + up * radius, up, volumeReach );
+  vGround = ground * softTransmit( mvPosition.xyz - up * radius, - up, volumeReach );
   mvPosition.xy += offset;
   gl_Position = projectionMatrix * mvPosition;
   #include <fog_vertex>
@@ -256,12 +294,25 @@ export interface SoftParticle {
   readonly flutter?: number;
   readonly stretch?: number;
   readonly seed?: number;
+  readonly curve?: number;
+}
+
+export interface SoftKey {
+  readonly at: number;
+  readonly color?: Rgb;
+  readonly glow?: number;
+  readonly opacity?: number;
 }
 
 export interface SoftParticlesOptions {
   readonly capacity?: number;
   readonly softness?: number;
   readonly scatter?: number;
+}
+
+function envelope(t: number): number {
+  const rise = Math.min(1, t / 0.08);
+  return rise * rise * (3 - 2 * rise) * Math.pow(1 - t, 1.5);
 }
 
 export class SoftParticles extends Mesh<InstancedBufferGeometry, ShaderMaterial> {
@@ -271,6 +322,16 @@ export class SoftParticles extends Mesh<InstancedBufferGeometry, ShaderMaterial>
   private cursor = 0;
   private dirtyFrom = Infinity;
   private dirtyTo = -1;
+  private curveData = new Float32Array(0);
+  private curveMap: DataTexture | null = null;
+  private readonly points: Float32Array;
+  private readonly grid = new Float32Array(CELLS ** 3);
+  private readonly spare = new Float32Array(CELLS ** 3);
+  private readonly cells: Uint8Array;
+  private readonly volume: Data3DTexture;
+  private readonly bounds = new Matrix4();
+  private readonly inverse = new Matrix4();
+  private settled = NaN;
 
   constructor({ capacity = 256, softness = 1, scatter = 0.8 }: SoftParticlesOptions = {}) {
     if (!Number.isInteger(capacity) || capacity < 1) throw new Error('SoftParticles capacity must be a positive integer');
@@ -281,8 +342,17 @@ export class SoftParticles extends Mesh<InstancedBufferGeometry, ShaderMaterial>
     const buffer = new InstancedInterleavedBuffer(data, STRIDE).setUsage(DynamicDrawUsage);
     (['spawn', 'velocity', 'force', 'shape', 'tint', 'drift'] as const).forEach((name, index) => geometry.setAttribute(name, new InterleavedBufferAttribute(buffer, 4, index * 4)));
     geometry.instanceCount = 0;
+    const cells = new Uint8Array(CELLS ** 3);
+    const volume = new Data3DTexture(cells, CELLS, CELLS, CELLS);
+    volume.format = RedFormat;
+    volume.type = UnsignedByteType;
+    volume.minFilter = volume.magFilter = LinearFilter;
+    volume.wrapS = volume.wrapT = volume.wrapR = ClampToEdgeWrapping;
+    volume.unpackAlignment = 1;
+    volume.needsUpdate = true;
     const material = new ShaderMaterial({
       name: 'look-soft-particles',
+      defines: { SOFT_SAMPLES: SAMPLES },
       uniforms: {
         ...UniformsUtils.merge([UniformsLib.lights, UniformsLib.fog, {
           time: { value: 0 },
@@ -291,7 +361,12 @@ export class SoftParticles extends Mesh<InstancedBufferGeometry, ShaderMaterial>
           wrapSize: { value: new Vector3() },
           softness: { value: softness },
           scatter: { value: scatter },
+          volumeMatrix: { value: new Matrix4() },
+          volumeDensity: { value: 0 },
+          volumeReach: { value: 0 },
         }]),
+        curves: { value: null },
+        volumeMap: { value: volume },
         ...frame,
       },
       vertexShader,
@@ -308,9 +383,13 @@ export class SoftParticles extends Mesh<InstancedBufferGeometry, ShaderMaterial>
     this.capacity = capacity;
     this.data = data;
     this.buffer = buffer;
+    this.cells = cells;
+    this.volume = volume;
+    this.points = new Float32Array(capacity * 5);
     this.frustumCulled = false;
     this.receiveShadow = true;
     this.layers.set(SOFT_LAYER);
+    this.curve([]);
   }
 
   get time(): number {
@@ -323,6 +402,37 @@ export class SoftParticles extends Mesh<InstancedBufferGeometry, ShaderMaterial>
 
   set still(value: boolean) {
     this.material.uniforms.still!.value = value ? 1 : 0;
+  }
+
+  curve(keys: readonly SoftKey[]): number {
+    const index = this.curveData.length / (SAMPLES * 8);
+    const rows = new Float32Array(this.curveData.length + SAMPLES * 8);
+    rows.set(this.curveData);
+    const tracks = [0, 1, 2, 3, 4].map(channel => keys
+      .map(key => ({ at: key.at, value: channel < 3 ? key.color && [key.color.r, key.color.g, key.color.b][channel] : channel === 3 ? key.glow : key.opacity }))
+      .filter((key): key is { at: number; value: number } => key.value !== undefined)
+      .sort((a, b) => a.at - b.at));
+    for (let sample = 0; sample < SAMPLES; sample++) {
+      const t = sample / (SAMPLES - 1);
+      const o = (index * 2 * SAMPLES + sample) * 4;
+      tracks.forEach((track, channel) => {
+        let result = channel < 3 ? 1 : envelope(t);
+        if (track.length) {
+          const next = track.findIndex(key => key.at >= t);
+          const b = track[next < 0 ? track.length - 1 : next]!;
+          const a = track[next <= 0 ? (next < 0 ? track.length - 1 : 0) : next - 1]!;
+          result = b.at > a.at ? a.value + (b.value - a.value) * (t - a.at) / (b.at - a.at) : b.value;
+        }
+        rows[channel < 4 ? o + channel : o + SAMPLES * 4] = result;
+      });
+    }
+    this.curveData = rows;
+    this.curveMap?.dispose();
+    this.curveMap = new DataTexture(rows, SAMPLES, rows.length / (SAMPLES * 4), RGBAFormat, FloatType);
+    this.curveMap.minFilter = this.curveMap.magFilter = NearestFilter;
+    this.curveMap.needsUpdate = true;
+    this.material.uniforms.curves!.value = this.curveMap;
+    return index;
   }
 
   advance(dt: number): void {
@@ -339,11 +449,12 @@ export class SoftParticles extends Mesh<InstancedBufferGeometry, ShaderMaterial>
     d[o + 8] = acceleration?.x ?? 0; d[o + 9] = acceleration?.y ?? 0; d[o + 10] = acceleration?.z ?? 0; d[o + 11] = particle.drag ?? 0;
     d[o + 12] = particle.size; d[o + 13] = particle.grow ?? 0; d[o + 14] = particle.opacity ?? 0; d[o + 15] = particle.seed ?? Math.random();
     d[o + 16] = tint.r; d[o + 17] = tint.g; d[o + 18] = tint.b; d[o + 19] = particle.glow ?? 0;
-    d[o + 20] = particle.flutter ?? 0; d[o + 21] = particle.stretch ?? 0; d[o + 22] = 0; d[o + 23] = 0;
+    d[o + 20] = particle.flutter ?? 0; d[o + 21] = particle.stretch ?? 0; d[o + 22] = particle.curve ?? 0; d[o + 23] = 0;
     this.dirtyFrom = Math.min(this.dirtyFrom, slot);
     this.dirtyTo = Math.max(this.dirtyTo, slot);
     this.cursor = (slot + 1) % this.capacity;
     this.geometry.instanceCount = Math.min(this.capacity, this.geometry.instanceCount + 1);
+    this.settled = NaN;
   }
 
   wrap(center: Xyz | null, size?: Xyz): void {
@@ -361,20 +472,123 @@ export class SoftParticles extends Mesh<InstancedBufferGeometry, ShaderMaterial>
     this.geometry.instanceCount = 0;
     this.dirtyFrom = Infinity;
     this.dirtyTo = -1;
+    this.settled = NaN;
   }
 
-  override onBeforeRender(): void {
-    if (this.dirtyTo < this.dirtyFrom) return;
-    this.buffer.clearUpdateRanges();
-    this.buffer.addUpdateRange(this.dirtyFrom * STRIDE, (this.dirtyTo - this.dirtyFrom + 1) * STRIDE);
-    this.buffer.needsUpdate = true;
-    this.dirtyFrom = Infinity;
-    this.dirtyTo = -1;
+  override onBeforeRender(_renderer: WebGLRenderer, _scene: Scene, camera: Camera): void {
+    if (this.dirtyTo >= this.dirtyFrom) {
+      this.buffer.clearUpdateRanges();
+      this.buffer.addUpdateRange(this.dirtyFrom * STRIDE, (this.dirtyTo - this.dirtyFrom + 1) * STRIDE);
+      this.buffer.needsUpdate = true;
+      this.dirtyFrom = Infinity;
+      this.dirtyTo = -1;
+    }
+    if (this.settled !== this.time) this.settle();
+    this.material.uniforms.volumeMatrix!.value.copy(this.bounds).multiply(this.inverse.copy(this.matrixWorld).invert()).multiply(camera.matrixWorld);
+  }
+
+  private opacityAt(curve: number, t: number): number {
+    const u = Math.min(1, Math.max(0, t)) * (SAMPLES - 1);
+    const i = Math.min(SAMPLES - 2, Math.floor(u));
+    const o = ((curve * 2 + 1) * SAMPLES + i) * 4;
+    return this.curveData[o]! + (this.curveData[o + 4]! - this.curveData[o]!) * (u - i);
+  }
+
+  private settle(): void {
+    this.settled = this.time;
+    const uniforms = this.material.uniforms;
+    const d = this.data;
+    const p = this.points;
+    const time = this.time;
+    const still = this.still;
+    const motion = still ? 0 : 1;
+    const span = uniforms.wrapSize!.value as Vector3;
+    const middle = uniforms.wrapCenter!.value as Vector3;
+    const wrapping = span.x + span.y + span.z > 0;
+    const lo = [Infinity, Infinity, Infinity];
+    const hi = [-Infinity, -Infinity, -Infinity];
+    let count = 0;
+    let total = 0;
+    for (let slot = 0; slot < this.geometry.instanceCount; slot++) {
+      const o = slot * STRIDE;
+      const age = time - d[o + 3]!;
+      const life = d[o + 7]!;
+      const t = life > 0 ? age / life : 0;
+      let cover = d[o + 14]!;
+      if (age < 0 || t >= 1 || cover <= 0) continue;
+      if (life > 0) cover *= this.opacityAt(Math.round(d[o + 22]!), t);
+      const k = d[o + 11]!;
+      const f = k > 1e-3 ? (1 - Math.exp(-k * age)) / k : age;
+      const g = k > 1e-3 ? (age - f) / k : 0.5 * age * age;
+      const radius = 0.5 * d[o + 12]! * (1 + d[o + 13]! * (still ? 0.5 : t));
+      for (let axis = 0; axis < 3; axis++) {
+        let at = d[o + axis]! + (d[o + 4 + axis]! * f + d[o + 8 + axis]! * g) * motion;
+        const size = span.getComponent(axis);
+        if (wrapping && size > 1e-3) {
+          const local = (((at - middle.getComponent(axis) + 0.5 * size) % size) + size) % size;
+          at = middle.getComponent(axis) - 0.5 * size + local;
+          cover *= Math.min(1, Math.min(local, size - local) / (0.12 * size));
+        }
+        p[count * 5 + axis] = at;
+      }
+      if (cover < 0.01) continue;
+      p[count * 5 + 3] = radius;
+      p[count * 5 + 4] = -Math.log(1 - Math.min(cover, 0.95)) * (2 / 3) * Math.PI * radius * radius;
+      for (let axis = 0; axis < 3; axis++) {
+        lo[axis] = Math.min(lo[axis]!, p[count * 5 + axis]! - radius);
+        hi[axis] = Math.max(hi[axis]!, p[count * 5 + axis]! + radius);
+      }
+      total += p[count * 5 + 4]!;
+      count++;
+    }
+    const thin = total / Math.max(1e-6, Math.min((hi[0]! - lo[0]!) * (hi[1]! - lo[1]!), (hi[1]! - lo[1]!) * (hi[2]! - lo[2]!), (hi[0]! - lo[0]!) * (hi[2]! - lo[2]!))) < 0.01;
+    if (count === 0 || thin) {
+      uniforms.volumeDensity!.value = 0;
+      return;
+    }
+    const cx = Math.max(hi[0]! - lo[0]!, 1e-3) / (CELLS - 2);
+    const cy = Math.max(hi[1]! - lo[1]!, 1e-3) / (CELLS - 2);
+    const cz = Math.max(hi[2]! - lo[2]!, 1e-3) / (CELLS - 2);
+    const ox = lo[0]! - cx, oy = lo[1]! - cy, oz = lo[2]! - cz;
+    const grid = this.grid;
+    grid.fill(0);
+    for (let index = 0; index < count; index++) {
+      const ux = (p[index * 5]! - ox) / cx - 0.5, uy = (p[index * 5 + 1]! - oy) / cy - 0.5, uz = (p[index * 5 + 2]! - oz) / cz - 0.5;
+      const bx = Math.min(CELLS - 2, Math.max(0, Math.floor(ux))), by = Math.min(CELLS - 2, Math.max(0, Math.floor(uy))), bz = Math.min(CELLS - 2, Math.max(0, Math.floor(uz)));
+      const wx = Math.min(1, Math.max(0, ux - bx)), wy = Math.min(1, Math.max(0, uy - by)), wz = Math.min(1, Math.max(0, uz - bz));
+      const mass = p[index * 5 + 4]!;
+      for (let corner = 0; corner < 8; corner++) {
+        const x = corner & 1, y = (corner >> 1) & 1, z = corner >> 2;
+        grid[(bz + z) * CELLS * CELLS + (by + y) * CELLS + bx + x] += mass * (x ? wx : 1 - wx) * (y ? wy : 1 - wy) * (z ? wz : 1 - wz);
+      }
+    }
+    for (let pass = 0; pass < 2; pass++) for (let axis = 0; axis < 3; axis++) this.blur(axis);
+    const volume = cx * cy * cz;
+    let peak = 0;
+    for (let index = 0; index < grid.length; index++) peak = Math.max(peak, grid[index]!);
+    for (let index = 0; index < grid.length; index++) this.cells[index] = Math.round((255 * grid[index]!) / Math.max(peak, 1e-9));
+    this.volume.needsUpdate = true;
+    uniforms.volumeDensity!.value = peak / volume;
+    uniforms.volumeReach!.value = Math.hypot(cx, cy, cz) * CELLS;
+    this.bounds.makeScale(1 / (cx * CELLS), 1 / (cy * CELLS), 1 / (cz * CELLS)).multiply(this.inverse.makeTranslation(-ox, -oy, -oz));
+  }
+
+  private blur(axis: number): void {
+    const from = this.grid;
+    const to = this.spare;
+    const step = axis === 0 ? 1 : axis === 1 ? CELLS : CELLS * CELLS;
+    for (let index = 0; index < from.length; index++) {
+      const at = Math.floor(index / step) % CELLS;
+      to[index] = 0.5 * from[index]! + (at > 0 ? 0.25 * from[index - step]! : 0) + (at < CELLS - 1 ? 0.25 * from[index + step]! : 0);
+    }
+    from.set(to);
   }
 
   dispose(): void {
     this.geometry.dispose();
     this.material.dispose();
+    this.curveMap?.dispose();
+    this.volume.dispose();
   }
 }
 

@@ -1,4 +1,4 @@
-import { BatchedMesh, DataTexture, FloatType, Matrix4, RGBAFormat, Sphere, type Color, type Material, type Vector4, type Camera } from 'three';
+import { BatchedMesh, DataTexture, FloatType, Matrix4, RGBAFormat, Sphere, type Color, type Material, type Vector4 } from 'three';
 
 export interface TransformRange { start: number; count: number }
 export interface ActorTransformRange { members: ReadonlyArray<string>; ranges: ReadonlyArray<TransformRange> }
@@ -11,7 +11,6 @@ export class GPUTransformPool {
   readonly actors = new Map<string, ActorTransformRange>();
   readonly slots = new Map<string, number>();
   revision = 0;
-  onCamera?: (camera: Camera) => void;
   private readonly free: TransformRange[];
   private readonly matrixDirty = new Set<number>();
   private readonly colorDirty = new Set<number>();
@@ -193,7 +192,6 @@ export class PooledBatchedMesh extends BatchedMesh {
   override getColorAt<T extends Color | Vector4>(instance: number, target: T): T { return target.fromArray(this.pool.colors.image.data as Float32Array, (this.globalSlots[instance] ?? 0) * 4) as T; }
 
   override onBeforeRender(...args: Parameters<BatchedMesh['onBeforeRender']>): void {
-    if (args[1]) this.pool.onCamera?.(args[2]);
     const rebuild = this.storage._visibilityChanged || this.perObjectFrustumCulled || this.sortObjects;
     super.onBeforeRender(...args);
     if (!rebuild) return; // Cached draw IDs already address the global texture.

@@ -6,7 +6,7 @@ import {
   Quaternion,
   Vector3,
 } from 'three';
-import type { BufferGeometry, Material, Camera } from 'three';
+import type { BufferGeometry, Material } from 'three';
 import { FragmentState, TRANSFORM_STRIDE, MAX_SECONDARY_FRAGMENTS } from '../../destruction-domain/src/index';
 import type {
   DestructibleManifest,
@@ -27,8 +27,6 @@ export type RenderTimings = Record<RenderPhase, number>;
 export interface DestructionRendererOptions {
   /** Opt-in CPU phase timings; the object is reused on each update. */
   profile?: boolean;
-  camera?: Camera;
-  cameraShake?: number;
   showConnections?: boolean;
   effects?: boolean;
   particleCapacity?: number;
@@ -123,8 +121,6 @@ export class DestructionRenderer {
     this.transformPool = new GPUTransformPool(options.transformCapacity ?? manifest.fragments.length + MAX_SECONDARY_FRAGMENTS + 1);
     this.effects = new DestructionEffects(options.particleCapacity);
     this.effects.group.visible = options.effects !== false;
-    this.effects.shake.setCamera(options.camera);
-    this.transformPool.onCamera = camera => this.effects.shake.discover(camera);
     if (options.reducedMotion === undefined && typeof matchMedia === 'function') {
       this.motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
       this.motionQuery.addEventListener('change', this.motionListener);
@@ -332,7 +328,6 @@ export class DestructionRenderer {
     if (snapshotChanged) this.effects.update(frame, this.time, this.reducedMotion);
     else this.effects.advance(this.time, this.reducedMotion);
     this.lastSnapshotTick = snapshotTick;
-    this.effects.shake.update(this.time, this.reducedMotion, this.options.cameraShake ?? 1);
     this.markPhase('effects');
     this.transformPool.flush();
     this.markPhase('poolFlush');
@@ -362,12 +357,6 @@ export class DestructionRenderer {
     this.materials.clear();
   }
 
-  setCamera(camera?: Camera): void { this.effects.shake.setCamera(camera); }
-  /** Hosts that write their camera after update() can apply the current shake once afterward. */
-  applyCameraShake(camera?: Camera): void {
-    if (camera) this.setCamera(camera);
-    this.effects.shake.update(this.time, this.reducedMotion, this.options.cameraShake ?? 1);
-  }
   setShowConnections(visible: boolean): void {
     if (this.connections.object.visible === visible) return;
     this.connections.object.visible = visible;

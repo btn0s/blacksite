@@ -948,7 +948,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   shaftMaterial.customProgramCacheKey = () => 'breach-shaft-near-fade'
   const moteTint = new THREE.Color('#e6dcc4')
   const moteCount = options.quality === 'high' && !options.phone ? 60 : options.quality === 'low' ? 24 : 40
-  const motes: Array<{ field: SoftParticles; room: RoomId }> = []
+  const motes: Array<{ field: SoftParticles; beam: THREE.SpotLight; power: number; room: RoomId }> = []
   SHAFTS.forEach((shaft, index) => {
     const height = Math.max(shaft.at[1] * 2, roomOf(shaft.room).ceiling) + 0.3
     const geometry = crossed(Math.max(shaft.size[0], shaft.size[1]) * 1.05, height, 3, 8)
@@ -975,8 +975,8 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
         velocity: { x: 0, y: -(0.015 + hash(key + 0.5) * 0.025), z: 0 },
         life: 0,
         size: 0.012 + hash(key + 0.6) * 0.01,
+        opacity: 0.6 + hash(key + 0.7) * 0.4,
         tint: moteTint,
-        glow: 0.18 + hash(key + 0.7) * 0.2,
         flutter: 0.07,
         seed: hash(key + 0.4),
       })
@@ -984,7 +984,14 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     field.wrap({ x: 0, y: bottom + range / 2, z: 0 }, { x: shaft.size[0] * 0.9, y: range, z: shaft.size[1] * 0.9 })
     field.position.set(shaft.at[0], 0, shaft.at[2])
     field.name = `motes-${index}`
-    motes.push({ field: add(field), room: shaft.room })
+    const ceiling = roomOf(shaft.room).ceiling
+    const source = 3 * height
+    const beam = new THREE.SpotLight('#efe6d2', 0, 0, Math.atan((0.5 * Math.max(shaft.size[0], shaft.size[1])) / (source - ceiling)), 0.35, 2)
+    beam.position.set(shaft.at[0], source, shaft.at[2])
+    beam.target.position.set(shaft.at[0], 0, shaft.at[2])
+    beam.name = `shaft-light-${index}`
+    add(beam.target)
+    motes.push({ field: add(field), beam: add(beam), power: 1.6 * source * source, room: shaft.room })
   })
 
   const marker = new THREE.Group()
@@ -1150,6 +1157,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     }
     for (const cloud of motes) {
       cloud.field.visible = visibleRooms.has(cloud.room)
+      cloud.beam.intensity = cloud.field.visible ? cloud.power : 0
       cloud.field.advance(dt)
     }
   }
