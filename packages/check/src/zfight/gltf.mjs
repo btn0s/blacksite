@@ -65,5 +65,5 @@ export async function readGltfSoup(file) {
     owner.fill(i, cursor, cursor + chunk.length / 9)
     cursor += chunk.length / 9
   })
-  return { positions, owner, count: total, meshes, truncated: false, sampledInstances: 0, skipped: { invisible: 0, unsupported: 0 } }
+  return { positions, owner, count: total, meshes, truncated: false, sampledInstances: 0, skipped: { invisible: 0, unsupported: 0, pooled: 0 } }
 }

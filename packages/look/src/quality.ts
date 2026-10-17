@@ -24,3 +24,18 @@ export function autoQuality(): QualityTier {
   const cores = typeof navigator === 'undefined' ? 8 : navigator.hardwareConcurrency || 8;
   return cores <= 4 ? 'medium' : 'high';
 }
+
+export interface DepthSettings {
+  readonly near: number;
+  readonly far: number;
+  readonly camera: { readonly near: number; readonly far: number };
+  readonly gl: { readonly logarithmicDepthBuffer: boolean };
+}
+
+const NEAR: Record<QualityTier, number> = { high: 0.1, medium: 0.15, low: 0.2 };
+
+export function depthDefaults(tier: QualityTier, options: { readonly far?: number; readonly near?: number; readonly logarithmic?: boolean } = {}): DepthSettings {
+  const near = options.near ?? NEAR[tier];
+  const far = options.far ?? 400;
+  return { near, far, camera: { near, far }, gl: { logarithmicDepthBuffer: options.logarithmic ?? false } };
+}

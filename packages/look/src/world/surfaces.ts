@@ -200,11 +200,26 @@ function contact() {
   return contactTexture
 }
 
+export const DECAL_BIAS = 3e-4
+
+export function decalBias<T extends THREE.Material>(material: T, bias = DECAL_BIAS) {
+  const previous = material.onBeforeCompile
+  const key = material.customProgramCacheKey
+  material.onBeforeCompile = (shader, renderer) => {
+    previous.call(material, shader, renderer)
+    shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>\nmvPosition.xyz *= ${(1 - bias).toFixed(6)};\ngl_Position = projectionMatrix * mvPosition;`)
+  }
+  material.customProgramCacheKey = () => `${key.call(material)}|decal${bias}`
+  material.userData.decalBias = bias
+  return material
+}
+
 const contactMaterials = new Map<number, THREE.MeshBasicMaterial>()
 export function contactShadow(width: number, depth: number, opacity = 0.55, spread = 1.4) {
   let material = contactMaterials.get(opacity)
   if (!material) {
     material = new THREE.MeshBasicMaterial({ map: contact(), transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, color: '#000000', fog: true })
+    decalBias(material)
     contactMaterials.set(opacity, material)
   }
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width + spread, depth + spread), material)
@@ -356,5 +371,5 @@ export function groundMaterial() {
 }
 
 export function puddleMaterial() {
-  return new THREE.MeshStandardMaterial({ name: 'look-puddle', color: '#2c2d27', roughness: 0.03, metalness: 0.55, envMapIntensity: 1.4, transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })
+  return decalBias(new THREE.MeshStandardMaterial({ name: 'look-puddle', color: '#2c2d27', roughness: 0.03, metalness: 0.55, envMapIntensity: 1.4, transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }))
 }

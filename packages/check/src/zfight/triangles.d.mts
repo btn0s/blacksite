@@ -8,8 +8,8 @@ export type TriangleSoup = {
   meshes: MeshInfo[]
   truncated: boolean
   sampledInstances: number
-  skipped: { invisible: number; unsupported: number }
+  skipped: { invisible: number; unsupported: number; pooled: number }
 }
-export type ExtractOptions = { maxTriangles?: number; maxInstances?: number; filter?: (object: unknown) => boolean }
+export type ExtractOptions = { maxTriangles?: number; maxInstances?: number; maxBatchInstances?: number; filter?: (object: unknown) => boolean }
 export function extractTriangles(root: unknown, options?: ExtractOptions): TriangleSoup
 export function labelOf(soup: TriangleSoup, mesh: MeshInfo, triangle: number): string | null

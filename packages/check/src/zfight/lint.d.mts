@@ -33,7 +33,7 @@ export type ZFightProblem = {
   trianglePairs: number
 }
 
-export type LintStats = { triangles: number; meshes: number; candidates: number; coplanar: number; overlapping: number; unseen: number; pruned: number; truncated: boolean; sampledInstances: number; skipped: { invisible: number; unsupported: number }; ms: number }
+export type LintStats = { triangles: number; meshes: number; candidates: number; coplanar: number; overlapping: number; unseen: number; pruned: number; truncated: boolean; sampledInstances: number; skipped: { invisible: number; unsupported: number; pooled: number }; ms: number }
 
 export type LintReport = { pass: boolean; problems: ZFightProblem[]; stats: LintStats; depth: string; setup: Required<Pick<DepthSetup, 'near' | 'far' | 'bits' | 'float' | 'reversed' | 'logarithmic'>>; safety: number }
 

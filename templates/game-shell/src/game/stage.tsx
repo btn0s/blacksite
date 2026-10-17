@@ -3,7 +3,7 @@ import { Canvas, type RootState } from '@react-three/fiber'
 import { CuboidCollider, CylinderCollider, Physics, RigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
 import { Look } from '@blacksite/look/r3f'
-import { QUALITY, autoQuality, type QualityTier } from '@blacksite/look/quality'
+import { QUALITY, autoQuality, depthDefaults, type QualityTier } from '@blacksite/look/quality'
 import { internalPixelRatio, texturesReady } from '@blacksite/look/world'
 import { PLAY, input, requestLock } from './input'
 import { FEEL, FIXED_STEP } from './model'
@@ -62,7 +62,7 @@ export function Stage({ children, overlay = null, physics = true, physicsPriorit
   useEffect(() => input.mount(), [])
   useEffect(() => input.actions.addContext(PLAY), [])
   const dpr = Math.min(QUALITY[tier].maxPixelRatio, internalPixelRatio())
-  return <Canvas shadows="percentage" dpr={[1, dpr]} camera={{ fov: FEEL.fov, near: 0.05, far: 400, position: [-4, FEEL.eyeHeight, 0] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={state => { const canvas = state.gl.domElement; canvas.addEventListener('click', () => requestLock(canvas)); onCreated?.(state) }}>
+  return <Canvas shadows="percentage" dpr={[1, dpr]} camera={{ fov: FEEL.fov, near: depthDefaults(tier).near, far: 400, position: [-4, FEEL.eyeHeight, 0] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={state => { const canvas = state.gl.domElement; canvas.addEventListener('click', () => requestLock(canvas)); onCreated?.(state) }}>
     <Lights onLights={setLights} />
     {lights && <Look atmosphere="zone" quality={tier} environment sun={lights.sun} fill={lights.fill} overlay={overlay} />}
     {ready && !physics && children}

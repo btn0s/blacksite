@@ -26,6 +26,7 @@ function surfaceOf(material) {
     doubleSided: first.side === DOUBLE_SIDE,
     offsetFactor: first.polygonOffset ? first.polygonOffsetFactor ?? 0 : 0,
     offsetUnits: first.polygonOffset ? first.polygonOffsetUnits ?? 0 : 0,
+    decalBias: typeof first.userData?.decalBias === 'number' ? first.userData.decalBias : 0,
     blended: first.transparent === true,
     depthWrite: first.depthWrite !== false,
   }
@@ -40,6 +41,36 @@ function localVertex(mesh, geometry, index, out, skinned) {
   out.set(position.getX(index), position.getY(index), position.getZ(index))
 }
 
+function batchedPositions(object, limit) {
+  if (object.pool || typeof object.getGeometryRangeAt !== 'function') return null
+  const geometry = object.geometry
+  const index = geometry.index
+  const position = geometry.attributes.position
+  const matrix = new object.matrixWorld.constructor()
+  const composed = new object.matrixWorld.constructor()
+  const slots = object._instanceInfo?.length ?? object.maxInstanceCount ?? 0
+  const out = []
+  let used = 0
+  for (let id = 0; id < slots; id++) {
+    if (object.getGeometryIdAt(id) < 0 || object.getVisibleAt(id) === false) continue
+    if (used++ >= limit) continue
+    const range = object.getGeometryRangeAt(object.getGeometryIdAt(id))
+    object.getMatrixAt(id, matrix)
+    composed.multiplyMatrices(object.matrixWorld, matrix)
+    const e = composed.elements
+    const count = Math.floor((index ? range.indexCount : range.vertexCount) / 3)
+    for (let t = 0; t < count; t++) {
+      for (let corner = 0; corner < 3; corner++) {
+        const vertex = index ? index.getX(range.indexStart + t * 3 + corner) : range.vertexStart + t * 3 + corner
+        const x = position.getX(vertex), y = position.getY(vertex), z = position.getZ(vertex)
+        const w = 1 / (e[3] * x + e[7] * y + e[11] * z + e[15])
+        out.push((e[0] * x + e[4] * y + e[8] * z + e[12]) * w, (e[1] * x + e[5] * y + e[9] * z + e[13]) * w, (e[2] * x + e[6] * y + e[10] * z + e[14]) * w)
+      }
+    }
+  }
+  return { positions: Float32Array.from(out), count: out.length / 9, sampled: Math.max(0, used - limit) }
+}
+
 export function extractTriangles(root, options = {}) {
   const maxTriangles = options.maxTriangles ?? 3_000_000
   const maxInstances = options.maxInstances ?? 512
@@ -49,7 +80,7 @@ export function extractTriangles(root, options = {}) {
   let total = 0
   let truncated = false
   let sampledInstances = 0
-  const skipped = { invisible: 0, unsupported: 0 }
+  const skipped = { invisible: 0, unsupported: 0, pooled: 0 }
   let meshIndex = 0
   root.traverse(object => {
     if (!object.isMesh || !object.geometry?.attributes?.position) return
@@ -57,6 +88,17 @@ export function extractTriangles(root, options = {}) {
     const surface = surfaceOf(object.material)
     if (!surface) { skipped.unsupported++; return }
     if (options.filter && !options.filter(object)) return
+    if (object.isBatchedMesh) {
+      const batch = batchedPositions(object, options.maxBatchInstances ?? 4096)
+      if (!batch) { skipped.pooled++; return }
+      if (total + batch.count > maxTriangles) { truncated = true; return }
+      sampledInstances += batch.sampled
+      meshes.push({ index: meshIndex, name: nameOf(object, meshIndex), path: pathOf(object), uuid: object.uuid, ...surface, first: total, count: batch.count, perInstance: batch.count, parts: null })
+      chunks.push(batch.positions)
+      total += batch.count
+      meshIndex++
+      return
+    }
     const geometry = object.geometry
     const index = geometry.index
     const triangleCount = index ? Math.floor(index.count / 3) : Math.floor(geometry.attributes.position.count / 3)

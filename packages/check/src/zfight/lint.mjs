@@ -161,12 +161,12 @@ function screenArea(polygon, height, tanV) {
 }
 
 function evaluate(polygon, context) {
-  const { setup, safety, frames, options, bias, distance } = context
+  const { setup, safety, frames, options, bias, distance, decal = 0 } = context
   if (!frames.length) {
     const step = depthStep(setup, distance)
     const tolerance = safety * step
     const work = polygon.map(p => {
-      const g = p[3] + bias * step
+      const g = p[3] + bias * step + decal * distance
       return [p[0], p[1], p[2], g, tolerance - g, tolerance + g]
     })
     const fight = clipByValue(clipByValue(work, 4), 5)
@@ -183,7 +183,7 @@ function evaluate(polygon, context) {
     const work = visible.map(p => {
       const step = depthStep(setup, p[6])
       const tolerance = safety * step
-      const g = p[3] + bias * step
+      const g = p[3] + bias * step + decal * p[6]
       return [p[0], p[1], p[2], g, p[4], p[5], p[6], tolerance - g, tolerance + g]
     })
     const fight = clipByValue(clipByValue(work, 7), 8)
@@ -243,6 +243,7 @@ export function lintTriangles(soup, input = {}) {
       if (j <= i || areas[j] === 0) return
       stats.candidates++
       const mj = meshes[soup.owner[j]]
+      if (!mi.depthWrite && !mj.depthWrite) return
       if (options.ignore && options.ignore(mi, mj)) return
       const nj = j * 4
       const dot = planes[ni] * planes[nj] + planes[ni + 1] * planes[nj + 1] + planes[ni + 2] * planes[nj + 2]
@@ -285,7 +286,7 @@ export function lintTriangles(soup, input = {}) {
       const biasI = -(mi.offsetUnits + mi.offsetFactor)
       const biasJ = -(mj.offsetUnits + mj.offsetFactor)
       const bias = biasJ - biasI
-      const result = evaluate(polygon, { setup, safety: options.safety, frames, options, distance, bias })
+      const result = evaluate(polygon, { setup, safety: options.safety, frames, options, distance, bias, decal: (mj.decalBias ?? 0) - (mi.decalBias ?? 0) })
       if (!result) { stats.unseen++; return }
       const overlap = polygonArea3(polygon)
       const fight = result.area

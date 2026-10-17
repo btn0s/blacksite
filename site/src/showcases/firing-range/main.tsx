@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import * as THREE from 'three'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Look } from '@blacksite/look/r3f'
-import { autoQuality, type QualityTier } from '@blacksite/look'
+import { autoQuality, depthDefaults, type QualityTier } from '@blacksite/look'
 import { ALS_WEAPONS, createWeaponRuntime, type QueryHit, type WeaponEvent } from '@blacksite/armory'
 import { StandaloneSubject, createStandaloneRecoil, createStandaloneTouch, type StandaloneIntent } from '@blacksite/subject-fpp'
 import { ArmsViewmodel, createArmsState, portraitFov, type ArmsPresentation } from '@blacksite/subject-fpp/arms'
@@ -311,7 +311,7 @@ function App() {
   }, [])
   const onArms = useCallback(() => { setProgress(1); setArmsReady(true) }, [])
   return <Screen>
-    <Canvas shadows={tier !== 'low'} dpr={internalPixelRatio()} camera={{ fov: 72, near: 0.05, far: 400, position: [0, eye, 0.4] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={state => attachPerfProbe(state.gl)}>
+    <Canvas shadows={tier !== 'low'} dpr={internalPixelRatio()} camera={{ fov: 72, near: depthDefaults(tier).near, far: 400, position: [0, eye, 0.4] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={state => attachPerfProbe(state.gl)}>
       <Scene tier={tier} onReady={onArms} />
     </Canvas>
     <TitleCard title="Armory · Firing Range" />
