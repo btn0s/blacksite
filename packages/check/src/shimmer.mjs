@@ -146,6 +146,8 @@ async function measure({ pose, still, offsets, settle, border, heat, sign }) {
   return { width, height, still: stillResult, motion: { ...motionResult, perOffset }, png }
 }
 
+export const shimmerSeconds = (contract, options, plan) => (contract?.bookmarks.length ?? 0) * plan.frames(30 + 4 + (options.shimmerFrames ?? 8) + OFFSETS.length * 5) + plan.shot((contract?.bookmarks.length ?? 0) + 1)
+
 export async function runShimmer({ page, scratch, base, out, name, profile, contract, options, setPose, contactSheet, round }) {
   if (!contract?.bookmarks.length) return { pass: false, skipped: 'needs at least one bookmark in window.__blacksite' }
   const quality = { ...SHIMMER_DEFAULTS, ...(contract.model?.quality ?? {}) }

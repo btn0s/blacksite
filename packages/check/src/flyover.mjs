@@ -58,6 +58,11 @@ async function frame({ pose, settle, width, first }) {
   return { energy, src }
 }
 
+export const flyoverSeconds = (contract, options, plan) => {
+  const count = Math.max(0, ((contract?.flyover ?? 0) - 1) * (options.flyoverSteps ?? FLYOVER_DEFAULTS.steps) + 1)
+  return plan.frames(30 + count * ((options.flyoverSettle ?? 4) + 1)) + plan.shot(2)
+}
+
 export async function runFlyover({ page, scratch, base, out, name, contract, options, setPose, contactSheet, percentile, round }) {
   const poses = contract ? await page.evaluate(() => window.__blacksite.flyover ?? null) : null
   if (!poses || poses.length < 2) return { pass: false, skipped: 'needs at least two flyover poses in window.__blacksite' }

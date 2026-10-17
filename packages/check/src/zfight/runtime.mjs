@@ -32,6 +32,8 @@ export async function ringImage(scratch, base, source, regions, scale, file) {
   await writeFile(file, Buffer.from(url.split(',')[1], 'base64'))
 }
 
+export const zfightSeconds = (contract, options = {}, plan) => (contract?.bookmarks?.length || 1) * (plan.frames(24 + (options.frames ?? 6) + 5) + plan.shot(2) + 0.5)
+
 export async function runZFight({ page, scratch, files, out, profile, contract, options = {}, log = () => {}, setPose, shoot }) {
   await mkdir(path.join(out, 'zfight'), { recursive: true })
   await page.addScriptTag({ content: pageScript() })

@@ -24,7 +24,7 @@ export type BudgetModel = {
 
 export type QualityModel = { shimmerStill?: number; shimmerMotion?: number; popLimit?: number }
 
-export type CheckModel = { feel?: FeelModel; budget?: BudgetModel; quality?: QualityModel }
+export type CheckModel = { feel?: FeelModel; budget?: BudgetModel; quality?: QualityModel; scripts?: Record<string, number> }
 
 export type PlayerSample = { position: Vec3; velocity?: Vec3; grounded?: boolean }
 

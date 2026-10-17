@@ -4,10 +4,13 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { chromium } from 'playwright-core'
 import { installHook } from './zfight/hook.mjs'
-import { runZFight, zfightDetail } from './zfight/runtime.mjs'
-import { runShimmer } from './shimmer.mjs'
-import { runFlyover } from './flyover.mjs'
-import { runStress } from './stress.mjs'
+import { runZFight, zfightDetail, zfightSeconds } from './zfight/runtime.mjs'
+import { runShimmer, shimmerSeconds } from './shimmer.mjs'
+import { runFlyover, flyoverSeconds } from './flyover.mjs'
+import { runStress, stressSeconds } from './stress.mjs'
+import { SLACK, planned, within } from './phase.mjs'
+import { takeTimingSlot } from './slot.mjs'
+import os from 'node:os'
 
 export const CHECKS = ['perf', 'hitch', 'pop', 'feel', 'critic', 'audio', 'zfight', 'stress']
 export const OPT_IN_CHECKS = ['shimmer', 'flyover']
@@ -18,6 +21,7 @@ export const PROFILES = {
 }
 
 const DEFAULTS = { frameMs: 8.3, phoneFrameMs: 16.7, hitchMs: 33, firstPlayableMs: 5000, voices: 32 }
+const MOVED = 0.05
 
 export const GPU_ARGS = [
   '--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu', '--use-gl=angle',
@@ -55,7 +59,11 @@ function probeScript() {
     try { callback(time) } finally { state.busy += performance.now() - start }
   }
   state.hz = null
-  window.requestAnimationFrame = callback => state.hz ? -setTimeout(() => run(callback, performance.now()), 1000 / state.hz) : raf(time => run(callback, time))
+  state.paused = false
+  const held = []
+  const deliver = (callback, time) => state.paused ? held.push(callback) : run(callback, time)
+  state.resume = () => { state.paused = false; for (const callback of held.splice(0)) window.requestAnimationFrame(callback) }
+  window.requestAnimationFrame = callback => state.hz ? -setTimeout(() => deliver(callback, performance.now()), 1000 / state.hz) : raf(time => deliver(callback, time))
   window.cancelAnimationFrame = id => id < 0 ? clearTimeout(-id) : cancel(id)
   let last = null
   const loop = time => {
@@ -119,6 +127,24 @@ function percentile(values, p) {
 }
 
 const round = (value, digits = 2) => value === null || value === undefined ? null : Math.round(value * 10 ** digits) / 10 ** digits
+
+const BLOCKS = 4
+
+const machineLoad = () => round(os.loadavg()[0] / os.cpus().length)
+
+function measurementQuality(frames, budgetMs, p95, load) {
+  const size = Math.floor(frames.length / BLOCKS)
+  const blocks = size ? Array.from({ length: BLOCKS }, (_, index) => round(percentile(frames.slice(index * size, (index + 1) * size).map(frame => frame[2]), 0.95))) : []
+  const spread = blocks.length ? round((Math.max(...blocks) - Math.min(...blocks)) / 2) : null
+  const margin = p95 === null ? null : round(budgetMs - p95)
+  return { loadPerCore: load, oversubscribed: Math.max(...load) >= 1, blockP95: blocks, spread, margin, conclusive: spread !== null && margin !== null && Math.abs(margin) > spread }
+}
+
+function noise(fits, quality) {
+  if (!fits && quality.oversubscribed) return `the machine was oversubscribed during the run (load ${quality.loadPerCore.join(' → ')} per core), which only makes frames slower; rerun when it is quieter`
+  if (typeof quality.spread === 'number' && !quality.conclusive) return `cpu p95 is ${quality.margin} ms from the budget, inside the ±${quality.spread} ms its quarters spread; rerun when the machine is quieter (load ${quality.loadPerCore.join(' → ')} per core)`
+  return null
+}
 
 function frameStats(frames) {
   const intervals = frames.map(frame => frame[1])
@@ -192,10 +218,14 @@ function steady(series) {
   return percentile(series.filter(item => item.t >= end - 1).map(item => item.speed), 0.5)
 }
 
-function within(measured, expected, tolerance) {
+function judge(measured, expected, tolerance) {
   if (expected === undefined || expected === null) return { measured: round(measured), expected: null, pass: measured !== null }
   return { measured: round(measured), expected, error: round(measured === null ? null : (measured - expected) / expected, 3), pass: measured !== null && Math.abs(measured - expected) <= expected * tolerance }
 }
+
+const FEEL = { settleFrames: 30, move: 3, sprint: 3, coast: 1.5, jump: 1.6, press: 0.12 }
+
+const feelSeconds = (contract, plan) => plan.frames(FEEL.settleFrames) + FEEL.move + FEEL.sprint + FEEL.coast + FEEL.jump + FEEL.press + (contract?.scripts.includes('feelStart') ? plan.script('feelStart') : 0)
 
 async function runFeel(page, contract) {
   const input = { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space', ...(contract.input ?? {}) }
@@ -203,30 +233,30 @@ async function runFeel(page, contract) {
   const tolerance = feel.tolerance ?? 0.1
   await page.evaluate(() => window.__blacksite.camera(null))
   if (contract.scripts.includes('feelStart')) await page.evaluate(() => window.__blacksite.scripts.feelStart())
-  await page.evaluate(() => window.__check.frame(30))
+  await page.evaluate(count => window.__check.frame(count), FEEL.settleFrames)
   const track = seconds => page.evaluate(value => window.__check.track(value), seconds)
-  const moving = track(3)
+  const moving = track(FEEL.move)
   await page.keyboard.down(input.move)
   const move = speeds(await moving)
   await page.keyboard.down(input.sprint)
-  const sprint = speeds(await track(3))
+  const sprint = speeds(await track(FEEL.sprint))
   await page.keyboard.up(input.sprint)
   await page.keyboard.up(input.move)
-  await track(1.5)
+  await track(FEEL.coast)
   const ground = await page.evaluate(() => window.__blacksite.player().position[1])
-  const jumping = track(1.6)
+  const jumping = track(FEEL.jump)
   await page.keyboard.down(input.jump)
-  await page.waitForTimeout(120)
+  await page.waitForTimeout(FEEL.press * 1000)
   await page.keyboard.up(input.jump)
   const jump = await jumping
   const moveSpeed = steady(move)
   const top = move.find(item => moveSpeed && item.speed >= moveSpeed * 0.9)
   const apex = jump.length ? Math.max(...jump.map(item => item.position[1])) - ground : null
   const numbers = {
-    moveSpeed: within(moveSpeed, feel.moveSpeed, tolerance),
-    sprintSpeed: within(steady(sprint), feel.sprintSpeed, tolerance),
-    timeToTopSpeed: within(top ? top.t : null, feel.timeToTopSpeed, Math.max(tolerance, 0.25)),
-    jumpApex: within(apex, feel.jumpApex, tolerance),
+    moveSpeed: judge(moveSpeed, feel.moveSpeed, tolerance),
+    sprintSpeed: judge(steady(sprint), feel.sprintSpeed, tolerance),
+    timeToTopSpeed: judge(top ? top.t : null, feel.timeToTopSpeed, Math.max(tolerance, 0.25)),
+    jumpApex: judge(apex, feel.jumpApex, tolerance),
   }
   return { pass: Object.values(numbers).every(item => item.pass), tolerance, numbers, samples: { move: move.length, sprint: sprint.length, jump: jump.length } }
 }
@@ -250,68 +280,131 @@ export async function runChecks(options) {
   try {
     for (const name of profiles) {
       const profile = PROFILES[name]
-      log(`${name}: loading ${url}`)
       const context = await browser.newContext({ viewport: profile.viewport, deviceScaleFactor: profile.deviceScaleFactor, isMobile: profile.isMobile, hasTouch: profile.hasTouch })
-      await context.addInitScript(probeScript)
-      await context.addInitScript(installHook)
-      await context.addInitScript(css => { addEventListener('DOMContentLoaded', () => { const style = document.createElement('style'); style.textContent = css; document.head.append(style) }) }, HIDE_HUD)
-      const page = await context.newPage()
-      const scratch = await context.newPage()
-      await page.bringToFront()
-      page.on('console', message => { if (message.type() === 'error' && !/the server responded with a status of 404/.test(message.text())) report.console.push({ profile: name, text: message.text().slice(0, 400) }) })
-      page.on('pageerror', error => report.console.push({ profile: name, text: String(error).slice(0, 400) }))
-      page.on('crash', () => report.console.push({ profile: name, text: 'page crashed' }))
-      page.on('response', response => { if (response.status() >= 400 && !response.url().endsWith('/favicon.ico')) report.console.push({ profile: name, text: `${response.status()} ${response.url()}` }) })
-      if (profile.cpu > 1) await (await context.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: profile.cpu })
-      await page.goto(url, { waitUntil: 'load', timeout: 120000 })
-      const hasContract = await page.waitForFunction(() => window.__blacksite?.ready === true && window.__check?.readyAt !== null && window.__check?.readyAt !== undefined, null, { timeout: 90000, polling: 50 }).then(() => true, () => false)
-      const contract = hasContract ? await page.evaluate(() => { const c = window.__blacksite; return { version: c.version, bookmarks: c.bookmarks, scripts: Object.keys(c.scripts ?? {}), player: typeof c.player === 'function', audio: typeof c.audio === 'function', character: typeof c.character === 'object' && c.character !== null, input: c.input ?? null, model: c.model ?? null } }) : null
-      const budget = { ...DEFAULTS, ...(contract?.model?.budget ?? {}) }
-      const readyAt = await page.evaluate(() => window.__check.readyAt)
-      report.profiles[name] = { ...profile, contract: contract ? { bookmarks: contract.bookmarks.map(bookmark => bookmark.name), scripts: contract.scripts, player: contract.player, audio: contract.audio, model: contract.model } : null, firstPlayableMs: round(readyAt, 0) }
-      log(`${name}: first playable ${round(readyAt, 0)} ms${contract ? '' : ' (no window.__blacksite contract, running timing only)'}`)
-
       const audioLog = { voices: [], plays: [] }
-      let audioTimer = null
-      const pollAudio = async () => {
-        const sample = await page.evaluate(() => window.__blacksite?.audio?.() ?? null).catch(() => null)
-        if (sample) { audioLog.voices.push(sample.voices); audioLog.plays.push(...(sample.plays ?? [])) }
-      }
-      if (contract?.audio) audioTimer = setInterval(pollAudio, 250)
+      const motion = { position: null, anchor: null, since: Date.now() }
+      let watcher = null
+      let aborted = null
+      let contract = null
+      let budget = DEFAULTS
+      let readyAt = null
+      let plan = planned(DEFAULTS, DEFAULTS.hitchMs * 30 / 1000, null, seconds)
+      let slot = null
+      const slotLabel = `blacksite check ${options.target}${options.page ? ` ${options.page}` : ''} ${name} in ${process.cwd()}`
+      try {
+        if (only.includes('perf') || only.includes('hitch')) {
+          slot = await takeTimingSlot({ label: `${slotLabel} perf and hitch`, seconds: DEFAULTS.firstPlayableMs / 1000, log: line => log(`${name}: ${line}`) })
+          report.profiles[name] = { timingSlotWaitSeconds: slot.waitedSeconds }
+        }
+        log(`${name}: loading ${url}`)
+        await context.addInitScript(probeScript)
+        await context.addInitScript(installHook)
+        await context.addInitScript(css => { addEventListener('DOMContentLoaded', () => { const style = document.createElement('style'); style.textContent = css; document.head.append(style) }) }, HIDE_HUD)
+        const page = await context.newPage()
+        const scratch = await context.newPage()
+        await page.bringToFront()
+        page.on('console', message => { if (message.type() === 'error' && !/the server responded with a status of 404/.test(message.text())) report.console.push({ profile: name, text: message.text().slice(0, 400) }) })
+        page.on('pageerror', error => report.console.push({ profile: name, text: String(error).slice(0, 400) }))
+        page.on('crash', () => report.console.push({ profile: name, text: 'page crashed' }))
+        page.on('response', response => { if (response.status() >= 400 && !response.url().endsWith('/favicon.ico')) report.console.push({ profile: name, text: `${response.status()} ${response.url()}` }) })
+        if (profile.cpu > 1) await (await context.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: profile.cpu })
 
-      await page.evaluate(() => window.__check.frame(60))
-      await page.evaluate(() => { window.__check.frames.length = 0 })
-      if (only.includes('perf') || only.includes('hitch') || only.includes('audio')) {
-        log(`${name}: scripted run`)
-        if (contract?.scripts.includes('perf')) await page.evaluate(() => window.__blacksite.scripts.perf())
-        else if (contract && contract.bookmarks.length > 1) await page.evaluate(([poses, s]) => window.__check.fly(poses, s), [contract.bookmarks, seconds])
-        else await page.waitForTimeout(seconds * 1000)
-        if (contract) await page.evaluate(() => window.__blacksite.camera(null))
-        await page.waitForTimeout(1500)
-      }
-      const frames = await page.evaluate(() => window.__check.frames.slice())
-      const stats = frameStats(frames)
-      const frameBudget = name === 'phone' ? budget.phoneFrameMs : budget.frameMs
-      const vsync = stats.interval.p50 ?? 16.7
-      if (only.includes('perf')) add('perf', name, {
-        pass: stats.cpu.p95 !== null && stats.cpu.p95 <= frameBudget && stats.interval.p95 <= vsync * 1.25,
-        budgetMs: frameBudget, vsyncMs: vsync, ...stats,
-        note: 'cpu is main-thread time inside requestAnimationFrame per frame; interval is the presented frame spacing, capped by vsync in headless Chrome',
-      })
-      if (only.includes('hitch')) {
-        const hitches = frames.filter(frame => frame[1] > budget.hitchMs).map(frame => ({ atMs: round(frame[0] - (readyAt ?? 0), 0), ms: round(frame[1], 1) }))
-        add('hitch', name, { pass: hitches.length === 0 && readyAt !== null && readyAt <= budget.firstPlayableMs, thresholdMs: budget.hitchMs, firstPlayableMs: round(readyAt, 0), firstPlayableBudgetMs: budget.firstPlayableMs, count: hitches.length, longestMs: stats.interval.max, hitches: hitches.slice(0, 40) })
-      }
+        let sampling = false
+        const sample = async () => {
+          if (sampling) return
+          sampling = true
+          const value = await page.evaluate(() => ({ audio: window.__blacksite?.audio?.() ?? null, player: window.__blacksite?.player?.()?.position ?? null })).catch(() => null)
+          sampling = false
+          if (value?.audio) { audioLog.voices.push(value.audio.voices); audioLog.plays.push(...(value.audio.plays ?? [])) }
+          const at = value?.player
+          if (!at) return
+          motion.position = at
+          if (!motion.anchor || Math.hypot(at[0] - motion.anchor[0], at[1] - motion.anchor[1], at[2] - motion.anchor[2]) > MOVED) { motion.anchor = at; motion.since = Date.now() }
+        }
+        const diagnose = async (label, error) => {
+          const failure = { phase: label, message: String(error?.message ?? error).replace(/^page\.evaluate: (Error: )?/, '').split('\n')[0].slice(0, 400), late: !!error?.late }
+          if (motion.position) Object.assign(failure, { player: motion.position.map(value => round(value)), stillSeconds: round((Date.now() - motion.since) / 1000, 1) })
+          failure.firstError = await within('reading the first error', plan.frames(30), page.evaluate(() => window.__check.first)).catch(() => null)
+          const file = `failures/${name}-${label.replace(/\W+/g, '-')}.png`
+          await mkdir(path.join(out, 'failures'), { recursive: true })
+          failure.capture = await within('the failure capture', plan.shot(1), page.screenshot({ path: path.join(out, file), timeout: 0 })).then(() => file, () => null)
+          log(`${name}: ${describeFailure(failure)}`)
+          return failure
+        }
+        const rendering = on => within(on ? 'resuming the page' : 'pausing the page', plan.frames(30), page.evaluate(on => { if (!window.__check?.resume) return; if (on) window.__check.resume(); else window.__check.paused = true }, on)).catch(() => {})
+        const step = async (checks, label, expected, body) => {
+          const wanted = checks.filter(check => only.includes(check) && !report.checks[check]?.[name])
+          if (!wanted.length) return
+          if (aborted) { for (const check of wanted) add(check, name, { pass: false, notRun: `${aborted} did not finish, so the page was closed` }); return }
+          const beside = slot ? null : await takeTimingSlot({ label: `${slotLabel} ${label}`, seconds: expected, shared: true, log: line => log(`${name}: ${line}`) })
+          if (beside) await rendering(true)
+          try { await within(`${name} ${label}`, expected, body()) } catch (error) {
+            const failure = await diagnose(label, error)
+            for (const check of wanted) if (!report.checks[check]?.[name]) add(check, name, { pass: false, failure })
+            if (failure.late) aborted = label
+          } finally {
+            if (beside) { await rendering(false); await beside.release() }
+          }
+        }
 
-      if (only.includes('feel') && name === 'desktop') {
-        if (!contract?.player) add('feel', name, { pass: false, skipped: 'the game exposes no player() in window.__blacksite' })
-        else { log(`${name}: feel`); add('feel', name, await runFeel(page, contract)) }
-      }
+        await step([...CHECKS, ...OPT_IN_CHECKS], 'load', DEFAULTS.firstPlayableMs / 1000, async () => {
+          await page.goto(url, { waitUntil: 'load', timeout: 0 })
+          const hasContract = await page.waitForFunction(() => window.__blacksite?.ready === true && window.__check?.readyAt !== null && window.__check?.readyAt !== undefined, null, { timeout: DEFAULTS.firstPlayableMs * SLACK, polling: 50 }).then(() => true, () => false)
+          contract = hasContract ? await page.evaluate(() => { const c = window.__blacksite; return { version: c.version, bookmarks: c.bookmarks, flyover: c.flyover?.length ?? 0, scripts: Object.keys(c.scripts ?? {}), player: typeof c.player === 'function', audio: typeof c.audio === 'function', character: typeof c.character === 'object' && c.character !== null, input: c.input ?? null, model: c.model ?? null } }) : null
+          budget = { ...DEFAULTS, ...(contract?.model?.budget ?? {}) }
+          readyAt = await page.evaluate(() => window.__check.readyAt)
+          const begin = performance.now()
+          await shoot(page, out, `first-playable-${name}.png`, true)
+          plan = planned(budget, (performance.now() - begin) / 1000, contract, seconds)
+        })
+        report.profiles[name] = { ...report.profiles[name], ...profile, contract: contract ? { bookmarks: contract.bookmarks.map(bookmark => bookmark.name), scripts: contract.scripts, player: contract.player, audio: contract.audio, model: contract.model } : null, firstPlayableMs: round(readyAt, 0) }
+        if (!aborted) log(`${name}: first playable ${round(readyAt, 0)} ms${contract ? '' : ' (no window.__blacksite contract, running timing only)'}`)
+        if (contract?.audio || contract?.player) watcher = setInterval(sample, 250)
 
-      if (only.includes('audio')) {
-        if (audioTimer) { clearInterval(audioTimer); await pollAudio() }
-        if (!contract?.audio) add('audio', name, { pass: false, skipped: 'the game exposes no audio() in window.__blacksite' })
-        else {
+        const scripted = contract?.scripts.includes('perf') ? 'perf' : contract && contract.bookmarks.length > 1 ? 'fly' : 'wait'
+        const runSeconds = plan.frames(60) + (scripted === 'perf' ? plan.script('perf') : seconds) + 1.5
+        await slot?.hold(runSeconds)
+        await step(['perf', 'hitch', 'audio'], 'scripted run', runSeconds, async () => {
+          const load = [machineLoad()]
+          await page.evaluate(() => window.__check.frame(60))
+          await page.evaluate(() => { window.__check.frames.length = 0 })
+          log(`${name}: scripted run`)
+          if (scripted === 'perf') await page.evaluate(() => window.__blacksite.scripts.perf())
+          else if (scripted === 'fly') await page.evaluate(([poses, s]) => window.__check.fly(poses, s), [contract.bookmarks, seconds])
+          else await page.waitForTimeout(seconds * 1000)
+          if (contract) await page.evaluate(() => window.__blacksite.camera(null))
+          await page.waitForTimeout(1500)
+          const frames = await page.evaluate(() => window.__check.frames.slice())
+          load.push(machineLoad())
+          const stats = frameStats(frames)
+          const frameBudget = name === 'phone' ? budget.phoneFrameMs : budget.frameMs
+          const vsync = stats.interval.p50 ?? 16.7
+          const quality = measurementQuality(frames, frameBudget, stats.cpu.p95, load)
+          const fits = stats.cpu.p95 !== null && stats.cpu.p95 <= frameBudget && stats.interval.p95 <= vsync * 1.25
+          const perfNoise = noise(fits, quality)
+          if (only.includes('perf')) add('perf', name, {
+            pass: fits && !perfNoise, ...(perfNoise ? { inconclusive: perfNoise } : {}),
+            budgetMs: frameBudget, vsyncMs: vsync, ...stats, quality,
+            note: 'cpu is main-thread time inside requestAnimationFrame per frame; interval is the presented frame spacing, capped by vsync in headless Chrome',
+          })
+          if (only.includes('hitch')) {
+            const hitches = frames.filter(frame => frame[1] > budget.hitchMs).map(frame => ({ atMs: round(frame[0] - (readyAt ?? 0), 0), ms: round(frame[1], 1) }))
+            const fits = hitches.length === 0 && readyAt !== null && readyAt <= budget.firstPlayableMs
+            const hitchNoise = noise(fits, { loadPerCore: load, oversubscribed: quality.oversubscribed })
+            add('hitch', name, { pass: fits && !hitchNoise, ...(hitchNoise ? { inconclusive: hitchNoise } : {}), loadPerCore: load, thresholdMs: budget.hitchMs, firstPlayableMs: round(readyAt, 0), firstPlayableBudgetMs: budget.firstPlayableMs, count: hitches.length, longestMs: stats.interval.max, hitches: hitches.slice(0, 40) })
+          }
+        })
+        if (slot) { await rendering(false); await slot.release() }
+        slot = null
+
+        if (name === 'desktop') await step(['feel'], 'feel', feelSeconds(contract, plan), async () => {
+          if (!contract?.player) add('feel', name, { pass: false, skipped: 'the game exposes no player() in window.__blacksite' })
+          else { log(`${name}: feel`); add('feel', name, await runFeel(page, contract)) }
+        })
+
+        await step(['audio'], 'audio', plan.frames(30), async () => {
+          if (!contract?.audio) { add('audio', name, { pass: false, skipped: 'the game exposes no audio() in window.__blacksite' }); return }
+          await sample()
           let repeats = 0
           const last = new Map()
           const counts = {}
@@ -323,14 +416,14 @@ export async function runChecks(options) {
           }
           const maxVoices = Math.max(0, ...audioLog.voices)
           add('audio', name, { pass: maxVoices <= budget.voices && repeats === 0, voices: { max: maxVoices, p50: percentile(audioLog.voices, 0.5), budget: budget.voices }, plays: audioLog.plays.length, backToBackRepeats: repeats, variations: Object.fromEntries(Object.entries(counts).map(([cue, set]) => [cue, set.size])) })
-        }
-      }
+        })
 
-      if (only.includes('pop') && name === 'desktop') {
-        if (!contract || contract.bookmarks.length < 2) add('pop', name, { pass: false, skipped: 'needs at least two bookmarks in window.__blacksite' })
-        else {
+        const popSteps = options.popSteps ?? 10
+        const bookmarkCount = contract?.bookmarks.length ?? 0
+        if (name === 'desktop') await step(['pop'], 'pop', ((bookmarkCount - 1) * popSteps + 1) * (plan.frames(6) + plan.shot(2)) + bookmarkCount * (plan.frames(30) + 1 + plan.shot(3)) + plan.shot(2), async () => {
+          if (!contract || contract.bookmarks.length < 2) { add('pop', name, { pass: false, skipped: 'needs at least two bookmarks in window.__blacksite' }); return }
           log(`${name}: pop sheet`)
-          const steps = options.popSteps ?? 10
+          const steps = popSteps
           const tiles = []
           const lerp = (a, b, t) => a.map((value, index) => value + (b[index] - value) * t)
           const bookmarks = contract.bookmarks
@@ -367,42 +460,46 @@ export async function runChecks(options) {
           await contactSheet(scratch, files.url, out, tiles.map(tile => ({ ...tile, label: `${tile.label}${tile.diff !== undefined ? ` Δ${(tile.diff * 100).toFixed(1)}%` : ''}` })), 'pop-sheet.png')
           await contactSheet(scratch, files.url, out, still.flatMap(item => [{ src: item.first, label: `${item.name} t=0` }, { src: item.second, label: `${item.name} t=1s`, flag: stillFlags.some(flag => flag.name === item.name) }]), 'pop-still.png', { columns: 4 })
           add('pop', name, { pass: flagged.length === 0 && stillFlags.length === 0, frames: tiles.length, flagged, still: stillFlags, files: ['pop-sheet.png', 'pop-still.png'], method: 'fraction of pixels (320 px wide, channel delta > 32) changed between frames; a moving frame is flagged above 2.5x its neighbours, a still camera above 2% in one second' })
-        }
-      }
+        })
 
-      const kit = { page, scratch, base: files.url, out, name, profile, contract, options, setPose, contactSheet, percentile, round }
-      if (only.includes('shimmer')) { log(`${name}: shimmer`); add('shimmer', name, await runShimmer(kit)) }
-      if (only.includes('flyover')) { log(`${name}: flyover`); add('flyover', name, await runFlyover(kit)) }
-      if (only.includes('zfight')) add('zfight', name, await runZFight({ page, scratch, files, out, profile: name, contract, options: options.zfight, log, setPose, shoot }))
+        const kit = { page, scratch, base: files.url, out, name, profile, contract, options, setPose, contactSheet, percentile, round }
+        await step(['shimmer'], 'shimmer', shimmerSeconds(contract, options, plan), async () => { log(`${name}: shimmer`); add('shimmer', name, await runShimmer(kit)) })
+        await step(['flyover'], 'flyover', flyoverSeconds(contract, options, plan), async () => { log(`${name}: flyover`); add('flyover', name, await runFlyover(kit)) })
+        await step(['zfight'], 'zfight', zfightSeconds(contract, options.zfight, plan), async () => add('zfight', name, await runZFight({ page, scratch, files, out, profile: name, contract, options: options.zfight, log, setPose, shoot })))
 
-      if (only.includes('critic')) {
-        log(`${name}: critic captures`)
-        const captured = []
-        const bookmarks = contract?.bookmarks.length ? contract.bookmarks : [null]
-        for (const bookmark of bookmarks) {
-          const label = bookmark?.name ?? 'play'
-          if (bookmark) await setPose(page, bookmark, 40)
-          else await page.waitForTimeout(1000)
-          await page.waitForTimeout(400)
-          captured.push(await shoot(page, out, `critic/${name}-${label}.png`, true))
-          if (bookmark && name === 'desktop' && grid > 1) {
-            const tiles = []
-            for (let row = 0; row < grid; row++) for (let column = 0; column < grid; column++) {
-              await setPose(page, { ...bookmark, view: { x: column / grid, y: row / grid, scale: grid } }, 4)
-              tiles.push({ src: await shoot(page, out, `critic/${label}-${grid}x/r${row}c${column}.png`, false), label: `${label} ${grid}x r${row}c${column}` })
+        const views = contract?.bookmarks.length ? contract.bookmarks.length : 0
+        const gridded = name === 'desktop' && grid > 1 ? views * (grid * grid * (plan.frames(4) + plan.shot(1)) + plan.shot(1)) : 0
+        await step(['critic'], 'critic', (views || 1) * (plan.frames(40) + 1.4 + plan.shot(1)) + gridded, async () => {
+          log(`${name}: critic captures`)
+          const captured = []
+          const bookmarks = contract?.bookmarks.length ? contract.bookmarks : [null]
+          for (const bookmark of bookmarks) {
+            const label = bookmark?.name ?? 'play'
+            if (bookmark) await setPose(page, bookmark, 40)
+            else await page.waitForTimeout(1000)
+            await page.waitForTimeout(400)
+            captured.push(await shoot(page, out, `critic/${name}-${label}.png`, true))
+            if (bookmark && name === 'desktop' && grid > 1) {
+              const tiles = []
+              for (let row = 0; row < grid; row++) for (let column = 0; column < grid; column++) {
+                await setPose(page, { ...bookmark, view: { x: column / grid, y: row / grid, scale: grid } }, 4)
+                tiles.push({ src: await shoot(page, out, `critic/${label}-${grid}x/r${row}c${column}.png`, false), label: `${label} ${grid}x r${row}c${column}` })
+              }
+              const sheet = `critic/${name}-${label}-${grid}x.png`
+              await contactSheet(scratch, files.url, out, tiles, sheet, { columns: grid, width: Math.round(profile.viewport.width / 2) })
+              captured.push(sheet)
             }
-            const sheet = `critic/${name}-${label}-${grid}x.png`
-            await contactSheet(scratch, files.url, out, tiles, sheet, { columns: grid, width: Math.round(profile.viewport.width / 2) })
-            captured.push(sheet)
           }
-        }
-        if (contract) await page.evaluate(() => window.__blacksite.camera(null))
-        const errors = report.console.filter(item => item.profile === name)
-        add('critic', name, { pass: errors.length === 0, captures: captured.length, files: captured, consoleErrors: errors.length, read: 'open every PNG at 1x and the grid sheets zoomed in; the check only proves they were captured with no console errors' })
+          if (contract) await page.evaluate(() => window.__blacksite.camera(null))
+          const errors = report.console.filter(item => item.profile === name)
+          add('critic', name, { pass: errors.length === 0, captures: captured.length, files: captured, consoleErrors: errors.length, read: 'open every PNG at 1x and the grid sheets zoomed in; the check only proves they were captured with no console errors' })
+        })
+        await step(['stress'], 'stress', stressSeconds(contract), async () => add('stress', name, await runStress({ page, scratch, contract, profile, name, log })))
+      } finally {
+        await slot?.release()
+        clearInterval(watcher)
+        await context.close().catch(() => {})
       }
-      if (only.includes('stress')) add('stress', name, await runStress({ page, scratch, contract, profile, name, log }))
-      clearInterval(audioTimer)
-      await context.close()
     }
   } finally {
     await browser.close()
@@ -411,28 +508,43 @@ export async function runChecks(options) {
     await rm(path.join(out, '_check.html'), { force: true })
   }
   report.finishedAt = new Date().toISOString()
-  report.pass = Object.values(report.checks).every(byProfile => Object.values(byProfile).every(result => result.pass || result.skipped))
+  const results = Object.values(report.checks).flatMap(byProfile => Object.values(byProfile))
+  report.pass = results.every(result => result.pass || result.skipped)
+  report.verdict = report.pass ? 'pass' : results.every(result => result.pass || result.skipped || result.inconclusive) ? 'inconclusive' : 'fail'
   await writeFile(path.join(out, 'report.json'), `${JSON.stringify(report, null, 2)}\n`)
   return report
+}
+
+function describeFailure(failure) {
+  const where = failure.player ? `; player at [${failure.player.join(', ')}], still for ${failure.stillSeconds} s` : ''
+  const first = failure.firstError ? `; first error: ${failure.firstError.message.split('\n')[0].slice(0, 160)}` : ''
+  return `${failure.phase} failed: ${failure.message}${where}${first}${failure.capture ? `; capture ${failure.capture}` : ''}`
+}
+
+function detail(check, result) {
+  if (result.failure) return describeFailure(result.failure)
+  if (result.notRun) return `not run: ${result.notRun}`
+  if (result.inconclusive) return `${check === 'perf' ? `cpu p95 ${result.cpu.p95} ms (budget ${result.budgetMs})` : `${result.count} frames over ${result.thresholdMs} ms, first playable ${result.firstPlayableMs} ms (budget ${result.firstPlayableBudgetMs})`}: ${result.inconclusive}`
+  if (result.skipped) return result.skipped
+  if (check === 'perf') return `cpu p50 ${result.cpu.p50} p95 ${result.cpu.p95} p99 ${result.cpu.p99} max ${result.cpu.max} ms (budget ${result.budgetMs}, quarters ±${result.quality.spread}); interval p95 ${result.interval.p95} max ${result.interval.max} ms; load ${result.quality.loadPerCore.join(' → ')} per core`
+  if (check === 'hitch') return `${result.count} frames over ${result.thresholdMs} ms, longest ${result.longestMs} ms; first playable ${result.firstPlayableMs} ms (budget ${result.firstPlayableBudgetMs})`
+  if (check === 'feel') return Object.entries(result.numbers).map(([key, value]) => `${key} ${value.measured}${value.expected !== null ? `/${value.expected}` : ''}`).join(', ')
+  if (check === 'audio') return `voices max ${result.voices.max}/${result.voices.budget}, ${result.plays} plays, ${result.backToBackRepeats} back-to-back repeats`
+  if (check === 'pop') return `${result.flagged.length} moving frames and ${result.still.length} still views flagged of ${result.frames}`
+  if (check === 'shimmer') return `still mean ${Math.max(...result.views.map(view => view.still.mean))}/${result.budget.shimmerStill}, motion mean ${Math.max(...result.views.map(view => view.motion.mean))}/${result.budget.shimmerMotion} (worst of ${result.views.length} views)`
+  if (check === 'flyover') return `${result.flagged.length} of ${result.frames} frames flagged (budget ${result.allowed})`
+  if (check === 'zfight') return zfightDetail(result)
+  if (check === 'critic') return `${result.captures} captures, ${result.consoleErrors} console errors`
+  if (check === 'stress') return result.pass ? `${result.refreshHz} Hz: ${result.steps.join(', ')} with no errors${result.absent.length ? ` (game has no ${result.absent.join(', ')})` : ''}` : `first error during ${result.during}: ${result.firstError.message.split('\n')[0].slice(0, 160)}`
+  return ''
 }
 
 export function summarize(report) {
   const lines = []
   for (const [check, byProfile] of Object.entries(report.checks)) for (const [profile, result] of Object.entries(byProfile)) {
-    const status = result.skipped ? 'skip' : result.pass ? 'pass' : 'FAIL'
-    let detail = result.skipped ?? ''
-    if (check === 'perf') detail = `cpu p50 ${result.cpu.p50} p95 ${result.cpu.p95} p99 ${result.cpu.p99} max ${result.cpu.max} ms (budget ${result.budgetMs}); interval p95 ${result.interval.p95} max ${result.interval.max} ms`
-    if (check === 'hitch') detail = `${result.count} frames over ${result.thresholdMs} ms, longest ${result.longestMs} ms; first playable ${result.firstPlayableMs} ms (budget ${result.firstPlayableBudgetMs})`
-    if (check === 'feel' && !result.skipped) detail = Object.entries(result.numbers).map(([key, value]) => `${key} ${value.measured}${value.expected !== null ? `/${value.expected}` : ''}`).join(', ')
-    if (check === 'audio' && !result.skipped) detail = `voices max ${result.voices.max}/${result.voices.budget}, ${result.plays} plays, ${result.backToBackRepeats} back-to-back repeats`
-    if (check === 'pop' && !result.skipped) detail = `${result.flagged.length} moving frames and ${result.still.length} still views flagged of ${result.frames}`
-    if (check === 'shimmer' && !result.skipped) detail = `still mean ${Math.max(...result.views.map(view => view.still.mean))}/${result.budget.shimmerStill}, motion mean ${Math.max(...result.views.map(view => view.motion.mean))}/${result.budget.shimmerMotion} (worst of ${result.views.length} views)`
-    if (check === 'flyover' && !result.skipped) detail = `${result.flagged.length} of ${result.frames} frames flagged (budget ${result.allowed})`
-    if (check === 'zfight' && !result.skipped) detail = zfightDetail(result)
-    if (check === 'critic') detail = `${result.captures} captures, ${result.consoleErrors} console errors`
-    if (check === 'stress') detail = result.pass ? `${result.refreshHz} Hz: ${result.steps.join(', ')} with no errors${result.absent.length ? ` (game has no ${result.absent.join(', ')})` : ''}` : `first error during ${result.during}: ${result.firstError.message.split('\n')[0].slice(0, 160)}`
-    lines.push(`${status.padEnd(4)}  ${check.padEnd(7)} ${profile.padEnd(7)} ${detail}`)
+    const status = result.skipped ? 'skip' : result.pass ? 'pass' : result.inconclusive ? '????' : 'FAIL'
+    lines.push(`${status.padEnd(4)}  ${check.padEnd(7)} ${profile.padEnd(7)} ${detail(check, result)}`)
   }
-  lines.push(report.pass ? 'checks passed' : 'checks failed')
+  lines.push({ pass: 'checks passed', fail: 'checks failed', inconclusive: 'checks inconclusive: a timing result is inside the measurement noise' }[report.verdict])
   return lines.join('\n')
 }
