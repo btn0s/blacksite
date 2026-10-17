@@ -15,7 +15,7 @@ export const site = {
   treeline: 980,
   spawn: [6, 14] as const,
   spawnYaw: -2.2,
-  horizon: { high: 12000, medium: 10000, low: 8000 },
+  far: 16000,
 } as const
 
 export const tiers = {
