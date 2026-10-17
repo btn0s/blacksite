@@ -105,6 +105,13 @@ Interval 0.4 s walking, 0.3 s running (Source `m_flStepSoundTime` 400 / 300 ms),
 | Point lights | constant count per quality tier, never toggled (a toggle recompiles every lit shader) |
 | Audio voices | 28 desktop / 16 phone |
 | Decals | 256 pooled |
+| Soldier pose evaluations | at most 2 per frame desktop; 1 every second frame phone, on frames where the arms hold their pose |
+| Soldier pose intervals | desktop 2 / 2 / 3 frames, phone 3 / 4 / 6, banded at 10 m and 20 m; 60 frames off screen |
+| Ragdolls falling at once | 3 desktop; phone topples the corpse snapshot over 0.55 s with a 0.3 s settle instead |
+| Corpse settle | static mesh after at least 0.55 s once still for 0.2 s, or by 2 s desktop / 1.2 s phone |
+| Physics step | 60 Hz desktop, 30 Hz phone |
+| Phone reverb tail | 0.7 × the room RT60 |
+| Wall decal atlas | 256 px desktop, 128 px phone and low |
 | First playable | under 5 s |
 
 ## Feedback contract
@@ -177,7 +184,9 @@ Warden intents, each barked 0.8 s before it happens with a subtitle: advance, fl
 - `src/model.ts` holds every number above; `check.tsx` hands `FEEL` and the budgets to the check contract.
 - The squad runs in a module worker (`squad.worker.ts`): one Warden `TacticalRuntime` per encounter at 30 Hz with our own `BreachAuthority`. A fight wakes when the player enters its trigger or shoots one of its soldiers. The worker posts soldier views and events (fire, flinch, intent, died, alert); the main thread draws the soldiers 110 ms behind with the ALS snapshot buffer and plays every event as sound, effects and subtitles.
 - Player shots are traced on the main thread against soldier hit zones and then the level; hits go to the worker as damage.
-- Soldiers are ALS bodies with animation LOD, drawn only in rooms the player can see. Shaders are compiled before the game reports ready.
+- Soldiers are ALS bodies drawn only in rooms the player can see. A per-frame budget picks which soldiers evaluate their pose, most overdue first; the rest hold their last pose. One ALS evaluation costs about 1.5 ms of main thread, so the phone budget is what keeps fights under 16.7 ms. After a restart soldiers receive snapshots one tick apart, so their first evaluations never land in the same frame.
+- Level pieces that share a surface but differ only by tint merge into one draw with vertex colours. Empty effect pools, cropped arm parts and phone soldier eyes are hidden, so they skip their draw.
+- Shaders are compiled before the game reports ready, with lights counted as in play and one real frame rendered through the post stack.
 
 ## Flow
 

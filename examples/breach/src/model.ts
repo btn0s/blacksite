@@ -201,13 +201,18 @@ export const FEEDBACK = {
   tracerSpeed: 520,
   decals: 256,
   casings: 48,
-  corpse: { minimumSeconds: 0.55, maximumSeconds: 2, settledSeconds: 0.2, settledSpeed: 0.5, groundedHeight: 0.65 },
+  corpse: { minimumSeconds: 0.55, settledSeconds: 0.2, settledSpeed: 0.5, groundedHeight: 0.65 },
 }
 
 export const PRESENTATION = {
   animationInterval: { desktop: [2, 2, 3], phone: [3, 4, 6], hidden: 60 },
   animationBands: [10, 20] as const,
-  ragdolls: { desktop: 3, phone: 1 },
+  animationBudget: { desktop: 2, phone: 1 },
+  animationFloor: { desktop: 1, phone: 0.25 },
+  armsPoseInterleave: { desktop: false, phone: true },
+  corpseSeconds: { desktop: 2, phone: 1.2 },
+  topple: { seconds: 0.55, lift: 0.13, bounce: { seconds: 0.3, angle: 0.1 } },
+  ragdolls: { desktop: 3, phone: 0 },
   physicsHz: { desktop: 60, phone: 30 },
 }
 
@@ -215,6 +220,23 @@ export function animationInterval(tier: 'desktop' | 'phone', distance: number, v
   if (!visible) return PRESENTATION.animationInterval.hidden
   const band = PRESENTATION.animationBands.findIndex(limit => distance < limit)
   return PRESENTATION.animationInterval[tier][band < 0 ? 2 : band]!
+}
+
+export function animationBudget(tier: 'desktop' | 'phone', falling: number) {
+  return Math.max(PRESENTATION.animationFloor[tier], PRESENTATION.animationBudget[tier] - falling)
+}
+
+export function scheduleAnimation(credit: Map<string, number>, intervals: ReadonlyMap<string, number>, budget: number, due: Set<string>) {
+  due.clear()
+  for (const [id, interval] of intervals) credit.set(id, Math.min(2, (credit.get(id) ?? 1) + 1 / interval))
+  while (due.size < budget) {
+    let best: string | null = null
+    for (const id of intervals.keys()) if (!due.has(id) && credit.get(id)! >= 1 && (best === null || credit.get(id)! > credit.get(best)!)) best = id
+    if (best === null) break
+    due.add(best)
+    credit.set(best, 0)
+  }
+  return due
 }
 
 export const BUDGET = {

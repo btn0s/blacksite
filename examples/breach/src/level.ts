@@ -144,7 +144,10 @@ function merge(geometries: THREE.BufferGeometry[]) {
   const merged = new THREE.BufferGeometry()
   for (const name of Object.keys(parts[0]!.attributes)) {
     const size = parts[0]!.getAttribute(name).itemSize
-    merged.setAttribute(name, new THREE.Float32BufferAttribute(parts.flatMap(part => Array.from(part.getAttribute(name).array as Float32Array)), size))
+    const array = new Float32Array(parts.reduce((total, part) => total + part.getAttribute(name).array.length, 0))
+    let offset = 0
+    for (const part of parts) { const source = part.getAttribute(name).array as Float32Array; array.set(source, offset); offset += source.length }
+    merged.setAttribute(name, new THREE.BufferAttribute(array, size))
   }
   for (const item of new Set([...geometries, ...parts])) item.dispose()
   merged.computeBoundingSphere()
@@ -1019,6 +1022,41 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
       mesh.geometry = merge(list.map(item => item.geometry))
       mesh.castShadow = list.some(item => item.castShadow)
     }
+    add(mesh)
+  }
+
+  const fixed = new Set(heroes.values())
+  const tinted = new Map<string, THREE.Mesh[]>()
+  for (const child of group.children) {
+    if (!(child instanceof THREE.Mesh) || fixed.has(child) || child.renderOrder !== 0 || !(child.material instanceof THREE.MeshStandardMaterial)) continue
+    const material = child.material
+    if (!material.name.startsWith('look-') || material.name === 'look-ground' || material.name === 'look-puddle' || material.vertexColors || material.transparent) continue
+    const maps = (['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap'] as const).map(key => material[key]?.uuid ?? '').join()
+    const key = `${material.name}|${maps}|${material.roughness}|${material.metalness}|${material.side}|${material.normalScale.x}|${material.customProgramCacheKey()}|${child.castShadow}|${child.receiveShadow}|${Object.keys(child.geometry.attributes).sort().join()}`
+    tinted.set(key, [...tinted.get(key) ?? [], child])
+  }
+  for (const list of tinted.values()) {
+    if (list.length < 2) continue
+    const geometries = list.map(item => {
+      item.updateMatrix()
+      const geometry = item.geometry.clone().applyMatrix4(item.matrix)
+      const color = (item.material as THREE.MeshStandardMaterial).color
+      const count = geometry.getAttribute('position').count
+      const colors = new Float32Array(count * 3)
+      for (let index = 0; index < count * 3; index += 3) { colors[index] = color.r; colors[index + 1] = color.g; colors[index + 2] = color.b }
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+      return geometry
+    })
+    const base = list[0]!.material as THREE.MeshStandardMaterial
+    const material = own(base.clone())
+    material.onBeforeCompile = base.onBeforeCompile
+    material.customProgramCacheKey = base.customProgramCacheKey
+    material.vertexColors = true
+    material.color.set('#ffffff')
+    const mesh = new THREE.Mesh(merge(geometries), material)
+    mesh.castShadow = list[0]!.castShadow
+    mesh.receiveShadow = list[0]!.receiveShadow
+    for (const item of list) { item.removeFromParent(); item.geometry.dispose() }
     add(mesh)
   }
 

@@ -72,6 +72,8 @@ export function createArmsRuntime(assets: ArmsAssets, state: ArmsState) {
   let action: ArmsAction | null = null
   let actionTime = 0
   let previousRotations: Float32Array | null = null
+  let pending = 0
+  let poseDelta = 0
   let aimAmount = 0
   let movementAmount = 0
   let sprintAmount = 0
@@ -125,20 +127,25 @@ export function createArmsRuntime(assets: ArmsAssets, state: ArmsState) {
       previous.reload = state.reloadSequence
       previous.equip = state.equipSequence
       previous.weapon = state.weapon
-      const mode = weaponModes[state.weapon]
-      const overlay = overlays.get(mode)!
-      overlay.setTime(phase, clock)
-      overlay.update(input)
-      const native = overlay.evaluate(input)
-      slot.update(delta, false, mode)
-      const pose = slot.evaluate(native)?.get('ArmRight')?.pose ?? native.pose
-      refreshVirtualBonePose(pose, rig, virtualScratch)
-      applyPose(applicator, pose)
-      let poseDelta = 0
-      if (previousRotations) {
-        for (let index = 0; index < pose.rotations.length; index++) poseDelta = Math.max(poseDelta, Math.abs(pose.rotations[index] - previousRotations[index]))
-        previousRotations.set(pose.rotations)
-      } else previousRotations = pose.rotations.slice()
+      pending += delta
+      if (!state.poseHold || !previousRotations) {
+        const mode = weaponModes[state.weapon]
+        const overlay = overlays.get(mode)!
+        input.deltaTime = pending
+        overlay.setTime(phase, clock)
+        overlay.update(input)
+        const native = overlay.evaluate(input)
+        slot.update(pending, false, mode)
+        pending = 0
+        const pose = slot.evaluate(native)?.get('ArmRight')?.pose ?? native.pose
+        refreshVirtualBonePose(pose, rig, virtualScratch)
+        applyPose(applicator, pose)
+        poseDelta = 0
+        if (previousRotations) {
+          for (let index = 0; index < pose.rotations.length; index++) poseDelta = Math.max(poseDelta, Math.abs(pose.rotations[index] - previousRotations[index]))
+          previousRotations.set(pose.rotations)
+        } else previousRotations = pose.rotations.slice()
+      }
       for (const entry of weapons) { entry.object.visible = entry.weapon === state.weapon; entry.flash?.update(delta) }
       aimAmount += ((state.aiming ? 1 : 0) - aimAmount) * (1 - Math.exp(-(state.aimSeconds ? 3 / state.aimSeconds : 16) * delta))
       movementAmount += ((input.moving ? 1 : 0) - movementAmount) * (1 - Math.exp(-12 * delta))

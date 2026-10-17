@@ -8,6 +8,7 @@ import type { FromSquad, SoldierView, SquadEvent, ToSquad } from './protocol'
 
 export const TICK_MS = 1000 / TICK_RATE
 export const DELAY_MS = 110
+const ARRIVAL_TICKS = 3
 
 const degrees = 180 / Math.PI
 const alsYaw = (simYaw: number) => 90 - simYaw * degrees
@@ -49,6 +50,7 @@ export class SquadClient {
   private worker: Worker | null = null
   private offset = Number.POSITIVE_INFINITY
   private seq = 0
+  private since = 0
   private history: Frame[] = []
   private pending: TimedEvent[] = []
   private listeners = new Set<() => void>()
@@ -69,6 +71,7 @@ export class SquadClient {
     this.round++
     this.error = null
     this.offset = Number.POSITIVE_INFINITY
+    this.since = 0
     this.history = []
     this.pending = []
     this.roster = []
@@ -101,7 +104,8 @@ export class SquadClient {
     this.roster = soldiers
     this.history.push({ t, soldiers: new Map(soldiers.map(soldier => [soldier.id, soldier])) })
     if (this.history.length > 24) this.history.shift()
-    for (const soldier of soldiers) if (soldier.alive) this.buffer(soldier.id).push(toAls(soldier, t, this.seq))
+    this.since++
+    soldiers.forEach((soldier, index) => { if (soldier.alive && index * ARRIVAL_TICKS < this.since) this.buffer(soldier.id).push(toAls(soldier, t, this.seq)) })
     for (const event of events) this.pending.push({ ...event, at: t })
     if (rosterChanged) for (const listener of this.listeners) listener()
   }

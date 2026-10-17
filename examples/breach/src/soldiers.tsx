@@ -77,13 +77,14 @@ function paint(source: THREE.Material) {
   return material
 }
 
-function dress(root: THREE.Object3D) {
+function dress(root: THREE.Object3D, phone: boolean) {
   combineUniform(root)
   let meshes = 0
   root.traverse(object => {
     if (!(object instanceof THREE.Mesh)) return
     meshes++
     object.castShadow = true
+    if (phone && !Array.isArray(object.material) && object.material.name.startsWith('Eyes')) object.visible = false
     if (object instanceof THREE.SkinnedMesh) {
       object.frustumCulled = false
       if (!object.boundingSphere) {
@@ -121,7 +122,7 @@ export function corpseOf(id: string) {
   return body
 }
 
-function Soldier({ id, client, handles }: { id: string; client: SquadClient; handles: Map<string, RefObject<AlsRagdollHandle | null>> }) {
+function Soldier({ id, client, handles, phone }: { id: string; client: SquadClient; handles: Map<string, RefObject<AlsRagdollHandle | null>>; phone: boolean }) {
   const ragdoll = useRef<AlsRagdollHandle | null>(null)
   const wrap = useRef<THREE.Group>(null)
   const dressed = useRef({ meshes: 0, frames: 0 })
@@ -138,8 +139,9 @@ function Soldier({ id, client, handles }: { id: string; client: SquadClient; han
     if (!wrap.current) return
     const view = lod.get(id)
     wrap.current.visible = view?.visible !== false || ragdoll.current?.active === true
+    wrap.current.matrixWorldAutoUpdate = wrap.current.visible
     if (state.frames > 120) return
-    const meshes = dress(wrap.current)
+    const meshes = dress(wrap.current, phone)
     state.frames = meshes === state.meshes ? state.frames + 1 : 0
     state.meshes = meshes
   })
@@ -148,11 +150,11 @@ function Soldier({ id, client, handles }: { id: string; client: SquadClient; han
   </group>
 }
 
-export function Soldiers({ roster, frozen, client, handles }: { roster: string[]; frozen: ReadonlySet<string>; client: SquadClient; handles: Map<string, RefObject<AlsRagdollHandle | null>> }) {
+export function Soldiers({ roster, frozen, client, handles, phone }: { roster: string[]; frozen: ReadonlySet<string>; client: SquadClient; handles: Map<string, RefObject<AlsRagdollHandle | null>>; phone: boolean }) {
   const lifetime = useRef({ round: client.round, versions: new Map<string, number>() })
   if (lifetime.current.round !== client.round) {
     lifetime.current.round = client.round
     for (const [id, handle] of handles) if (handle.current?.active) lifetime.current.versions.set(id, (lifetime.current.versions.get(id) ?? 0) + 1)
   }
-  return <>{roster.filter(id => !frozen.has(id)).map(id => <Soldier key={`${lifetime.current.versions.get(id) ?? 0}:${id}`} id={id} client={client} handles={handles} />)}</>
+  return <>{roster.filter(id => !frozen.has(id)).map(id => <Soldier key={`${lifetime.current.versions.get(id) ?? 0}:${id}`} id={id} client={client} handles={handles} phone={phone} />)}</>
 }

@@ -5,6 +5,7 @@ export interface ArmsState {
   weapon: ArmsWeapon
   aiming: boolean
   aimSeconds?: number
+  poseHold?: boolean
   speed: number
   sprinting: boolean
   fireSequence: number

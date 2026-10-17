@@ -83,6 +83,7 @@ export function createEffects(scene: THREE.Scene) {
     const material = new THREE.MeshStandardMaterial({ map: decalTextures[kind](), transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })
     const mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), material, count)
     mesh.count = 0
+    mesh.visible = false
     mesh.frustumCulled = false
     mesh.renderOrder = 2
     mesh.receiveShadow = true
@@ -101,6 +102,7 @@ export function createEffects(scene: THREE.Scene) {
   sparkGeometry.setAttribute('color', new THREE.BufferAttribute(sparkColors, 3).setUsage(THREE.DynamicDrawUsage))
   const sparkLines = new THREE.LineSegments(sparkGeometry, new THREE.LineBasicMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, toneMapped: false, fog: false }))
   sparkLines.frustumCulled = false
+  sparkLines.visible = false
   root.add(sparkLines)
   const sparks = Array.from({ length: sparkCount }, () => ({ life: 0, max: 1, position: new THREE.Vector3(), velocity: new THREE.Vector3(), heat: 1 }))
   let sparkNext = 0
@@ -113,6 +115,7 @@ export function createEffects(scene: THREE.Scene) {
   tracerGeometry.setAttribute('color', new THREE.BufferAttribute(tracerColors, 3).setUsage(THREE.DynamicDrawUsage))
   const tracerLines = new THREE.LineSegments(tracerGeometry, sparkLines.material)
   tracerLines.frustumCulled = false
+  tracerLines.visible = false
   root.add(tracerLines)
   const tracers = Array.from({ length: tracerCount }, () => ({ alive: false, from: new THREE.Vector3(), to: new THREE.Vector3(), travelled: 0, length: 0 }))
   let tracerNext = 0
@@ -141,6 +144,7 @@ export function createEffects(scene: THREE.Scene) {
   chipMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
   chipMesh.frustumCulled = false
   chipMesh.castShadow = false
+  chipMesh.visible = false
   root.add(chipMesh)
   const chips = Array.from({ length: chipCount }, () => ({ life: 0, max: 1, position: new THREE.Vector3(), velocity: new THREE.Vector3(), spin: new THREE.Vector3(), rotation: new THREE.Euler(), size: 0.02 }))
   let chipNext = 0
@@ -152,6 +156,7 @@ export function createEffects(scene: THREE.Scene) {
   const casingMesh = new THREE.InstancedMesh(casingGeometry, new THREE.MeshStandardMaterial({ color: '#b8904f', metalness: 0.85, roughness: 0.32 }), casingCount)
   casingMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
   casingMesh.frustumCulled = false
+  casingMesh.visible = false
   root.add(casingMesh)
   const casings = Array.from({ length: casingCount }, () => ({ life: 0, alive: false, position: new THREE.Vector3(), velocity: new THREE.Vector3(), rotation: new THREE.Euler(), spin: new THREE.Vector3(), resting: false, bounced: false, scale: 1 }))
   let casingNext = 0
@@ -205,6 +210,7 @@ export function createEffects(scene: THREE.Scene) {
     pool.mesh.setColorAt(pool.next, scratch.color.set(surface === 'metal' ? '#9aa0a0' : surface === 'wood' ? '#d8b98a' : surface === 'brick' ? '#e0b8a0' : '#ffffff'))
     pool.next = (pool.next + 1) % pool.capacity
     pool.mesh.count = Math.max(pool.mesh.count, pool.next === 0 ? pool.capacity : pool.next)
+    pool.mesh.visible = true
     pool.mesh.instanceMatrix.needsUpdate = true
     if (pool.mesh.instanceColor) pool.mesh.instanceColor.needsUpdate = true
   }
@@ -304,10 +310,12 @@ export function createEffects(scene: THREE.Scene) {
     },
     update(dt: number, onCasing: (position: THREE.Vector3) => void) {
       const step = Math.min(dt, 1 / 30)
+      let sparksAlive = false
       for (let index = 0; index < sparkCount; index++) {
         const item = sparks[index]!
         const offset = index * 6
-        if (item.life <= 0) { sparkPositions.fill(0, offset, offset + 6); continue }
+        if (item.life <= 0) { if (sparkLines.visible) sparkPositions.fill(0, offset, offset + 6); continue }
+        sparksAlive = true
         item.life -= step
         item.velocity.y -= 9.8 * step
         item.velocity.multiplyScalar(1 - 1.5 * step)
@@ -321,13 +329,18 @@ export function createEffects(scene: THREE.Scene) {
         sparkPositions[offset + 5] = item.position.z - item.velocity.z * 0.016
         sparkColors.set([7 * fade, 4.2 * fade, 1.4 * fade, 2.2 * fade, 0.7 * fade, 0.1 * fade], offset)
       }
-      sparkGeometry.attributes.position!.needsUpdate = true
-      sparkGeometry.attributes.color!.needsUpdate = true
+      if (sparksAlive || sparkLines.visible) {
+        sparkGeometry.attributes.position!.needsUpdate = true
+        sparkGeometry.attributes.color!.needsUpdate = true
+      }
+      sparkLines.visible = sparksAlive
 
+      let tracersAlive = false
       for (let index = 0; index < tracerCount; index++) {
         const item = tracers[index]!
         const offset = index * 6
-        if (!item.alive) { tracerPositions.fill(0, offset, offset + 6); continue }
+        if (!item.alive) { if (tracerLines.visible) tracerPositions.fill(0, offset, offset + 6); continue }
+        tracersAlive = true
         item.travelled += 520 * step
         const head = Math.min(item.travelled, item.length)
         const tail = Math.max(0, item.travelled - 5)
@@ -341,8 +354,11 @@ export function createEffects(scene: THREE.Scene) {
         tracerPositions[offset + 5] = item.from.z + scratch.vector.z * tail
         tracerColors.set([9, 6.5, 3, 1.2, 0.5, 0.15], offset)
       }
-      tracerGeometry.attributes.position!.needsUpdate = true
-      tracerGeometry.attributes.color!.needsUpdate = true
+      if (tracersAlive || tracerLines.visible) {
+        tracerGeometry.attributes.position!.needsUpdate = true
+        tracerGeometry.attributes.color!.needsUpdate = true
+      }
+      tracerLines.visible = tracersAlive
 
       for (const item of flashes) {
         if (item.life <= 0) { item.sprite.visible = false; continue }
@@ -377,6 +393,7 @@ export function createEffects(scene: THREE.Scene) {
         chipMesh.setMatrixAt(index, scratch.matrix.compose(item.position, scratch.quaternion, scratch.scale.set(size, size * 0.6, size * 0.8)))
       }
       if (chipsChanged) chipMesh.instanceMatrix.needsUpdate = true
+      chipMesh.visible = chipsChanged
 
       let casingsChanged = false
       for (let index = 0; index < casingCount; index++) {
@@ -408,6 +425,7 @@ export function createEffects(scene: THREE.Scene) {
         casingMesh.setMatrixAt(index, scratch.matrix.compose(item.position, scratch.quaternion, scratch.scale.set(scale, scale, scale)))
       }
       if (casingsChanged) casingMesh.instanceMatrix.needsUpdate = true
+      casingMesh.visible = casingsChanged
     },
   }
 }

@@ -52,8 +52,11 @@ export function createArmsMesh(source: Object3D) {
     object.frustumCulled = false
     object.castShadow = false
     object.receiveShadow = false
+    object.geometry.groups = object.geometry.groups.filter((group: { count: number }) => group.count > 0)
+    const count = object.geometry.getIndex()?.count ?? 0
+    object.visible = count > 0
     geometries.push(object.geometry)
-    triangles += (object.geometry.getIndex()?.count ?? 0) / 3
+    triangles += count / 3
   })
   if (!triangles) throw new Error('Character contains no weighted clavicle/arm skin')
   return { scene, triangles, dispose: () => geometries.forEach(geometry => geometry.dispose()) }
