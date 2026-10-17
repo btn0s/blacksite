@@ -22,10 +22,10 @@ Keep a question open, marked as open, if the user hasn't decided. Don't fill it 
 
 | Answer | Profile | Uses |
 |---|---|---|
-| Solo, first person | `fpp` | Arms-only `@blacksite/subject-fpp` and Armory. Bring your own character physics; the standalone subject has no gravity or collision. |
+| Solo, first person | `fpp` | Arms-only `@blacksite/subject-fpp` and Armory on the template's walker, with gravity, collision, jump and ray hits. |
 | Solo, third person | `tpp` | The ALS body and camera. Read `als.md`. |
 | Multiplayer, first or third person | `mp` | Local arms, ALS remote bodies, Relay over Colyseus with an offline loopback, V switching the view. |
-| Anything else | `blank` | The shell with an empty scene. |
+| Anything else | `blank` | A walker in the starter yard, with the look, input, sound and check already wired. |
 
 Add Warden for squads, Cascade for destruction and Armory for weapons only where the design calls for them.
 

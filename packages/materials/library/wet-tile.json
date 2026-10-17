@@ -1,0 +1,209 @@
+{
+  "name": "wet-tile",
+  "title": "Wet ceramic floor tile",
+  "description": "150 mm glazed tiles with dark grout, grime in the joints, cracked and chipped tiles, standing water.",
+  "size": 1.5,
+  "depth": 0.004,
+  "seed": 7,
+  "orientation": "floor",
+  "porosity": 0.35,
+  "nodes": {
+    "tiles": {
+      "op": "tiles",
+      "tile": 0.15,
+      "gap": 0.004,
+      "bevel": 0.0015,
+      "jitter": 0.15,
+      "seed": 1202382
+    },
+    "tileId": {
+      "op": "tiles",
+      "tile": 0.15,
+      "gap": 0.004,
+      "bevel": 0.0015,
+      "output": "random",
+      "seed": 1202382
+    },
+    "tileMask": {
+      "op": "tiles",
+      "tile": 0.15,
+      "gap": 0.004,
+      "bevel": 0.0015,
+      "output": "mask",
+      "seed": 1202382
+    },
+    "cracks": {
+      "op": "cellular",
+      "cell": 0.12,
+      "mode": "edge"
+    },
+    "crackW": {
+      "op": "fbm",
+      "cell": 0.05,
+      "octaves": 3
+    },
+    "crackWarped": {
+      "op": "warp",
+      "input": "cracks",
+      "by": "crackW",
+      "amount": 0.01
+    },
+    "crackSel": {
+      "op": "fbm",
+      "cell": 0.5,
+      "octaves": 3
+    },
+    "crackLine": {
+      "op": "levels",
+      "input": "crackWarped",
+      "in": [
+        0.03,
+        0.0
+      ]
+    },
+    "crackKeep": {
+      "op": "levels",
+      "input": "crackSel",
+      "in": [
+        0.6,
+        0.65
+      ]
+    },
+    "crack": {
+      "op": "blend",
+      "a": "crackLine",
+      "b": "crackKeep",
+      "mode": "multiply"
+    },
+    "glaze": {
+      "op": "fbm",
+      "cell": 0.2,
+      "octaves": 4
+    },
+    "fine": {
+      "op": "fbm",
+      "cell": 0.003,
+      "octaves": 2,
+      "basis": "value"
+    },
+    "relief": {
+      "op": "blend",
+      "a": "tiles",
+      "b": "glaze",
+      "mode": "overlay",
+      "opacity": 0.05
+    },
+    "relief2": {
+      "op": "blend",
+      "a": "relief",
+      "b": "crack",
+      "mode": "subtract",
+      "opacity": 0.4
+    },
+    "groutH": {
+      "op": "levels",
+      "input": "fine",
+      "out": [
+        0.05,
+        0.15
+      ]
+    },
+    "height": {
+      "op": "blend",
+      "a": "groutH",
+      "b": "relief2",
+      "mode": "max"
+    },
+    "tint": {
+      "op": "blend",
+      "a": "tileId",
+      "b": "glaze",
+      "mode": "mix",
+      "opacity": 0.4
+    },
+    "tileC": {
+      "op": "ramp",
+      "input": "tint",
+      "stops": [
+        [
+          0,
+          "#a29e92"
+        ],
+        [
+          0.5,
+          "#b4b0a4"
+        ],
+        [
+          1,
+          "#c1bdb0"
+        ]
+      ]
+    },
+    "tileC2": {
+      "op": "blend",
+      "a": "tileC",
+      "b": "#3c3830",
+      "mode": "mix",
+      "mask": "crack",
+      "opacity": 0.8
+    },
+    "groutC": {
+      "op": "ramp",
+      "input": "fine",
+      "stops": [
+        [
+          0,
+          "#2f2c26"
+        ],
+        [
+          1,
+          "#4a463d"
+        ]
+      ]
+    },
+    "color": {
+      "op": "blend",
+      "a": "groutC",
+      "b": "tileC2",
+      "mode": "mix",
+      "mask": "tileMask"
+    },
+    "roughT": {
+      "op": "levels",
+      "input": "glaze",
+      "out": [
+        0.18,
+        0.32
+      ]
+    },
+    "roughness": {
+      "op": "blend",
+      "a": 0.9,
+      "b": "roughT",
+      "mode": "mix",
+      "mask": "tileMask"
+    }
+  },
+  "outputs": {
+    "color": "color",
+    "height": "height",
+    "roughness": "roughness",
+    "metalness": 0
+  },
+  "finish": {
+    "normal": 1,
+    "ao": {
+      "radius": 0.012,
+      "strength": 0.8
+    }
+  },
+  "weather": {
+    "age": 0.4,
+    "dirt": 0.55,
+    "moisture": 0.5,
+    "damage": {
+      "chips": 0.25
+    },
+    "puddles": 0.55
+  }
+}

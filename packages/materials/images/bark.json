@@ -1,0 +1,19 @@
+{
+  "id": "bark",
+  "model": "gemini-3.1-flash-image",
+  "prompt": "Flat orthographic straight-on photograph of exactly 1 m x 1 m of pine or oak tree bark, face-on, filling the entire frame edge to edge. Deep vertical furrows and rough ridges, grey-brown. Muted desaturated, physically plausible colours. Even overcast diffuse daylight, no cast shadows, no directional light, no vignette, no lighting gradient, no perspective, no moss, no objects, no text, no watermark. Uniform exposure across the whole image.",
+  "generated": "2026-10-16",
+  "size": [
+    1,
+    1
+  ],
+  "provider": "Google Gemini",
+  "licence": "Generated output under Gemini API terms; Google does not claim ownership. Not a CC0 scan.",
+  "notes": "Convincing; mild vertical grain dominance, uniform lighting.",
+  "author": "Generated for Blacksite using Google Gemini",
+  "sourceUrl": "https://ai.google.dev/gemini-api/docs/image-generation",
+  "termsUrl": "https://ai.google.dev/gemini-api/terms",
+  "scaleNote": "Intended area requested in the prompt; physical dimensions are not measured.",
+  "seed": null,
+  "seedNote": "No generation seed was set; retain this source image to reproduce graph bakes."
+}

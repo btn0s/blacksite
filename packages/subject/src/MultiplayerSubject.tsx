@@ -2,7 +2,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type React
 import { Canvas, useFrame, type RootState } from '@react-three/fiber'
 import { Physics, CuboidCollider, RigidBody, useRapier } from '@react-three/rapier'
 import { Vector3 } from 'three'
-import { Character } from 'als-ue5-r3f/app/Character'
+import { Character, type CharacterProps } from 'als-ue5-r3f/app/Character'
 import { AlsCamera } from 'als-ue5-r3f/app/AlsCamera'
 import { AlsRemoteActor, type AlsRagdollHandle } from 'als-ue5-r3f/app/AlsRemoteActor'
 import { AlsSnapshotBuffer } from 'als-ue5-r3f/als/AlsSnapshotBuffer'
@@ -10,7 +10,7 @@ import type { AlsCharacterSnapshot } from 'als-ue5-r3f/als/AlsCharacterSnapshot'
 import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { AlsFootstepAudioRuntime } from 'als-ue5-r3f/engine/alsAudioBridge'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
-import { ArmsViewmodel, createArmsState, type ArmsState } from '@blacksite/subject-fpp/arms'
+import { ArmsViewmodel, createArmsState, type ArmsPresentation, type ArmsState } from '@blacksite/subject-fpp/arms'
 import { ALS_WEAPONS, createWeaponRuntime, type WeaponRuntime } from '@blacksite/armory'
 import { createWorld, trait } from 'koota'
 import { Subject, createSubject } from './index'
@@ -59,7 +59,10 @@ export interface MultiplayerSceneProps {
   cameraMode?: CameraMode
   subject?: SubjectState
   initialSpawn?: readonly [number, number, number]
-  armsOverlay?: boolean
+  onArmsPresentation?: (presentation: ArmsPresentation | null) => void
+  input?: 'dom' | 'external'
+  gaitSpeedOverrides?: CharacterProps['gaitSpeedOverrides']
+  footsteps?: Pick<AlsFootstepAudioRuntime, 'PlayFootstepSound' | 'SetListenerTransform'>
   children?: ReactNode
   onReplica?: (replica: MultiplayerReplica | null) => void
   onStatus?: (status: MultiplayerStatus) => void
@@ -167,7 +170,7 @@ export function MultiplayerScene(props: MultiplayerSceneProps) {
   return replica ? <Suspense fallback={null}><ReplicatedScene {...props} subject={subject} replica={replica} /></Suspense> : null
 }
 
-function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics, onShot, physicsProbe, armsOverlay = false, children, subject, replica }: MultiplayerSceneProps & { subject: SubjectState; replica: MultiplayerReplica }) {
+function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics, onShot, physicsProbe, onArmsPresentation, input = 'dom', gaitSpeedOverrides, footsteps, children, subject, replica }: MultiplayerSceneProps & { subject: SubjectState; replica: MultiplayerReplica }) {
   const inputSource = useMemo(() => createSubjectInputSource(subject), [subject])
   const controlRotationSource = useMemo(() => () => ({ yaw: subject.player.command.yaw, pitch: subject.player.command.pitch }), [subject])
   const arms = useMemo(createArmsState, [])
@@ -191,7 +194,7 @@ function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics,
   const controller = useMemo(() => world.spawn(Controller({ pawn: connection.id })), [world, connection.id])
   const pawn = useMemo(() => world.spawn(Pawn({ owner: connection.id }), Intent), [world, connection.id])
   const worldTime = useMemo(createWorldTimeState, [])
-  const audio = useMemo(() => new AlsFootstepAudioRuntime({ AutoInstallUserGestureUnlock: true }), [])
+  const audio = useMemo(() => footsteps ?? new AlsFootstepAudioRuntime({ AutoInstallUserGestureUnlock: true }), [footsteps])
   const ragdoll = useRef<AlsRagdollHandle | null>(null)
   const alive = useRef(true)
   const [remotes, setRemotes] = useState<string[]>(() => remoteKeys(replica, connection.id))
@@ -285,14 +288,14 @@ function ReplicatedScene({ connection, offline = false, onStatus, onDiagnostics,
   const ignoreSize = useCallback(() => {}, [])
   return <>
     <Suspense fallback={null}><Physics gravity={[0, -9.8, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
-      <group visible={view === 'third-person'}><Character showDebugControls={false} key={spawn.revision} initialPosition={spawn.position} poseSample={subject.player.pose} worldTime={worldTime} footstepSoundSink={audio} onSizeChange={ignoreSize} onOverlayModeBridgeChange={ignoreSize} inputEnabled={false} ragdollInputEnabled={false} ragdollRef={ragdoll} inputSource={inputSource} onSnapshot={publishSnapshot} snapshotRateHz={SNAPSHOT_RATE_HZ} /></group>
+      <group visible={view === 'third-person'}><Character showDebugControls={false} key={spawn.revision} initialPosition={spawn.position} poseSample={subject.player.pose} worldTime={worldTime} footstepSoundSink={audio} onSizeChange={ignoreSize} onOverlayModeBridgeChange={ignoreSize} inputEnabled={false} ragdollInputEnabled={false} ragdollRef={ragdoll} inputSource={inputSource} gaitSpeedOverrides={gaitSpeedOverrides} onSnapshot={publishSnapshot} snapshotRateHz={SNAPSHOT_RATE_HZ} /></group>
       <AlsCamera poseSample={subject.player.pose} worldTime={worldTime} footstepAudioRuntime={audio} toggleViewModeKey={null} controlRotationSource={controlRotationSource} />
       <WeaponDriver subject={subject} replica={replica} weapon={weapon} arms={arms} alive={alive} onShot={onShot} />
       {physicsProbe}
       {children}
       {remotes.map(key => { const [id, life] = key.split('#'); return <RemotePawn key={key} id={id!} life={Number(life)} replica={replica} onClock={telemetry.record} /> })}
     </Physics></Suspense>
-    <Subject controller={subject} /><Suspense fallback={null}><ArmsViewmodel state={arms} visible={view === 'first-person'} overlay={armsOverlay} /></Suspense>
+    <Subject controller={subject} input={input} /><Suspense fallback={null}><ArmsViewmodel state={arms} visible={view === 'first-person'} render={onArmsPresentation ? 'external' : 'composite'} onPresentation={onArmsPresentation} /></Suspense>
   </>
 }
 

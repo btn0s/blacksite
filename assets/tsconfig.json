@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "baseUrl": "..", "paths": { "@blacksite/*": ["packages/*/src/index.ts"] } },
+  "include": ["viewer", "vite.config.ts", "../packages/look/src", "../vendor/als-web/src/app/globals.d.ts"]
+}

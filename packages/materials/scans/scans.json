@@ -1,0 +1,235 @@
+[
+  {
+    "id": "poured-concrete",
+    "assetId": "Concrete004",
+    "url": "https://ambientcg.com/view?id=Concrete004",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRApproximated",
+    "size": [
+      1.2,
+      1.2
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; estimated from ~10 formwork board courses at ~0.12 m",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ]
+  },
+  {
+    "id": "precast-panel",
+    "assetId": "Concrete013",
+    "url": "https://ambientcg.com/view?id=Concrete013",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRPhotogrammetry",
+    "size": [
+      3,
+      1.5
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; estimated from panel joint spacing; width is twice the height for the complete 2:1 source tile.",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ],
+    "processing": "Complete 1024 × 512 source tile preserved; WebP conversion only, no crop or aspect change.",
+    "referenceNote": "Precast concrete masonry units; a related concrete reference rather than large sealed wall panels."
+  },
+  {
+    "id": "plaster-paint",
+    "assetId": "PaintedPlaster018",
+    "url": "https://ambientcg.com/view?id=PaintedPlaster018",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRPhotogrammetry",
+    "size": [
+      1.5,
+      1.5
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; estimated from patch scale of a typical wall photo",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ]
+  },
+  {
+    "id": "brick",
+    "assetId": "Bricks097",
+    "url": "https://ambientcg.com/view?id=Bricks097",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRPhotogrammetry",
+    "size": [
+      2.4,
+      1.2
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; 16 courses at ~0.075 m (brick + joint) over the tile height; width is twice the height for the complete 2:1 source tile.",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ],
+    "processing": "Complete 1024 × 512 source tile preserved; WebP conversion only, no crop or aspect change."
+  },
+  {
+    "id": "corrugated-rust",
+    "assetId": "CorrugatedSteel009",
+    "url": "https://ambientcg.com/view?id=CorrugatedSteel009",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRPhotogrammetry",
+    "size": [
+      2.2,
+      1.1
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; estimated from ~16 ribs at ~0.07 m pitch over the full height; width is twice the height for the complete 2:1 source tile.",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "metalness.webp",
+      "height.webp"
+    ],
+    "processing": "Complete 1024 × 512 source tile preserved; WebP conversion only, no crop or aspect change.",
+    "referenceNote": "Weathered galvanised corrugated sheet with light rust; a material-family reference, not a heavily rusted match."
+  },
+  {
+    "id": "painted-metal",
+    "assetId": "Metal063",
+    "url": "https://ambientcg.com/view?id=Metal063",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRApproximated",
+    "size": [
+      1,
+      1
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; estimated for a sheet-metal close-up",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "metalness.webp",
+      "height.webp"
+    ],
+    "referenceNote": "Aged steel with bluish residue and rust bloom; a related metal reference rather than a measured chipped-paint stack."
+  },
+  {
+    "id": "wet-tile",
+    "assetId": "Tiles039",
+    "url": "https://ambientcg.com/view?id=Tiles039",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRPhotogrammetry",
+    "size": [
+      1.6,
+      1.6
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; 8 square tiles across at ~0.2 m pitch",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ],
+    "referenceNote": "Dry ceramic reference; wetness is not measured or simulated in the reference maps."
+  },
+  {
+    "id": "asphalt",
+    "assetId": "Asphalt015",
+    "url": "https://ambientcg.com/view?id=Asphalt015",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRPhotogrammetry",
+    "size": [
+      1.5,
+      1.5
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; estimated from aggregate grain size",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "height.webp"
+    ]
+  },
+  {
+    "id": "gravel-soil",
+    "assetId": "Ground110",
+    "url": "https://ambientcg.com/view?id=Ground110",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRPhotogrammetry",
+    "size": [
+      2.1,
+      2.1
+    ],
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ]
+  },
+  {
+    "id": "bark",
+    "assetId": "Bark014",
+    "url": "https://ambientcg.com/view?id=Bark014",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRPhotogrammetry",
+    "size": [
+      1.2,
+      1.2
+    ],
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ]
+  },
+  {
+    "id": "wood-planks",
+    "assetId": "Planks002",
+    "url": "https://ambientcg.com/view?id=Planks002",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRApproximated",
+    "size": [
+      1,
+      1
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; 7 planks across at ~0.145 m pitch",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "height.webp"
+    ]
+  }
+]

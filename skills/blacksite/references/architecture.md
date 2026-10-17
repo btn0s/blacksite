@@ -17,7 +17,7 @@ Who owns which state in a Blacksite game: entities and data, transitions, servic
 
 ## Working pattern
 
-The starter's `src/architecture.ts` is executable. It creates one Koota world and `Pawn`/`PawnIntent` traits, a life machine, an Effect event service, an input writer, a synchronous tick, and a snapshot. Extend that seam rather than inventing another state store.
+The starter's `src/architecture.ts` is executable. It creates one Koota world and `Pawn`/`PawnIntent` traits, the life and phase machines, an Effect event service, an intent writer, a `mirror` for the pawn's position, and a snapshot. Input comes from `@blacksite/input` through `src/game/input.ts`, and the frame loop belongs to the stage. Extend that seam rather than inventing another state store.
 
 ```ts
 const Controller = trait({ player: 0 })
