@@ -10,6 +10,7 @@ export interface WeaponDefinition {
   readonly magazineSize: number;
   readonly initialReserve: number;
   readonly reloadSeconds: number;
+  readonly emptyReloadSeconds?: number;
   readonly equipSeconds: number;
   readonly damage: number;
   readonly range: number;

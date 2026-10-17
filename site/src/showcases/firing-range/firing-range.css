@@ -18,10 +18,26 @@
 .range-ammo strong { font: 600 38px/1 'Barlow Condensed', sans-serif; letter-spacing: 0.04em; color: #f0ecdb; font-variant-numeric: tabular-nums; }
 .range-ammo small { font-size: 18px; color: #8d8b78; }
 .range-ammo .range-ammo--empty { color: #ff6a4a; }
-.range-ammo--touch { bottom: calc(150px + env(safe-area-inset-bottom)); }
+.range-ammo--touch { bottom: calc(208px + env(safe-area-inset-bottom)); }
 .range-ammo--touch strong { font-size: 28px; }
 @media (max-width: 640px) {
   .range-hud .hud-status { top: calc(40px + env(safe-area-inset-top)); bottom: auto; }
   .range-pips { top: calc(86px + env(safe-area-inset-top)); bottom: auto; }
 }
 .range-hud .hud-status span { white-space: nowrap; }
+.range-rig { position: absolute; z-index: 9; top: calc(18px + env(safe-area-inset-top)); right: calc(20px + env(safe-area-inset-right)); display: flex; align-items: baseline; gap: 8px; padding: 7px 10px; border: 1px solid #f0ecdb33; background: #0c0e0bb3; color: #f0ecdb; cursor: pointer; font: 500 10.5px 'IBM Plex Mono', monospace; letter-spacing: 0.16em; text-transform: uppercase; }
+.range-rig span { color: #a9b57e; }
+.range-rig strong { font-weight: 600; letter-spacing: 0.08em; }
+.range-rig kbd { padding: 1px 5px; border: 1px solid #f0ecdb55; font: inherit; color: #d8d4c1; }
+.range-rig:hover { border-color: #e2a23b; }
+.range-rig--touch { top: calc(112px + env(safe-area-inset-top)); }
+
+@media (max-width: 640px) {
+  .range-rig { top: calc(112px + env(safe-area-inset-top)); font-size: 12px; min-height: 44px; }
+  .hud-title, .hud-loading-kicker { font-size: 12px; }
+  .range-ammo span, .range-pips span, .range-hud .hud-status span { font-size: 12px; letter-spacing: 0.06em; }
+}
+
+.range-found-note { position: absolute; z-index: 9; top: 62px; right: 20px; color: #e4dfce; text-align: right; font: 12px/1.6 'IBM Plex Mono', monospace; text-shadow: 0 1px 8px #000; }
+.range-found-note a { color: #c3cf9d; display: inline-block; min-height: 44px; align-content: center; }
+@media (max-width: 640px) { .range-found-note { top: 160px; font-size: 12px; } }

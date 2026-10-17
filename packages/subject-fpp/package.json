@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/StandaloneSubject.tsx",
     "./intent": "./src/intent.ts",
-    "./arms": "./src/ArmsViewmodel.tsx"
+    "./arms": "./src/ArmsViewmodel.tsx",
+    "./arms/model": "./src/arms/model.ts"
   },
   "dependencies": {
     "@react-three/fiber": "^9.8.2",

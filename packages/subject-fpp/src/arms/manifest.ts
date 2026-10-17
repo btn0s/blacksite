@@ -1,5 +1,4 @@
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
-import type { ConsumerOverlayState } from 'als-ue5-r3f/als/AnimGraph/consumerOverlayStates'
 import { Bone, LoadingManager, type AnimationClip, type Object3D, type WebGLRenderer } from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
@@ -7,44 +6,10 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 import basisJsUrl from 'three/examples/jsm/libs/basis/basis_transcoder.js?url'
 import basisWasmUrl from 'three/examples/jsm/libs/basis/basis_transcoder.wasm?url'
 import { loadArmsDress, type ArmsDress } from './dress'
-import type { ArmsAction, ArmsWeapon } from './state'
+import type { ArmsWeapon } from './state'
+import { DEFAULT_ARMS_MANIFEST, fetchArmsManifest, type ArmsManifest } from './manifestFile'
 
-export interface ArmsWeaponManifest {
-  meshUrl?: string
-  animationUrl?: string
-  clips?: Partial<ConsumerOverlayState['sources']> & Partial<Record<ArmsAction, string>>
-  attachment?: {
-    bone?: string
-    position?: [number, number, number]
-    rotation?: [number, number, number]
-    scale?: number
-  }
-  presentation?: {
-    position?: [number, number, number]
-    aimOffset?: [number, number, number]
-    sight?: [number, number, number]
-  }
-}
-
-export interface ArmsManifest {
-  version: 1
-  characterUrl?: string
-  fov?: number
-  weapons?: Partial<Record<ArmsWeapon, ArmsWeaponManifest>>
-}
-
-export function validateArmsManifest(value: unknown): ArmsManifest {
-  if (!value || typeof value !== 'object' || !('version' in value) || value.version !== 1) throw new Error('Arms manifest requires version 1')
-  const manifest = value as ArmsManifest
-  if (manifest.fov !== undefined && (!Number.isFinite(manifest.fov) || manifest.fov <= 0 || manifest.fov >= 180)) throw new Error('Arms FOV must be between 0 and 180 degrees')
-  for (const weapon of Object.values(manifest.weapons ?? {})) {
-    for (const tuple of [weapon.attachment?.position, weapon.attachment?.rotation, weapon.presentation?.position, weapon.presentation?.aimOffset, weapon.presentation?.sight]) {
-      if (tuple && (tuple.length !== 3 || !tuple.every(Number.isFinite))) throw new Error('Arms attachment requires three finite coordinates')
-    }
-    if (weapon.attachment?.scale !== undefined && !(weapon.attachment.scale > 0)) throw new Error('Arms attachment scale must be positive')
-  }
-  return manifest
-}
+export { validateArmsManifest, type ArmsManifest, type ArmsWeaponManifest } from './manifestFile'
 
 export function validateArmsSkeleton(reference: Object3D, source: Object3D) {
   const bones = (scene: Object3D) => {
@@ -66,7 +31,7 @@ export function validateArmsSkeleton(reference: Object3D, source: Object3D) {
 
 const pending = new Map<string, ReturnType<typeof loadArmsAssets>>()
 
-export function preloadArmsAssets(manifestUrl = '/assets/arms.json', renderer?: WebGLRenderer) {
+export function preloadArmsAssets(manifestUrl = DEFAULT_ARMS_MANIFEST, renderer?: WebGLRenderer) {
   let assets = pending.get(manifestUrl)
   if (!assets) { assets = loadArmsAssets(manifestUrl, renderer); pending.set(manifestUrl, assets) }
   return assets
@@ -74,10 +39,7 @@ export function preloadArmsAssets(manifestUrl = '/assets/arms.json', renderer?: 
 
 async function loadArmsAssets(manifestUrl: string, renderer?: WebGLRenderer): Promise<ArmsAssets> {
   const dressing = loadArmsDress()
-  const response = await fetch(manifestUrl)
-  let manifest: ArmsManifest = { version: 1 }
-  if (response.ok && !(response.headers.get('content-type') ?? '').includes('text/html')) manifest = validateArmsManifest(await response.json())
-  else if (response.status !== 404 && !response.ok) throw new Error(`Arms manifest request failed (${response.status})`)
+  const manifest = await fetchArmsManifest(manifestUrl)
   const resolve = (url: string) => new URL(url, new URL(manifestUrl, globalThis.location.href)).href
   const manager = new LoadingManager().setURLModifier(url => url.endsWith('basis_transcoder.js') ? basisJsUrl : url.endsWith('basis_transcoder.wasm') ? basisWasmUrl : url)
   const loader = new GLTFLoader(manager).setMeshoptDecoder(MeshoptDecoder)

@@ -38,7 +38,7 @@ export function createWeaponRuntime(options: WeaponRuntimeOptions): WeaponRuntim
     assert(finite(definition.roundsPerSecond, 0.01, 1 / dt), `${definition.id}: firing rate must fit the fixed tick rate`);
     assert(definition.fireMode !== 'burst' || integer(definition.burstSize ?? 3, 2, 32), `${definition.id}: invalid burst size`);
     assert(integer(definition.magazineSize, 1, 1_000_000) && integer(definition.initialReserve, 0, 1_000_000), `${definition.id}: invalid ammunition`);
-    assert(finite(definition.reloadSeconds, dt, 300) && finite(definition.equipSeconds, 0, 30), `${definition.id}: invalid reload/equip duration`);
+    assert(finite(definition.reloadSeconds, dt, 300) && finite(definition.emptyReloadSeconds ?? definition.reloadSeconds, dt, 300) && finite(definition.equipSeconds, 0, 30), `${definition.id}: invalid reload/equip duration`);
     assert(finite(definition.damage, 0, 1_000_000) && finite(definition.range, 0.001, 100_000), `${definition.id}: invalid damage/range`);
     assert(finite(definition.spreadRadians, 0, Math.PI / 4), `${definition.id}: invalid spread angle`);
     assert(!!definition.recoil && finite(definition.recoil.pitchMin, 0, Math.PI / 2) && finite(definition.recoil.pitchMax, definition.recoil.pitchMin, Math.PI / 2) && finite(definition.recoil.yawMax, 0, Math.PI / 2), `${definition.id}: invalid recoil`);
@@ -226,7 +226,7 @@ export function createWeaponRuntime(options: WeaponRuntimeOptions): WeaponRuntim
       events.push({ ...base(), type: 'reload-completed' });
     }
     if (command.reload && !previousReload && !command.cancelReload && !equip && reloadUntil === null && ammo.magazine < definition.magazineSize && ammo.reserve > 0) {
-      reloadUntil = tick + Math.ceil(definition.reloadSeconds / dt - EPSILON);
+      reloadUntil = tick + Math.ceil((ammo.magazine <= 0 ? definition.emptyReloadSeconds ?? definition.reloadSeconds : definition.reloadSeconds) / dt - EPSILON);
       burstRemaining = 0;
       events.push({ ...base(), type: 'reload-started' });
     }
