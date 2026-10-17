@@ -11,6 +11,7 @@ export type PageMeta = { route: string; title: string; description: string; imag
 
 const toolDescriptions: Record<string, string> = {
   characters: 'A three.js port of ALS Refactored: a player body that walks, sprints, mantles, rolls, ragdolls and aims in first or third person.',
+  world: 'Open country from the grass at your feet to mountains at the horizon: terrain, grass, forests, one wind field and a physically based sky. Walk the Valley.',
   destruction: 'Cascade: concrete buildings that crack, lose their supports and fall, with the physics in a web worker. Call an air strike in the demo.',
   weapons: 'Armory: rigged first-person arms with a rifle and a pistol. Fire, reload, aim and recoil, with hits the server can check. Try the firing range.',
   multiplayer: 'Relay: rooms where each player moves their own body, the server checks hits, and remote players run the full character animation.',

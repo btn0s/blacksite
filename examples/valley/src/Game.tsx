@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { CuboidCollider, HeightfieldCollider, Physics, RigidBody } from '@react-three/rapier'
 import { InputProvider, makeInputDevices } from '@blacksite/input'
+import { depthDefaults } from '@blacksite/look'
 import { Look } from '@blacksite/look/r3f'
 import { internalPixelRatio, isTouchDevice } from '@blacksite/look/world'
 import { BREEZE, createWind, type Wind } from '@blacksite/landscape'
@@ -84,6 +85,17 @@ function Ground({ world }: { world: ValleyWorld }) {
   </RigidBody>
 }
 
+function DepthRange({ tier }: { tier: Tier }) {
+  const { near, far } = depthDefaults(tier, { far: site.far })
+  useFrame(({ camera }) => {
+    if (!(camera instanceof THREE.PerspectiveCamera) || (camera.near === near && camera.far === far)) return
+    camera.near = near
+    camera.far = far
+    camera.updateProjectionMatrix()
+  }, ALS_FRAME_PRIORITY.Camera + 0.1)
+  return null
+}
+
 function Listener({ shared }: { shared: Shared }) {
   const forward = useMemo(() => new THREE.Vector3(), [])
   useFrame(({ camera }, delta) => {
@@ -113,6 +125,7 @@ function Scene({ shared, world, bark, tier, spawn, onAction, api }: { shared: Sh
       {compiled && <Probe shared={shared} world={world} api={api} />}
     </Physics>
     <Listener shared={shared} />
+    <DepthRange tier={tier} />
   </>
 }
 
@@ -182,7 +195,7 @@ export function Game() {
   const api = useMemo<ProbeApi>(() => ({ respawn }), [respawn])
   const ready = world !== null && bark !== null && spawn !== null
   return <InputProvider runtime={runtime}><div className="hud-screen">
-    <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 55, near: 0.1, far: site.horizon[tier], position: [0, 260, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }}
+    <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 55, ...depthDefaults(tier, { far: site.far }).camera, position: [0, 260, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }}
       onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
       {ready && <Scene shared={shared} world={world} bark={bark} tier={tier} spawn={spawn} onAction={onAction} api={api} />}
     </Canvas>

@@ -34,6 +34,7 @@ export interface GradeSpec {
   readonly curve?: ToneCurve;
   readonly saturation?: number;
   readonly bloom?: number;
+  readonly tint?: Rgb;
 }
 
 export interface HeightFogSpec {

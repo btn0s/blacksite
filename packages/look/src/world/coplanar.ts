@@ -23,7 +23,7 @@ export type FaceSource =
   | { kind: 'cylinder'; label: string; size: [number, number, number]; position: THREE.Vector3; quaternion: THREE.Quaternion; geometry: THREE.BufferGeometry }
   | { kind: 'plane'; label: string; width: number; depth: number; position: THREE.Vector3; quaternion: THREE.Quaternion; geometry: THREE.BufferGeometry }
 
-type Face = { source: FaceSource; axis: number; sign: number; normal: THREE.Vector3; center: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3; hu: number; hv: number; area: number }
+type Face = { source: FaceSource; axis: number; sign: number; normal: THREE.Vector3; center: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3; hu: number; hv: number; area: number; box?: THREE.Box3; seen?: number }
 
 const AXES = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)]
 
@@ -78,19 +78,26 @@ function overlapArea(a: Face, b: Face) {
   return Math.abs(sum) / 2
 }
 
+function apart(a: THREE.Box3, b: THREE.Box3, margin: number) {
+  return a.max.x + margin < b.min.x || b.max.x + margin < a.min.x || a.max.y + margin < b.min.y || b.max.y + margin < a.min.y || a.max.z + margin < b.min.z || b.max.z + margin < a.min.z
+}
+
 function bounds(face: Face) {
-  const box = new THREE.Box3()
+  if (face.box) return face.box
+  const box = face.box = new THREE.Box3()
   for (const [x, y] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) box.expandByPoint(face.center.clone().addScaledVector(face.u, x * face.hu).addScaledVector(face.v, y * face.hv))
   return box
 }
 
 function push(source: FaceSource, face: Face, lift: number) {
-  const offset = face.normal.clone().multiplyScalar(lift)
+  const { x: nx, y: ny, z: nz } = face.normal
+  const { x: cx, y: cy, z: cz } = face.center
+  const ox = nx * lift, oy = ny * lift, oz = nz * lift
   const position = source.geometry.getAttribute('position') as THREE.BufferAttribute
-  const point = new THREE.Vector3()
+  const all = source.kind === 'plane'
   for (let i = 0; i < position.count; i++) {
-    point.fromBufferAttribute(position, i)
-    if (source.kind === 'plane' || Math.abs(face.normal.dot(point.clone().sub(face.center))) < 1e-4) position.setXYZ(i, point.x + offset.x, point.y + offset.y, point.z + offset.z)
+    const x = position.getX(i), y = position.getY(i), z = position.getZ(i)
+    if (all || Math.abs(nx * (x - cx) + ny * (y - cy) + nz * (z - cz)) < 1e-4) position.setXYZ(i, x + ox, y + oy, z + oz)
   }
   position.needsUpdate = true
   if (source.kind !== 'plane') {
@@ -99,79 +106,96 @@ function push(source: FaceSource, face: Face, lift: number) {
   } else source.position.addScaledVector(face.normal, lift)
 }
 
-function sweep(sources: FaceSource[], options: CoplanarOptions) {
-  const minGap = options.minGap ?? 0.004
-  const separation = options.separation ?? 0.02
-  const minArea = options.minArea ?? 0.0004
-  const resolve = options.mode !== 'ignore' && options.mode !== 'throw'
-  const reach = minGap + separation * 2
-  const resolutions: CoplanarResolution[] = []
+// Faces bucketed into 8 m cells, kept across passes. A moved face is re-placed under its new bounds;
+// stale cells only add candidates, which the geometric tests reject.
+function faceIndex(reach: number) {
   const cell = 8
-  const grid = new Map<string, Face[]>()
-  const wide: Face[] = []
-  const placed: Face[] = []
+  const grid = new Map<number, Face[]>()
+  const wide = new Set<Face>()
+  const placed = new Set<Face>()
   const keysOf = (box: THREE.Box3) => {
     const x0 = Math.floor((box.min.x - reach) / cell), x1 = Math.floor((box.max.x + reach) / cell)
     const y0 = Math.floor((box.min.y - reach) / cell), y1 = Math.floor((box.max.y + reach) / cell)
     const z0 = Math.floor((box.min.z - reach) / cell), z1 = Math.floor((box.max.z + reach) / cell)
     if ((x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > 4096) return null
-    const keys: string[] = []
-    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) keys.push(`${x}|${y}|${z}`)
+    const keys: number[] = []
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) keys.push(((x + 4096) * 8192 + (y + 4096)) * 8192 + (z + 4096))
     return keys
   }
-  const place = (face: Face) => {
-    placed.push(face)
-    const keys = keysOf(bounds(face))
-    if (!keys) { wide.push(face); return }
-    for (const key of keys) { const list = grid.get(key); if (list) list.push(face); else grid.set(key, [face]) }
-  }
-  const owned = new Map<FaceSource, Face[]>()
-  const refresh = (source: FaceSource) => {
-    const fresh = facesOf(source)
-    const old = owned.get(source)!
-    fresh.forEach((face, index) => Object.assign(old[index]!, face))
-  }
-  for (const source of sources) {
-    const faces = facesOf(source)
-    owned.set(source, faces)
-    const candidates = new Set<Face>(wide)
-    for (const face of faces) {
+  return {
+    place(face: Face) {
+      placed.add(face)
       const keys = keysOf(bounds(face))
-      if (!keys) { for (const other of placed) candidates.add(other); continue }
-      for (const key of keys) for (const other of grid.get(key) ?? []) candidates.add(other)
-    }
-    for (const other of candidates) {
-      if (other.source === source) continue
-      for (const face of faces) {
-        if (face.normal.dot(other.normal) < 0.9995) continue
-        const gap = face.normal.dot(face.center.clone().sub(other.center))
-        if (Math.abs(gap) >= minGap) continue
-        const area = overlapArea(face, other)
-        if (area < minArea) continue
-        const mover = face.area <= other.area ? face : other
-        const anchor = mover === face ? other : face
-        const signed = mover === face ? gap : -gap
-        const lift = separation - signed
-        if (resolve) {
-          push(mover.source, mover, lift)
-          refresh(mover.source)
-        }
-        const at = mover.center
-        resolutions.push({ moved: mover.source.label, other: anchor.source.label, gap: Math.round(signed * 10000) / 10000, lift: Math.round(lift * 10000) / 10000, area: Math.round(area * 1000) / 1000, at: [Math.round(at.x * 100) / 100, Math.round(at.y * 100) / 100, Math.round(at.z * 100) / 100] })
-      }
-    }
-    for (const face of faces) place(face)
+      if (!keys) { wide.add(face); return }
+      for (const key of keys) { const list = grid.get(key); if (!list) grid.set(key, [face]); else if (list[list.length - 1] !== face) list.push(face) }
+    },
+    // The buckets that can hold a face near `face`; a face may sit in several.
+    near(face: Face) {
+      const keys = keysOf(bounds(face))
+      if (!keys) return [placed]
+      const lists: Iterable<Face>[] = [wide]
+      for (const key of keys) { const list = grid.get(key); if (list) lists.push(list) }
+      return lists
+    },
   }
-  return resolutions
 }
 
 export function resolveCoplanar(sources: FaceSource[], options: CoplanarOptions = {}) {
+  const minGap = options.minGap ?? 0.004
+  const separation = options.separation ?? 0.02
+  const minArea = options.minArea ?? 0.0004
   const resolve = options.mode !== 'ignore' && options.mode !== 'throw'
+  const index = faceIndex(minGap + separation * 2)
+  const owned = new Map<FaceSource, Face[]>()
+  const order = new Map(sources.map((source, position) => [source, position]))
   const all: CoplanarResolution[] = []
+  const placedSources = new Set<FaceSource>()
+  let stamp = 0
+  const move = (mover: Face, lift: number) => {
+    push(mover.source, mover, lift)
+    const old = owned.get(mover.source)
+    if (!old) return
+    facesOf(mover.source).forEach((face, i) => Object.assign(old[i]!, face, { box: undefined }))
+    if (placedSources.has(mover.source)) for (const face of old) index.place(face)
+  }
+  // The first pass checks each source against the ones placed before it; later passes only
+  // re-check the sources the previous pass moved, against every face.
+  let focus: Set<FaceSource> | undefined
   for (let pass = 0; pass < 6; pass++) {
-    const found = sweep(sources, options)
-    all.push(...found)
-    if (!resolve || !found.length) break
+    const moved = new Set<FaceSource>()
+    const found = all.length
+    for (const source of sources) {
+      if (focus && !focus.has(source)) continue
+      let faces = owned.get(source)
+      if (!faces) { faces = facesOf(source); owned.set(source, faces) }
+      for (const face of faces) {
+        const seen = ++stamp
+        for (const list of index.near(face)) for (const other of list) {
+          if (other.seen === seen) continue
+          other.seen = seen
+          if (other.source === source) continue
+          const n = face.normal
+          if (n.dot(other.normal) < 0.9995) continue
+          const a = face.center, b = other.center
+          const gap = n.x * (a.x - b.x) + n.y * (a.y - b.y) + n.z * (a.z - b.z)
+          if (Math.abs(gap) >= minGap) continue
+          if (focus?.has(other.source) && order.get(other.source)! > order.get(source)!) continue
+          if (apart(bounds(face), bounds(other), minGap)) continue
+          const area = overlapArea(face, other)
+          if (area < minArea) continue
+          const mover = face.area <= other.area ? face : other
+          const anchor = mover === face ? other : face
+          const signed = mover === face ? gap : -gap
+          const lift = separation - signed
+          const at = mover.center
+          all.push({ moved: mover.source.label, other: anchor.source.label, gap: Math.round(signed * 10000) / 10000, lift: Math.round(lift * 10000) / 10000, area: Math.round(area * 1000) / 1000, at: [Math.round(at.x * 100) / 100, Math.round(at.y * 100) / 100, Math.round(at.z * 100) / 100] })
+          if (resolve) { move(mover, lift); moved.add(mover.source) }
+        }
+      }
+      if (!placedSources.has(source)) { placedSources.add(source); for (const face of faces) index.place(face) }
+    }
+    if (!resolve || all.length === found) break
+    focus = moved
   }
   return all
 }

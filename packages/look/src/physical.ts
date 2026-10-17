@@ -297,24 +297,24 @@ const CLOUD_GLSL = `
     for (int i = 0; i < CLOUD_OCTAVES; i++) {
       if (i >= octaves) break;
       float n = cloudNoise(q);
-      if (i >= 2) n = mix(n, abs(n) * 2.0 - 0.38, 0.35);
-      sum += amplitude * n * (1.0 - smoothstep(0.08, 0.28, footprint * frequency));
+      if (i >= 1) n = mix(n, abs(n) * 2.0 - 0.38, 0.3);
+      sum += amplitude * n * (1.0 - smoothstep(0.18, 0.45, footprint * frequency));
       q = mat2(0.8, 0.6, -0.6, 0.8) * q * 2.03 + vec2(13.1, 7.7);
       frequency *= 2.03;
-      amplitude *= 0.5;
+      amplitude *= 0.56;
     }
     return sum;
   }
 
   float cloudEdge(vec2 q, float footprint, int octaves) {
     vec2 p = q * 0.38 * cloudScale + vec2(cloudTime * 0.004, cloudTime * 0.0012);
-    p += vec2(cloudNoise(p * 0.3 + vec2(1.7, 9.2)), cloudNoise(p * 0.3 + vec2(8.3, 2.8))) * 1.4;
-    float base = cloudFbm(p * vec2(1.0, 1.15), footprint * 0.65 * cloudScale, octaves) * 1.3 + 0.5;
+    p += vec2(cloudNoise(p * 0.3 + vec2(1.7, 9.2)), cloudNoise(p * 0.3 + vec2(8.3, 2.8))) * 0.5;
+    float base = cloudFbm(p, footprint * 0.65 * cloudScale, octaves) * 1.3 + 0.5;
     return base + cloudNoise(q * 0.05 * cloudScale + vec2(3.1, 1.3)) * 0.7 - (1.0 - cloudCoverage);
   }
 
   float cloudSoft(float footprint) {
-    return 0.38 + min(footprint * 0.65 * cloudScale, 1.0) * 0.3;
+    return 0.62 + min(footprint * 0.65 * cloudScale, 1.0) * 0.3;
   }
 
   float cloudAmount(vec2 q, float footprint, int octaves) {
@@ -327,8 +327,9 @@ const CLOUD_GLSL = `
     float t = atRaySphere(origin, direction, AT_RG + cloudAltitude).y;
     vec3 p = origin + direction * t;
     vec3 up = p / length(p);
-    vec2 q = p.xz + cameraPosition.xz * 0.001;
     float mu = max(dot(up, direction), 0.03);
+    vec2 along = direction.xz / max(length(direction.xz), 1e-4);
+    vec2 q = p.xz - along * dot(p.xz, along) * (1.0 - mix(0.45, 1.0, smoothstep(0.04, 0.35, mu))) + cameraPosition.xz * 0.001;
     float footprint = t * pixel / mu;
     edge = cloudEdge(q, footprint, CLOUD_OCTAVES);
     float aa = fwidth(edge);
@@ -347,9 +348,12 @@ const CLOUD_GLSL = `
     float phase = mix(atPhaseHg(c, 0.75), atPhaseHg(c, -0.2), 0.25);
     float forward = smoothstep(-0.2, 0.7, c);
     vec3 single = sun * shadow * phase * mix(alpha * 0.55, tau * exp(-tau) * 2.2, forward) * 3.0;
-    float rim = clamp((d - s1) * 2.5, 0.0, 1.0);
-    vec3 multiple = sun * (0.025 + 0.22 * rim) * mix(1.0, shadow, 0.5) * alpha * (0.25 + 0.75 * smoothstep(-0.3, 0.9, c));
-    vec3 ambient = (atSky(normalize(vec3(direction.x, 0.03, direction.z))) * 0.26 + atSky(vec3(0.0, 1.0, 0.0)) * 0.42) * alpha * (1.0 - 0.35 * d);
+    float rim = smoothstep(0.0, 1.0, clamp((d - s1) * 1.2, 0.0, 1.0));
+    float side = 1.0 - smoothstep(0.05, 0.45, mu);
+    float rise = clamp((d - cloudAmount(q + along * 0.12, footprint, CLOUD_OCTAVES - 1) * fade) * 3.0 + 0.5, 0.0, 1.0);
+    single *= mix(1.0, (0.75 + 0.6 * rim) * mix(0.8, 1.2, rise), side * 0.6);
+    vec3 multiple = sun * (0.06 + 0.08 * rim + 0.04 * rise * side) * mix(1.0, shadow, 0.5) * alpha * (0.25 + 0.75 * smoothstep(-0.3, 0.9, c));
+    vec3 ambient = (atSky(normalize(vec3(direction.x, 0.03, direction.z))) * 0.26 + atSky(vec3(0.0, 1.0, 0.0)) * 0.42) * alpha * (1.0 - 0.35 * d) * mix(1.0, mix(0.9, 1.1, rise), side);
     vec4 result = vec4(single + multiple + ambient, alpha);
     result *= smoothstep(0.0, aa * 1.5 + 1e-6, edge);
     float haze = exp(-t * 0.02);

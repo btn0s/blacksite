@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { lintZFighting } from '../packages/check/src/zfight/lint.mjs'
 import { LevelBuilder } from '../packages/look/src/world/builder'
+import { resolveCoplanar } from '../packages/look/src/world/coplanar'
 
 const stone = { name: 'cast' } as const
 const brick = { name: 'brick' } as const
@@ -41,6 +42,23 @@ describe('LevelBuilder coplanar faces', () => {
     level.box([2, 1, 2], brick, { at: [5, 0.5, 0], shadow: false, name: 'plinth' })
     level.box([3, 1, 3], brick, { at: [5, 0.5, 0.5], shadow: false, name: 'ledge' })
     expect(() => level.build()).toThrow(/coplanar/)
+  })
+
+  it('settles cascades in a dense layout, leaving no coplanar faces behind', () => {
+    const level = new LevelBuilder({ coplanar: 'resolve' })
+    const room = 6, height = 3, wall = 0.2, n = 4
+    for (let i = 0; i <= n; i++) for (let j = 0; j < n; j++) {
+      level.box([room + wall, height, wall], brick, { at: [j * room + room / 2, height / 2, i * room], shadow: false })
+      level.box([wall, height, room + wall], brick, { at: [i * room, height / 2, j * room + room / 2], shadow: false })
+    }
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      level.box([room, 0.2, room], stone, { at: [i * room + room / 2, -0.1, j * room + room / 2], shadow: false })
+      level.box([1, 0.5, 1], stone, { at: [i * room + 4, 0.25, j * room + 4], shadow: false })
+      level.box([1, 0.5, 1], stone, { at: [i * room + 4, 0.75, j * room + 4.2], shadow: false })
+    }
+    level.build()
+    expect(level.coplanar.length).toBeGreaterThan(50)
+    expect(resolveCoplanar((level as unknown as { sources: Parameters<typeof resolveCoplanar>[0] }).sources, { mode: 'ignore' })).toEqual([])
   })
 
   it('leaves faces that only touch edge to edge alone', () => {
