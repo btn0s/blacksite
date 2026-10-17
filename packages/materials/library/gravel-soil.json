@@ -1,0 +1,243 @@
+{
+  "name": "gravel-soil",
+  "title": "Gravel and soil",
+  "description": "Packed brown soil with two sizes of angular gravel pressed into it and fine grit.",
+  "size": 2.0,
+  "depth": 0.03,
+  "seed": 9,
+  "orientation": "floor",
+  "nodes": {
+    "soil": {
+      "op": "fbm",
+      "cell": 0.3,
+      "octaves": 7,
+      "gain": 0.55
+    },
+    "clods": {
+      "op": "fbm",
+      "cell": 0.04,
+      "octaves": 4
+    },
+    "big": {
+      "op": "scatter",
+      "cell": 0.11,
+      "radius": 0.048,
+      "sizeJitter": 0.55,
+      "density": 0.8,
+      "shape": "blob",
+      "output": "height",
+      "seed": 13290937
+    },
+    "bigId": {
+      "op": "scatter",
+      "cell": 0.11,
+      "radius": 0.048,
+      "sizeJitter": 0.55,
+      "density": 0.8,
+      "shape": "blob",
+      "output": "random",
+      "seed": 13290937
+    },
+    "bigM": {
+      "op": "scatter",
+      "cell": 0.11,
+      "radius": 0.048,
+      "sizeJitter": 0.55,
+      "density": 0.8,
+      "shape": "chip",
+      "output": "mask",
+      "seed": 13290937
+    },
+    "small": {
+      "op": "scatter",
+      "cell": 0.045,
+      "radius": 0.017,
+      "sizeJitter": 0.55,
+      "density": 0.85,
+      "shape": "blob",
+      "output": "height",
+      "seed": 12907660
+    },
+    "smallId": {
+      "op": "scatter",
+      "cell": 0.045,
+      "radius": 0.017,
+      "sizeJitter": 0.55,
+      "density": 0.85,
+      "shape": "blob",
+      "output": "random",
+      "seed": 12907660
+    },
+    "smallM": {
+      "op": "scatter",
+      "cell": 0.045,
+      "radius": 0.017,
+      "sizeJitter": 0.55,
+      "density": 0.85,
+      "shape": "chip",
+      "output": "mask",
+      "seed": 12907660
+    },
+    "presence": {
+      "op": "fbm",
+      "cell": 0.4,
+      "octaves": 4
+    },
+    "presenceM": {
+      "op": "levels",
+      "input": "presence",
+      "in": [
+        0.22,
+        0.42
+      ]
+    },
+    "bigK": {
+      "op": "blend",
+      "a": "bigM",
+      "b": "presenceM",
+      "mode": "multiply"
+    },
+    "smallK": {
+      "op": "blend",
+      "a": "smallM",
+      "b": "presenceM",
+      "mode": "multiply",
+      "opacity": 0.6
+    },
+    "soilH": {
+      "op": "blend",
+      "a": "soil",
+      "b": "clods",
+      "mode": "overlay",
+      "opacity": 0.4
+    },
+    "soilLow": {
+      "op": "levels",
+      "input": "soilH",
+      "out": [
+        0.2,
+        0.45
+      ]
+    },
+    "stones": {
+      "op": "blend",
+      "a": "small",
+      "b": "big",
+      "mode": "max"
+    },
+    "stonesH": {
+      "op": "levels",
+      "input": "stones",
+      "out": [
+        0.3,
+        0.9
+      ]
+    },
+    "gravelOn": {
+      "op": "blend",
+      "a": "smallK",
+      "b": "bigK",
+      "mode": "max"
+    },
+    "height": {
+      "op": "blend",
+      "a": "soilLow",
+      "b": "stonesH",
+      "mode": "max",
+      "mask": "gravelOn"
+    },
+    "soilC": {
+      "op": "ramp",
+      "input": "soilH",
+      "stops": [
+        [
+          0,
+          "#2a221a"
+        ],
+        [
+          0.5,
+          "#3d3226"
+        ],
+        [
+          1,
+          "#5a4a38"
+        ]
+      ]
+    },
+    "stoneTone": {
+      "op": "blend",
+      "a": "smallId",
+      "b": "bigId",
+      "mode": "mix",
+      "mask": "bigK"
+    },
+    "stoneC": {
+      "op": "ramp",
+      "input": "stoneTone",
+      "stops": [
+        [
+          0,
+          "#4f4b45"
+        ],
+        [
+          0.25,
+          "#6f695f"
+        ],
+        [
+          0.5,
+          "#8c8476"
+        ],
+        [
+          0.7,
+          "#a39a88"
+        ],
+        [
+          0.85,
+          "#6a5a48"
+        ],
+        [
+          1,
+          "#b8b0a0"
+        ]
+      ]
+    },
+    "stoneC2": {
+      "op": "blend",
+      "a": "stoneC",
+      "b": "clods",
+      "mode": "overlay",
+      "opacity": 0.3
+    },
+    "color": {
+      "op": "blend",
+      "a": "soilC",
+      "b": "stoneC2",
+      "mode": "mix",
+      "mask": "gravelOn"
+    },
+    "roughness": {
+      "op": "blend",
+      "a": 0.97,
+      "b": 0.85,
+      "mode": "mix",
+      "mask": "gravelOn"
+    }
+  },
+  "outputs": {
+    "color": "color",
+    "height": "height",
+    "roughness": "roughness",
+    "metalness": 0
+  },
+  "finish": {
+    "normal": 1,
+    "ao": {
+      "radius": 0.03,
+      "strength": 1
+    }
+  },
+  "weather": {
+    "age": 0.3,
+    "dirt": 0.2
+  }
+}

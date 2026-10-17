@@ -1,0 +1,29 @@
+{
+  "name": "corrugated-rust",
+  "title": "Rusted corrugated steel",
+  "description": "76 mm sinusoidal galvanised sheet, vertical, with dents, remnant grey paint and rust running from the troughs.",
+  "size": 1.52,
+  "depth": 0.018,
+  "seed": 5,
+  "orientation": "wall",
+  "nodes": {
+    "wave": { "op": "wave", "axis": "u", "period": 0.076 },
+    "dents": { "op": "fbm", "cell": 0.35, "octaves": 4 },
+    "fine": { "op": "fbm", "cell": 0.004, "octaves": 2, "basis": "value" },
+    "relief": { "op": "blend", "a": "wave", "b": "dents", "mode": "mix", "opacity": 0.15 },
+    "height": { "op": "blend", "a": "relief", "b": "fine", "mode": "overlay", "opacity": 0.06 },
+    "zinc": { "op": "fbm", "cell": 0.08, "octaves": 5 },
+    "spangle": { "op": "cellular", "cell": 0.012, "mode": "id" },
+    "zincTone": { "op": "blend", "a": "zinc", "b": "spangle", "mode": "mix", "opacity": 0.15 },
+    "steel": { "op": "ramp", "input": "zincTone", "stops": [[0, "#6f716d"], [0.5, "#878985"], [1, "#9b9c97"]] },
+    "paintField": { "op": "fbm", "cell": 0.25, "octaves": 6 },
+    "paint": { "op": "levels", "input": "paintField", "in": [0.55, 0.58] },
+    "color": { "op": "blend", "a": "steel", "b": "#6e746c", "mode": "mix", "mask": "paint", "opacity": 0.9 },
+    "roughS": { "op": "levels", "input": "zinc", "out": [0.38, 0.55] },
+    "roughness": { "op": "blend", "a": "roughS", "b": 0.7, "mode": "mix", "mask": "paint" },
+    "metalness": { "op": "blend", "a": 0.85, "b": 0, "mode": "mix", "mask": "paint" }
+  },
+  "outputs": { "color": "color", "height": "height", "roughness": "roughness", "metalness": "metalness" },
+  "finish": { "normal": 1, "ao": { "radius": 0.03, "strength": 0.7 } },
+  "weather": { "age": 0.5, "rust": 0.6, "dirt": 0.2 }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "asymmetric-check",
+  "size": 1,
+  "depth": 0.02,
+  "seed": 91,
+  "orientation": "floor",
+  "nodes": {
+    "u": { "op": "wave", "axis": "u", "shape": "saw", "period": 1 },
+    "v": { "op": "wave", "axis": "v", "shape": "saw", "period": 1 },
+    "red": { "op": "ramp", "input": "u", "stops": [[0, "#204060"], [1, "#a04060"]] },
+    "blue": { "op": "ramp", "input": "v", "stops": [[0, "#000000"], [1, "#004080"]] },
+    "color": { "op": "blend", "a": "red", "b": "blue", "mode": "add" },
+    "height": { "op": "blend", "a": "u", "b": "v", "opacity": 0.7 },
+    "roughness": { "op": "levels", "input": "u", "out": [0.2, 0.9] },
+    "metalness": { "op": "levels", "input": "v", "out": [0, 0.8] }
+  },
+  "outputs": { "color": "color", "height": "height", "roughness": "roughness", "metalness": "metalness" },
+  "weather": { "dirt": 0.45, "moisture": 0.2, "puddles": 0, "damage": { "chips": 0.8, "seed": 7 } }
+}

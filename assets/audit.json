@@ -1,0 +1,1701 @@
+{
+  "version": 1,
+  "checked": "2026-10-16",
+  "scope": "All tracked binary files plus text SVG/LUT/animation data. ALS excluded entirely by owner instruction. Dependencies, build output, caches and gitignored files excluded. No assets removed.",
+  "method": "git ls-files; safe files with a NUL in first 8000 bytes, plus .svg/.cube and arms-actions.json; byte length and SHA-256 of every included file. Credentials and protected paths never read.",
+  "counts": {
+    "material": 70,
+    "sky": 2,
+    "lut": 2,
+    "animation-data": 1,
+    "site-identity": 4,
+    "site-image": 10,
+    "site-capture": 6,
+    "software-archive": 6
+  },
+  "totalFiles": 101,
+  "totalBytes": 21675061,
+  "entries": [
+    {
+      "path": "packages/look/assets/world/asphalt_c.ktx2",
+      "bytes": 288933,
+      "sha256": "90962d1754affefc4a233a58ca98c542da9948d4e5f8c008e1409161928b4f3c",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Asphalt031",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/asphalt_c.webp"
+    },
+    {
+      "path": "packages/look/assets/world/asphalt_n.ktx2",
+      "bytes": 288662,
+      "sha256": "61a71dfa04e1b8bf19b83de7bf3a3f1bddbe7e6dcbe87c29e3ed1d0196ec1ac5",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Asphalt031",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/asphalt_n.webp"
+    },
+    {
+      "path": "packages/look/assets/world/brick_c.ktx2",
+      "bytes": 333711,
+      "sha256": "58c451a4dec733614717383c96727ac48c53daf806cbc789f0b9bc535141316f",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Bricks059",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/brick_c.webp"
+    },
+    {
+      "path": "packages/look/assets/world/brick_n.ktx2",
+      "bytes": 299110,
+      "sha256": "3fbf941463cfd9e2357e4f9dd76d1263b19055f895af0e67796998bedc937a6c",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Bricks059",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/brick_n.webp"
+    },
+    {
+      "path": "packages/look/assets/world/cast_c.ktx2",
+      "bytes": 231934,
+      "sha256": "0d5fce644898e3040623fe6b005c4dc013b77487ed26981fe52b6f828b70eb90",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete044D",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/cast_c.webp"
+    },
+    {
+      "path": "packages/look/assets/world/cast_n.ktx2",
+      "bytes": 264454,
+      "sha256": "b15c67768126b02a4b347fb67c3139031a06d48d4495048dd72ff0427fb32f66",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete044D",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/cast_n.webp"
+    },
+    {
+      "path": "packages/look/assets/world/corrugated_c.ktx2",
+      "bytes": 225393,
+      "sha256": "67d537a050943a2306f133b3de4a3f34588b97a57fc89241163bafadf45d1294",
+      "category": "material",
+      "source": "https://ambientcg.com/a/CorrugatedSteel005",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/corrugated_c.webp"
+    },
+    {
+      "path": "packages/look/assets/world/corrugated_n.ktx2",
+      "bytes": 100534,
+      "sha256": "bad03779fbfdea5e6a27a2028688dbd35ec6bdc231a0c326aa5fcd90e77453e0",
+      "category": "material",
+      "source": "https://ambientcg.com/a/CorrugatedSteel005",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/corrugated_n.webp"
+    },
+    {
+      "path": "packages/look/assets/world/dirt_c.ktx2",
+      "bytes": 325750,
+      "sha256": "d41ea71d1863598277bfeb5c96fb460085732e29825f54fff777a0cb70c95043",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Ground103",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/dirt_c.webp"
+    },
+    {
+      "path": "packages/look/assets/world/dirt_n.ktx2",
+      "bytes": 339089,
+      "sha256": "50b3b71b183d72da1705b8b8709a709a7a24cfdea9cf737f9474ae1b772cdfaf",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Ground103",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/dirt_n.webp"
+    },
+    {
+      "path": "packages/look/assets/world/grass_c.ktx2",
+      "bytes": 347749,
+      "sha256": "6e47ab2abaf1d5a9074b503d22ad6f32e46c346e7639eeb6d2d4700a61b301bb",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Ground037",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/grass_c.webp"
+    },
+    {
+      "path": "packages/look/assets/world/grass_n.ktx2",
+      "bytes": 339637,
+      "sha256": "9033c3ce35aa8dc69bb93e3f5ee25f64ca419d41696c22efc1206d6ef18dd9cc",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Ground037",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/grass_n.webp"
+    },
+    {
+      "path": "packages/look/assets/world/gravel_c.ktx2",
+      "bytes": 337108,
+      "sha256": "b75872ba1b064da250961a4956301e8fdc2664ca38a2ca2070528044ac40fcc4",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Gravel043",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/gravel_c.webp"
+    },
+    {
+      "path": "packages/look/assets/world/gravel_n.ktx2",
+      "bytes": 336220,
+      "sha256": "6072f4201e9d89a1276b3a932d90a013d8ca3223af005b931644ed891ddaa923",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Gravel043",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/gravel_n.webp"
+    },
+    {
+      "path": "packages/look/assets/world/metal_c.ktx2",
+      "bytes": 327067,
+      "sha256": "a8dfa2c0f0f4f9b08e5777c6ea6d09c49f6096614d01035a3facd1d268d357f4",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Metal041B",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/metal_c.webp"
+    },
+    {
+      "path": "packages/look/assets/world/metal_n.ktx2",
+      "bytes": 17077,
+      "sha256": "22300049af736630bdb410a82bb0f8a2b1ce13d97e9f9671fea471c12d491a2c",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Metal041B",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/metal_n.webp"
+    },
+    {
+      "path": "packages/look/assets/world/paint_c.ktx2",
+      "bytes": 235270,
+      "sha256": "37f12807680dbf416f596f8355768a742fb2c5f2d82221a6f60a892bd49952ca",
+      "category": "material",
+      "source": "https://ambientcg.com/a/PaintedPlaster015",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/paint_c.webp"
+    },
+    {
+      "path": "packages/look/assets/world/paint_n.ktx2",
+      "bytes": 333609,
+      "sha256": "f2bb02f0559c5a7712cb536fe05ddb606c74a7c27df271730832db643e08129f",
+      "category": "material",
+      "source": "https://ambientcg.com/a/PaintedPlaster015",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/paint_n.webp"
+    },
+    {
+      "path": "packages/look/assets/world/panel_c.ktx2",
+      "bytes": 149932,
+      "sha256": "ab2aacb5b8b9b699e97a1ce908c1fcb3b150523da17b88270e676a5bb2455bb7",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete042A",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/panel_c.webp"
+    },
+    {
+      "path": "packages/look/assets/world/panel_n.ktx2",
+      "bytes": 172111,
+      "sha256": "24f37d0c000d9ba245a84a51b4bf461b7ed34dd5704be80db236d8ef14bc38d6",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete042A",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/panel_n.webp"
+    },
+    {
+      "path": "packages/look/assets/world/rust_c.ktx2",
+      "bytes": 281797,
+      "sha256": "5f7f6e641e6870d471e702a9c678774020e1fc2c09f0f2dd451b38fb1d64112f",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Rust009",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/rust_c.webp"
+    },
+    {
+      "path": "packages/look/assets/world/rust_n.ktx2",
+      "bytes": 187088,
+      "sha256": "1f6f236b3a15595ed046f205a3c0de97e917f54747b97d1824cb58718414e253",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Rust009",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/rust_n.webp"
+    },
+    {
+      "path": "packages/look/assets/world/sky.ktx2",
+      "bytes": 211718,
+      "sha256": "962f0b34aa1c3fdd80ab93d1e77a31d3204ebf7b074da2b883ae00f28d97b6b8",
+      "category": "sky",
+      "source": "https://polyhaven.com/a/overcast_soil_puresky",
+      "author": "Jarod Guest and Sergej Majboroda / Poly Haven",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://polyhaven.com/license",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; record grading, resize and compression.",
+      "derivedFrom": "site/public/look/sky.webp"
+    },
+    {
+      "path": "packages/look/assets/world/slab_c.ktx2",
+      "bytes": 186097,
+      "sha256": "9f17b16d84be5bd4d75c1fd18e25da968174b9e37aa50b64895077a4ee18932a",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete031",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/slab_c.webp"
+    },
+    {
+      "path": "packages/look/assets/world/slab_n.ktx2",
+      "bytes": 247729,
+      "sha256": "0dc5ef28ddbd801a9e49f722dec732388c364afd48e830008fe477681d5883d5",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete031",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/slab_n.webp"
+    },
+    {
+      "path": "packages/look/assets/world/stained_c.ktx2",
+      "bytes": 222605,
+      "sha256": "a6e9a9dec0320a79db21979e3f3cf0e2a7854c1ba06990f03ffb77fbd697d347",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete046",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/stained_c.webp"
+    },
+    {
+      "path": "packages/look/assets/world/stained_n.ktx2",
+      "bytes": 35184,
+      "sha256": "7ff0d482cd88af552dfc823c247b4771b972dd62aee4a77e2c17dc27b7ef5aec",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete046",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/",
+        "packages/look/assets/world/ktx2.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives.",
+      "derivedFrom": "site/public/look/stained_n.webp"
+    },
+    {
+      "path": "packages/look/luts/haze.cube",
+      "bytes": 862580,
+      "sha256": "4a2ee3344dabc0d7acd2010bd278bab5acb4e35736f582a93409472a0ad7e241",
+      "category": "lut",
+      "source": "packages/look/scripts/make-lut.mjs",
+      "author": "Blacksite contributors",
+      "licence": "FSL-1.1-ALv2 (repository notice; no asset-specific grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "packages/look/scripts/make-lut.mjs"
+      ],
+      "verdict": "not-on-library-allowlist",
+      "recommendation": "Keep in repository; obtain explicit owner CC0/MIT grant before adding to the open asset catalog."
+    },
+    {
+      "path": "packages/look/luts/zone.cube",
+      "bytes": 862580,
+      "sha256": "fe308f1f7d42a22f8df32654165568ec3dea585e2a828e8135d6879d468b9391",
+      "category": "lut",
+      "source": "packages/look/scripts/make-lut.mjs",
+      "author": "Blacksite contributors",
+      "licence": "FSL-1.1-ALv2 (repository notice; no asset-specific grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "packages/look/scripts/make-lut.mjs"
+      ],
+      "verdict": "not-on-library-allowlist",
+      "recommendation": "Keep in repository; obtain explicit owner CC0/MIT grant before adding to the open asset catalog."
+    },
+    {
+      "path": "packages/subject-fpp/assets/arms-actions.json",
+      "bytes": 1842,
+      "sha256": "aec801fd20c1627dbaf5752e023e2d5b86a32cca4c1d396ee26aef4c40c83337",
+      "category": "animation-data",
+      "source": "packages/subject-fpp/assets/arms-actions.json",
+      "author": "Blacksite contributors",
+      "licence": "MIT",
+      "evidence": [
+        "packages/subject-fpp/assets/LICENSE",
+        "packages/subject-fpp/assets/arms-actions.json"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep MIT copyright and permission notice when redistributed."
+    },
+    {
+      "path": "packages/subject-fpp/assets/materials/glove_c.webp",
+      "bytes": 38178,
+      "sha256": "425760ba3ec9c258b15e77e5b0148073c4b8b58d63aa19e20d601ec7b3351c8e",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Leather032",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "packages/subject-fpp/assets/materials/glove_n.webp",
+      "bytes": 3752,
+      "sha256": "1cc955d3a85f9284edfd7b2c8ac893ea3a29cee19e1d74ca9acca79170072a7e",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Leather032",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "packages/subject-fpp/assets/materials/gunmetal_c.webp",
+      "bytes": 27684,
+      "sha256": "6da2ba124f81156e167821ecbb3cbb57e018f919a11fff77067687e7d5022275",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Metal046B",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "packages/subject-fpp/assets/materials/gunmetal_n.webp",
+      "bytes": 2940,
+      "sha256": "72d7298e9f830d354a0752673ed632a41481c5eb88eef7e499450ba7fffacd87",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Metal046B",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "packages/subject-fpp/assets/materials/paint_c.webp",
+      "bytes": 19358,
+      "sha256": "8401bb463a2b0b1015ff84565f27b3f6df77709fbde137eecaf89ad3c9d3065e",
+      "category": "material",
+      "source": "https://ambientcg.com/a/PaintedMetal005",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "packages/subject-fpp/assets/materials/paint_n.webp",
+      "bytes": 9270,
+      "sha256": "18bd51b7e8baef195213056b3d6ca22ff8ac5f0fd0dc115c4d2c1ad2e4ee5635",
+      "category": "material",
+      "source": "https://ambientcg.com/a/PaintedMetal005",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "packages/subject-fpp/assets/materials/polymer_c.webp",
+      "bytes": 2628,
+      "sha256": "602d3f343e0e41e475f6a85a21af291f64efacc6c66656b99d5051e8df652b74",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Plastic012B",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "packages/subject-fpp/assets/materials/polymer_n.webp",
+      "bytes": 1974,
+      "sha256": "fa4efc9c977dd27d2c543a9ee2c819ede64df275f0daae0eea6e739fe96027f7",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Plastic012B",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "packages/subject-fpp/assets/materials/sleeve_c.webp",
+      "bytes": 70930,
+      "sha256": "8e7bc5be08ebdcfd0528fd97b030a33146ca44ca117694cdf3507c38d6445639",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Fabric030",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "packages/subject-fpp/assets/materials/sleeve_n.webp",
+      "bytes": 119596,
+      "sha256": "4454c4f2c94157caca006fe945216349e2f82929b8c45e8a3428c2ad9de3afbc",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Fabric030",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/apple-touch-icon.png",
+      "bytes": 1157,
+      "sha256": "c242bde7b674e6851bfac3e39deb2ad6e24d34e03dec48bc0ad1019c47299abf",
+      "category": "site-identity",
+      "source": "scripts/meta-images.ts",
+      "author": "Blacksite contributors",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site icons; brand assets are not included in the open game-art catalog."
+    },
+    {
+      "path": "site/public/favicon-32.png",
+      "bytes": 241,
+      "sha256": "69168f8581fbebc5978ee44a1b23398a1b06ecd1ee63b756da917a45cfd87b09",
+      "category": "site-identity",
+      "source": "scripts/meta-images.ts",
+      "author": "Blacksite contributors",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site icons; brand assets are not included in the open game-art catalog."
+    },
+    {
+      "path": "site/public/favicon.svg",
+      "bytes": 152,
+      "sha256": "84c28ebdb477d8db5aab19915253af398638f0c352cd6c55828a1abfe1bde30d",
+      "category": "site-identity",
+      "source": "scripts/meta-images.ts",
+      "author": "Blacksite contributors",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site icons; brand assets are not included in the open game-art catalog."
+    },
+    {
+      "path": "site/public/icon-512.png",
+      "bytes": 8847,
+      "sha256": "9bf66fbefa102d8a6d11df72293a3edfd45fc6e01caf5b3b52909d1923dae094",
+      "category": "site-identity",
+      "source": "scripts/meta-images.ts",
+      "author": "Blacksite contributors",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site icons; brand assets are not included in the open game-art catalog."
+    },
+    {
+      "path": "site/public/look/asphalt_c.webp",
+      "bytes": 82376,
+      "sha256": "0c5637e082d54bfb650f7661d1835714e4f5e135bbbd79eef72ddd7a479a2f18",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Asphalt031",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/asphalt_n.webp",
+      "bytes": 60536,
+      "sha256": "a008895acaaf5bce8ab38c1c06b4f2e154067f53ff3b935bbc544043072e84e6",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Asphalt031",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/brick_c.webp",
+      "bytes": 46940,
+      "sha256": "7a1f7900ab7b6e2709fe44c00ff95967ff0ce8b93055393364aad7ed61c0fef6",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Bricks059",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/brick_n.webp",
+      "bytes": 55760,
+      "sha256": "6c813dfc44801a0fb106bbe6a036da246c8596d41b10b477fc189441367f05c4",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Bricks059",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/cast_c.webp",
+      "bytes": 26774,
+      "sha256": "64184a4366a253dadfd1b1e82d00be490106aa951254f68d9e9c6f0f101d5771",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete044D",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/cast_n.webp",
+      "bytes": 36774,
+      "sha256": "7cd3ab92afbd01d356624d30972cc882adf3341e35ebe2856f42f129ee6478ad",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete044D",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/corrugated_c.webp",
+      "bytes": 22096,
+      "sha256": "f35fa2aeb38add99d038434d22e858ac581cd8f5de6d7d0f15a481ea0a7aa193",
+      "category": "material",
+      "source": "https://ambientcg.com/a/CorrugatedSteel005",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/corrugated_n.webp",
+      "bytes": 6488,
+      "sha256": "4588c6aa7092a0315ee1d077fe6add4de0ae06cb85cf1a176b2944bc6d58e0af",
+      "category": "material",
+      "source": "https://ambientcg.com/a/CorrugatedSteel005",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/dirt_c.webp",
+      "bytes": 67858,
+      "sha256": "58397f4406728452183d2199d190da514f3c5425e83c7fffeb279ea4b86628aa",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Ground103",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/dirt_n.webp",
+      "bytes": 91926,
+      "sha256": "ac920a82ba02b3ea9e0c551c8cbb6c252a79501e4217f9ec9f0438681a3663b1",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Ground103",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/grass_c.webp",
+      "bytes": 116880,
+      "sha256": "3ca3b90d30d318241e68549e94c5c047f9202efb5edad856f7fc8d35a57b2269",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Ground037",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/grass_n.webp",
+      "bytes": 107064,
+      "sha256": "320c73e96d6be56a4e062502ee70926acd6dcc993310e69c49f6178e97a48ccf",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Ground037",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/gravel_c.webp",
+      "bytes": 85592,
+      "sha256": "232f42c8432ec5f5530a79cc1e55f5cded25214959f9a6efa4445d94f3ea6e44",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Gravel043",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/gravel_n.webp",
+      "bytes": 99192,
+      "sha256": "062cb9263b0a6ada5c8646b704b20b63dbba62d8517eed80f8c297a8193d390b",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Gravel043",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/metal_c.webp",
+      "bytes": 58022,
+      "sha256": "c9dabcd9474a8eb6e033a6e3d7ee7b1d1031c1aaad32023ccc41855d1a844d04",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Metal041B",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/metal_n.webp",
+      "bytes": 2134,
+      "sha256": "ad6f60e7b4d681a9c4c1e6176053f9a22a3f9023c90d56e5420da73103ff0492",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Metal041B",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/paint_c.webp",
+      "bytes": 27838,
+      "sha256": "9ecd8ec5252645e017f4f07bce9cbda560f6c6f06c853044873bf17d4f644d5f",
+      "category": "material",
+      "source": "https://ambientcg.com/a/PaintedPlaster015",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/paint_n.webp",
+      "bytes": 57032,
+      "sha256": "ce7471a4c52d795c14531eafe8dc2731d3237ac24a36fb8b780e843e39e85123",
+      "category": "material",
+      "source": "https://ambientcg.com/a/PaintedPlaster015",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/panel_c.webp",
+      "bytes": 12122,
+      "sha256": "5a15473c5494b19679d8523cf76811f7516ad1bb920f8bd3b67af673f9fe9a37",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete042A",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/panel_n.webp",
+      "bytes": 13434,
+      "sha256": "b8d7a6038d13c110e33cdb116061282fe422123e9d2a7ce87fc7dbf98313fb37",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete042A",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/rust_c.webp",
+      "bytes": 33724,
+      "sha256": "399c20c153cdccd81670b914ed2b715e106b5d492be134757f3917e856e64f8a",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Rust009",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/rust_n.webp",
+      "bytes": 15564,
+      "sha256": "d056c48622291263536eaa128f779009ef1a0dd86a018fd519cef72ef875ed9c",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Rust009",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/sky.webp",
+      "bytes": 8908,
+      "sha256": "0430587a7c07708865a08aea05f65ec7df68b7a2d048e9d3202818d70c4030a0",
+      "category": "sky",
+      "source": "https://polyhaven.com/a/overcast_soil_puresky",
+      "author": "Jarod Guest and Sergej Majboroda / Poly Haven",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://polyhaven.com/license"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; record grading, resize and compression."
+    },
+    {
+      "path": "site/public/look/slab_c.webp",
+      "bytes": 14654,
+      "sha256": "12ef3bcab2ebf2050d6756e360a6c7bdc013781e998b06a06cbe4a9cadd266d9",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete031",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/slab_n.webp",
+      "bytes": 30678,
+      "sha256": "49e7ae94ef9b24648ba285b57285e26f34fc6508e37ac082dcc863c66927e3b0",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete031",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/stained_c.webp",
+      "bytes": 23932,
+      "sha256": "0c10dade84d63b52f4eb3c2c046e6fca8742af56c4f81e913525aa004f28ebae",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete046",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/look/stained_n.webp",
+      "bytes": 2758,
+      "sha256": "c8f17d93213625dacb408799f02fa1be9b72863e5a524c55e5ad9b5d07e0dccb",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Concrete046",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/public/og/ai.jpg",
+      "bytes": 43179,
+      "sha256": "82e812eed8d4e6596ee282f142438bca99a528a38eb0c7e9db8f0de4c348d13f",
+      "category": "site-image",
+      "source": "scripts/meta-images.ts; site/src/meta-images.ts; site/public/thumbs/",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts",
+        "site/src/meta-images.ts",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site imagery; not a permissively licensed reusable art pack. Obtain owner grant before catalog inclusion."
+    },
+    {
+      "path": "site/public/og/characters.jpg",
+      "bytes": 48920,
+      "sha256": "315f52065620a556b1aaa34a9d621fa47a6ffe4e0899a50bf13eb4d0ddce8f1d",
+      "category": "site-image",
+      "source": "scripts/meta-images.ts; site/src/meta-images.ts; site/public/thumbs/",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts",
+        "site/src/meta-images.ts",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site imagery; not a permissively licensed reusable art pack. Obtain owner grant before catalog inclusion."
+    },
+    {
+      "path": "site/public/og/destruction.jpg",
+      "bytes": 43293,
+      "sha256": "ed742c62294eab6215c5a487a94166a4394f8f2c9503f968f5eed6c588153124",
+      "category": "site-image",
+      "source": "scripts/meta-images.ts; site/src/meta-images.ts; site/public/thumbs/",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts",
+        "site/src/meta-images.ts",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site imagery; not a permissively licensed reusable art pack. Obtain owner grant before catalog inclusion."
+    },
+    {
+      "path": "site/public/og/get-started.jpg",
+      "bytes": 28518,
+      "sha256": "0f957adc00644303f3e99509f8234060d3d0d67ed9204f55da697e162a5037d6",
+      "category": "site-image",
+      "source": "scripts/meta-images.ts; site/src/meta-images.ts; site/public/thumbs/",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts",
+        "site/src/meta-images.ts",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site imagery; not a permissively licensed reusable art pack. Obtain owner grant before catalog inclusion."
+    },
+    {
+      "path": "site/public/og/home.jpg",
+      "bytes": 49380,
+      "sha256": "1fe838936bc29f749d487f55412d58ae1ef300821d7e43ea4e2b078e05d36ca3",
+      "category": "site-image",
+      "source": "scripts/meta-images.ts; site/src/meta-images.ts; site/public/thumbs/",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts",
+        "site/src/meta-images.ts",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site imagery; not a permissively licensed reusable art pack. Obtain owner grant before catalog inclusion."
+    },
+    {
+      "path": "site/public/og/input.jpg",
+      "bytes": 28406,
+      "sha256": "5ac30618bb99bfd36f7a1375048cc7f177a7cd02471ca7bc3e3ace73c84294c8",
+      "category": "site-image",
+      "source": "scripts/meta-images.ts; site/src/meta-images.ts; site/public/thumbs/",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts",
+        "site/src/meta-images.ts",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site imagery; not a permissively licensed reusable art pack. Obtain owner grant before catalog inclusion."
+    },
+    {
+      "path": "site/public/og/multiplayer.jpg",
+      "bytes": 49441,
+      "sha256": "ab209ce9a29c6f0806c8836fa35858dc9d70bd68180b4eefa11179b0346d132f",
+      "category": "site-image",
+      "source": "scripts/meta-images.ts; site/src/meta-images.ts; site/public/thumbs/",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts",
+        "site/src/meta-images.ts",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site imagery; not a permissively licensed reusable art pack. Obtain owner grant before catalog inclusion."
+    },
+    {
+      "path": "site/public/og/roadmap.jpg",
+      "bytes": 25810,
+      "sha256": "3e6be5717ac3901d61b470944a1c187a2632c16a1e77533b20e7caa5bbd629d9",
+      "category": "site-image",
+      "source": "scripts/meta-images.ts; site/src/meta-images.ts; site/public/thumbs/",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts",
+        "site/src/meta-images.ts",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site imagery; not a permissively licensed reusable art pack. Obtain owner grant before catalog inclusion."
+    },
+    {
+      "path": "site/public/og/skills.jpg",
+      "bytes": 24258,
+      "sha256": "c835d5d6e17a4ffcb28569b3fe9e897182e08eb377c6a9d0e5cae04e762da240",
+      "category": "site-image",
+      "source": "scripts/meta-images.ts; site/src/meta-images.ts; site/public/thumbs/",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts",
+        "site/src/meta-images.ts",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site imagery; not a permissively licensed reusable art pack. Obtain owner grant before catalog inclusion."
+    },
+    {
+      "path": "site/public/og/weapons.jpg",
+      "bytes": 44734,
+      "sha256": "5d8da510069886a9ed7e3cb60efad9b60eaf8ae008d7bcf82ee44bd013d62ef9",
+      "category": "site-image",
+      "source": "scripts/meta-images.ts; site/src/meta-images.ts; site/public/thumbs/",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "scripts/meta-images.ts",
+        "site/src/meta-images.ts",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site imagery; not a permissively licensed reusable art pack. Obtain owner grant before catalog inclusion."
+    },
+    {
+      "path": "site/public/thumbs/ai.webp",
+      "bytes": 117594,
+      "sha256": "da3a59c5c08c763732fc67ab419b4117a34b3fd0bfb42c1ca825440d8676fb0b",
+      "category": "site-capture",
+      "source": "Site showcase captures (declared in site/public/CREDITS.md)",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site captures; record capture scene/camera if later republishing as reusable art."
+    },
+    {
+      "path": "site/public/thumbs/characters.webp",
+      "bytes": 76590,
+      "sha256": "39739121dab7722191c1a0ef432a50393a39d416667fb2f51f478588168dcef0",
+      "category": "site-capture",
+      "source": "Site showcase captures (declared in site/public/CREDITS.md)",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site captures; record capture scene/camera if later republishing as reusable art."
+    },
+    {
+      "path": "site/public/thumbs/destruction.webp",
+      "bytes": 41704,
+      "sha256": "2a5208094a041efe3762ecac64282a13bb76d5b0f42d55113c8091a9bb787d95",
+      "category": "site-capture",
+      "source": "Site showcase captures (declared in site/public/CREDITS.md)",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site captures; record capture scene/camera if later republishing as reusable art."
+    },
+    {
+      "path": "site/public/thumbs/hero.webp",
+      "bytes": 88712,
+      "sha256": "47153aed87c2fbc375155fa5594c2acb4f8457abb6374148e11654d9180ec360",
+      "category": "site-capture",
+      "source": "Site showcase captures (declared in site/public/CREDITS.md)",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site captures; record capture scene/camera if later republishing as reusable art."
+    },
+    {
+      "path": "site/public/thumbs/multiplayer.webp",
+      "bytes": 36136,
+      "sha256": "ea4a9c5f9991f17f7e3a92096512efe789003f78c7b410e9de0a6f3589fd1c7c",
+      "category": "site-capture",
+      "source": "Site showcase captures (declared in site/public/CREDITS.md)",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site captures; record capture scene/camera if later republishing as reusable art."
+    },
+    {
+      "path": "site/public/thumbs/weapons.webp",
+      "bytes": 101946,
+      "sha256": "3fa2fb7cf998e3c47e35d915b3cb4a7b09a8bb9dce0cc3114d79892a94591c36",
+      "category": "site-capture",
+      "source": "Site showcase captures (declared in site/public/CREDITS.md)",
+      "author": "Blacksite contributors; underlying scene assets keep their licences",
+      "licence": "FSL-1.1-ALv2 (repository notice; no separate image grant found)",
+      "evidence": [
+        "LICENSE.md",
+        "site/public/CREDITS.md"
+      ],
+      "verdict": "site-use-only-audit",
+      "recommendation": "Keep site captures; record capture scene/camera if later republishing as reusable art."
+    },
+    {
+      "path": "site/src/showcases/firing-range/textures/canvas_c.webp",
+      "bytes": 57444,
+      "sha256": "007242072cf32cbec81caab8214b31fd187cafd382a015eaa1e1aac1282ca5f5",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Fabric045",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/src/showcases/firing-range/textures/canvas_n.webp",
+      "bytes": 110742,
+      "sha256": "b4405616b6f5ea507e4a5ce37d247197b562a599aa4da92c2cec154e3ee5f0d7",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Fabric045",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/src/showcases/firing-range/textures/osb_c.webp",
+      "bytes": 38106,
+      "sha256": "c9be4cfa228ad4513ecd45ee8a558aa385cfe3fa43e30ccc3141bef47bd13488",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Chipboard005",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/src/showcases/firing-range/textures/osb_n.webp",
+      "bytes": 18134,
+      "sha256": "49adc5b31d169619ebb5217eefc37ccdcc99778d18e4b60c1efc06a0cc55747b",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Chipboard005",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/src/showcases/firing-range/textures/planks_c.webp",
+      "bytes": 26046,
+      "sha256": "8435cf131fa181d56b7f9b213828de87b62e1e411a8148e8e3ece80014b2cac3",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Planks037A",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/src/showcases/firing-range/textures/planks_n.webp",
+      "bytes": 12314,
+      "sha256": "16b5e2ea75e7224276067e3a6586179d39c839c76bd1f570c3d3184fa6b7c772",
+      "category": "material",
+      "source": "https://ambientcg.com/a/Planks037A",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/src/showcases/firing-range/textures/plate_c.webp",
+      "bytes": 67908,
+      "sha256": "79c6f0ff6f3b9584f7c66486461a40a9c53d1f695b8792d433fcdd47801dc1ec",
+      "category": "material",
+      "source": "https://ambientcg.com/a/PaintedMetal005",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "site/src/showcases/firing-range/textures/plate_n.webp",
+      "bytes": 9270,
+      "sha256": "18bd51b7e8baef195213056b3d6ca22ff8ac5f0fd0dc115c4d2c1ad2e4ee5635",
+      "category": "material",
+      "source": "https://ambientcg.com/a/PaintedMetal005",
+      "author": "Lennart Demes / ambientCG",
+      "licence": "CC0-1.0",
+      "evidence": [
+        "site/public/CREDITS.md",
+        "https://docs.ambientcg.com/license/"
+      ],
+      "verdict": "redistributable",
+      "recommendation": "Keep; preserve source mapping with derivatives."
+    },
+    {
+      "path": "vendor/rapier/rapier3d-0.30.1.crate",
+      "bytes": 257358,
+      "sha256": "5bd27b8eb36d0833fa0f2aea40164fabfad0fc34b9932286ae9e84f3452f5364",
+      "category": "software-archive",
+      "source": "vendor/rapier/build.mjs; https://github.com/dimforge/rapier.js; https://github.com/dimforge/rapier",
+      "author": "Dimforge contributors; local fork changes",
+      "licence": "Apache-2.0 upstream; local archive notices not exhaustively audited",
+      "evidence": [
+        "vendor/rapier/build.mjs",
+        "https://raw.githubusercontent.com/dimforge/rapier/master/LICENSE"
+      ],
+      "verdict": "software-outside-art-audit",
+      "recommendation": "Keep; software dependency, not a game-art source. Preserve bundled upstream notices."
+    },
+    {
+      "path": "vendor/rapier/rapier3d-compat-0.19.2-rupture.3.tgz",
+      "bytes": 2514195,
+      "sha256": "8fae22434b979c7c8b2a43b748ec505c09ca620f62c92a5509f506e3748d2528",
+      "category": "software-archive",
+      "source": "vendor/rapier/build.mjs; https://github.com/dimforge/rapier.js; https://github.com/dimforge/rapier",
+      "author": "Dimforge contributors; local fork changes",
+      "licence": "Apache-2.0 upstream; local archive notices not exhaustively audited",
+      "evidence": [
+        "vendor/rapier/build.mjs",
+        "https://raw.githubusercontent.com/dimforge/rapier/master/LICENSE"
+      ],
+      "verdict": "software-outside-art-audit",
+      "recommendation": "Keep; software dependency, not a game-art source. Preserve bundled upstream notices."
+    },
+    {
+      "path": "vendor/rapier/rapier3d-compat-0.19.2-rupture.4.tgz",
+      "bytes": 2520675,
+      "sha256": "5a996c8a7f07e9d11eb14b17749d59a53d920172c1384c77bb825c7931f0db86",
+      "category": "software-archive",
+      "source": "vendor/rapier/build.mjs; https://github.com/dimforge/rapier.js; https://github.com/dimforge/rapier",
+      "author": "Dimforge contributors; local fork changes",
+      "licence": "Apache-2.0 upstream; local archive notices not exhaustively audited",
+      "evidence": [
+        "vendor/rapier/build.mjs",
+        "https://raw.githubusercontent.com/dimforge/rapier/master/LICENSE"
+      ],
+      "verdict": "software-outside-art-audit",
+      "recommendation": "Keep; software dependency, not a game-art source. Preserve bundled upstream notices."
+    },
+    {
+      "path": "vendor/rapier/rapier3d-simd-compat-0.19.2-rupture.3.tgz",
+      "bytes": 2638157,
+      "sha256": "bfaa1af814cb77e260744d716ec4c9e3317cf21cdcded3fe06de55229fce9a5b",
+      "category": "software-archive",
+      "source": "vendor/rapier/build.mjs; https://github.com/dimforge/rapier.js; https://github.com/dimforge/rapier",
+      "author": "Dimforge contributors; local fork changes",
+      "licence": "Apache-2.0 upstream; local archive notices not exhaustively audited",
+      "evidence": [
+        "vendor/rapier/build.mjs",
+        "https://raw.githubusercontent.com/dimforge/rapier/master/LICENSE"
+      ],
+      "verdict": "software-outside-art-audit",
+      "recommendation": "Keep; software dependency, not a game-art source. Preserve bundled upstream notices."
+    },
+    {
+      "path": "vendor/rapier/rapier3d-simd-compat-0.19.2-rupture.4.tgz",
+      "bytes": 2644875,
+      "sha256": "c0b38db88f8781c5509e9814cd174420990985ae2d2e9adb6eec59a9e5fa0665",
+      "category": "software-archive",
+      "source": "vendor/rapier/build.mjs; https://github.com/dimforge/rapier.js; https://github.com/dimforge/rapier",
+      "author": "Dimforge contributors; local fork changes",
+      "licence": "Apache-2.0 upstream; local archive notices not exhaustively audited",
+      "evidence": [
+        "vendor/rapier/build.mjs",
+        "https://raw.githubusercontent.com/dimforge/rapier/master/LICENSE"
+      ],
+      "verdict": "software-outside-art-audit",
+      "recommendation": "Keep; software dependency, not a game-art source. Preserve bundled upstream notices."
+    },
+    {
+      "path": "vendor/rapier/rupture-bindings.bundle",
+      "bytes": 4883,
+      "sha256": "5935011cfcdd73a648c1c417ca56af15dddb9825b72e4b924afb56afaf325524",
+      "category": "software-archive",
+      "source": "vendor/rapier/build.mjs; https://github.com/dimforge/rapier.js; https://github.com/dimforge/rapier",
+      "author": "Dimforge contributors; local fork changes",
+      "licence": "Apache-2.0 upstream; local archive notices not exhaustively audited",
+      "evidence": [
+        "vendor/rapier/build.mjs",
+        "https://raw.githubusercontent.com/dimforge/rapier/master/LICENSE"
+      ],
+      "verdict": "software-outside-art-audit",
+      "recommendation": "Keep; software dependency, not a game-art source. Preserve bundled upstream notices."
+    }
+  ],
+  "fonts": [
+    {
+      "import": "@fontsource/barlow/latin-400.css",
+      "family": "barlow",
+      "weight": 400,
+      "style": "normal",
+      "subset": "latin",
+      "author": "The Barlow Project Authors / Jeremy Tribby",
+      "licence": "OFL-1.1",
+      "evidence": [
+        "site/src/main.tsx",
+        "https://raw.githubusercontent.com/jpt/barlow/main/OFL.txt"
+      ],
+      "status": "dependency supplied; binary files excluded from tracked inventory",
+      "recommendation": "Ship copyright and full OFL notices with site font files; retain reserved names."
+    },
+    {
+      "import": "@fontsource/barlow/latin-500.css",
+      "family": "barlow",
+      "weight": 500,
+      "style": "normal",
+      "subset": "latin",
+      "author": "The Barlow Project Authors / Jeremy Tribby",
+      "licence": "OFL-1.1",
+      "evidence": [
+        "site/src/main.tsx",
+        "https://raw.githubusercontent.com/jpt/barlow/main/OFL.txt"
+      ],
+      "status": "dependency supplied; binary files excluded from tracked inventory",
+      "recommendation": "Ship copyright and full OFL notices with site font files; retain reserved names."
+    },
+    {
+      "import": "@fontsource/barlow-condensed/latin-500.css",
+      "family": "barlow-condensed",
+      "weight": 500,
+      "style": "normal",
+      "subset": "latin",
+      "author": "The Barlow Project Authors / Jeremy Tribby",
+      "licence": "OFL-1.1",
+      "evidence": [
+        "site/src/main.tsx",
+        "https://raw.githubusercontent.com/jpt/barlow/main/OFL.txt"
+      ],
+      "status": "dependency supplied; binary files excluded from tracked inventory",
+      "recommendation": "Ship copyright and full OFL notices with site font files; retain reserved names."
+    },
+    {
+      "import": "@fontsource/barlow-condensed/latin-600.css",
+      "family": "barlow-condensed",
+      "weight": 600,
+      "style": "normal",
+      "subset": "latin",
+      "author": "The Barlow Project Authors / Jeremy Tribby",
+      "licence": "OFL-1.1",
+      "evidence": [
+        "site/src/main.tsx",
+        "https://raw.githubusercontent.com/jpt/barlow/main/OFL.txt"
+      ],
+      "status": "dependency supplied; binary files excluded from tracked inventory",
+      "recommendation": "Ship copyright and full OFL notices with site font files; retain reserved names."
+    },
+    {
+      "import": "@fontsource/ibm-plex-mono/latin-400.css",
+      "family": "ibm-plex-mono",
+      "weight": 400,
+      "style": "normal",
+      "subset": "latin",
+      "author": "IBM Corp.",
+      "licence": "OFL-1.1",
+      "evidence": [
+        "site/src/main.tsx",
+        "https://raw.githubusercontent.com/IBM/plex/master/LICENSE.txt"
+      ],
+      "status": "dependency supplied; binary files excluded from tracked inventory",
+      "recommendation": "Ship copyright and full OFL notices with site font files; retain reserved names."
+    },
+    {
+      "import": "@fontsource/ibm-plex-mono/latin-500.css",
+      "family": "ibm-plex-mono",
+      "weight": 500,
+      "style": "normal",
+      "subset": "latin",
+      "author": "IBM Corp.",
+      "licence": "OFL-1.1",
+      "evidence": [
+        "site/src/main.tsx",
+        "https://raw.githubusercontent.com/IBM/plex/master/LICENSE.txt"
+      ],
+      "status": "dependency supplied; binary files excluded from tracked inventory",
+      "recommendation": "Ship copyright and full OFL notices with site font files; retain reserved names."
+    }
+  ]
+}

@@ -1,0 +1,197 @@
+{
+  "name": "painted-metal",
+  "title": "Chipped painted steel",
+  "description": "Olive-grey enamel over steel plate, two plates with a seam and a rivet line, chipped to primer and bare metal.",
+  "size": 1.0,
+  "depth": 0.004,
+  "seed": 6,
+  "orientation": "object",
+  "wear": {
+    "color": "#77746c",
+    "roughness": 0.35,
+    "metalness": 0.9
+  },
+  "nodes": {
+    "plates": {
+      "op": "panels",
+      "tile": [
+        1.0,
+        0.5
+      ],
+      "gap": 0.0015,
+      "bevel": 0.0012
+    },
+    "rivets": {
+      "op": "rivets",
+      "spacing": [
+        0.083,
+        0.5
+      ],
+      "radius": 0.009,
+      "offset": [
+        0,
+        0.42
+      ]
+    },
+    "peel": {
+      "op": "fbm",
+      "cell": 0.006,
+      "octaves": 2,
+      "basis": "value"
+    },
+    "orange": {
+      "op": "fbm",
+      "cell": 0.012,
+      "octaves": 3
+    },
+    "waves": {
+      "op": "fbm",
+      "cell": 0.4,
+      "octaves": 3
+    },
+    "relief": {
+      "op": "blend",
+      "a": "plates",
+      "b": "orange",
+      "mode": "overlay",
+      "opacity": 0.12
+    },
+    "relief2": {
+      "op": "blend",
+      "a": "relief",
+      "b": "waves",
+      "mode": "overlay",
+      "opacity": 0.2
+    },
+    "height": {
+      "op": "blend",
+      "a": "relief2",
+      "b": "rivets",
+      "mode": "add",
+      "opacity": 0.6
+    },
+    "tone": {
+      "op": "fbm",
+      "cell": 0.3,
+      "octaves": 6
+    },
+    "paint": {
+      "op": "ramp",
+      "input": "tone",
+      "stops": [
+        [
+          0,
+          "#4b5243"
+        ],
+        [
+          0.5,
+          "#5a6251"
+        ],
+        [
+          1,
+          "#69705f"
+        ]
+      ]
+    },
+    "paint2": {
+      "op": "blend",
+      "a": "paint",
+      "b": "peel",
+      "mode": "overlay",
+      "opacity": 0.12
+    },
+    "color": {
+      "op": "blend",
+      "a": "paint2",
+      "b": "#3f4438",
+      "mode": "mix",
+      "mask": "rivets",
+      "opacity": 0.3
+    },
+    "roughness": {
+      "op": "levels",
+      "input": "orange",
+      "out": [
+        0.5,
+        0.62
+      ]
+    },
+    "streak": {
+      "op": "fbm",
+      "cell": [
+        0.05,
+        0.5
+      ],
+      "octaves": 4
+    },
+    "spots": {
+      "op": "scatter",
+      "cell": 0.12,
+      "radius": 0.018,
+      "density": 0.4,
+      "shape": "blob",
+      "sizeJitter": 0.6
+    },
+    "spotsN": {
+      "op": "blend",
+      "a": "spots",
+      "b": "streak",
+      "mode": "multiply"
+    },
+    "spotRust": {
+      "op": "ramp",
+      "input": "streak",
+      "stops": [
+        [
+          0,
+          "#3a2015"
+        ],
+        [
+          0.5,
+          "#6b3a1e"
+        ],
+        [
+          1,
+          "#8a5028"
+        ]
+      ]
+    },
+    "color2": {
+      "op": "blend",
+      "a": "color",
+      "b": "spotRust",
+      "mode": "mix",
+      "mask": "spotsN",
+      "opacity": 0.9
+    },
+    "rough2": {
+      "op": "blend",
+      "a": "roughness",
+      "b": 0.85,
+      "mode": "mix",
+      "mask": "spotsN"
+    }
+  },
+  "outputs": {
+    "color": "color2",
+    "height": "height",
+    "roughness": "rough2",
+    "metalness": 0
+  },
+  "finish": {
+    "normal": 1,
+    "ao": {
+      "radius": 0.012,
+      "strength": 0.7
+    }
+  },
+  "weather": {
+    "age": 0.4,
+    "rust": 0.35,
+    "wear": 0.55,
+    "dirt": 0.25,
+    "damage": {
+      "chips": 0.6
+    }
+  }
+}

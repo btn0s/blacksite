@@ -113,6 +113,7 @@ Run `blacksite catalog --json` for the live list; [catalog.md](references/catalo
 | Building one mechanic in isolation | [prototype.md](references/prototype.md) |
 | Joining proven prototypes into the loop | [combine.md](references/combine.md) |
 | Lighting, materials, dressing, atmosphere, feedback | [craft.md](references/craft.md) |
+| Authoring, weathering, comparing or baking procedural and image-derived materials | [materials.md](references/materials.md) |
 | Movement, camera, aiming, controller response | [feel.md](references/feel.md) |
 | Footsteps, weapons, ambience, mixing | [sound.md](references/sound.md) |
 | Frame budgets and what gives way first | [performance.md](references/performance.md) |

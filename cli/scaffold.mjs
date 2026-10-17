@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { runPrototype } from './prototype.mjs'
+import { runPrototype, writeKit } from './prototype.mjs'
 import { initializeSubmodule } from './scaffold-git.mjs'
 
 const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -20,7 +20,7 @@ const profiles = {
   fpp: { name: 'First person', description: 'Game shell with rigged, animated first person arms', included: ['subject', 'armory'], optional: Object.keys(systems), unavailable: [] },
   tpp: { name: 'Third person', description: 'Game shell with an ALS controller prototype', included: [], optional: Object.keys(systems), unavailable: [] },
   mp: { name: 'Multiplayer first and third person', description: 'Networked rigged FPP arms and ALS bodies with switchable camera', included: ['subject', 'armory', 'relay', 'protocol'], optional: Object.keys(systems), unavailable: [] },
-  blank: { name: 'Blank', description: 'Game shell with an empty R3F scene', included: [], optional: Object.keys(systems), unavailable: [] },
+  blank: { name: 'Blank', description: 'Game shell with a walker in the starter yard', included: [], optional: Object.keys(systems), unavailable: [] },
 }
 function parse(argv) {
   const result = { command: argv[0] === 'catalog' ? 'catalog' : 'scaffold', json: argv.includes('--json'), gate: argv.includes('--gate') }
@@ -83,7 +83,7 @@ async function main() {
       systems: Object.entries(systems).map(([id, system]) => ({ id, ...system, profiles: Object.fromEntries(Object.entries(profiles).map(([profile, data]) => [profile, data.included.includes(id) ? 'included' : data.unavailable.includes(id) ? 'unavailable' : 'optional'])) })),
       packages: packageRows.filter(Boolean),
       templates: [{ id: 'game-shell', path: 'templates/game-shell' }],
-      kits: ['tpp', 'fpp', 'subject', 'armory', 'warden', 'cascade', 'mp'].map(id => ({ id, command: `blacksite prototype new <name> --with ${id}`, status: ['subject', 'armory', 'warden', 'cascade'].includes(id) ? 'experimental' : 'usable' })),
+      kits: ['blank', 'tpp', 'fpp', 'subject', 'armory', 'warden', 'cascade', 'mp'].map(id => ({ id, command: `blacksite prototype new <name> --with ${id}`, status: ['subject', 'armory', 'warden', 'cascade'].includes(id) ? 'experimental' : 'usable' })),
       tools: ['install', 'doctor', 'catalog', 'scaffold', 'new', 'budget', 'check', 'assets', 'prototype', 'architecture', 'update'],
     }
     process.stdout.write(`${JSON.stringify(catalog)}\n`)
@@ -129,13 +129,15 @@ async function main() {
   await initializeSubmodule(root, localRef || blacksiteUrl, 'vendor/blacksite', localRef ? null : options['blacksite-ref'])
   emit(options.json, 'submodules', 'done', 'Recursive Blacksite submodule initialized')
   const packageIds = [...requested].map(id => id === 'subject' && profile === 'fpp' ? 'subject-fpp' : id)
+  if (profile === 'mp') packageIds.push('subject-fpp')
   const needsAls = profile === 'tpp' || packageIds.includes('subject') || packageIds.includes('subject-fpp')
-  const closure = await packageClosure(path.join(root, 'vendor/blacksite'), ['ui', ...packageIds])
+  const base = ['ui', 'look', 'input', 'check', 'soundscape']
+  const closure = await packageClosure(path.join(root, 'vendor/blacksite'), [...base, ...packageIds])
   const workspace = ['packages:', ...closure.map(item => `  - '${item}'`), ...(needsAls ? ["  - 'vendor/blacksite/vendor/als-web'"] : []), 'allowBuilds:', '  esbuild: true', ...(profile === 'mp' ? ['  msgpackr-extract: false'] : []), 'minimumReleaseAge: 0', ''].join('\n')
   await writeFile(path.join(root, 'pnpm-workspace.yaml'), workspace)
   const dependencyNames = ['react', 'react-dom', 'three', '@react-three/fiber', '@react-three/rapier', 'effect', 'koota', 'xstate']
   const devNames = ['typescript', 'vite', '@vitejs/plugin-react', '@tailwindcss/vite', 'oxlint', '@types/react', '@types/react-dom', '@types/three', ...(profile === 'mp' ? ['tsx', 'concurrently', '@types/node'] : [])]
-  const dependencies = { '@blacksite/ui': 'workspace:*' }
+  const dependencies = Object.fromEntries(base.map(id => [`@blacksite/${id}`, 'workspace:*']))
   if (needsAls) dependencies['als-ue5-r3f'] = 'workspace:*'
   for (const id of packageIds) dependencies[`@blacksite/${id}`] = 'workspace:*'
   for (const name of dependencyNames) dependencies[name] = await npmRange(name)
@@ -146,13 +148,14 @@ async function main() {
   await writeFile(path.join(root, 'pnpm-workspace.yaml'), `${workspace}overrides:\n  react: '${dependencies.react}'\n  react-dom: '${dependencies['react-dom']}'\n  three: '${dependencies.three}'\n  '@react-three/fiber': '${dependencies['@react-three/fiber']}'\n  '@types/three': '${devDependencies['@types/three']}'\n`)
   const source = path.join(templateDirectory, 'game-shell')
   await cp(source, root, { recursive: true, force: true })
-  if (profile !== 'blank') await runPrototype(['new', profile === 'tpp' ? 'controller-tpp' : profile === 'mp' ? 'controller-mp' : 'controller-fpp', '--with', profile === 'tpp' ? 'als-tpp' : profile === 'mp' ? 'mp' : 'fpp', '--project', root, '--quiet'])
+  const kit = profile === 'tpp' ? 'als-tpp' : profile
+  await runPrototype(['new', `controller-${profile}`, '--with', kit, '--project', root, '--quiet'])
+  await writeKit(kit, path.join(root, 'src', 'game', 'mode.tsx'), 'game')
   if (profile === 'mp') {
     await mkdir(path.join(root, 'server'), { recursive: true })
     await cp(path.join(templateDirectory, 'multiplayer-server', 'index.ts'), path.join(root, 'server', 'index.ts'))
     await cp(path.join(templateDirectory, 'multiplayer-server', 'README.md'), path.join(root, 'server', 'README.md'))
   }
-  if (profile === 'mp' || profile === 'fpp') await cp(path.join(root, 'src', 'prototypes', `controller-${profile}`, 'mode.tsx'), path.join(root, 'src', 'game', 'mode.tsx'))
   await mkdir(path.join(root, 'lint'), { recursive: true })
   await cp(path.join(templateDirectory, 'lint', 'game.mjs'), path.join(root, 'lint', 'game.mjs'), { recursive: true, force: true })
   await cp(path.join(templateDirectory, 'lint', '.oxlintrc.json'), path.join(root, '.oxlintrc.json'), { force: true })
@@ -160,16 +163,18 @@ async function main() {
   if (profile !== 'tpp') {
     const tsconfigFile = path.join(root, 'tsconfig.json')
     const tsconfig = await json(tsconfigFile)
-    tsconfig.include = ['src', ...(profile === 'mp' ? ['server'] : []), ...(needsAls ? ['vendor/blacksite/vendor/als-web/src/app/globals.d.ts'] : [])]
+    tsconfig.include = ['src', 'vendor/blacksite/packages/look/src/n8ao.d.ts', ...(profile === 'mp' ? ['server'] : []), ...(needsAls ? ['vendor/blacksite/vendor/als-web/src/app/globals.d.ts'] : [])]
     await writeFile(tsconfigFile, `${JSON.stringify(tsconfig, null, 2)}\n`)
   }
   await cp(path.join(templateDirectory, 'monorepo', 'vite.config.mjs'), path.join(root, 'vite.config.mjs'), { force: true })
   await mkdir(path.join(root, 'scripts'), { recursive: true })
   await cp(path.join(rootDirectory, 'cli', 'budget-check.mjs'), path.join(root, 'scripts', 'budget-check.mjs'), { force: true })
-  await writeFile(path.join(root, 'budget.config.json'), JSON.stringify({ maxChunkBytes: 4000000, maxTotalJsBytes: 8000000, maxAssetBytes: 20000000, fixedStepHz: 60, tiers: { desktop: { targetFps: 120, renderScale: 1 }, mobile: { targetFps: 60, renderScale: 0.75, effectScale: 0.5, distanceScale: 0.6, densityScale: 0.5, updateRateScale: 0.5 } }, legacyAssetPaths: ['assets/skm-als.glb', 'assets/skm-als-pistol.glb', 'assets/skm-als-rifle.glb'], requiresFixedStep: true }, null, 2) + '\n')
+  const worldTextures = (await readdir(path.join(root, 'vendor/blacksite/packages/look/assets/world'))).filter(file => file.endsWith('.webp')).map(file => `assets/${file.replace(/\.webp$/, '')}-*.webp`)
+  const armsTextures = needsAls ? (await readdir(path.join(root, 'vendor/blacksite/packages/subject-fpp/assets/materials'))).filter(file => file.endsWith('.webp')).map(file => `assets/${file.replace(/\.webp$/, '')}-*.webp`) : []
+  await writeFile(path.join(root, 'budget.config.json'), JSON.stringify({ maxChunkBytes: 4000000, maxTotalJsBytes: 8000000, maxAssetBytes: 20000000, fixedStepHz: 60, tiers: { desktop: { targetFps: 120, renderScale: 1 }, mobile: { targetFps: 60, renderScale: 0.75, effectScale: 0.5, distanceScale: 0.6, densityScale: 0.5, updateRateScale: 0.5 } }, legacyAssetPaths: ['assets/skm-als.glb', 'assets/skm-als-pistol.glb', 'assets/skm-als-rifle.glb', ...worldTextures, ...armsTextures], requiresFixedStep: true }, null, 2) + '\n')
   await cp(path.join(templateDirectory, 'loading', 'warmup.ts'), path.join(root, 'scripts', 'warmup.ts'), { force: true })
   await cp(path.join(templateDirectory, 'monorepo', 'gitignore.txt'), path.join(root, '.gitignore'), { force: true })
-  await writeFile(path.join(root, 'index.html'), `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${options.name.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>\n`)
+  await writeFile(path.join(root, 'index.html'), `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>${options.name.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>\n`)
   emit(options.json, 'files', 'done', `Copied ${profile} starter and ${closure.length} Blacksite workspace packages`)
   emit(options.json, 'install', 'start', 'Running pnpm install')
   run('pnpm', ['install'], root)

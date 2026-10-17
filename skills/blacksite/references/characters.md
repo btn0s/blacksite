@@ -7,7 +7,7 @@ An animated player body that walks, runs, sprints, crouches, mantles, rolls, rag
 | Need | Use |
 |---|---|
 | Solo first person, arms only | `@blacksite/subject-fpp`: `StandaloneSubject` and `ArmsViewmodel` from `/arms`. The game owns movement and returns the camera position. |
-| Solo third person | The ALS `Character` and `AlsCamera`; the character reads keyboard, mouse and gamepad itself. Template: `templates/prototype-kits/als-tpp/mode.tsx`. |
+| Solo third person | The ALS `Character` and `AlsCamera`, driven from `@blacksite/input` through `inputSource` and `controlRotationSource` with `inputEnabled={false}`. Template: `templates/prototype-kits/als-tpp/mode.tsx`. |
 | Switchable view, or a body the game drives | `@blacksite/subject`: `createSubject()` plus `Character inputEnabled={false} inputSource={createSubjectInputSource(subject)}`. |
 | Remote players, or AI puppets | One `AlsSnapshotBuffer` per actor, drawn with `AlsRemoteActor`. Squad does this. |
 

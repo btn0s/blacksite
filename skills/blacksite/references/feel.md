@@ -18,10 +18,10 @@ Movement, camera and aim numbers taken from shipped character systems and from t
 | Capsule | Radius 0.3 m, height 1.8 m standing, 1.12 m crouched | ALS |
 | Mantle | Ledges 0.5–2.25 m from the ground, 0.5–1.5 m in the air | ALS |
 | Physics step | Fixed 1/60 s | Every template |
-| First-person kit | 3.5 m/s walk, 6.5 sprint | `fpp` template |
+| Template walker | 1.75 m/s walk, 3.75 run, 6.5 sprint, 0.25 s to top speed, 0.9 m apex | `src/game/model.ts` |
 | Firing range | 3.1 m/s walk, 5.2 sprint, 1.8 aiming | Firing Range |
 
-Build what the kit doesn't have yet, because players expect it: **coyote time** (0.1 s after leaving a ledge), a **jump buffer** (0.1 s before landing), and a camera dip and sound on landing. The standalone first-person subject has no gravity, collision or jump; a first-person game brings its own character physics.
+Players expect **coyote time** (0.1 s after leaving a ledge) and a **jump buffer** (0.1 s before landing); the template's motor has both. Add a camera dip on landing; the walker already plays the landing sound. The standalone first-person subject has no gravity, collision or jump, which is why the `fpp` template puts it on the walker.
 
 ## Camera
 

@@ -1,0 +1,19 @@
+{
+  "id": "wood-planks",
+  "model": "gemini-3.1-flash-image",
+  "prompt": "Flat orthographic straight-on photograph of exactly 2 m x 2 m of weathered grey wooden planks, laid horizontally, each board 15 cm wide, with narrow dark gaps between boards, face-on, filling the entire frame edge to edge. Silvery grey weathered grain, cracks, a few knots. Muted desaturated Soviet industrial ruin, physically plausible colours. Even overcast diffuse daylight, no cast shadows, no directional light, no vignette, no lighting gradient, no perspective, no objects, no text, no watermark. Uniform exposure across the whole image.",
+  "generated": "2026-10-16",
+  "size": [
+    2,
+    2
+  ],
+  "provider": "Google Gemini",
+  "licence": "Generated output under Gemini API terms; Google does not claim ownership. Not a CC0 scan.",
+  "notes": "About 12 boards across 2 m (slightly wider than 15 cm); gaps are near-black. Uniform lighting.",
+  "author": "Generated for Blacksite using Google Gemini",
+  "sourceUrl": "https://ai.google.dev/gemini-api/docs/image-generation",
+  "termsUrl": "https://ai.google.dev/gemini-api/terms",
+  "scaleNote": "Intended area requested in the prompt; physical dimensions are not measured.",
+  "seed": null,
+  "seedNote": "No generation seed was set; retain this source image to reproduce graph bakes."
+}

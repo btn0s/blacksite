@@ -1,0 +1,232 @@
+{
+  "name": "poured-concrete",
+  "title": "Poured concrete, board-formed",
+  "description": "Cast-in-place wall concrete with formwork board imprints, bug holes and fine aggregate.",
+  "size": 2.4,
+  "depth": 0.012,
+  "seed": 1,
+  "orientation": "wall",
+  "nodes": {
+    "boards": {
+      "op": "planks",
+      "tile": [
+        2.4,
+        0.12
+      ],
+      "gap": 0.002,
+      "bevel": 0.001,
+      "lengthJitter": 0,
+      "offsetJitter": 1,
+      "jitter": 0.35,
+      "seed": 6710408
+    },
+    "boardTone": {
+      "op": "planks",
+      "tile": [
+        2.4,
+        0.12
+      ],
+      "gap": 0.002,
+      "bevel": 0.001,
+      "lengthJitter": 0,
+      "offsetJitter": 1,
+      "output": "random",
+      "seed": 6710408
+    },
+    "grainRaw": {
+      "op": "fbm",
+      "cell": [
+        0.6,
+        0.008
+      ],
+      "octaves": 5,
+      "gain": 0.6
+    },
+    "warpField": {
+      "op": "fbm",
+      "cell": [
+        0.4,
+        0.1
+      ],
+      "octaves": 3
+    },
+    "grain": {
+      "op": "warp",
+      "input": "grainRaw",
+      "by": "warpField",
+      "amount": 0.02
+    },
+    "streak": {
+      "op": "fbm",
+      "cell": [
+        0.3,
+        0.02
+      ],
+      "octaves": 5,
+      "gain": 0.55
+    },
+    "broad": {
+      "op": "fbm",
+      "cell": 0.9,
+      "octaves": 5,
+      "gain": 0.5
+    },
+    "fine": {
+      "op": "fbm",
+      "cell": 0.006,
+      "octaves": 3,
+      "basis": "value"
+    },
+    "pores": {
+      "op": "scatter",
+      "cell": 0.025,
+      "radius": 0.003,
+      "sizeJitter": 0.7,
+      "density": 0.55,
+      "shape": "crater",
+      "stretch": 0.7
+    },
+    "aggregate": {
+      "op": "cellular",
+      "cell": 0.005,
+      "mode": "f1"
+    },
+    "relief": {
+      "op": "blend",
+      "a": "boards",
+      "b": "grain",
+      "mode": "mix",
+      "opacity": 0.45
+    },
+    "relief2": {
+      "op": "blend",
+      "a": "reliefL",
+      "b": "fine",
+      "mode": "overlay",
+      "opacity": 0.35
+    },
+    "height": {
+      "op": "blend",
+      "a": "relief2",
+      "b": "pores",
+      "mode": "subtract",
+      "opacity": 0.7
+    },
+    "tone": {
+      "op": "blend",
+      "a": "streak",
+      "b": "boardTone",
+      "mode": "mix",
+      "opacity": 0.25
+    },
+    "tone2": {
+      "op": "blend",
+      "a": "tone",
+      "b": "broad",
+      "mode": "overlay",
+      "opacity": 0.7
+    },
+    "tone3": {
+      "op": "blend",
+      "a": "tone2",
+      "b": "lumpsW",
+      "mode": "overlay",
+      "opacity": 0.3
+    },
+    "base": {
+      "op": "ramp",
+      "input": "tone3",
+      "stops": [
+        [
+          0,
+          "#66645f"
+        ],
+        [
+          0.4,
+          "#85837d"
+        ],
+        [
+          0.65,
+          "#9b9890"
+        ],
+        [
+          1,
+          "#b2aea4"
+        ]
+      ]
+    },
+    "speck": {
+      "op": "levels",
+      "input": "aggregate",
+      "in": [
+        0.0,
+        0.45
+      ],
+      "out": [
+        0.82,
+        1.0
+      ]
+    },
+    "color0": {
+      "op": "blend",
+      "a": "base",
+      "b": "speck",
+      "mode": "multiply"
+    },
+    "color": {
+      "op": "blend",
+      "a": "color0",
+      "b": "#2b2925",
+      "mode": "mix",
+      "mask": "pores",
+      "opacity": 0.85
+    },
+    "roughness": {
+      "op": "levels",
+      "input": "fine",
+      "out": [
+        0.84,
+        0.98
+      ]
+    },
+    "lumps": {
+      "op": "fbm",
+      "cell": [
+        0.09,
+        0.035
+      ],
+      "octaves": 4,
+      "gain": 0.55
+    },
+    "lumpsW": {
+      "op": "warp",
+      "input": "lumps",
+      "by": "warpField",
+      "amount": 0.015
+    },
+    "reliefL": {
+      "op": "blend",
+      "a": "relief",
+      "b": "lumpsW",
+      "mode": "overlay",
+      "opacity": 0.85
+    }
+  },
+  "outputs": {
+    "color": "color",
+    "height": "height",
+    "roughness": "roughness",
+    "metalness": 0
+  },
+  "finish": {
+    "normal": 1.2,
+    "ao": {
+      "radius": 0.02,
+      "strength": 0.9
+    }
+  },
+  "weather": {
+    "age": 0.55,
+    "dirt": 0.35
+  }
+}

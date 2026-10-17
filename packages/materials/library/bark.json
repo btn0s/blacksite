@@ -1,0 +1,194 @@
+{
+  "name": "bark",
+  "title": "Tree bark",
+  "description": "Furrowed bark of a mature broadleaf: long vertical plates split by deep fissures, lichen in the lee.",
+  "size": 1.0,
+  "depth": 0.03,
+  "seed": 10,
+  "orientation": "object",
+  "nodes": {
+    "plates": {
+      "op": "cellular",
+      "cell": [
+        0.032,
+        0.22
+      ],
+      "mode": "edge",
+      "jitter": 1
+    },
+    "warpA": {
+      "op": "fbm",
+      "cell": [
+        0.08,
+        0.5
+      ],
+      "octaves": 4
+    },
+    "platesW": {
+      "op": "warp",
+      "input": "plates",
+      "by": "warpA",
+      "amount": 0.035
+    },
+    "ridges": {
+      "op": "ridged",
+      "cell": [
+        0.018,
+        0.3
+      ],
+      "octaves": 5,
+      "sharpness": 1.2
+    },
+    "ridgesW": {
+      "op": "warp",
+      "input": "ridges",
+      "by": "warpA",
+      "amount": 0.015
+    },
+    "fibres": {
+      "op": "fbm",
+      "cell": [
+        0.03,
+        0.004
+      ],
+      "octaves": 3
+    },
+    "fissure": {
+      "op": "levels",
+      "input": "platesW",
+      "in": [
+        0.0,
+        0.22
+      ],
+      "gamma": 0.8
+    },
+    "body": {
+      "op": "blend",
+      "a": "fissure",
+      "b": "ridgesW",
+      "mode": "multiply",
+      "opacity": 0.75
+    },
+    "body2": {
+      "op": "blend",
+      "a": "body",
+      "b": "fibres",
+      "mode": "overlay",
+      "opacity": 0.45
+    },
+    "height": {
+      "op": "slopeBlur",
+      "input": "body2",
+      "slope": "warpA",
+      "amount": 0.004,
+      "samples": 6,
+      "mode": "blur"
+    },
+    "tone": {
+      "op": "fbm",
+      "cell": 0.2,
+      "octaves": 5
+    },
+    "toneMix": {
+      "op": "blend",
+      "a": "height",
+      "b": "tone",
+      "mode": "overlay",
+      "opacity": 0.4
+    },
+    "barkC": {
+      "op": "ramp",
+      "input": "toneMix",
+      "stops": [
+        [
+          0,
+          "#1c140e"
+        ],
+        [
+          0.25,
+          "#3a2a1d"
+        ],
+        [
+          0.5,
+          "#5a4330"
+        ],
+        [
+          0.7,
+          "#6e5a46"
+        ],
+        [
+          0.85,
+          "#7c6c5a"
+        ],
+        [
+          1,
+          "#8f8270"
+        ]
+      ]
+    },
+    "lichenF": {
+      "op": "fbm",
+      "cell": 0.08,
+      "octaves": 5
+    },
+    "lichenM0": {
+      "op": "levels",
+      "input": "lichenF",
+      "in": [
+        0.6,
+        0.7
+      ]
+    },
+    "lichenM": {
+      "op": "blend",
+      "a": "lichenM0",
+      "b": "fissure",
+      "mode": "multiply"
+    },
+    "color": {
+      "op": "blend",
+      "a": "barkC",
+      "b": "#7d8a63",
+      "mode": "mix",
+      "mask": "lichenM",
+      "opacity": 0.6
+    },
+    "roughness": {
+      "op": "levels",
+      "input": "fibres",
+      "out": [
+        0.85,
+        0.98
+      ]
+    },
+    "rusty": {
+      "op": "levels",
+      "input": "tone",
+      "in": [
+        0.5,
+        0.75
+      ]
+    },
+    "color2": {
+      "op": "blend",
+      "a": "color",
+      "b": "#8a5a34",
+      "mode": "overlay",
+      "mask": "rusty",
+      "opacity": 0.5
+    }
+  },
+  "outputs": {
+    "color": "color2",
+    "height": "height",
+    "roughness": "roughness",
+    "metalness": 0
+  },
+  "finish": {
+    "normal": 1,
+    "ao": {
+      "radius": 0.04,
+      "strength": 1
+    }
+  }
+}

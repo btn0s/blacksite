@@ -112,7 +112,7 @@ export class AirStrikeScene {
     this.renderer.domElement.style.filter = 'none'
     host.prepend(this.renderer.domElement)
     attachPerfProbe(this.renderer)
-    const atmosphere = createAtmosphere(this.scene, this.renderer, { fog: '#8a8b7e', density: 0.0068, sunDirection: [-0.62, 0.42, 0.5], sunIntensity: 2.4, ambient: 0.95, shadowSize: 44, shadowMap: isTouchDevice() ? 1024 : 2048, exposure: 1.02 })
+    const atmosphere = createAtmosphere(this.scene, this.renderer, { fog: '#8a8b7e', density: 0.0068, sunDirection: [-0.62, 0.42, 0.5], sunIntensity: 2.4, ambient: 0.95, shadowSize: 44, shadowMap: isTouchDevice() ? 1024 : 2048 })
     atmosphere.follow(new THREE.Vector3(0, 0, 4))
     this.look = createLook(this.renderer, this.scene, this.camera, { atmosphere: 'zone', sky: false, fog: false })
     this.reticle.visible = false

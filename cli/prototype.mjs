@@ -10,7 +10,12 @@ const option = (args, name) => { const index = args.indexOf(name); return index 
 const slug = value => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 const directory = args => path.resolve(option(args, '--project') || process.cwd())
 const safe = name => /^[a-z][a-z0-9-]{0,63}$/.test(name)
-const kits = ['als-tpp', 'tpp', 'fpp', 'subject', 'armory', 'warden', 'cascade', 'mp']
+const kits = ['blank', 'als-tpp', 'tpp', 'fpp', 'subject', 'armory', 'warden', 'cascade', 'mp']
+const playerKits = ['blank', 'als-tpp', 'tpp', 'fpp', 'mp']
+export async function writeKit(kit, target, place = 'prototype') {
+  const source = await readFile(path.join(rootDirectory, 'templates', 'prototype-kits', kit === 'tpp' ? 'als-tpp' : kit, 'mode.tsx'), 'utf8')
+  await writeFile(target, source.replaceAll("'../../game-shell/src/game/", place === 'game' ? "'./" : "'../../game/"))
+}
 async function ensureKitPackages(project, kit, prototypeName) {
   const multiplayer = ['mp'].includes(kit)
   const needsAls = ['als-tpp', 'tpp', 'subject', 'mp', 'fpp'].includes(kit)
@@ -29,6 +34,13 @@ async function ensureKitPackages(project, kit, prototypeName) {
     const config = JSON.parse(await readFile(configFile, 'utf8'))
     config.include = [...new Set([...(config.include || ['src']), 'vendor/blacksite/vendor/als-web/src/app/globals.d.ts'])]
     await writeFile(configFile, `${JSON.stringify(config, null, 2)}\n`)
+    const budgetFile = path.join(project, 'budget.config.json')
+    if (existsSync(budgetFile)) {
+      const budget = JSON.parse(await readFile(budgetFile, 'utf8'))
+      const textures = (await readdir(path.join(packagesRoot, 'subject-fpp/assets/materials'))).filter(file => file.endsWith('.webp')).map(file => `assets/${file.replace(/\.webp$/, '')}-*.webp`)
+      budget.legacyAssetPaths = [...new Set([...(budget.legacyAssetPaths || []), ...textures])]
+      await writeFile(budgetFile, `${JSON.stringify(budget, null, 2)}\n`)
+    }
   }
   if (multiplayer && !workspace.includes('msgpackr-extract: false')) { workspace = workspace.replace('  esbuild: true', '  esbuild: true\n  msgpackr-extract: false'); changed = true }
   const seen = new Set()
@@ -62,7 +74,7 @@ async function ensureKitPackages(project, kit, prototypeName) {
     config.include = [...new Set([...(config.include || ['src']), 'server', 'vendor/blacksite/vendor/als-web/src/app/globals.d.ts'])]
     await writeFile(configFile, `${JSON.stringify(config, null, 2)}\n`)
     const modeFile = path.join(project, 'src', 'game', 'mode.tsx')
-    if (!existsSync(modeFile)) { await mkdir(path.dirname(modeFile), { recursive: true }); await cp(path.join(project, 'src', 'prototypes', prototypeName, 'mode.tsx'), modeFile) }
+    if (!existsSync(modeFile)) { await mkdir(path.dirname(modeFile), { recursive: true }); await writeKit(kit, modeFile, 'game') }
     changed = true
   }
   if (!changed) return
@@ -74,7 +86,7 @@ async function ensureKitPackages(project, kit, prototypeName) {
 }
 async function create(args) {
   const name = slug(args[1] || '')
-  if (!safe(name)) throw new Error('Use prototype new <name> [--with tpp|fpp|subject|armory|warden|cascade]')
+  if (!safe(name)) throw new Error('Use prototype new <name> [--with blank|tpp|fpp|mp|subject|armory|warden|cascade]')
   const kit = option(args, '--with')
   if (kit && !kits.includes(kit)) throw new Error(`Unknown kit: ${kit}`)
   const project = directory(args)
@@ -85,10 +97,10 @@ async function create(args) {
   await mkdir(path.join(project, 'docs', 'prototypes'), { recursive: true })
   const code = `import { useEffect, useState } from 'react'\nimport { createWorld, trait } from 'koota'\n\nconst Progress = trait({ count: 0 })\nconst world = createWorld()\nconst entity = world.spawn(Progress)\n\nexport default function Prototype() {\n  const [count, setCount] = useState(0)\n  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (event.code === 'Space') advance() }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey) }, [])\n  const advance = () => { const next = entity.get(Progress)!.count + 1; entity.set(Progress, { count: next }); setCount(next) }\n  return <main className="panel"><h1>${name}</h1><p>${kit || 'blank'} prototype · Progress {count}</p><button onClick={advance}>Try mechanic</button></main>\n}\n`
   await writeFile(path.join(root, 'mode.tsx'), code)
-  if (['als-tpp', 'tpp', 'fpp', 'mp'].includes(kit)) await cp(path.join(rootDirectory, 'templates', 'prototype-kits', kit === 'tpp' ? 'als-tpp' : kit, 'mode.tsx'), path.join(root, 'mode.tsx'))
-  const inputs = ['mp'].includes(kit) ? 'WASD, mouse, V view toggle, fire, online/offline room selection' : ['als-tpp', 'tpp'].includes(kit) ? 'WASD, mouse, sprint, jump' : kit === 'fpp' ? 'WASD, mouse, view, weapon, reload, fire' : 'keyboard Space or Try mechanic button'
-  const outputs = ['mp'].includes(kit) ? 'local FPP arms or ALS TPP body, interpolated remote ALS bodies, validated hits' : ['als-tpp', 'tpp'].includes(kit) ? 'ALS pose and camera' : kit === 'fpp' ? 'camera pose, weapon events, recoil, shot count' : 'progress count'
-  const traits = ['als-tpp', 'tpp', 'fpp', 'mp'].includes(kit) ? 'Controller, Pawn, PawnIntent; add prototype traits here' : 'Progress'
+  if (playerKits.includes(kit)) await writeKit(kit, path.join(root, 'mode.tsx'))
+  const inputs = playerKits.includes(kit) ? 'the play context in src/game/input.ts: keyboard, mouse, gamepad and touch' : 'keyboard Space or Try mechanic button'
+  const outputs = ['mp'].includes(kit) ? 'local FPP arms or ALS TPP body, interpolated remote ALS bodies, validated hits' : ['als-tpp', 'tpp'].includes(kit) ? 'ALS pose and camera' : kit === 'fpp' ? 'camera pose, weapon events, sound cues' : kit === 'blank' ? 'walker position and camera' : 'progress count'
+  const traits = playerKits.includes(kit) ? 'Controller, Pawn, PawnIntent; add prototype traits here' : 'Progress'
   await writeFile(path.join(project, 'docs', 'prototypes', `${name}.md`), `# ${name}\n\nKit: ${kit || 'blank'}\n\n## Question\n\nWhat must this prototype prove?\n\n## Contract\n\n- Inputs: ${inputs}\n- Outputs: ${outputs}\n- Koota traits: ${traits}\n- Machine events: define any discrete transitions here\n- Effect services: list resource and I/O interfaces here\n- State ownership: Koota gameplay world\n\n## What was learned\n\nRecord player evidence before promoting.\n`)
   await ensureKitPackages(project, kit, name)
   if (!args.includes('--quiet')) process.stdout.write(`${root}\n`)
