@@ -41,9 +41,9 @@ export function grassTexture(size = 256, seed = 11): CanvasTexture {
   return canvasTexture(size, seed, (context, s, random) => {
     for (let index = 0; index < 54; index++) {
       const spread = random() - 0.5
-      const x = s * (0.5 + spread * 0.42)
+      const x = s * (0.5 + spread * 0.86)
       const height = s * (0.4 + random() * 0.58)
-      const lean = spread * s * 0.75 + (random() - 0.5) * s * 0.16
+      const lean = spread * s * 0.3 + (random() - 0.5) * s * 0.2
       blade(context, x, s, height, s * (0.016 + random() * 0.018), lean, 0.7 + random() * 0.45)
     }
     for (let index = 0; index < 5; index++) {
