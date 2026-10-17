@@ -493,3 +493,7 @@ Licence: https://www.usgs.gov/information-policies-and-instructions/copyrights-a
 | `bed-stream` Stream Soundscape from the Black Canyon Trail | ambience | J. Job / National Park Service, Rocky Mountain National Park | [www.nps.gov](https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm) |
 | `bed-wind-alpine` Wind Soundscape from Gem Lake | ambience | J. Job, Rocky Mountain National Park (National Park Service) | [www.nps.gov](https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm) |
 | `terrain-ridge-valley` USGS 3DEP 1/3 arc-second n41w079 | terrain | U.S. Geological Survey | [www.usgs.gov](https://www.usgs.gov/3d-elevation-program) |
+
+## Breach selected library assets
+
+Breach ships `gunfire-ak47`, `gunfire-pistol-9mm`, `step-boots-concrete`, `step-metal-ladder`, `step-wood-oga`, `step-gravel-oga`, `step-water-oga`, and `wood-planks-old` from the catalog ledger above. Gunfire and footsteps are selected, trimmed takes, normalized and encoded to Opus with AAC fallback. Old Planks 02 is resized and packed into colour, normal and ORM maps. Complete original and derivative authors, source links and licences are retained above and in Breach’s own credits.

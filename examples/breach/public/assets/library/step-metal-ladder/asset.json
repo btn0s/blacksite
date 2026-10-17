@@ -1,0 +1,55 @@
+{
+  "id": "step-metal-ladder",
+  "category": "footstep",
+  "ship": [
+    "01.ogg",
+    "02.ogg",
+    "03.ogg",
+    "04.ogg"
+  ],
+  "files": {
+    "01.ogg": 2581,
+    "01.m4a": 5171,
+    "02.ogg": 2882,
+    "02.m4a": 5951,
+    "03.ogg": 2543,
+    "03.m4a": 5691,
+    "04.ogg": 2083,
+    "04.m4a": 3871
+  },
+  "bytes": 2882,
+  "budget": 60000,
+  "withinBudget": true,
+  "over": [],
+  "variations": [
+    {
+      "file": "01.ogg",
+      "fallback": "01.m4a",
+      "seconds": 0.307,
+      "source": "0.ogg",
+      "peakDb": -1.11
+    },
+    {
+      "file": "02.ogg",
+      "fallback": "02.m4a",
+      "seconds": 0.354,
+      "source": "1.ogg",
+      "peakDb": -1.25
+    },
+    {
+      "file": "03.ogg",
+      "fallback": "03.m4a",
+      "seconds": 0.332,
+      "source": "2.ogg",
+      "peakDb": -1.22
+    },
+    {
+      "file": "04.ogg",
+      "fallback": "04.m4a",
+      "seconds": 0.192,
+      "source": "3.ogg",
+      "peakDb": -1.2
+    }
+  ],
+  "channels": 1
+}
