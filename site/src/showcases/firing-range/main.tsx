@@ -56,6 +56,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
   const override = useRef<CameraPose | null>(null)
   const capturing = useRef(false)
   const readyFrames = useRef(0)
+  const warmFrames = useRef(0)
   const size = useThree(state => state.size)
   const recoil = useMemo(createStandaloneRecoil, [])
   const effects = useMemo(() => createEffects(scene), [scene])
@@ -307,7 +308,13 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     audio.update(dt, camera.position, scratch.forward.set(0, 0, -1).applyQuaternion(camera.quaternion))
     state.flash = Math.max(0, state.flash - dt)
     lights.flash.intensity = state.flash > 0 ? 14 * state.flash / 0.05 : 0
-    if (worldReady && presentation && readyFrames.current++ > 2) check.ready()
+    if (worldReady && presentation) {
+      if (warmFrames.current < 3) {
+        const warming = warmFrames.current++ < 2
+        effects.warm(warming)
+        steelSet.warm(warming)
+      } else if (readyFrames.current++ > 2) check.ready()
+    }
     if (capturing.current) {
       const capacity = definitions.find(definition => definition.id === arms.weapon)!.magazineSize
       const sample = drill.get()

@@ -229,5 +229,18 @@ export function buildSteel() {
   frameMesh.receiveShadow = true
   group.add(frameMesh)
 
-  return { group, steel, solids: [...steel.flatMap(target => target.solids), ...frameSolids] }
+  const warmMark = new THREE.Mesh(splashGeometry, splashMaterial!)
+  warmMark.frustumCulled = false
+  warmMark.visible = false
+  group.add(warmMark)
+
+  return {
+    group,
+    steel,
+    solids: [...steel.flatMap(target => target.solids), ...frameSolids],
+    warm(active: boolean) {
+      warmMark.visible = active
+      splashMaterial!.colorWrite = !active
+    },
+  }
 }

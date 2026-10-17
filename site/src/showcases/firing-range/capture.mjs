@@ -107,23 +107,25 @@ const persist = async complete => {
   await Promise.all(assetRequests)
   await writeFile(path.join(out, `report-${rig}-${profile}-${scale}x${batch ? `-${batch}` : ''}.json`), JSON.stringify({ capturedAt: new Date().toISOString(), complete, batch: batch || 'full', url: url.href, viewport, deviceScaleFactor: scale, assets, performance: performanceSample, model: modelSnapshot, errors, measurements, report }, null, 2))
 }
-if (rig === 'blacksite' && (measureOnly || args.includes('--measure'))) {
+if (measureOnly || args.includes('--measure')) {
   const model = await page.evaluate(() => window.__viewmodel.model)
   for (const weapon of ['rifle', 'pistol']) {
     await reset(weapon)
     const expected = model.weapons[weapon]
+    const aimSeconds = rig === 'found' ? model.found.weapons[weapon].aimSeconds : expected.aimSeconds
+    const kickScale = rig === 'found' ? model.found.weapons[weapon].recoil.hip : 1
     let reached = null
-    for (let index = 1; index <= Math.ceil((expected.aimSeconds + 0.05) * 120); index++) { const debug = await advance(1 / 120, { aiming: true }); if (reached === null && debug.aimAmount >= 0.999999) reached = index / 120 }
-    measurements.push({ weapon, metric: 'ADS seconds', expected: expected.aimSeconds, actual: reached, pass: reached !== null && Math.abs(reached - expected.aimSeconds) <= 1 / 120 + 1e-6 })
+    for (let index = 1; index <= Math.ceil((aimSeconds + 0.05) * 120); index++) { const debug = await advance(1 / 120, { aiming: true }); if (reached === null && debug.aimAmount >= 0.999999) reached = index / 120 }
+    measurements.push({ weapon, metric: 'ADS seconds', expected: aimSeconds, actual: reached, pass: reached !== null && Math.abs(reached - aimSeconds) <= 1 / 120 + 1e-6 })
     await advance(0.8, { aiming: false })
     let peak = 0, settled = 0
-    for (let index = 1; index <= 72; index++) { const debug = await advance(1 / 120, index === 1 ? { fire: true } : {}); peak = Math.max(peak, Math.abs(debug.recoilOffset)); if (Math.abs(debug.recoilOffset) > expected.recoil.back * 0.05) settled = index / 120 }
+    for (let index = 1; index <= 72; index++) { const debug = await advance(1 / 120, index === 1 ? { fire: true } : {}); peak = Math.max(peak, Math.abs(debug.recoilOffset)); if (Math.abs(debug.recoilOffset) > expected.recoil.back * kickScale * 0.05) settled = index / 120 }
     const substeps = Math.ceil((1 / 120) / model.procedural.spring.maxStepSeconds)
     const springStep = (1 / 120) / substeps
     const stiffness = model.procedural.recoil.stiffness
     const radius = Math.sqrt(1 - model.procedural.recoil.damping * springStep)
     const angle = Math.acos((2 - model.procedural.recoil.damping * springStep - stiffness * springStep ** 2) / (2 * radius))
-    const impulse = expected.recoil.back * Math.sqrt(stiffness) * Math.E
+    const impulse = expected.recoil.back * kickScale * Math.sqrt(stiffness) * Math.E
     const reference = sample => springStep * radius * impulse * radius ** (sample * substeps) * Math.sin(sample * substeps * angle) / Math.sin(angle)
     const expectedPeak = Math.max(...Array.from({ length: 72 }, (_, index) => Math.abs(reference(index + 1))))
     measurements.push({ weapon, metric: 'recoil peak metres', reference: model.procedural.spring.integrator, springStepSeconds: springStep, expected: expectedPeak, actual: peak, pass: Math.abs(peak - expectedPeak) < expectedPeak * 0.1 })
