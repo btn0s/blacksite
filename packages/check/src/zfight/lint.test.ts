@@ -26,6 +26,12 @@ describe('depth model', () => {
     expect(depthStep({ ...setup, near: 0.2 }, 100)).toBeLessThan(depthStep(setup, 100) / 3.9)
   })
 
+  it('orthographic depth is linear in range, not in distance', () => {
+    const linear = { ...setup, orthographic: true }
+    expect(depthStep(linear, 300) / depthStep(linear, 10)).toBeLessThan(4)
+    expect(depthStep(linear, 100)).toBeLessThan(depthStep(setup, 100) / 100)
+  })
+
   it('reversed float depth resolves finer than fixed point at range', () => {
     expect(depthStep({ ...setup, float: true, reversed: true, bits: 32 }, 300)).toBeLessThan(depthStep(setup, 300) / 1000)
   })
@@ -108,5 +114,36 @@ describe('static z-fight lint', () => {
     labelled.add(merged)
     const report = lintZFighting(labelled, { ...setup, cameras: [{ position: [1, 3, -2], target: [1, 0, 1] }] })
     expect(report.problems[0]!.labels).toEqual(['floor', 'rug'])
+  })
+
+  it('ignores coplanar faces that point away from every camera', () => {
+    const scene = new THREE.Scene()
+    const a = new THREE.Mesh(new THREE.BoxGeometry(4, 1, 4), new THREE.MeshBasicMaterial())
+    const b = new THREE.Mesh(new THREE.BoxGeometry(6, 3, 6), new THREE.MeshBasicMaterial())
+    a.position.set(0, 0.5, 0)
+    b.position.set(0, 1.5, 0)
+    scene.add(a, b)
+    expect(lintZFighting(scene, { cameras: [near], depth: setup }).problems).toEqual([])
+    const below = { name: 'below', position: [0, -3, -4] as [number, number, number], target: [0, 0, 0] as [number, number, number] }
+    expect(lintZFighting(scene, { cameras: [below], depth: setup }).problems.length).toBeGreaterThan(0)
+  })
+
+  it('skips pairs where neither surface writes depth', () => {
+    const scene = new THREE.Scene()
+    const make = () => new THREE.Mesh(new THREE.PlaneGeometry(4, 4).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }))
+    scene.add(make(), make())
+    expect(lintZFighting(scene, { cameras: [near], depth: setup }).problems).toEqual([])
+  })
+
+  it('credits a decal bias against the gap', () => {
+    const scene = new THREE.Scene()
+    const floor = ground()
+    const decal = new THREE.Mesh(new THREE.PlaneGeometry(6, 6).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }))
+    decal.position.y = 0.004
+    scene.add(floor, decal)
+    const mid = { name: 'mid', position: [0, 10, -60] as [number, number, number], target: [0, 0, 0] as [number, number, number] }
+    expect(lintZFighting(scene, { cameras: [mid], depth: setup }).problems.length).toBeGreaterThan(0)
+    decal.material.userData.decalBias = 3e-4
+    expect(lintZFighting(scene, { cameras: [mid], depth: setup }).problems).toEqual([])
   })
 })

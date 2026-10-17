@@ -7,16 +7,17 @@ export type BoxCollider = { kind: 'box'; half: [number, number, number]; positio
 export type CylinderCollider = { kind: 'cylinder'; halfHeight: number; radius: number; position: [number, number, number]; rotation: [number, number, number] }
 export type Collider = BoxCollider | CylinderCollider
 
-type Material = { name: SurfaceName; color?: string; scale?: number; ao?: GroundAO | false }
+type Material = { name: SurfaceName; color?: string; scale?: number; ao?: GroundAO | false; decal?: number }
 type Place = { at: [number, number, number]; rotate?: number | [number, number, number]; collide?: boolean; shadow?: boolean | number; cast?: boolean; name?: string }
 
 export type LevelBuilderOptions = { coplanar?: CoplanarMode; separation?: number }
 
-const keyOf = (material: Material) => `${material.name}|${material.color ?? ''}|${material.scale ?? 1}|${material.ao === false ? 'noao' : JSON.stringify(material.ao ?? '')}`
+const keyOf = (material: Material) => `${material.name}|${material.color ?? ''}|${material.scale ?? 1}|${material.ao === false ? 'noao' : JSON.stringify(material.ao ?? '')}|${material.decal ?? ''}`
 
 export class LevelBuilder {
   private parts = new Map<string, { material: Material; geometries: THREE.BufferGeometry[]; labels: string[]; cast: boolean }>()
-  private contacts: THREE.BufferGeometry[] = []
+  private contacts: Array<{ geometry: THREE.BufferGeometry; x: number; z: number }> = []
+  private planes: Array<{ geometry: THREE.BufferGeometry; material: Material; label: string; source: Extract<FaceSource, { kind: 'plane' }> }> = []
   private meshes: THREE.Mesh[] = []
   readonly colliders: Collider[] = []
   private sources: FaceSource[] = []
@@ -36,18 +37,31 @@ export class LevelBuilder {
     return place.name ?? `${material.name} ${kind} at (${place.at.map(value => Math.round(value * 100) / 100).join(', ')})`
   }
 
-  private add(geometry: THREE.BufferGeometry, material: Material, place: Place, label: string) {
+  private transform(geometry: THREE.BufferGeometry, place: Place) {
     const rotation = typeof place.rotate === 'number' ? [0, place.rotate, 0] as const : place.rotate ?? [0, 0, 0] as const
     this.quaternion.setFromEuler(this.euler.set(rotation[0], rotation[1], rotation[2]))
     this.matrix.compose(new THREE.Vector3(...place.at), this.quaternion, new THREE.Vector3(1, 1, 1))
     geometry.applyMatrix4(this.matrix)
-    const cast = place.cast ?? true
+    return { rotation, quaternion: this.quaternion.clone() }
+  }
+
+  private register(geometry: THREE.BufferGeometry, material: Material, cast: boolean, label: string) {
     const key = `${keyOf(material)}|${cast}`
     let part = this.parts.get(key)
     if (!part) { part = { material, geometries: [], labels: [], cast }; this.parts.set(key, part) }
     part.geometries.push(geometry)
     part.labels.push(label)
-    return { rotation, quaternion: this.quaternion.clone() }
+  }
+
+  private add(geometry: THREE.BufferGeometry, material: Material, place: Place, label: string) {
+    const placed = this.transform(geometry, place)
+    this.register(geometry, material, place.cast ?? true, label)
+    return placed
+  }
+
+  private pushContact(geometry: THREE.BufferGeometry, x: number, z: number) {
+    geometry.translate(x, 0.015, z)
+    this.contacts.push({ geometry, x, z })
   }
 
   box(size: [number, number, number], material: Material, place: Place) {
@@ -61,20 +75,21 @@ export class LevelBuilder {
       const contact = contactShadow(size[0], size[2]).geometry.clone()
       contact.rotateX(-Math.PI / 2)
       contact.rotateY(rotation[1])
-      contact.translate(place.at[0], 0.015, place.at[2])
-      this.contacts.push(contact)
+      this.pushContact(contact, place.at[0], place.at[2])
     }
   }
 
   cylinder(radius: number, height: number, material: Material, place: Place, segments = 12) {
     const tile = surface(material.name, material).userData.tile as number
-    const { rotation } = this.add(worldCylinderGeometry(radius, height, tile, segments), material, place, this.label('cylinder', material, place))
+    const label = this.label('cylinder', material, place)
+    const geometry = worldCylinderGeometry(radius, height, tile, segments)
+    const { rotation, quaternion } = this.add(geometry, material, place, label)
+    this.sources.push({ kind: 'cylinder', label, size: [radius * 2, height, radius * 2], position: new THREE.Vector3(...place.at), quaternion, geometry })
     if (place.collide !== false) this.colliders.push({ kind: 'cylinder', halfHeight: height / 2, radius, position: [...place.at], rotation: [...rotation] })
     if (place.shadow !== false && place.at[1] - height / 2 < 0.2 && rotation[0] === 0 && rotation[2] === 0) {
       const contact = contactShadow(radius * 2, radius * 2, 0.55, radius * 1.4).geometry.clone()
       contact.rotateX(-Math.PI / 2)
-      contact.translate(place.at[0], 0.015, place.at[2])
-      this.contacts.push(contact)
+      this.pushContact(contact, place.at[0], place.at[2])
     }
   }
 
@@ -82,16 +97,17 @@ export class LevelBuilder {
     const tile = surface(material.name, material).userData.tile as number
     const label = this.label('plane', material, place)
     const geometry = worldPlaneGeometry(width, depth, tile)
-    const { quaternion } = this.add(geometry, material, { ...place, cast: false }, label)
-    this.sources.push({ kind: 'plane', label, width, depth, position: new THREE.Vector3(...place.at), quaternion, geometry })
+    const { quaternion } = this.transform(geometry, place)
+    const source = { kind: 'plane' as const, label, width, depth, position: new THREE.Vector3(...place.at), quaternion, geometry }
+    this.sources.push(source)
+    this.planes.push({ geometry, material, label, source })
   }
 
   contact(width: number, depth: number, at: [number, number], rotate = 0) {
     const contact = contactShadow(width, depth).geometry.clone()
     contact.rotateX(-Math.PI / 2)
     contact.rotateY(rotate)
-    contact.translate(at[0], 0.015, at[1])
-    this.contacts.push(contact)
+    this.pushContact(contact, at[0], at[1])
   }
 
   collider(collider: Collider) { this.colliders.push(collider) }
@@ -112,6 +128,19 @@ export class LevelBuilder {
         if (this.options.coplanar === 'throw') throw new Error(message)
         console.warn(message)
       }
+    }
+    const levels = [...new Set(this.planes.map(item => Math.round(item.source.position.y * 1000)))].sort((a, b) => a - b)
+    for (const item of this.planes) this.register(item.geometry, { ...item.material, decal: item.material.decal ?? levels.indexOf(Math.round(item.source.position.y * 1000)) + 1 }, false, item.label)
+    const local = new THREE.Vector3()
+    const inverse = new THREE.Quaternion()
+    for (const contact of this.contacts) {
+      let top = 0
+      for (const item of this.planes) {
+        const plane = item.source
+        local.set(contact.x - plane.position.x, 0, contact.z - plane.position.z).applyQuaternion(inverse.copy(plane.quaternion).invert())
+        if (Math.abs(local.x) <= plane.width / 2 && Math.abs(local.z) <= plane.depth / 2) top = Math.max(top, plane.position.y)
+      }
+      if (top + 0.006 > 0.015) contact.geometry.translate(0, top + 0.006 - 0.015, 0)
     }
     for (const part of this.parts.values()) {
       const pieces = part.geometries.map(item => item.index ? item.toNonIndexed() : item)
@@ -137,7 +166,7 @@ export class LevelBuilder {
     if (this.contacts.length) {
       const template = contactShadow(1, 1)
       template.geometry.dispose()
-      const contactMesh = new THREE.Mesh(mergeGeometries(this.contacts, false), template.material)
+      const contactMesh = new THREE.Mesh(mergeGeometries(this.contacts.map(item => item.geometry), false), template.material)
       contactMesh.renderOrder = 1
       contactMesh.matrixAutoUpdate = false
       group.add(contactMesh)

@@ -22,6 +22,7 @@ It starts headless Chrome with the GPU on (WebGL and WebGPU), loads the page onc
 | `pop` | Moves the camera between consecutive bookmarks in 10 steps and photographs each step with the HUD hidden; then holds each bookmark still for one second. Writes `pop-sheet.png` and `pop-still.png`. | No moving frame changes more than 2.5× its neighbours (more than the motion explains), and no still view changes more than 2% of its pixels in a second. Flagged frames are outlined red on the sheet. |
 | `feel` | Desktop only. Hands the camera back, runs `scripts.feelStart` if present, holds `input.move` for 3 s, adds `input.sprint` for 3 s, releases, then taps `input.jump`. Reads `player()` every frame and derives speed from positions. | Steady move speed, sprint speed, time to 90% of top speed and jump apex are each within `feel.tolerance` (10%) of `model.feel`. Numbers without a model value are reported, not judged. |
 | `critic` | At every bookmark: a 1× capture with the HUD on (desktop and phone), and on desktop a 4 × 4 grid of 4× crops rendered at full resolution through `camera.setViewOffset`, tiled into `critic/desktop-<name>-4x.png`. | Every capture is taken with no console errors and no failed requests. Passing proves only that the pictures exist. Reading them is your job. |
+| `zfight` | At every bookmark renders an object-ID buffer several times, each with a sub-pixel projection jitter and a 0.7 mm camera nudge, using the game's own materials, render target and depth format. Pixels whose winning ID flips between frames while their neighbours stay stable are z-fighting. Writes `zfight/<profile>-<bookmark>.png` with the pixels ringed, and `-raw.png` beside it. | Ringed pixels at every bookmark ≤ max(32, 0.003% of the frame), and the ID pass covered at least 2% of the view (an empty buffer proves nothing). Edges don't count: a pixel only counts when it sits in a patch at least 4 px across, and when the two IDs that flip are within a few centimetres of each other in depth (the ID pass stores depth in alpha), so a thin bar flickering against the wall behind it is not reported. |
 | `audio` | Polls `audio()` every 250 ms through the perf and feel runs. | Peak active voices ≤ `budget.voices` (32), and no cue plays the same sample twice in a row. |
 
 The `phone` profile is 390 × 844 at device pixel ratio 3, with touch and a coarse pointer, and the CPU throttled 4×. `desktop` is 1440 × 900 at ratio 1.
@@ -69,6 +70,28 @@ With React Three Fiber, apply the pose in a `useFrame` whose priority is after y
 
 A page without the contract still gets `perf`, `hitch` (first playable is then unknown and fails) and one critic capture. The rest report `skip` with the reason.
 
+## Z-fighting
+
+Two surfaces at the same depth look fine in a still and shimmer as soon as the camera moves; the check above finds them by what flips, and `blacksite lint` finds them before anything renders:
+
+```sh
+blacksite lint dist --page frames/game.html          # static: triangles, BVH, depth maths
+blacksite lint dist --page frames/game.html --near 0.1 --far 300 --bits 24
+blacksite lint scene.glb                             # a glTF, in Node, no browser
+```
+
+The lint takes every mesh in the scene (instanced and batched meshes included; skinned meshes at their current pose), finds triangle pairs that are within 1° of coplanar and overlap with real area, and asks whether the gap between them is smaller than the depth buffer can resolve at the distance each camera bookmark sees them. It reports both mesh names (or the `userData.parts` labels `LevelBuilder` writes), the world position, the overlap area, the gap and the gap that would be needed, so a 1 mm gap at 2 m passes and the same gap at 300 m fails. It exits 1 on any problem and runs in well under a second on a 250,000-triangle scene. From code: `lintZFighting(scene, options)` from `@blacksite/check`.
+
+Reading a line:
+
+```
+zfight  look-panel#21 and look-cast#29 overlap 909.4 m² at (-3.6, 0, -112), 0 mm apart; 34.6 mm needed at 120.4 m from view
+```
+
+`0 mm apart` is exactly coplanar: no depth format fixes it, move one surface. A gap smaller than the one `needed` is a decal or overlay: use `decalBias`, or lift it by the stated amount. Meshes that draw without writing depth (blended decals) are only compared with meshes that do. Transforms that live on the GPU (the Cascade fragment pool) can't be read back, so the lint reports them as pooled; the runtime check covers those.
+
+Fixes, in the order to try them: delete the hidden surface; trim the overlap; push the smaller face out by the `needed` gap plus margin; give flat overlays `decalBias`; raise the camera near plane. `LevelBuilder` does the third by default and says so. Reversed depth is not available as a default (N8AO renders white with it); logarithmic depth works with the Look composer but needs `logdepthbuf` chunks in every custom shader.
+
 ## Reading the output
 
 `report.json` has every number. Print a summary with `blacksite check … | tail`:
@@ -88,7 +111,7 @@ That is Checkpoint. Phone hitches are single missed vsyncs under a 4× throttle,
 Then read the pictures, critically:
 
 1. `critic/desktop-*.png` and `critic/phone-*.png` at 1×. Ask the ten-second question: would a stranger take this screenshot for a shipped game with an art direction? Count against the parts list in `craft.md`: practicals lit, decals on walls, props in clusters, fog layering the distance, a readable silhouette at the focal point.
-2. The `-4x` sheets, zoomed in. Every tile should still have something true in it. A blank wall, a stretched texture, a floating prop, a seam of light under a wall, a z-fighting decal and a prop with no contact shadow all show here and nowhere else.
+2. The `-4x` sheets, zoomed in. Every tile should still have something true in it. A blank wall, a stretched texture, a floating prop, a seam of light under a wall, a z-fighting decal and a prop with no contact shadow all show here and nowhere else. A decal that shimmers will also be ringed in `zfight/`.
 3. `pop-sheet.png` frame by frame, and `pop-still.png` in pairs. A flagged frame is something that appeared, vanished or changed level of detail. A still pair that differs is streaming, a LOD swap or a shadow cascade jumping.
 4. Phone captures: the HUD fits, touch controls don't cover the focal point, and text is at least 12 px.
 

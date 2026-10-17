@@ -1,4 +1,4 @@
-import { decodeIds } from './analyze.mjs'
+import { decodeDepth, decodeIds } from './analyze.mjs'
 const state = { ids: new WeakMap(), variants: new WeakMap(), table: [null] }
 
 function halton(index, base) {
@@ -30,7 +30,7 @@ function variantOf(material, id) {
   variant.onBeforeCompile = (shader, renderer) => {
     if (prior) prior.call(variant, shader, renderer)
     shader.uniforms.bsId = { value: colour }
-    const body = shader.fragmentShader.replace(/\}\s*$/, '\n\tgl_FragColor = vec4(bsId, 1.0);\n}')
+    const body = shader.fragmentShader.replace(/\}\s*$/, '\n\tgl_FragColor = vec4(bsId, gl_FragCoord.z);\n}')
     const precision = body.match(/precision\s+\w+\s+float\s*;/)
     shader.fragmentShader = precision ? body.replace(precision[0], `${precision[0]}\nuniform vec3 bsId;`) : `uniform vec3 bsId;\n${body}`
   }
@@ -114,6 +114,7 @@ export function runIdProbe(renderer, original, scene, camera, options = {}) {
   const up = [camera.matrixWorld.elements[4], camera.matrixWorld.elements[5], camera.matrixWorld.elements[6]]
   const forward = [-camera.matrixWorld.elements[8], -camera.matrixWorld.elements[9], -camera.matrixWorld.elements[10]]
   const captured = []
+  const depths = []
   let floats = false
   try {
     for (let k = 0; k < frames; k++) {
@@ -135,6 +136,7 @@ export function runIdProbe(renderer, original, scene, camera, options = {}) {
       const read = readTarget(renderer, target, width, height)
       floats = read.floats
       captured.push(decodeIds(read.data, width, height, read.floats))
+      depths.push(read.floats ? decodeDepth(read.data, width, height) : null)
     }
   } finally {
     camera.position.set(...saved.position)
@@ -150,5 +152,5 @@ export function runIdProbe(renderer, original, scene, camera, options = {}) {
     renderer.shadowMap.autoUpdate = saved.autoUpdate
     renderer.setClearColor(clear, saved.alpha)
   }
-  return { width, height, floats, frames: captured, table: state.table }
+  return { width, height, floats, frames: captured, depths: floats && !renderer.capabilities.logarithmicDepthBuffer ? depths : null, table: state.table }
 }

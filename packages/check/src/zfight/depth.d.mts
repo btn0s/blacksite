@@ -7,10 +7,11 @@ export type DepthSetup = {
   float?: boolean
   reversed?: boolean
   logarithmic?: boolean
+  orthographic?: boolean
   format?: DepthFormatName
 }
 
-export type ResolvedDepth = { near: number; far: number; bits: number; float: boolean; reversed: boolean; logarithmic: boolean }
+export type ResolvedDepth = { near: number; far: number; bits: number; float: boolean; reversed: boolean; logarithmic: boolean; orthographic: boolean }
 
 export const DEPTH_FORMATS: Record<DepthFormatName, { bits: number; float: boolean }>
 export function normaliseDepth(setup?: DepthSetup): ResolvedDepth

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { lintZFighting } from '../../../check/src/zfight/lint.mjs'
-import { LevelBuilder } from './builder'
+import { lintZFighting } from '../packages/check/src/zfight/lint.mjs'
+import { LevelBuilder } from '../packages/look/src/world/builder'
 
 const stone = { name: 'cast' } as const
 const brick = { name: 'brick' } as const
@@ -57,5 +57,19 @@ describe('LevelBuilder coplanar faces', () => {
     const mesh = group.children[0] as THREE.Mesh
     expect(mesh.userData.parts[0].label).toBe('crate')
     expect(mesh.userData.parts[0].count).toBe(12)
+  })
+
+  it('separates the caps of wheels that overlap side by side', () => {
+    const build = (coplanar: 'resolve' | 'ignore') => {
+      const level = new LevelBuilder({ coplanar })
+      level.cylinder(0.48, 0.34, stone, { at: [0, 0.48, 0], rotate: [Math.PI / 2, 0, 0], shadow: false, name: 'wheel a' })
+      level.cylinder(0.48, 0.34, stone, { at: [0.8, 0.48, 0], rotate: [Math.PI / 2, 0, 0], shadow: false, name: 'wheel b' })
+      return level
+    }
+    expect(lintLevel(build('ignore').build()).problems.length).toBeGreaterThan(0)
+    const fixed = build('resolve')
+    const group = fixed.build()
+    expect(fixed.coplanar.length).toBe(2)
+    expect(lintLevel(group).problems).toEqual([])
   })
 })

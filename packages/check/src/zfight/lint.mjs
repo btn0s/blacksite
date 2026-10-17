@@ -161,7 +161,7 @@ function screenArea(polygon, height, tanV) {
 }
 
 function evaluate(polygon, context) {
-  const { setup, safety, frames, options, bias, distance, decal = 0 } = context
+  const { setup, safety, frames, options, bias, distance, decal = 0, facing = [] } = context
   if (!frames.length) {
     const step = depthStep(setup, distance)
     const tolerance = safety * step
@@ -176,6 +176,7 @@ function evaluate(polygon, context) {
   }
   let best = null
   for (const frame of frames) {
+    if (facing.some(plane => plane[0] * frame.position[0] + plane[1] * frame.position[1] + plane[2] * frame.position[2] - plane[3] <= 0)) continue
     const near = Math.max(frame.near ?? setup.near, setup.near)
     const far = Math.min(frame.far ?? setup.far, setup.far)
     const visible = clipFrustum(polygon, frame, near, far)
@@ -286,7 +287,7 @@ export function lintTriangles(soup, input = {}) {
       const biasI = -(mi.offsetUnits + mi.offsetFactor)
       const biasJ = -(mj.offsetUnits + mj.offsetFactor)
       const bias = biasJ - biasI
-      const result = evaluate(polygon, { setup, safety: options.safety, frames, options, distance, bias, decal: (mj.decalBias ?? 0) - (mi.decalBias ?? 0) })
+      const result = evaluate(polygon, { setup, safety: options.safety, frames, options, distance, bias, decal: (mj.decalBias ?? 0) - (mi.decalBias ?? 0), facing: [...(mi.doubleSided ? [] : [planes.subarray(ni, ni + 4)]), ...(mj.doubleSided ? [] : [planes.subarray(nj, nj + 4)])] })
       if (!result) { stats.unseen++; return }
       const overlap = polygonArea3(polygon)
       const fight = result.area

@@ -48,7 +48,7 @@ export async function runZFight({ page, scratch, files, out, profile, contract, 
     if (bookmark) await setPose(page, bookmark, 24)
     else await page.waitForTimeout(500)
     const probe = await page.evaluate(settings => window.__bsZ.probe(settings), { frames: options.frames ?? 6, jitter: options.jitter ?? 0.4, nudge: options.nudge ?? 0.0007 })
-    const floor = options.noise ?? Math.max(16, Math.round(probe.width * probe.height * 1.2e-5))
+    const floor = options.noise ?? Math.max(32, Math.round(probe.width * probe.height * 3e-5))
     const raw = await shoot(page, out, `zfight/${profile}-${label}-raw.png`, false)
     const scale = viewport ? (viewport.width * (profile === 'phone' ? 3 : 1)) / probe.width : 1
     const ringed = probe.pixels > floor ? `zfight/${profile}-${label}.png` : null
@@ -63,6 +63,7 @@ export async function runZFight({ page, scratch, files, out, profile, contract, 
       covered: round(probe.covered, 3),
       pass: probe.pixels <= floor && probe.covered >= 0.02,
       regions: probe.regions.length,
+      worst: probe.regions.slice(0, 6).map(region => ({ x: region.x, y: region.y, w: region.w, h: region.h, pixels: region.pixels, distance: region.distance })),
       pairs,
       file,
       depth: probe.depth,
@@ -88,5 +89,5 @@ export function zfightDetail(result) {
   const worst = [...result.bookmarks].sort((a, b) => b.pixels - a.pixels)[0]
   const depth = result.depth
   const where = worst && worst.pixels > 0 ? `; worst ${worst.bookmark} ${worst.pixels} px${worst.pairs[0] ? ` between ${worst.pairs[0].a?.name} and ${worst.pairs[0].b?.name}` : ''}` : ''
-  return `${result.total} z-fighting pixels over ${result.bookmarks.length} views (${depth ? `${depth.float ? 'float ' : ''}${depth.bits}-bit ${depth.logarithmic ? 'logarithmic' : depth.reversed ? 'reversed' : 'standard'} depth, near ${round(depth.near)}` : 'depth unknown'})${where}`
+  return `${result.total} z-fighting pixels over ${result.bookmarks.length} views (${depth ? `${depth.float ? 'float ' : ''}${depth.bits}-bit ${depth.orthographic ? 'orthographic' : depth.logarithmic ? 'logarithmic' : depth.reversed ? 'reversed' : 'standard'} depth, near ${round(depth.near)}` : 'depth unknown'})${where}`
 }

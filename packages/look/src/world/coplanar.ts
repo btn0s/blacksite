@@ -20,6 +20,7 @@ export type CoplanarResolution = {
 
 export type FaceSource =
   | { kind: 'box'; label: string; size: [number, number, number]; position: THREE.Vector3; quaternion: THREE.Quaternion; geometry: THREE.BufferGeometry }
+  | { kind: 'cylinder'; label: string; size: [number, number, number]; position: THREE.Vector3; quaternion: THREE.Quaternion; geometry: THREE.BufferGeometry }
   | { kind: 'plane'; label: string; width: number; depth: number; position: THREE.Vector3; quaternion: THREE.Quaternion; geometry: THREE.BufferGeometry }
 
 type Face = { source: FaceSource; axis: number; sign: number; normal: THREE.Vector3; center: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3; hu: number; hv: number; area: number }
@@ -33,13 +34,14 @@ function facesOf(source: FaceSource): Face[] {
     return [{ source, axis: 1, sign: 1, normal: normal!, center: source.position.clone(), u: u!, v: v!, hu: source.width / 2, hv: source.depth / 2, area: source.width * source.depth }]
   }
   const faces: Face[] = []
-  for (let axis = 0; axis < 3; axis++) for (const sign of [1, -1]) {
+  const axes = source.kind === 'cylinder' ? [1] : [0, 1, 2]
+  for (const axis of axes) for (const sign of [1, -1]) {
     const normal = frame[axis]!.clone().multiplyScalar(sign)
     const u = frame[(axis + 1) % 3]!
     const v = frame[(axis + 2) % 3]!
     const hu = source.size[(axis + 1) % 3]! / 2
     const hv = source.size[(axis + 2) % 3]! / 2
-    faces.push({ source, axis, sign, normal, center: source.position.clone().addScaledVector(normal, source.size[axis]! / 2), u, v, hu, hv, area: hu * hv * 4 })
+    faces.push({ source, axis, sign, normal, center: source.position.clone().addScaledVector(normal, source.size[axis]! / 2), u, v, hu, hv, area: source.kind === 'cylinder' ? Math.PI * hu * hv : hu * hv * 4 })
   }
   return faces
 }
@@ -91,14 +93,14 @@ function push(source: FaceSource, face: Face, lift: number) {
     if (source.kind === 'plane' || Math.abs(face.normal.dot(point.clone().sub(face.center))) < 1e-4) position.setXYZ(i, point.x + offset.x, point.y + offset.y, point.z + offset.z)
   }
   position.needsUpdate = true
-  if (source.kind === 'box') {
+  if (source.kind !== 'plane') {
     source.size[face.axis] += lift
     source.position.addScaledVector(face.normal, lift / 2)
   } else source.position.addScaledVector(face.normal, lift)
 }
 
 function sweep(sources: FaceSource[], options: CoplanarOptions) {
-  const minGap = options.minGap ?? 0.01
+  const minGap = options.minGap ?? 0.004
   const separation = options.separation ?? 0.02
   const minArea = options.minArea ?? 0.0004
   const resolve = options.mode !== 'ignore' && options.mode !== 'throw'

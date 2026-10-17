@@ -1,9 +1,39 @@
 const MIXED = 0xffffffff
 
+function linearizer(setup) {
+  if (!setup || setup.reversed || setup.logarithmic) return null
+  const near = setup.near
+  const far = setup.far
+  if (setup.orthographic) return z => near + z * (far - near)
+  return z => (2 * far * near) / (far + near - (2 * z - 1) * (far - near))
+}
+
 export function analyzeFrames(frames, width, height, options = {}) {
+  const depths = options.depths && options.depths[0] ? options.depths : null
+  const linear = depths ? linearizer(options.depth) : null
+  const separation = options.separation ?? 0.002
+  const floorGap = options.separationFloor ?? 0.03
+  let edges = 0
+  const separated = p => {
+    if (!linear) return false
+    const seen = new Map()
+    for (let f = 0; f < frames.length; f++) {
+      const id = frames[f][p]
+      if (id === MIXED) continue
+      const entry = seen.get(id)
+      const z = depths[f][p]
+      if (!entry) seen.set(id, { count: 1, z })
+      else { entry.count++; entry.z = Math.min(entry.z, z) }
+    }
+    if (seen.size < 2) return false
+    const list = [...seen.values()].sort((a, b) => b.count - a.count)
+    const a = linear(list[0].z)
+    const b = linear(list[1].z)
+    return Math.abs(a - b) > Math.max(floorGap, separation * Math.min(a, b))
+  }
   const radius = options.radius ?? 2
   const cells = (radius * 2 + 1) ** 2
-  const densityMin = options.densityMin ?? Math.ceil(cells * 0.5)
+  const densityMin = options.densityMin ?? Math.ceil(cells * 0.76)
   const total = width * height
   const first = frames[0]
   const unstable = new Uint8Array(total)
@@ -17,7 +47,10 @@ export function analyzeFrames(frames, width, height, options = {}) {
     if (reference === MIXED) continue
     for (let f = 0; f < frames.length; f++) {
       const value = frames[f][p]
-      if (value !== reference && value !== MIXED) { unstable[p] = 1; unstableCount++; break }
+      if (value !== reference && value !== MIXED) {
+        if (separated(p)) { edges++; break }
+        unstable[p] = 1; unstableCount++; break
+      }
     }
   }
   const stride = width + 1
@@ -59,13 +92,14 @@ export function analyzeFrames(frames, width, height, options = {}) {
     const label = regions.length + 1
     const stack = [start]
     labels[start] = label
-    let minX = width, minY = height, maxX = 0, maxY = 0, pixels = 0
+    let minX = width, minY = height, maxX = 0, maxY = 0, pixels = 0, depthSum = 0
     const local = new Map()
     while (stack.length) {
       const p = stack.pop()
       const x = p % width
       const y = (p - x) / width
       pixels++
+      if (linear) depthSum += linear(depths[0][p])
       if (x < minX) minX = x
       if (x > maxX) maxX = x
       if (y < minY) minY = y
@@ -87,17 +121,28 @@ export function analyzeFrames(frames, width, height, options = {}) {
         }
       }
     }
-    regions.push({ x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1, pixels, ids: [...local.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([key, count]) => ({ pair: key.split(',').map(Number), pixels: count })) })
+    regions.push({ x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1, pixels, distance: linear ? Math.round((depthSum / pixels) * 10) / 10 : null, ids: [...local.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([key, count]) => ({ pair: key.split(',').map(Number), pixels: count })) })
   }
   regions.sort((a, b) => b.pixels - a.pixels)
   return {
     width, height, frames: frames.length,
     unstable: unstableCount,
+    edges,
     covered: covered / total,
     pixels: denseCount,
     regions,
     pairs: [...pairs.entries()].sort((a, b) => b[1] - a[1]).map(([key, count]) => ({ pair: key.split(',').map(Number), pixels: count })),
   }
+}
+
+export function decodeDepth(data, width, height) {
+  const depth = new Float32Array(width * height)
+  for (let row = 0; row < height; row++) {
+    const source = (height - 1 - row) * width * 4
+    const target = row * width
+    for (let x = 0; x < width; x++) depth[target + x] = data[source + x * 4 + 3]
+  }
+  return depth
 }
 
 export function decodeIds(data, width, height, floats) {

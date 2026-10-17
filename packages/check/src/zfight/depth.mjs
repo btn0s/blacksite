@@ -19,6 +19,7 @@ export function normaliseDepth(setup = {}) {
     float: setup.float ?? format?.float ?? false,
     reversed: setup.reversed ?? false,
     logarithmic: setup.logarithmic ?? false,
+    orthographic: setup.orthographic ?? false,
   }
 }
 
@@ -33,7 +34,9 @@ export function depthStep(input, z) {
   const distance = Math.min(Math.max(z, near), far)
   const transform = Math.max(1, distance) * 2 ** -22
   let step
-  if (setup.logarithmic) {
+  if (setup.orthographic) {
+    step = (far - near) * 2 ** -(setup.float ? 23 : setup.bits)
+  } else if (setup.logarithmic) {
     step = (1 + distance) * Math.log(1 + far) * 2 ** -(setup.float ? 23 : setup.bits)
   } else if (setup.float) {
     const ratio = far / (far - near)
@@ -52,7 +55,7 @@ export function gapNeeded(setup, z, safety = 2) {
 
 export function describeDepth(input) {
   const setup = normaliseDepth(input)
-  const kind = setup.logarithmic ? 'logarithmic' : setup.reversed ? 'reversed' : 'standard'
+  const kind = setup.orthographic ? 'orthographic' : setup.logarithmic ? 'logarithmic' : setup.reversed ? 'reversed' : 'standard'
   const format = setup.float ? `${setup.bits}-bit float` : `${setup.bits}-bit`
   return `${format} ${kind} depth, near ${roundMetres(setup.near)} m, far ${roundMetres(setup.far)} m`
 }
