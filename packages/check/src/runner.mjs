@@ -195,6 +195,7 @@ async function runFeel(page, contract) {
   await page.keyboard.up(input.sprint)
   await page.keyboard.up(input.move)
   await track(1.5)
+  const ground = await page.evaluate(() => window.__blacksite.player().position[1])
   const jumping = track(1.6)
   await page.keyboard.down(input.jump)
   await page.waitForTimeout(120)
@@ -202,7 +203,6 @@ async function runFeel(page, contract) {
   const jump = await jumping
   const moveSpeed = steady(move)
   const top = move.find(item => moveSpeed && item.speed >= moveSpeed * 0.9)
-  const ground = jump.length ? jump[0].position[1] : null
   const apex = jump.length ? Math.max(...jump.map(item => item.position[1])) - ground : null
   const numbers = {
     moveSpeed: within(moveSpeed, feel.moveSpeed, tolerance),

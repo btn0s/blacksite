@@ -1,6 +1,6 @@
 # Site credits
 
-World textures and the sky below are CC0. The material viewer also includes generated images, identified separately with their provider and provenance. World files are resized to 512 px (sky 1024 × 512) and compressed to WebP; material references retain their recorded tile aspect ratio.
+World textures and the sky below are CC0. The material viewer also includes generated images, identified separately with their provider and provenance. World files are resized to 512 px (sky 1024 × 512) and compressed to WebP; material references retain their recorded tile aspect ratio. The default found first-person arms use CC BY 4.0 art credited below.
 
 ## Materials (ambientCG, CC0)
 
@@ -76,6 +76,14 @@ The corresponding `packages/materials/library/*-image.json` graphs make the sour
 ## Character
 
 The ALS mannequin and animations come from [ALS Web](https://github.com/btn0s/als-web) (MIT), served from `vendor/als-web/public/assets`.
+
+## First-person viewmodel
+
+The CC0 `Built` arms derive from the **MakeHuman team**'s bundled [MPFB mesh, weights and skeleton](https://github.com/makehumancommunity/mpfb2), [CC0 1.0](https://github.com/makehumancommunity/mpfb2/blob/master/LICENSE.ASSETS.md). Blacksite crops, dresses, rigs and textures the arms; its original sleeve geometry is also CC0. The application's source-code licence does not cover exported mesh output, as explained in [MPFB's licence statement](https://github.com/makehumancommunity/mpfb2/blob/master/LICENSE.md).
+
+The `Built` rifle derives from **LonesomeDucky**'s [AKM](https://opengameart.org/content/akm), **CC0**, including its weathered PBR maps. Blacksite adds a part rig, changes orientation and reduces the embedded maps to 1024-pixel JPEGs. The `Built` pistol derives from **Quaternius**'s [Animated Guns Pack](https://quaternius.com/packs/animatedguns.html), [CC0](https://opengameart.org/content/low-poly-animated-guns), with adapted scale, orientation and part rig. The sleeve, glove and pistol surface textures listed above are by **ambientCG / Lennart Demes**, [CC0](https://docs.ambientcg.com/license/).
+
+The default **found** arms (the Firing Range's `Found · CC BY` rig) are CC BY 4.0 works from Sketchfab. The rifle is **[AKM Assault Rifle - Animated](https://sketchfab.com/3d-models/akm-assault-rifle-animated-6348dc53e3e249c6b297cb8f3f1e3e9b)** by **[user77](https://sketchfab.com/user77)**, which combines arms and animations from **[fps AK animated](https://sketchfab.com/3d-models/fps-ak-animated-b0b1bae40337449189483f6187cf7af7)** by **[DJMaesen](https://sketchfab.com/bumstrum)** and the **[AKM](https://sketchfab.com/3d-models/akm-fe8b79ae8a8142fb9ba706912c6b9df8)** model by **[Armored Wave](https://sketchfab.com/armoredwave)**. The pistol is **[animated pistol](https://sketchfab.com/3d-models/animated-pistol-bd896167e7ca44f19597d3afe6a8d83f)** by **[DJMaesen](https://sketchfab.com/bumstrum)**. Blacksite re-baked the files, reduced textures to 1024-pixel JPEGs, removed emissive maps and retoned the sleeves olive; keyframes are unchanged. [Full attribution and changes](viewmodel/CREDITS.md); [full licence and warranty disclaimer](viewmodel/CC-BY-4.0.txt). These credits do not imply endorsement. The MakeHuman arms above remain available as the CC0 `Built` rig.
 
 ## Fonts (SIL Open Font License)
 

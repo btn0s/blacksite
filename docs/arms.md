@@ -1,23 +1,122 @@
 # First-person arms
 
-The `fpp` and `mp` profiles use `ArmsViewmodel` from `@blacksite/subject-fpp/arms`. The viewmodel keeps the SK_Als skeleton and skinning, masks the mesh to arms, and evaluates the ALS rifle/pistol upper-body graph. It draws with its own camera and depth pass after the world camera is final, so the arms have an independent FOV and do not disappear inside walls. Remote players continue to render the full ALS character.
+`ArmsViewmodel` from `@blacksite/subject-fpp/arms` draws a separately lit, camera-relative viewmodel after the world. Three rigs share one `ArmsState`:
 
-The default mannequin, weapon meshes and locomotion/pose animation data come from the pinned MIT ALS submodule. Original Blacksite fire, reload and equip clips are also MIT, with their authored tracks in `packages/subject-fpp/assets/arms-actions.json`. Generated development servers and builds distribute both `assets/LICENSE-ALS-Refactored.md` and `assets/LICENSE-Blacksite-Arms.md`. No purchased content is required or redistributed by Blacksite.
+| `rig` | What it is | Licence |
+| --- | --- | --- |
+| `found` (default) | The field set: an authored, hand-keyed AKM and Beretta with gloved arms, played as clips with procedural sway, bob, recoil, ADS, sprint, holster and landing on top | CC BY 4.0, attribution required |
+| `blacksite` | A finger-rigged MakeHuman/MPFB mesh with procedural action curves and two-bone IK on the grip, magazine and charging handle | CC0 |
+| `als` | The ALS-derived arms, for local arms that match the remote character | MIT |
 
-The solo `fpp` profile needs ALS's animation graph and asset data to use this same viewmodel. It does not mount ALS Character, locomotion physics, full-body presentation, or a multiplayer transport. Keeping the graph as a tree-shaken dependency is the smallest shared implementation; a future animation-only ALS package could reduce the source workspace without duplicating the graph.
+The found set replaced the procedural rig as the default because its authored reloads, finger contact and weapon handling read better at both 1× and 4×. The procedural rig remains the right choice for CC0-only projects and for custom weapons that need calibrated sockets.
 
-## Manifest
+## Use
 
-Each generated game has `public/assets/arms.json`, initially `{ "version": 1 }`. Edit this manifest to replace assets without changing game code. Relative URLs resolve from the manifest URL. Omitted fields retain the MIT defaults. The viewmodel also accepts `manifestUrl` for games with another asset layout.
+```tsx
+import { ArmsViewmodel, createArmsState } from '@blacksite/subject-fpp/arms'
+
+const arms = createArmsState()
+
+<ArmsViewmodel state={arms} render="external" onPresentation={setPresentation} />
+<Look overlay={presentation} />
+```
+
+Keep one `ArmsState` per player. Update `weapon`, `aiming`, `speed` in metres per second, and `sprinting` from gameplay. Increment `fireSequence`, `reloadSequence` and `equipSequence` only for accepted Armory events. Set `weapon` when a switch starts: the viewmodel holsters the old weapon before equipping the new one. Increment `inspectSequence` for inspect, and `landSequence` with `landSpeed` in metres per second for a landing dip. Set `empty` from the displayed weapon's magazine so the pistol slide can lock open.
+
+Aim, firing and sprint cancel inspect smoothly. Reload and weapon switching suppress ADS until the action permits it. Animation does not authorize shots or refill magazines; Armory owns those decisions.
+
+`StandaloneSubject` accepts `touch` (`createStandaloneTouch()`), `recoil` (`createStandaloneRecoil()`) and `sensitivity`. Scale look sensitivity by aim FOV / hip FOV. It owns camera input; the arms derive sway from that finished camera pose without another mouse listener.
+
+## Found field set
+
+The set lives in `packages/subject-fpp/src/found/`. `FIELD_SET` (`sets.ts`) declares each weapon's GLB, frame ranges for `idle`, `fire`, `fireLast`, `reload`, `reloadEmpty`, `holster`, `draw` and `inspect`, the eye basis of the authored camera, a bone-local rear and front sight, eye relief, hip, sprint and pivot offsets, recoil scale and reload events. The runtime solves ADS each frame from the two sight landmarks, so the sight line lands on screen centre at any aspect. Missing clips are procedural: the rifle inspect, sprint, holster when a set has none, and walking bob. Below a 4:3 aspect `portrait.camera` moves the hip view back and up so both forearms stay in frame; ADS fades the offset to zero.
+
+Gameplay must use the clip lengths. `foundTimings(FIELD_SET, weapon)` returns `reloadSeconds`, `emptyReloadSeconds` and `equipSeconds`; Armory's `emptyReloadSeconds` applies when the magazine is empty when the reload starts. Set `arms.empty` from the displayed magazine so the empty reload and last-shot clips play.
+
+```ts
+import { FIELD_SET, foundTimings } from '@blacksite/subject-fpp/arms'
+
+const definitions = ALS_WEAPONS.map(weapon =>
+  weapon.id === 'rifle' || weapon.id === 'pistol'
+    ? { ...weapon, ...foundTimings(FIELD_SET, weapon.id) }
+    : weapon,
+)
+```
+
+Authoritative servers import the same data without the renderer or GLB URLs: `foundTimings({ weapons: FIELD_WEAPONS }, weapon.id)` from `@blacksite/subject-fpp/arms/model` returns identical values.
+
+A replacement set must keep the same licence bar and declare the same fields; measure the sight landmarks from the weapon mesh, not from a screenshot. The bake and sleeve-dressing scripts are `packages/subject-fpp/scripts/bake-found-set.py` and `dress-viewmodel.py`.
+
+### Migrating to the found default
+
+- The default `rig` changed from `blacksite` to `found`. Pass `rig="blacksite"` or `rig="als"`, as a prop or as `"rig"` in the manifest, to keep an earlier look. Manifests with ALS character or weapon overrides still select ALS automatically.
+- Derive Armory definitions from `foundTimings`, on the server as well as the client. Rifle and pistol reloads are longer than the procedural curves, and the empty reload is longer again.
+- Ship attribution. `cli/serve-assets.mjs` serves and copies the credits to `assets/viewmodel/found/`; link them from the game's credits screen.
+- `ArmsState`, `createArmsState()`, the sequence counters and `onPresentation` are unchanged.
+
+## Procedural rig: motion model and parts list
+
+The authoritative model is `packages/subject-fpp/src/viewmodel/model.ts`; the short action curves are in `clips.ts`. Their public exports are `VIEWMODEL`, `VIEWMODEL_WEAPONS`, `VIEWMODEL_CLIPS` and `switchSeconds(to, from)`. These are Blacksite tuning values, not measurements claimed from a commercial title.
+
+Armory's older `ALS_WEAPONS` equip timings are shorter than the procedural holster-plus-equip animation. When using `rig="blacksite"`, derive the weapon definitions from the same curves; the FPP template and Firing Range demonstrate this migration. For definitions that have one equip duration per destination, use the longer of the two source weapons:
+
+```ts
+const definitions = ALS_WEAPONS.map(weapon =>
+  weapon.id === 'rifle' || weapon.id === 'pistol'
+    ? {
+        ...weapon,
+        reloadSeconds: VIEWMODEL_CLIPS[weapon.id].reload.duration,
+        equipSeconds: Math.max(
+          switchSeconds(weapon.id, 'rifle'),
+          switchSeconds(weapon.id, 'pistol'),
+        ),
+      }
+    : weapon,
+)
+```
+
+Apply these definitions on the authoritative simulation as well as the client. Servers can import the same values from `@blacksite/subject-fpp/arms/model`, which has no renderer or asset-loader imports. A multiplayer game retaining the older timings can keep `rig="als"` until both sides migrate together.
+
+| Layer | What moves |
+| --- | --- |
+| Idle | Low-amplitude breathing, textured sleeves and articulated hands |
+| Sway | Bounded springs driven by camera angular velocity |
+| Bob | Stride phase derived from speed and stride length, reduced in ADS |
+| Fire | Translation and rotation springs, trigger pose, slide/bolt cycle and muzzle flash |
+| ADS | Timed blend toward the calibrated physical sight line, with per-weapon framing |
+| Reload | Magazine removal and insertion, bolt/slide travel, support-hand IK and finger grip changes |
+| Equip / holster | Two distinct curves with weapon replacement below the screen |
+| Sprint | Lowered, canted weapon with a speed-driven stride |
+| Inspect | Two inspection angles, reversible interruption and support-hand release |
+| Land | A capped spring impulse proportional to impact speed |
+
+For any rig, the minimum visual parts are two skinned forearms with sleeves, two gloves, ten independently articulated fingers, two weapons, two detachable magazines, and a moving charging handle or slide on each weapon. Rifle and pistol have their own sight, wrist targets, elbow poles, grip poses and action curves. The Firing Range is the playable reference for all these states.
+
+The rifle calibration centres the front blade and pitches the model to retain a visible sight picture; the pistol uses its rear-sight target. Sight distances in the model are measured to those chosen points.
+
+The default viewmodel FOV is 56°, with a 0.005 m near plane. Below a 4:3 aspect it widens the vertical FOV to preserve horizontal coverage and shifts hip framing inward. ADS fades the shift to zero. `portraitFov(fov, aspect, minimum)` exposes the widening for a game's world camera.
+
+## Composition
+
+With `render="external"`, `onPresentation` supplies `{ scene, camera }` to `<Look overlay={presentation} />` or `look.addOverlay(scene, camera)`. The viewmodel receives bloom and grading after world AO, and its independent depth buffer prevents walls from clipping the hands. The default `composite` mode renders after the world without requiring Look. Show exactly one local set of arms; remote characters continue using their full body.
+
+## ALS compatibility
+
+Use `<ArmsViewmodel rig="als" … />` or set `"rig": "als"` in `public/assets/arms.json`. This keeps the existing SK_Als skeleton, graph and action slots. The public component, state factory, composition callback and sequence counters retain their names. Games that construct `ArmsState` literals should switch to `createArmsState()` so the added inspect, landing, empty-magazine and diagnostic fields receive their defaults.
+
+A version-1 manifest remains the asset customization entry point. Relative URLs resolve from `manifestUrl`, which defaults to `/assets/arms.json`.
+
+For the procedural rig, `armsUrl` replaces the arm mesh while retaining the MakeHuman game skeleton and its fitted bind pose. It is a compatible-mesh slot, not an automatic retargeter. Weapon geometry and its moving-part names must match the calibrated sockets in `VIEWMODEL_WEAPONS`; an arbitrary gun needs its own socket and sight calibration. The older animation and attachment slots below belong to ALS mode.
 
 ```json
 {
   "version": 1,
+  "rig": "als",
   "fov": 56,
   "weapons": {
     "rifle": {
-      "meshUrl": "/assets/owned/infima/rifle.glb",
-      "animationUrl": "/assets/owned/infima/character.glb",
+      "meshUrl": "/assets/owned/rifle.glb",
+      "animationUrl": "/assets/owned/character.glb",
       "clips": {
         "fire": "Rifle_Fire",
         "reload": "Rifle_Reload",
@@ -29,61 +128,23 @@ Each generated game has `public/assets/arms.json`, initially `{ "version": 1 }`.
         "rotation": [0, 0, 0],
         "scale": 1
       }
-    },
-    "pistol": {
-      "meshUrl": "/assets/owned/infima/pistol.glb",
-      "animationUrl": "/assets/owned/infima/character.glb",
-      "clips": {
-        "fire": "Pistol_Fire",
-        "reload": "Pistol_Reload",
-        "equip": "Pistol_Equip"
-      }
     }
   }
 }
 ```
 
-Names above illustrate the slot mapping; use the exact animation names in the converted GLB. Both weapon entries support `poses`, `aim`, `aimCrouch`, `aimReference`, `idle`, `idleReference`, `runArms`, `sprintArms`, `sprintImpulseArms`, `fire`, `reload`, and `equip` clip slots. `characterUrl` replaces the skinned character mesh. Bone names, hierarchy, reference pose, animation targets and ALS metadata must match SK_Als. Attachment positions are metres, rotations are Euler radians, and scale is uniform.
+Existing manifests with character or weapon overrides select ALS automatically unless `rig` is explicitly set. Legacy character and animation replacements require SK_Als bone names, hierarchy, reference transforms and animation targets. Clip slots also include `poses`, `aim`, `aimCrouch`, `aimReference`, `idle`, `idleReference`, `runArms`, `sprintArms` and `sprintImpulseArms`. Attachment positions are metres, Euler rotations are radians, and scale is uniform.
 
-Each weapon may set `presentation.position` to frame its clips in camera-local metres. Set `presentation.sight` to the rear sight's center in the weapon asset's scene-local coordinates, before its attachment transform. At aim, the viewmodel evaluates the current skinned pose, transforms that physical sight point and centers it on the reticle in the same frame. `presentation.aimOffset` is an additional camera-local trim after that centering; its Z coordinate controls stock clearance. These values are three-element metre coordinates. Owned meshes need their own measured sight point even when their animation skeleton matches SK_Als.
+In ALS mode, `presentation.position` frames the pose, `presentation.sight` identifies the rear sight in the weapon asset's scene-local coordinates, and `presentation.aimOffset` trims the centered sight. Its Z coordinate controls stock clearance. Matching a skeleton does not prove weapon socket alignment: measure the sight for every replacement.
 
-The default ALS rifle calibration is:
+Owned-pack installation belongs in the user's game, through `blacksite assets search`, `formats` and `add`. Generated ignore rules exclude purchased asset directories. Commit a manifest when appropriate; keep purchased bytes local and ignored. Blacksite's default requires no purchased content.
 
-```json
-{
-  "position": [0.2, -1.6, -0.36],
-  "sight": [0, 0.15937, 0.03789],
-  "aimOffset": [0, 0, 0.21]
-}
-```
+## Verification
 
-The viewmodel keeps all 68 physical bones while rendering only forearms and hands. Its default pose bank uses the native raised aiming posture for first-person visibility; aiming blends that posture and aligns the physical sights. The native third-person relaxed pose remains available to full-body characters.
+Run the Firing Range capture harness and the standard `blacksite check` desktop and phone profiles. The capture harness pauses the animation clock and advances exact frame steps to expose the complete reload and equip, including handoffs. Its report includes model timings and contact residuals. Compare screenshots as well: zero wrist-target error cannot prove that a finger bends correctly or that a magazine is inside the hand.
 
-## Dress
+Read the 1× view for framing and the 4× view for wrist deformation, finger placement, clipping, magazine contact and state transitions. Runtime tests cover the numerical model and the rig; a playtest still decides whether recoil, action weight and touch aiming feel right.
 
-The default mannequin and ALS weapons are dressed at load with CC0 materials from `packages/subject-fpp/assets/materials`: an olive sleeve, leather gloves, gunmetal, worn olive paint, polymer and brass. Rifle and pistol triangles are regrouped by skinning bone and position into those finishes. Each forearm carries a rigid sleeve that runs past the elbow and off screen, so the cropped arm never ends in view. Each weapon gets a muzzle flash and light on its `muzzle` bone, driven by `fireSequence`. A manifest `characterUrl` or weapon `meshUrl` keeps that asset's own materials.
+## Distribution
 
-## Framing
-
-The viewmodel camera has its own 56° vertical FOV (manifest `fov`), independent of the world camera. At rest the rifle sits lower right and spans roughly a quarter to a third of a landscape screen; aiming centres the measured sight. Sprinting lowers and cants the weapon procedurally instead of playing the ALS sprint arms pose. Below a 4:3 aspect the viewmodel widens its vertical FOV to keep 4:3 horizontal coverage and shifts its hip framing inward, returning to centre as aim blends in. `portraitFov(fov, aspect, minimum)` exposes the same widening for the world camera.
-
-## Composition
-
-By default the viewmodel renders the arms itself after the world. With `@blacksite/look`, pass `render="external"` and `onPresentation`, then hand the presentation to Look: `<Look overlay={presentation} />` in React Three Fiber, or `look.addOverlay(presentation.scene, presentation.camera)` in plain three. Look draws it after AO and before bloom, the grade and grain, so the arms match the world. The viewmodel keeps its lights in the presentation scene and sets its own camera aspect.
-
-`StandaloneSubject` also accepts `touch` (`createStandaloneTouch()`: move, look deltas and fire), `recoil` (`createStandaloneRecoil()`: add Armory shot recoil; part climbs, part kicks back) and `sensitivity` (scale look while aiming).
-
-## Owned-pack upgrade
-
-Discover the user's licensed pack through indexed metadata:
-
-```sh
-blacksite assets search "Low Poly Animated Modern Guns" --json
-blacksite assets formats <owned-id> --json
-```
-
-An owner may install a converted weapon into their game with `blacksite assets add <owned-id> --project /absolute/game`. Its `assets.lock.json` entry supplies the manifest's `meshUrl`. The generated ignore rules cover `public/assets/fab_*/`, `public/assets/itch_*/`, and `public/assets/owned/`; game manifests may be committed, purchased bytes may not. The game `public` directory takes precedence over ALS defaults during development and build.
-
-Infima's character clips have been independently checked against all 68 SK_Als bones, including names, parents and reference transforms. This permits direct slot mapping after conversion; it does not prove weapon socket alignment. Preserve the converted character clips, curves and montage metadata, then set their exact clip names in this manifest. A generic model import does not replace a character-animation export or skeleton validation. Keep these exports local and ignored. Blacksite does not install or bundle the pack itself.
-
-Validate a pack in its owning game with rifle and pistol idle, movement, aim, fire, reload and equip. Check attachment alignment separately from skeleton compatibility. Fire, reload and equip sequences should come from accepted Armory events, keeping their visual actions aligned with the weapon simulation.
+Asset provenance and licence texts live beside the arms in `packages/subject-fpp/assets/arms/` and `packages/subject-fpp/assets/found/`. `cli/serve-assets.mjs` serves and copies them to `assets/viewmodel/CREDITS.md`, `assets/viewmodel/licenses/` and `assets/viewmodel/found/` in both the site and generated games. The pre-existing ALS option and original ALS action tracks retain their MIT notices. See `docs/viewmodel-research.md` for the Find shortlist and exclusions.

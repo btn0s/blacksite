@@ -73,6 +73,18 @@ describe('fixed-tick firing and ammunition', () => {
     expect(ammo(runtime)).toEqual({ id: 'rifle', magazine: 2, reserve: 0 });
   });
 
+  it('uses the empty reload duration only when the magazine is empty', () => {
+    const runtime = create([rifle({ magazineSize: 2, reloadSeconds: 0.1, emptyReloadSeconds: 0.3 })]);
+    runtime.step(command(0, { trigger: true }), queries);
+    runtime.step(command(1, { reload: true }), queries);
+    expect(runtime.snapshot().status).toEqual({ kind: 'reloading', untilTick: 7 });
+    tickUntil(runtime, 7);
+    tickUntil(runtime, 20, { trigger: true });
+    expect(ammo(runtime).magazine).toBe(0);
+    runtime.step(command(21, { reload: true }), queries);
+    expect(runtime.snapshot().status).toEqual({ kind: 'reloading', untilTick: 39 });
+  });
+
   it('cancels reload without ammunition transfer, including completion boundary', () => {
     const runtime = create([rifle({ reloadSeconds: 0.1 })]);
     runtime.step(command(0, { trigger: true }), queries);

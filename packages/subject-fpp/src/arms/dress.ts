@@ -104,6 +104,17 @@ export async function loadArmsDress() {
     })
     return [name, material]
   })) as Record<Finish, MeshStandardMaterial>
+  const field = { glove: materials.glove.clone(), sleeve: materials.sleeve.clone() }
+  field.glove.vertexColors = field.sleeve.vertexColors = true
+  field.glove.name = 'BlacksiteArms_fieldGlove'
+  field.glove.color.set('#b9b2a4')
+  field.glove.roughness = 0.62
+  field.glove.normalScale.setScalar(1.6)
+  field.sleeve.name = 'BlacksiteArms_fieldSleeve'
+  field.sleeve.map = materials.sleeve.map!.clone(); field.sleeve.map.repeat.setScalar(1)
+  field.sleeve.normalMap = materials.sleeve.normalMap!.clone(); field.sleeve.normalMap.repeat.setScalar(1)
+  field.glove.map = materials.glove.map!.clone(); field.glove.map.repeat.setScalar(1)
+  field.glove.normalMap = materials.glove.normalMap!.clone(); field.glove.normalMap.repeat.setScalar(1)
   const flash = flashTexture()
   const cuff = materials.sleeve.clone()
   cuff.side = DoubleSide
@@ -128,6 +139,22 @@ export async function loadArmsDress() {
         bone.add(sleeve)
       }
     },
+    fieldArms(scene: Object3D) {
+      scene.traverse(object => {
+        if (!(object instanceof SkinnedMesh)) return
+        const pick = (material: Material) => /glove/i.test(material.name) ? field.glove : field.sleeve
+        object.material = Array.isArray(object.material) ? object.material.map(pick) : pick(object.material)
+        object.castShadow = object.receiveShadow = false
+      })
+    },
+    fieldWeapon(weapon: ArmsWeapon, object: Object3D) {
+      if (weapon === 'rifle') return
+      object.traverse(child => {
+        if (!(child instanceof Mesh)) return
+        const pick = (material: Material) => material.name.startsWith('polymer') ? materials.grip : materials.gunmetal
+        child.material = Array.isArray(child.material) ? child.material.map(pick) : pick(child.material)
+      })
+    },
     weapon(weapon: ArmsWeapon, object: Object3D) {
       object.traverse(child => {
         if (!(child instanceof SkinnedMesh)) return
@@ -138,6 +165,7 @@ export async function loadArmsDress() {
     flash: (weapon: ArmsWeapon, object: Object3D) => createMuzzleFlash(object, flash, weapon),
     dispose() {
       cuff.dispose()
+      for (const material of Object.values(field)) { material.map?.dispose(); material.normalMap?.dispose(); material.dispose() }
       for (const geometry of sleeves) geometry.dispose()
       for (const material of Object.values(materials)) { material.map?.dispose(); material.normalMap?.dispose(); material.dispose() }
       for (const texture of textures.values()) texture.dispose()
@@ -192,7 +220,7 @@ function createMuzzleFlash(weapon: Object3D, texture: Texture, kind: ArmsWeapon)
   const group = new Group()
   group.name = 'BlacksiteArmsMuzzleFlash'
   const material = new MeshBasicMaterial({ map: texture, color: new Color(6, 4.6, 3), blending: AdditiveBlending, transparent: true, depthWrite: false, side: DoubleSide, toneMapped: false, fog: false })
-  const size = kind === 'rifle' ? 0.16 : 0.11
+  const size = kind === 'rifle' ? 0.16 : 0.058
   const front = new Mesh(new PlaneGeometry(size, size), material)
   const side = new Mesh(new PlaneGeometry(size * 1.9, size * 0.7), material)
   side.rotation.y = Math.PI / 2
@@ -219,7 +247,7 @@ function createMuzzleFlash(weapon: Object3D, texture: Texture, kind: ArmsWeapon)
       const life = 0.05
       for (const plane of planes) plane.visible = age < life
       const fade = Math.max(0, 1 - age / life)
-      light.intensity = fade * 3.2
+      light.intensity = fade * (kind === 'rifle' ? 3.2 : 1.3)
       material.opacity = fade
     },
     dispose() {
