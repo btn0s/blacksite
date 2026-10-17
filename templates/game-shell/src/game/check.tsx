@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { applyCameraPose, exposeCheck, type CameraPose, type FeelModel, type PlayerSample } from '@blacksite/check'
+import { applyCameraPose, exposeCheck, sampleView, type CameraPose, type FeelModel, type PlayerSample } from '@blacksite/check'
 import { BUDGET, FEEL } from './model'
 import { sound } from './sound'
 import { bookmarks } from './yard'
 
 const checkFeel: FeelModel = { moveSpeed: FEEL.moveSpeed, sprintSpeed: FEEL.sprintSpeed, timeToTopSpeed: FEEL.timeToTopSpeed, jumpApex: FEEL.jumpApex, tolerance: FEEL.tolerance }
 
-export function CheckProbe({ player, ready, reset, onCameraOverride, feel = checkFeel, priority = 0.5 }: {
+export function CheckProbe({ player, ready, reset, onCameraOverride, feel = checkFeel, priority = 0.5, viewmodel }: {
   player: () => PlayerSample | null
+  viewmodel?: () => readonly number[]
   ready: () => boolean
   reset?: () => void
   onCameraOverride?: (active: boolean) => void
@@ -29,6 +30,7 @@ export function CheckProbe({ player, ready, reset, onCameraOverride, feel = chec
       if (!next) { camera.clearViewOffset(); camera.updateProjectionMatrix() }
     },
     player: () => latest.current.player(),
+    view: () => sampleView(camera, viewmodel?.()),
     audio: () => sound.sample(),
     scripts: { feelStart: async () => latest.current.reset?.() },
     input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },

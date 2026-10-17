@@ -28,6 +28,8 @@ export type CheckModel = { feel?: FeelModel; budget?: BudgetModel; quality?: Qua
 
 export type PlayerSample = { position: Vec3; velocity?: Vec3; grounded?: boolean }
 
+export type ViewSample = { position: Vec3; quaternion: [number, number, number, number]; fov: number; viewmodel?: readonly number[] }
+
 export type AudioPlay = { cue: string; sample: string }
 
 export type AudioSample = { voices: number; plays?: AudioPlay[] }
@@ -42,6 +44,7 @@ export type BlacksiteCheck = {
   camera(pose: CameraPose | null): void
   scripts?: Record<string, () => Promise<void>>
   player?(): PlayerSample | null
+  view?(): ViewSample | null
   audio?(): AudioSample
   input?: CheckInput
   model?: CheckModel
@@ -59,6 +62,26 @@ export function exposeCheck(check: Omit<BlacksiteCheck, 'version' | 'ready'> & {
     ready() { probe.ready = true },
     dispose() { if (window.__blacksite === probe) delete window.__blacksite },
   }
+}
+
+type SampledCamera = {
+  updateWorldMatrix(parents: boolean, children: boolean): void
+  matrixWorld: { elements: ArrayLike<number> }
+  fov?: number
+}
+
+export function sampleView(camera: SampledCamera, viewmodel?: readonly number[]): ViewSample {
+  camera.updateWorldMatrix(true, false)
+  const m = camera.matrixWorld.elements
+  const sx = Math.hypot(m[0], m[1], m[2]), sy = Math.hypot(m[4], m[5], m[6]), sz = Math.hypot(m[8], m[9], m[10])
+  const a = m[0] / sx, b = m[4] / sy, c = m[8] / sz, d = m[1] / sx, e = m[5] / sy, f = m[9] / sz, g = m[2] / sx, h = m[6] / sy, i = m[10] / sz
+  const trace = a + e + i
+  let q: [number, number, number, number]
+  if (trace > 0) { const s = 0.5 / Math.sqrt(trace + 1); q = [(h - f) * s, (c - g) * s, (d - b) * s, 0.25 / s] }
+  else if (a > e && a > i) { const s = 2 * Math.sqrt(1 + a - e - i); q = [0.25 * s, (b + d) / s, (c + g) / s, (h - f) / s] }
+  else if (e > i) { const s = 2 * Math.sqrt(1 + e - a - i); q = [(b + d) / s, 0.25 * s, (f + h) / s, (c - g) / s] }
+  else { const s = 2 * Math.sqrt(1 + i - a - e); q = [(c + g) / s, (f + h) / s, 0.25 * s, (d - b) / s] }
+  return { position: [m[12], m[13], m[14]], quaternion: q, fov: camera.fov ?? 0, ...(viewmodel ? { viewmodel: [...viewmodel] } : {}) }
 }
 
 type PoseCamera = {

@@ -3,9 +3,9 @@ import { clone } from 'three/addons/utils/SkeletonUtils.js'
 import type { ArmsDress, MuzzleFlash } from '../arms/dress'
 import type { ArmsState, ArmsWeapon } from '../arms/state'
 import { createClipSample, resetClipSample, sampleClip, VIEWMODEL_CLIPS, type Clip, type ViewmodelAction } from './clips'
-import { bobFrequency, GRIPS, VIEWMODEL, VIEWMODEL_WEAPONS, type LeftAnchor, type Socket, type Vec3, type WeaponModel } from './model'
+import { applyGunPose, createViewmodelFeel } from '../feel/viewmodel'
+import { GRIPS, VIEWMODEL, VIEWMODEL_WEAPONS, type LeftAnchor, type Socket, type Vec3, type WeaponModel } from './model'
 import { createArmsRig, type Side } from './rig'
-import { approach, createSpring3, kickSpring3, smoothstep, stepSpring3 } from './spring'
 
 export type ViewmodelAssets = {
   arms: Object3D
@@ -126,22 +126,12 @@ export function createViewmodelRuntime(assets: ViewmodelAssets, state: ArmsState
   }
 
   const sample = createClipSample()
-  const sway = { rotation: createSpring3(), position: createSpring3() }
-  const recoil = { position: createSpring3(), rotation: createSpring3() }
-  const landing = createSpring3()
-  const previousView = new Quaternion()
-  const view = new Quaternion()
-  const deltaView = new Quaternion()
-  const deltaEuler = new Euler(0, 0, 0, 'YXZ')
-  let hasView = false
+  const feel = createViewmodelFeel(state)
   let displayed: ArmsWeapon = state.weapon
   let pending: ArmsWeapon | null = null
   type Playing = { action: Exclude<ViewmodelAction, 'fire'>; clip: Clip; time: number; weight: number; fading: boolean }
   let playing: Playing | null = null
-  let aimLinear = 0
   let sprintAmount = 0
-  let moveAmount = 0
-  let bobPhase = 0
   let clock = 0
   let cycleTime = Infinity
   let shotIndex = 0
@@ -170,6 +160,8 @@ export function createViewmodelRuntime(assets: ViewmodelAssets, state: ArmsState
   const magazineQuaternion = new Quaternion()
   const magazineEuler = new Euler()
   const freeEuler = new Euler()
+  const holderEuler = new Euler(0, 0, 0, 'YXZ')
+  const sightPoint = new Vector3()
   const freeQuaternion = new Quaternion()
   const matrix = new Matrix4()
 
@@ -221,23 +213,12 @@ export function createViewmodelRuntime(assets: ViewmodelAssets, state: ArmsState
         if (pending) { displayed = pending; pending = null; playing = null }
         if (playing?.action === 'equip') playing = null
         const rigged = weapons[displayed]
-        const kick = rigged.model.recoil
-        const scale = 1 - smoothstep(aimLinear) * (1 - kick.aimScale)
         const random = (shotIndex * 0.618034) % 1
-        const side = ((shotIndex * 0.381966) % 1) * 2 - 1
         shotIndex++
-        const omega = Math.sqrt(VIEWMODEL.recoil.stiffness) * Math.E
-        const omegaRotation = Math.sqrt(VIEWMODEL.recoil.rotationStiffness) * Math.E
-        kickSpring3(recoil.position, [side * 0.002 * omega * scale, kick.rise * omega * scale, kick.back * omega * scale])
-        kickSpring3(recoil.rotation, [kick.pitch * omegaRotation * scale, side * kick.yaw * omegaRotation * scale, (random * 2 - 1) * kick.roll * omegaRotation * scale])
         cycleTime = 0
         triggerPull = 1
         rigged.flash?.fire(random)
         if (playing?.action === 'inspect' || playing?.action === 'reload') playing.fading = true
-      }
-      if (state.landSequence !== previous.land) {
-        const dip = Math.min(VIEWMODEL.landing.maxDip, Math.abs(state.landSpeed ?? 0) * VIEWMODEL.landing.dipPerMetrePerSecond)
-        kickSpring3(landing, [0, -dip * Math.sqrt(VIEWMODEL.landing.stiffness) * Math.E, 0])
       }
       previous.fire = state.fireSequence; previous.reload = state.reloadSequence; previous.equip = state.equipSequence
       previous.weapon = state.weapon; previous.inspect = state.inspectSequence; previous.land = state.landSequence
@@ -259,50 +240,12 @@ export function createViewmodelRuntime(assets: ViewmodelAssets, state: ArmsState
       const rigged = weapons[displayed]
       const model = rigged.model
       const reloading = playing?.action === 'reload' || playing?.action === 'equip' || playing?.action === 'holster'
-      aimLinear = Math.min(1, Math.max(0, aimLinear + (state.aiming && !reloading ? 1 : -1) * step / model.aimSeconds))
-      const aim = smoothstep(aimLinear)
-      sprintAmount = approach(sprintAmount, state.sprinting && !state.aiming ? 1 : 0, VIEWMODEL.sprintRate, step)
-      const moving = state.speed > VIEWMODEL.moveThreshold
-      moveAmount = approach(moveAmount, moving ? Math.min(1.6, state.speed / VIEWMODEL.bob.walkSpeed) : 0, VIEWMODEL.bob.blendRate, step)
-      bobPhase += Math.PI * bobFrequency(Math.max(state.speed, 0.5), state.sprinting) * step * (moving ? 1 : 0)
+      const aim = feel.aim(state.aiming && !reloading, step, displayed)
+      sprintAmount = feel.lower(state.sprinting && !state.aiming, step)
       cycleTime += step
       triggerPull = Math.max(0, triggerPull - step / 0.09)
 
-      if (worldView) {
-        view.copy(worldView)
-        if (hasView && step > 0) {
-          deltaView.copy(previousView).invert().multiply(view)
-          deltaEuler.setFromQuaternion(deltaView)
-          const scale = VIEWMODEL.sway.perRadianPerSecond * (1 - aim * 0.7)
-          const max = VIEWMODEL.sway.maxRotation
-          const yawRate = deltaEuler.y / step
-          const pitchRate = deltaEuler.x / step
-          const target: [number, number, number] = [
-            Math.max(-max, Math.min(max, -pitchRate * scale)),
-            Math.max(-max, Math.min(max, -yawRate * scale)),
-            Math.max(-max, Math.min(max, -yawRate * scale * 0.6)),
-          ]
-          stepSpring3(sway.rotation, target, VIEWMODEL.sway.stiffness, VIEWMODEL.sway.damping, step)
-          const offset = VIEWMODEL.sway.positionPerRadian
-          stepSpring3(sway.position, [target[1] * offset * -1, target[0] * offset, 0], VIEWMODEL.sway.stiffness, VIEWMODEL.sway.damping, step)
-        }
-        previousView.copy(view)
-        hasView = true
-      } else {
-        stepSpring3(sway.rotation, null, VIEWMODEL.sway.stiffness, VIEWMODEL.sway.damping, step)
-        stepSpring3(sway.position, null, VIEWMODEL.sway.stiffness, VIEWMODEL.sway.damping, step)
-      }
-      stepSpring3(recoil.position, null, VIEWMODEL.recoil.stiffness, VIEWMODEL.recoil.damping, step)
-      stepSpring3(recoil.rotation, null, VIEWMODEL.recoil.rotationStiffness, VIEWMODEL.recoil.rotationDamping, step)
-      stepSpring3(landing, null, VIEWMODEL.landing.stiffness, VIEWMODEL.landing.damping, step)
-
-      const bob = VIEWMODEL.bob
-      const bobScale = moveAmount * (1 - aim * (1 - bob.aimScale)) * (1 + (bob.sprintScale - 1) * sprintAmount)
-      const breath = Math.sin(clock * Math.PI * 2 * VIEWMODEL.idle.breathHz) * (1 - aim * (1 - VIEWMODEL.idle.aimScale))
-      const bobX = Math.sin(bobPhase) * bob.lateral * bobScale
-      const bobY = -(Math.sin(bobPhase) ** 2) * bob.vertical * bobScale + breath * VIEWMODEL.idle.vertical
-      const bobRoll = Math.sin(bobPhase) * bob.roll * bobScale
-      const bobPitch = Math.sin(bobPhase * 2) * bob.pitch * bobScale + breath * VIEWMODEL.idle.pitch
+      feel.update(step, worldView, sprintAmount, displayed)
 
       const hip = model.hip
       toPivot(model.pivot, pivotPoint)
@@ -312,20 +255,24 @@ export function createViewmodelRuntime(assets: ViewmodelAssets, state: ArmsState
       const sprint = model.sprint
       const clipScale = 1
       position.set(
-        hip.position[0] + (ads.x - hip.position[0]) * aim + sprint.position[0] * sprintAmount + sample.weaponPosition[0] * clipScale + bobX + sway.position.value[0] + recoil.position.value[0],
-        hip.position[1] + (ads.y - hip.position[1]) * aim + sprint.position[1] * sprintAmount + sample.weaponPosition[1] * clipScale + bobY + sway.position.value[1] + recoil.position.value[1] + landing.value[1],
-        hip.position[2] + (ads.z - hip.position[2]) * aim + sprint.position[2] * sprintAmount + sample.weaponPosition[2] * clipScale + recoil.position.value[2],
+        hip.position[0] + (ads.x - hip.position[0]) * aim + sprint.position[0] * sprintAmount + sample.weaponPosition[0] * clipScale,
+        hip.position[1] + (ads.y - hip.position[1]) * aim + sprint.position[1] * sprintAmount + sample.weaponPosition[1] * clipScale,
+        hip.position[2] + (ads.z - hip.position[2]) * aim + sprint.position[2] * sprintAmount + sample.weaponPosition[2] * clipScale,
       )
       rotation.set(
-        hip.rotation[0] * (1 - aim) + rigged.aimRotation[0] * aim + sprint.rotation[0] * sprintAmount + sample.weaponRotation[0] + bobPitch + sway.rotation.value[0] + recoil.rotation.value[0],
-        hip.rotation[1] * (1 - aim) + rigged.aimRotation[1] * aim + sprint.rotation[1] * sprintAmount + sample.weaponRotation[1] + sway.rotation.value[1] + recoil.rotation.value[1],
-        hip.rotation[2] * (1 - aim) + rigged.aimRotation[2] * aim + sprint.rotation[2] * sprintAmount + sample.weaponRotation[2] + bobRoll + sway.rotation.value[2] + recoil.rotation.value[2],
+        hip.rotation[0] * (1 - aim) + rigged.aimRotation[0] * aim + sprint.rotation[0] * sprintAmount + sample.weaponRotation[0],
+        hip.rotation[1] * (1 - aim) + rigged.aimRotation[1] * aim + sprint.rotation[1] * sprintAmount + sample.weaponRotation[1],
+        hip.rotation[2] * (1 - aim) + rigged.aimRotation[2] * aim + sprint.rotation[2] * sprintAmount + sample.weaponRotation[2],
       )
       for (const entry of Object.values(weapons)) entry.pivot.visible = entry === rigged
       quaternion.setFromEuler(rotation)
       toPivot(model.pivot, pivotPoint)
       rigged.pivot.quaternion.copy(quaternion)
       rigged.pivot.position.copy(position).add(pivotPoint).sub(pivotPoint.clone().applyQuaternion(quaternion))
+      applyGunPose(rigged.pivot, feel)
+      holderEuler.setFromQuaternion(rigged.pivot.quaternion)
+      sightPoint.copy(rigged.rearSight).applyQuaternion(rigged.pivot.quaternion).add(rigged.pivot.position)
+      state.debug.holder = [sightPoint.x, sightPoint.y, sightPoint.z, holderEuler.x, holderEuler.y, holderEuler.z]
 
       if (rigged.magazine) {
         const rest = rigged.magazineRest
@@ -398,9 +345,9 @@ export function createViewmodelRuntime(assets: ViewmodelAssets, state: ArmsState
       debug.handError = Math.max(rightError, leftError)
       debug.reach = Math.max(rig.measure.reach.right, rig.measure.reach.left)
       debug.weaponOffset = [position.x - hip.position[0], position.y - hip.position[1], position.z - hip.position[2]]
-      debug.recoilOffset = recoil.position.value[2]
-      debug.swayRotation = sway.rotation.value[1]
-      debug.bobPhase = bobPhase
+      debug.recoilOffset = feel.gun.pose.pivot.position.z
+      debug.swayRotation = feel.gun.pose.group.quaternion.y * 2
+      debug.bobPhase = feel.phase
     },
     weaponPivot: () => weapons[displayed].pivot,
     sightInView(target = new Vector3()) {

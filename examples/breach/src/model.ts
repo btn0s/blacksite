@@ -24,7 +24,6 @@ export const MOVE = {
   gravity: 9.8,
   coyoteSeconds: 0.1,
   bufferSeconds: 0.1,
-  landDip: 0.06,
   crouchSeconds: 0.2,
   sprintOutSeconds: 0.22,
   bobAmplitude: 0.012,
@@ -55,12 +54,10 @@ export function timeToTopSpeed(speed: number, fraction = 0.9) {
 
 export const VIEW = {
   fov: 75,
-  fovBlend: 14,
   viewmodelFov: 56,
   sensitivity: 0.0022,
   touchSensitivity: 0.0042,
   kickDecaySeconds: 0.08,
-  shake: { shot: 0.18 * DEG, hit: 1.4 * DEG, decay: 9 },
 }
 
 export type Kick = readonly [pitch: number, yaw: number]
@@ -80,13 +77,13 @@ export const WEAPONS = {
   rifle: {
     id: 'rifle', label: 'Rifle', roundsPerSecond: 10, magazine: 30, reserve: 150,
     ...FOUND.rifle, damage: 36, range: 120,
-    adsSeconds: 0.25, adsFov: 55, kicks: rifleKicks, kickResetSeconds: 0.43, kickJitter: 0.04, recoveryFraction: 0.6, recoverySeconds: 0.43,
+    adsSeconds: 0.3, adsFov: 55, kicks: rifleKicks, kickResetSeconds: 0.43, kickJitter: 0.04,
     spread: { hip: 1.1, aim: 0.12, move: 1.6, sprint: 4, crouch: 0.75, bloomPerShot: 0.18, bloomMax: 2.2, recoverySeconds: 0.43, recoveryDelaySeconds: 0.1 },
   },
   pistol: {
     id: 'pistol', label: 'Pistol', roundsPerSecond: 5, magazine: 8, reserve: 40,
     ...FOUND.pistol, damage: 28, range: 60,
-    adsSeconds: 0.15, adsFov: 62, kicks: pistolKicks, kickResetSeconds: 0.3, kickJitter: 0.1, recoveryFraction: 0.85, recoverySeconds: 0.25,
+    adsSeconds: 0.3, adsFov: 62, kicks: pistolKicks, kickResetSeconds: 0.3, kickJitter: 0.1,
     spread: { hip: 0.9, aim: 0.15, move: 1.2, sprint: 3, crouch: 0.8, bloomPerShot: 0.35, bloomMax: 1.8, recoverySeconds: 0.3, recoveryDelaySeconds: 0.2 },
   },
 } as const

@@ -1,8 +1,9 @@
 import { AnimationAction, AnimationClip, AnimationMixer, AnimationUtils, Bone, Euler, Group, LoopOnce, LoopRepeat, Matrix4, Object3D, Quaternion, Vector3, type Material, type Mesh } from 'three'
 import { clone } from 'three/addons/utils/SkeletonUtils.js'
 import type { ArmsState, ArmsWeapon } from '../arms/state'
-import { VIEWMODEL, VIEWMODEL_WEAPONS, bobFrequency } from '../viewmodel/model'
-import { approach, createSpring3, kickSpring3, smoothstep, stepSpring3 } from '../viewmodel/spring'
+import { applyGunPose, createViewmodelFeel } from '../feel/viewmodel'
+import { VIEWMODEL } from '../viewmodel/model'
+import { approach, smoothstep } from '../viewmodel/spring'
 import { FOUND_HOLSTER, FOUND_INSPECT, clipSeconds, type FoundClip, type FoundClipSource, type FoundSet, type FoundWeapon, type Vec3 } from './model'
 
 export type FoundAsset = { scene: Object3D; animations: AnimationClip[] }
@@ -118,23 +119,14 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
   const weapons = { rifle: rig(assets.rifle, set.weapons.rifle, 'rifle'), pistol: rig(assets.pistol, set.weapons.pistol, 'pistol') }
   for (const entry of Object.values(weapons)) root.add(entry.holder)
 
-  const sway = { rotation: createSpring3(), position: createSpring3() }
-  const recoil = { position: createSpring3(), rotation: createSpring3() }
-  const landing = createSpring3()
-  const previousView = new Quaternion()
-  const deltaView = new Quaternion()
-  const deltaEuler = new Euler(0, 0, 0, 'YXZ')
-  let hasView = false
+  const feel = createViewmodelFeel(state)
   let displayed: ArmsWeapon = state.weapon
   let pending: ArmsWeapon | null = null
   type Playing = { action: Action; clip: FoundClip | null; time: number; duration: number; weight: number; fading: boolean }
   let playing: Playing | null = null
-  let aimLinear = 0
   let sprintAmount = 0
   let moveAmount = 0
-  let bobPhase = 0
   let clock = 0
-  let shotIndex = 0
   const locomotion = { idle: 1, walk: 0, run: 0 }
   const previous = { fire: state.fireSequence, reload: state.reloadSequence, equip: state.equipSequence, weapon: state.weapon, inspect: state.inspectSequence, land: state.landSequence }
 
@@ -172,6 +164,8 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
   const relative = new Matrix4()
   const inverseHolder = new Matrix4()
   const euler = new Euler()
+  const holderEuler = new Euler(0, 0, 0, 'YXZ')
+  const sightPoint = new Vector3()
   const roll = new Quaternion()
   const minusZ = new Vector3(0, 0, -1)
   const offset = new Vector3()
@@ -206,20 +200,6 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
         const rigged = weapons[displayed]
         const aiming = state.aiming && rigged.actions.aimFire
         play('fire', aiming ? 'aimFire' : state.empty && rigged.actions.fireLast ? 'fireLast' : 'fire')
-        const kick = VIEWMODEL_WEAPONS[displayed].recoil
-        const aim = smoothstep(aimLinear)
-        const scale = rigged.spec.recoil.hip + (rigged.spec.recoil.aim - rigged.spec.recoil.hip) * aim
-        const random = (shotIndex * 0.618034) % 1
-        const side = ((shotIndex * 0.381966) % 1) * 2 - 1
-        shotIndex++
-        const omega = Math.sqrt(VIEWMODEL.recoil.stiffness) * Math.E
-        const omegaRotation = Math.sqrt(VIEWMODEL.recoil.rotationStiffness) * Math.E
-        kickSpring3(recoil.position, [side * 0.002 * omega * scale, kick.rise * omega * scale, kick.back * omega * scale])
-        kickSpring3(recoil.rotation, [kick.pitch * omegaRotation * scale, side * kick.yaw * omegaRotation * scale, (random * 2 - 1) * kick.roll * omegaRotation * scale])
-      }
-      if (state.landSequence !== previous.land) {
-        const dip = Math.min(VIEWMODEL.landing.maxDip, Math.abs(state.landSpeed ?? 0) * VIEWMODEL.landing.dipPerMetrePerSecond)
-        kickSpring3(landing, [0, -dip * Math.sqrt(VIEWMODEL.landing.stiffness) * Math.E, 0])
       }
       previous.fire = state.fireSequence; previous.reload = state.reloadSequence; previous.equip = state.equipSequence
       previous.weapon = state.weapon; previous.inspect = state.inspectSequence; previous.land = state.landSequence
@@ -248,12 +228,10 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
       const rigged = weapons[displayed]
       const spec = rigged.spec
       const busy = playing?.action === 'reload' || playing?.action === 'draw' || playing?.action === 'holster'
-      aimLinear = Math.min(1, Math.max(0, aimLinear + (state.aiming && !busy ? 1 : -1) * step / spec.aimSeconds))
-      const aim = smoothstep(aimLinear)
-      sprintAmount = approach(sprintAmount, state.sprinting && !state.aiming ? 1 : 0, VIEWMODEL.sprintRate, step)
+      const aim = feel.aim(state.aiming && !busy, step, displayed)
+      sprintAmount = feel.lower(state.sprinting && !state.aiming, step)
       const moving = state.speed > VIEWMODEL.moveThreshold
       moveAmount = approach(moveAmount, moving ? Math.min(1.6, state.speed / VIEWMODEL.bob.walkSpeed) : 0, VIEWMODEL.bob.blendRate, step)
-      bobPhase += Math.PI * bobFrequency(Math.max(state.speed, 0.5), state.sprinting) * step * (moving ? 1 : 0)
 
       const run = rigged.actions.run ? sprintAmount : 0
       const walk = rigged.actions.walk ? Math.min(1, moveAmount) * (1 - run) * (1 - aim) : 0
@@ -272,29 +250,7 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
       held += step
       if (!state.poseHold) { rigged.mixer.update(held); held = 0 }
 
-      if (worldView) {
-        if (hasView && step > 0) {
-          deltaView.copy(previousView).invert().multiply(worldView)
-          deltaEuler.setFromQuaternion(deltaView)
-          const scale = VIEWMODEL.sway.perRadianPerSecond * (1 - aim * 0.7)
-          const max = VIEWMODEL.sway.maxRotation
-          const target: Vec3 = [
-            Math.max(-max, Math.min(max, -deltaEuler.x / step * scale)),
-            Math.max(-max, Math.min(max, -deltaEuler.y / step * scale)),
-            Math.max(-max, Math.min(max, -deltaEuler.y / step * scale * 0.6)),
-          ]
-          stepSpring3(sway.rotation, target, VIEWMODEL.sway.stiffness, VIEWMODEL.sway.damping, step)
-          stepSpring3(sway.position, [-target[1] * VIEWMODEL.sway.positionPerRadian, target[0] * VIEWMODEL.sway.positionPerRadian, 0], VIEWMODEL.sway.stiffness, VIEWMODEL.sway.damping, step)
-        }
-        previousView.copy(worldView)
-        hasView = true
-      } else {
-        stepSpring3(sway.rotation, null, VIEWMODEL.sway.stiffness, VIEWMODEL.sway.damping, step)
-        stepSpring3(sway.position, null, VIEWMODEL.sway.stiffness, VIEWMODEL.sway.damping, step)
-      }
-      stepSpring3(recoil.position, null, VIEWMODEL.recoil.stiffness, VIEWMODEL.recoil.damping, step)
-      stepSpring3(recoil.rotation, null, VIEWMODEL.recoil.rotationStiffness, VIEWMODEL.recoil.rotationDamping, step)
-      stepSpring3(landing, null, VIEWMODEL.landing.stiffness, VIEWMODEL.landing.damping, step)
+      feel.update(step, worldView, sprintAmount, displayed)
 
       sights(rigged)
       direction.subVectors(front, rear).normalize()
@@ -310,27 +266,28 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
       blendQuaternion.slerpQuaternions(hipQuaternion, aimQuaternion, aim)
       blendPosition.lerpVectors(hipPosition, aimPosition, aim)
 
-      const bob = VIEWMODEL.bob
-      const bobScale = moveAmount * (rigged.actions.walk ? aim * bob.aimScale : 1 - aim * (1 - bob.aimScale))
-      const breath = Math.sin(clock * Math.PI * 2 * VIEWMODEL.idle.breathHz) * aim * VIEWMODEL.idle.aimScale
       const sprint = rigged.actions.run ? 0 : sprintAmount
       euler.set(
-        spec.sprint.rotation[0] * sprint + FOUND_HOLSTER.rotation[0] * holsterAmount + FOUND_INSPECT.rotation[0] * inspectAmount + Math.sin(bobPhase * 2) * bob.pitch * bobScale + breath * VIEWMODEL.idle.pitch + sway.rotation.value[0] + recoil.rotation.value[0],
-        spec.sprint.rotation[1] * sprint + FOUND_HOLSTER.rotation[1] * holsterAmount + FOUND_INSPECT.rotation[1] * inspectAmount + sway.rotation.value[1] + recoil.rotation.value[1],
-        spec.sprint.rotation[2] * sprint + FOUND_HOLSTER.rotation[2] * holsterAmount + FOUND_INSPECT.rotation[2] * inspectAmount + Math.sin(bobPhase) * bob.roll * bobScale + sway.rotation.value[2] + recoil.rotation.value[2],
+        spec.sprint.rotation[0] * sprint + FOUND_HOLSTER.rotation[0] * holsterAmount + FOUND_INSPECT.rotation[0] * inspectAmount,
+        spec.sprint.rotation[1] * sprint + FOUND_HOLSTER.rotation[1] * holsterAmount + FOUND_INSPECT.rotation[1] * inspectAmount,
+        spec.sprint.rotation[2] * sprint + FOUND_HOLSTER.rotation[2] * holsterAmount + FOUND_INSPECT.rotation[2] * inspectAmount,
       )
       procedural.setFromEuler(euler)
       pivot.lerp(offset.set(0, -0.02, -spec.eyeRelief - 0.08), aim)
       offset.set(
-        spec.sprint.position[0] * sprint + FOUND_HOLSTER.position[0] * holsterAmount + FOUND_INSPECT.position[0] * inspectAmount + Math.sin(bobPhase) * bob.lateral * bobScale + sway.position.value[0] + recoil.position.value[0],
-        spec.sprint.position[1] * sprint + FOUND_HOLSTER.position[1] * holsterAmount - (Math.sin(bobPhase) ** 2) * bob.vertical * bobScale + breath * VIEWMODEL.idle.vertical + sway.position.value[1] + recoil.position.value[1] + landing.value[1],
-        spec.sprint.position[2] * sprint + FOUND_HOLSTER.position[2] * holsterAmount + FOUND_INSPECT.position[2] * inspectAmount + recoil.position.value[2],
+        spec.sprint.position[0] * sprint + FOUND_HOLSTER.position[0] * holsterAmount + FOUND_INSPECT.position[0] * inspectAmount,
+        spec.sprint.position[1] * sprint + FOUND_HOLSTER.position[1] * holsterAmount,
+        spec.sprint.position[2] * sprint + FOUND_HOLSTER.position[2] * holsterAmount + FOUND_INSPECT.position[2] * inspectAmount,
       )
       rigged.holder.quaternion.copy(procedural).multiply(blendQuaternion)
       rigged.holder.position.copy(blendPosition).sub(pivot).applyQuaternion(procedural).add(pivot).add(offset)
+      applyGunPose(rigged.holder, feel)
       rigged.holder.updateMatrixWorld(true)
 
       const debug = state.debug
+      holderEuler.setFromQuaternion(rigged.holder.quaternion)
+      sightPoint.copy(rigged.rear).applyMatrix4(rigged.bone.matrixWorld)
+      debug.holder = [sightPoint.x, sightPoint.y, sightPoint.z, holderEuler.x, holderEuler.y, holderEuler.z]
       debug.animationSeconds = clock
       debug.frames++
       debug.activeAction = playing?.action === 'fire' ? 'fire' : playing?.action === 'reload' ? 'reload' : playing?.action === 'draw' ? 'equip' : null
@@ -345,9 +302,9 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
       debug.handError = 0
       debug.reach = 0
       debug.weaponOffset = [blendPosition.x, blendPosition.y, blendPosition.z]
-      debug.recoilOffset = recoil.position.value[2]
-      debug.swayRotation = sway.rotation.value[1]
-      debug.bobPhase = bobPhase
+      debug.recoilOffset = feel.gun.pose.pivot.position.z
+      debug.swayRotation = feel.gun.pose.group.quaternion.y * 2
+      debug.bobPhase = feel.phase
     },
     sightInView(target = new Vector3()) {
       const rigged = weapons[displayed]

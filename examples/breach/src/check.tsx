@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
-import { applyCameraPose, exposeCheck, type Bookmark, type CameraPose } from '@blacksite/check'
+import { applyCameraPose, exposeCheck, sampleView, type Bookmark, type CameraPose } from '@blacksite/check'
 import type { BreachAudio } from './audio'
 import { clearLine, type Target, type V3 } from './geometry'
 import { BOOKMARKS, FEEL_START } from './layout'
@@ -45,7 +45,7 @@ async function warm(gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.C
   restore()
 }
 
-export function CheckProbe({ driver, audio, ready, overlay, onWarmed }: { driver: Controls; audio: BreachAudio; ready: boolean; overlay: { scene: THREE.Scene; camera: THREE.Camera } | null; onWarmed: () => void }) {
+export function CheckProbe({ driver, audio, ready, overlay, onWarmed, viewmodel }: { driver: Controls; audio: BreachAudio; ready: boolean; overlay: { scene: THREE.Scene; camera: THREE.Camera } | null; onWarmed: () => void; viewmodel?: () => readonly number[] }) {
   const camera = useThree(state => state.camera)
   const size = useThree(state => state.size)
   const gl = useThree(state => state.gl)
@@ -59,6 +59,7 @@ export function CheckProbe({ driver, audio, ready, overlay, onWarmed }: { driver
       const body = driver.body
       return { position: [body.position.x, body.position.y, body.position.z], velocity: [body.velocity.x, body.velocity.y, body.velocity.z], grounded: body.grounded }
     },
+    view: () => sampleView(camera, viewmodel?.()),
     audio: () => audio.sample(),
     scripts: {
       async feelStart() {
@@ -137,7 +138,7 @@ export function CheckProbe({ driver, audio, ready, overlay, onWarmed }: { driver
     },
     input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
     model: { feel: FEEL, budget: CHECK_BUDGET },
-  }), [driver, audio])
+  }), [driver, audio, camera])
   useEffect(() => check.dispose, [check])
   useFrame(() => {
     const local = state.current
