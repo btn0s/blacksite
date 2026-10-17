@@ -90,3 +90,8 @@ export function createAudioLog() {
     sample(): AudioSample { const drained = plays; plays = []; return { voices, plays: drained } },
   }
 }
+
+export { formatProblem, lintTriangles, lintZFighting, summarizeLint } from './zfight/lint.mjs'
+export type { LintCamera, LintOptions, LintReport, ZFightProblem } from './zfight/lint.mjs'
+export { extractTriangles } from './zfight/triangles.mjs'
+export { depthStep, gapNeeded } from './zfight/depth.mjs'

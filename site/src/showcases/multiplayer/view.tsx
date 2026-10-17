@@ -4,7 +4,7 @@ import { useGLTF } from '@react-three/drei'
 import { CuboidCollider, CylinderCollider, RigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
 import { Look } from '@blacksite/look/r3f'
-import { QUALITY, type QualityTier } from '@blacksite/look/quality'
+import { QUALITY, depthDefaults, type QualityTier } from '@blacksite/look/quality'
 import { MultiplayerScene, type MultiplayerReplica, type MultiplayerShot, type MultiplayerStatus, type SubjectState } from '@blacksite/subject'
 import type { Connection } from '@blacksite/relay'
 import type { ArmsPresentation } from '@blacksite/subject-fpp/arms'
@@ -129,7 +129,7 @@ export function PlayerView({ index, connection, subject, level, tier, mode, list
   const dpr = Math.min(QUALITY[tier].maxPixelRatio, internalPixelRatio())
   const health = status?.health ?? 100
   return <div className={`mp-view mp-view--${mode}`}>
-    <Canvas shadows="percentage" dpr={hidden ? 0.25 : [1, dpr]} camera={{ fov: 75, near: 0.05, far: 400, position: [0, 1.63, 0] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={onCreated}>
+    <Canvas shadows="percentage" dpr={hidden ? 0.25 : [1, dpr]} camera={{ fov: 75, near: depthDefaults(tier).near, far: 400, position: [0, 1.63, 0] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={onCreated}>
       <Lights tier={tier} onLights={setLights} />
       {!hidden && lights && <Look atmosphere="zone" quality={tier} environment sun={lights.sun} fill={lights.fill} overlay={arms} />}
       {hidden && <Silent />}

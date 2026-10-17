@@ -3,10 +3,12 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { chromium } from 'playwright-core'
+import { installHook } from './zfight/hook.mjs'
+import { runZFight, zfightDetail } from './zfight/runtime.mjs'
 import { runShimmer } from './shimmer.mjs'
 import { runFlyover } from './flyover.mjs'
 
-export const CHECKS = ['perf', 'hitch', 'pop', 'feel', 'critic', 'audio']
+export const CHECKS = ['perf', 'hitch', 'pop', 'feel', 'critic', 'audio', 'zfight']
 export const OPT_IN_CHECKS = ['shimmer', 'flyover']
 
 export const PROFILES = {
@@ -16,7 +18,7 @@ export const PROFILES = {
 
 const DEFAULTS = { frameMs: 8.3, phoneFrameMs: 16.7, hitchMs: 33, firstPlayableMs: 5000, voices: 32 }
 
-const GPU_ARGS = [
+export const GPU_ARGS = [
   '--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu', '--use-gl=angle',
   ...(process.platform === 'darwin' ? ['--use-angle=metal'] : []),
   '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
@@ -238,6 +240,7 @@ export async function runChecks(options) {
       log(`${name}: loading ${url}`)
       const context = await browser.newContext({ viewport: profile.viewport, deviceScaleFactor: profile.deviceScaleFactor, isMobile: profile.isMobile, hasTouch: profile.hasTouch })
       await context.addInitScript(probeScript)
+      await context.addInitScript(installHook)
       await context.addInitScript(css => { addEventListener('DOMContentLoaded', () => { const style = document.createElement('style'); style.textContent = css; document.head.append(style) }) }, HIDE_HUD)
       const page = await context.newPage()
       const scratch = await context.newPage()
@@ -357,6 +360,7 @@ export async function runChecks(options) {
       const kit = { page, scratch, base: files.url, out, name, profile, contract, options, setPose, contactSheet, percentile, round }
       if (only.includes('shimmer')) { log(`${name}: shimmer`); add('shimmer', name, await runShimmer(kit)) }
       if (only.includes('flyover')) { log(`${name}: flyover`); add('flyover', name, await runFlyover(kit)) }
+      if (only.includes('zfight')) add('zfight', name, await runZFight({ page, scratch, files, out, profile: name, contract, options: options.zfight, log, setPose, shoot }))
 
       if (only.includes('critic')) {
         log(`${name}: critic captures`)
@@ -410,6 +414,7 @@ export function summarize(report) {
     if (check === 'pop' && !result.skipped) detail = `${result.flagged.length} moving frames and ${result.still.length} still views flagged of ${result.frames}`
     if (check === 'shimmer' && !result.skipped) detail = `still mean ${Math.max(...result.views.map(view => view.still.mean))}/${result.budget.shimmerStill}, motion mean ${Math.max(...result.views.map(view => view.motion.mean))}/${result.budget.shimmerMotion} (worst of ${result.views.length} views)`
     if (check === 'flyover' && !result.skipped) detail = `${result.flagged.length} of ${result.frames} frames flagged (budget ${result.allowed})`
+    if (check === 'zfight' && !result.skipped) detail = zfightDetail(result)
     if (check === 'critic') detail = `${result.captures} captures, ${result.consoleErrors} console errors`
     lines.push(`${status.padEnd(4)}  ${check.padEnd(7)} ${profile.padEnd(7)} ${detail}`)
   }
