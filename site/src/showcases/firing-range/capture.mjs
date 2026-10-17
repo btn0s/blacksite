@@ -117,11 +117,15 @@ if (rig === 'blacksite' && (measureOnly || args.includes('--measure'))) {
     await advance(0.8, { aiming: false })
     let peak = 0, settled = 0
     for (let index = 1; index <= 72; index++) { const debug = await advance(1 / 120, index === 1 ? { fire: true } : {}); peak = Math.max(peak, Math.abs(debug.recoilOffset)); if (Math.abs(debug.recoilOffset) > expected.recoil.back * 0.05) settled = index / 120 }
-    const damping = model.procedural.recoil.damping / 2
-    const omega = Math.sqrt(model.procedural.recoil.stiffness - damping * damping)
-    const peakTime = Math.atan(omega / damping) / omega
-    const expectedPeak = expected.recoil.back * Math.sqrt(model.procedural.recoil.stiffness) * Math.E / omega * Math.exp(-damping * peakTime) * Math.sin(omega * peakTime)
-    measurements.push({ weapon, metric: 'recoil peak metres', expected: expectedPeak, actual: peak, pass: Math.abs(peak - expectedPeak) < expectedPeak * 0.1 })
+    const substeps = Math.ceil((1 / 120) / model.procedural.spring.maxStepSeconds)
+    const springStep = (1 / 120) / substeps
+    const stiffness = model.procedural.recoil.stiffness
+    const radius = Math.sqrt(1 - model.procedural.recoil.damping * springStep)
+    const angle = Math.acos((2 - model.procedural.recoil.damping * springStep - stiffness * springStep ** 2) / (2 * radius))
+    const impulse = expected.recoil.back * Math.sqrt(stiffness) * Math.E
+    const reference = sample => springStep * radius * impulse * radius ** (sample * substeps) * Math.sin(sample * substeps * angle) / Math.sin(angle)
+    const expectedPeak = Math.max(...Array.from({ length: 72 }, (_, index) => Math.abs(reference(index + 1))))
+    measurements.push({ weapon, metric: 'recoil peak metres', reference: model.procedural.spring.integrator, springStepSeconds: springStep, expected: expectedPeak, actual: peak, pass: Math.abs(peak - expectedPeak) < expectedPeak * 0.1 })
     measurements.push({ weapon, metric: 'recoil recovery to 5% seconds', expected: '<0.35', actual: settled + 1 / 120, pass: settled < 0.35 })
     for (const [speed, sprinting] of [[3.1, false], [5.2, true]]) {
       const before = await advance(0.5, { speed, sprinting })

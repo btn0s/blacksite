@@ -46,6 +46,7 @@ export type WeaponModel = {
 
 export const VIEWMODEL = {
   fov: 56,
+  spring: { integrator: 'semi-implicit-euler', maxStepSeconds: 1 / 240 },
   shoulders: { right: [0.16, -0.24, 0.0], left: [-0.15, -0.24, 0.0] },
   upperArmStretch: 1.2,
   sway: { perRadianPerSecond: 0.016, maxRotation: 0.07, positionPerRadian: 0.045, stiffness: 140, damping: 19 },

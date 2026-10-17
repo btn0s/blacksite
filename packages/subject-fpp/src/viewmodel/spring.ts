@@ -1,9 +1,11 @@
+import { VIEWMODEL } from './model'
+
 export type Spring3 = { value: [number, number, number]; velocity: [number, number, number] }
 
 export const createSpring3 = (): Spring3 => ({ value: [0, 0, 0], velocity: [0, 0, 0] })
 
 export function stepSpring3(spring: Spring3, target: readonly [number, number, number] | null, stiffness: number, damping: number, delta: number) {
-  const steps = Math.max(1, Math.ceil(delta / (1 / 240)))
+  const steps = Math.max(1, Math.ceil(delta / VIEWMODEL.spring.maxStepSeconds))
   const dt = delta / steps
   for (let step = 0; step < steps; step++) {
     for (let index = 0; index < 3; index++) {
