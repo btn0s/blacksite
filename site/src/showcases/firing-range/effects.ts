@@ -78,6 +78,7 @@ export function createEffects(scene: THREE.Scene) {
     mesh.renderOrder = 2
     mesh.receiveShadow = true
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    for (let index = 0; index < count; index++) mesh.setColorAt(index, scratch.color.set('#ffffff'))
     root.add(mesh)
     return [kind, { mesh, next: 0, capacity: count }]
   })) as unknown as Record<Decal, { mesh: THREE.InstancedMesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>; next: number; capacity: number }>
@@ -120,6 +121,7 @@ export function createEffects(scene: THREE.Scene) {
   const dust = Array.from({ length: 36 }, () => {
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustTexture, transparent: true, depthWrite: false, opacity: 0 }))
     sprite.visible = false
+    sprite.frustumCulled = false
     root.add(sprite)
     return { sprite, life: 0, max: 1, velocity: new THREE.Vector3(), grow: 1, opacity: 0.6 }
   })
@@ -213,6 +215,9 @@ export function createEffects(scene: THREE.Scene) {
   }
 
   return {
+    warm(active: boolean) {
+      if (dust[0].life <= 0) dust[0].sprite.visible = active
+    },
     impact(surface: Surface, point: THREE.Vector3, normal: THREE.Vector3, power: number) {
       decal(surface, point, normal)
       if (surface === 'steel') { spark(point, normal, 16 + Math.round(power * 10), 7); puff(point, normal, surface, 0.45); return }

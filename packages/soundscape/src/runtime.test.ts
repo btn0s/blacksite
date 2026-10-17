@@ -160,9 +160,10 @@ describe('soundscape voice lifecycle', () => {
     const context = new Context()
     const audio = createSoundscape({ context: context as unknown as AudioContext, tier: 'phone' })
     await audio.start()
+    const prepared = context.convolvers.length
     audio.play('weapon.rifle')
-    const weaponWet = context.convolvers.at(-1)?.outputs[0]
-    expect(weaponWet?.outputs[0]).toBe(context.gains[3])
+    expect(context.convolvers.length).toBe(prepared)
+    expect(context.convolvers.some(convolver => convolver.outputs[0]?.outputs[0] === context.gains[3])).toBe(true)
     audio.setBusVolume('weapons', 0)
     expect(context.gains[3].gain.value).toBe(0)
     audio.dispose()

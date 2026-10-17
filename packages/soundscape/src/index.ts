@@ -222,6 +222,8 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
     return effect
   }
 
+  const prepareZone = (name: string) => { for (const bus of BUS_NAMES) getZoneEffect(name, bus) }
+
   const updateDucking = () => {
     if (!context) return
     const now = context.currentTime
@@ -523,7 +525,7 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
     }
     noise = noiseBuffer(context)
     initialized = true
-    getZoneEffect(currentZone, 'sfx')
+    prepareZone(currentZone)
   }
 
   const prepare = () => {
@@ -619,7 +621,7 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
     if (!zones.has(name)) throw new Error(`Unknown sound zone: ${name}`)
     if (name === currentZone && activeBeds.length) return
     currentZone = name
-    getZoneEffect(name, 'sfx')
+    prepareZone(name)
     transitionBeds()
   }
 
@@ -638,7 +640,7 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
       effects.delete(effectId)
       later(() => { existing.convolver.disconnect(); existing.wet.disconnect() }, 3000)
     }
-    if (currentZone === zone.name) { getZoneEffect(zone.name, 'sfx'); transitionBeds() }
+    if (currentZone === zone.name) { prepareZone(zone.name); transitionBeds() }
   }
 
   const setImpulseResponse = (zoneName: string, impulse: AudioBuffer) => {

@@ -1,4 +1,4 @@
-import { AnimationAction, AnimationClip, AnimationMixer, AnimationUtils, Bone, Euler, Group, LoopOnce, LoopRepeat, Matrix4, Object3D, Quaternion, Vector3 } from 'three'
+import { AnimationAction, AnimationClip, AnimationMixer, AnimationUtils, Bone, Euler, Group, LoopOnce, LoopRepeat, Matrix4, Object3D, Quaternion, Vector3, type Material, type Mesh } from 'three'
 import { clone } from 'three/addons/utils/SkeletonUtils.js'
 import type { ArmsState, ArmsWeapon } from '../arms/state'
 import { VIEWMODEL, VIEWMODEL_WEAPONS, bobFrequency } from '../viewmodel/model'
@@ -21,7 +21,10 @@ type Rigged = {
   up: Vector3
   bones: number
   triangles: number
+  warm: Warmup | null
 }
+
+type Warmup = ReturnType<typeof warmup>
 
 const LOCOMOTION = ['idle', 'walk', 'run'] as const
 const vector = (value: Vec3, target = new Vector3()) => target.set(value[0], value[1], value[2])
@@ -32,6 +35,29 @@ function resolveClip(asset: FoundAsset, source: FoundClipSource, fps: number, na
   if (!clip) throw new Error(`Found viewmodel clip ${clipName} is missing`)
   if (typeof source === 'string') return clip
   return AnimationUtils.subclip(clip, name, source.from, source.to, fps)
+}
+
+function warmup(model: Object3D) {
+  const meshes: Mesh[] = []
+  model.traverse(child => { if ((child as Mesh).isMesh) meshes.push(child as Mesh) })
+  const materials = [...new Set(meshes.flatMap(mesh => [mesh.material].flat() as Material[]))]
+  const writes = materials.map(material => [material.colorWrite, material.depthWrite] as const)
+  const idle = Object3D.prototype.onAfterRender
+  let drawn = false
+  const done = () => { drawn = true }
+  for (const mesh of meshes) mesh.onAfterRender = done
+  const mask = (hidden: boolean) => materials.forEach((material, index) => {
+    material.colorWrite = !hidden && writes[index][0]
+    material.depthWrite = !hidden && writes[index][1]
+  })
+  return {
+    drawn: () => drawn,
+    mask,
+    finish() {
+      for (const mesh of meshes) if (mesh.onAfterRender === done) mesh.onAfterRender = idle
+      mask(false)
+    },
+  }
 }
 
 function rig(asset: FoundAsset, spec: FoundWeapon, name: string): Rigged {
@@ -76,7 +102,7 @@ function rig(asset: FoundAsset, spec: FoundWeapon, name: string): Rigged {
     const geometry = (child as { geometry?: { index?: { count: number } | null } }).geometry
     if (geometry?.index) triangles += geometry.index.count / 3
   })
-  return { spec, holder, model, mixer, actions, bone, rear, front, up: upDirection.normalize(), bones, triangles }
+  return { spec, holder, model, mixer, actions, bone, rear, front, up: upDirection.normalize(), bones, triangles, warm: warmup(model) }
 }
 
 export function foundSeconds(asset: FoundAsset, spec: FoundWeapon, clip: FoundClip) {
@@ -237,7 +263,12 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
       const actionWeight = playing?.clip ? playing.weight : 0
       for (const clip of LOCOMOTION) rigged.actions[clip]?.setEffectiveWeight(locomotion[clip] * (1 - actionWeight))
       if (playing?.clip) rigged.actions[playing.clip]?.setEffectiveWeight(actionWeight)
-      for (const entry of Object.values(weapons)) entry.holder.visible = entry === rigged
+      for (const entry of Object.values(weapons)) {
+        if (entry.warm?.drawn()) { entry.warm.finish(); entry.warm = null }
+        const warming = entry !== rigged && entry.warm !== null
+        entry.warm?.mask(warming)
+        entry.holder.visible = entry === rigged || warming
+      }
       held += step
       if (!state.poseHold) { rigged.mixer.update(held); held = 0 }
 
@@ -327,7 +358,7 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
       return foundSeconds(assets[weapon], set.weapons[weapon], clip)
     },
     dispose() {
-      for (const entry of Object.values(weapons)) { entry.mixer.stopAllAction(); entry.mixer.uncacheRoot(entry.model) }
+      for (const entry of Object.values(weapons)) { entry.warm?.finish(); entry.mixer.stopAllAction(); entry.mixer.uncacheRoot(entry.model) }
     },
   }
 }
