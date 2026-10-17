@@ -7,7 +7,7 @@ import type { AlsRagdollHandle } from 'als-ue5-r3f/app/AlsRemoteActor'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import type { CameraPose } from '@blacksite/check'
 import { Look } from '@blacksite/look/r3f'
-import { autoQuality, type Atmosphere, type QualityTier } from '@blacksite/look'
+import { autoQuality, depthDefaults, type Atmosphere, type QualityTier } from '@blacksite/look'
 import { ZONE } from '@blacksite/look/presets'
 import { createWeaponRuntime, type QueryHit, type WeaponEvent } from '@blacksite/armory'
 import { StandaloneSubject, createStandaloneRecoil, createStandaloneTouch, type StandaloneIntent, type StandaloneView } from '@blacksite/subject-fpp'
@@ -738,7 +738,7 @@ export function Game() {
   const onArms = useCallback(() => { setProgress(1); setArmsReady(true) }, [])
   const onFirstFrame = useCallback(() => setPlaying(true), [])
   return <Screen>
-    <Canvas shadows={tier !== 'low'} dpr={internalPixelRatio()} camera={{ fov: VIEW.fov, near: 0.05, far: 260, position: [START.position[0], MOVE.eye, START.position[2]] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={state => attachPerfProbe(state.gl)}>
+    <Canvas shadows={tier !== 'low'} dpr={internalPixelRatio()} camera={{ fov: VIEW.fov, ...depthDefaults(tier, { far: 260 }).camera, position: [START.position[0], MOVE.eye, START.position[2]] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={state => attachPerfProbe(state.gl)}>
       {world && <Scene tier={tier} audio={audio} touchInput={touchInput} commands={commands} onArms={onArms} onFirstFrame={onFirstFrame} />}
     </Canvas>
     <TitleCard title="Breach" />

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { LevelBuilder, apartmentBlock, apc, deadTree, groundMaterial, lada, puddleMaterial, surface, waterTower, worldBoxGeometry, worldPlaneGeometry, type SurfaceName, type SurfaceSource } from '@blacksite/look/world'
+import { LevelBuilder, decalBias, apartmentBlock, apc, deadTree, groundMaterial, lada, puddleMaterial, surface, waterTower, worldBoxGeometry, worldPlaneGeometry, type SurfaceName, type SurfaceSource } from '@blacksite/look/world'
 import { APC_AT, EXFIL, LEVEL, PATCHES, PRACTICALS, ROOMS, SHAFTS, type Block, type Practical, type Room, type Vec3 } from './layout'
 import { BUDGET, type RoomId } from './model'
 import woodColor from './assets/wood-planks-old/c.webp?url'
@@ -137,6 +137,18 @@ function texture(width: number, height: number, texel: (u: number, v: number) =>
   if (options.repeat) map.wrapS = map.wrapT = THREE.RepeatWrapping
   map.needsUpdate = true
   return map
+}
+
+function partsOf(meshes: THREE.Mesh[]) {
+  const parts: Array<{ start: number; count: number; label: string }> = []
+  let start = 0
+  for (const mesh of meshes) {
+    const triangles = (mesh.geometry.index?.count ?? mesh.geometry.getAttribute('position').count) / 3
+    const own: Array<{ start: number; count: number; label: string }> = mesh.userData.parts ?? [{ start: 0, count: triangles, label: mesh.name }]
+    for (const part of own) parts.push({ start: start + part.start, count: part.count, label: part.label })
+    start += triangles
+  }
+  return parts
 }
 
 function merge(geometries: THREE.BufferGeometry[]) {
@@ -477,7 +489,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   mount('z+', 10.4, -0.17, 3.12, [2.3, 0.62, 0.05], { name: 'paint', color: '#3c4a58' }, 0)
   sign.forEach((glyph, index) => glyph.forEach((on, pixel) => {
     if (!on) return
-    mount('z+', 10.4, -1.0 + index * 0.42 + (pixel % 3) * 0.085, 3.32 - Math.floor(pixel / 3) * 0.085, [0.075, 0.075, 0.02], paper, 0.05)
+    mount('z+', 10.4, -0.995 + index * 0.42 + (pixel % 3) * 0.085, 3.32 - Math.floor(pixel / 3) * 0.085, [0.075, 0.075, 0.02], paper, 0.04)
   }))
   wallDecal('streak', 'z+', 10.4, 0.6, 2.2, 0.8, 1.4)
   wallDecal('streak', 'z+', 10.4, -1.2, 2.3, 0.6, 1.2, true)
@@ -507,7 +519,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     for (const gap of gaps) { spans.push([cursor, gap.x0]); cursor = gap.x1 }
     spans.push([cursor, 7.3])
     for (const [x0, x1] of spans) {
-      const shape = new THREE.Shape([new THREE.Vector2(-z0, 5.3), new THREE.Vector2(-z1, 5.3), new THREE.Vector2(-z1, 6.9)])
+      const shape = new THREE.Shape([new THREE.Vector2(-z0, 5.31), new THREE.Vector2(-z1, 5.31), new THREE.Vector2(-z1, 6.9)])
       const prism = new THREE.ExtrudeGeometry(shape, { depth: x1 - x0, bevelEnabled: false }).rotateY(Math.PI / 2).translate(x0, 0, 0)
       const uv = prism.getAttribute('uv')
       for (let vertex = 0; vertex < uv.count; vertex++) uv.setXY(vertex, uv.getX(vertex) / (corrugated.userData.tile as number), uv.getY(vertex) / (corrugated.userData.tile as number))
@@ -572,7 +584,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
       disc(face, plane, along, y, 0.17, 0.04, ink, 0.014)
       disc(face, plane, along, y, 0.145, 0.01, paper, 0.054)
       mount(face, plane, along, y + 0.05, [0.016, 0.1, 0.006], ink, 0.064)
-      mount(face, plane, along + 0.03, y - 0.02, [0.016, 0.08, 0.006], ink, 0.064, 2.1)
+      mount(face, plane, along + 0.03, y - 0.02, [0.016, 0.08, 0.006], ink, 0.075, 2.1)
     } else {
       mount(face, plane, along, y, [0.4, 0.2, 0.05], { name: 'metal', color: '#2a2b26', ao: false }, 0.014)
       glowBox(face, plane, along, y, 0.32, 0.12, 0.064, '#4fd27a', 1.5)
@@ -661,7 +673,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   put([1.24, 0.08, 0.54], iron, [-2.8, 1.94, -5.42])
   for (const [index, x] of [-3.2, -2.95, -2.7].entries()) {
     disc('z-', -5.67, x, 1.5, 0.06, 0.02, paper, 0)
-    glowBox('z-', -5.67, x + 0.55, 1.5 - index * 0.12, 0.04, 0.04, 0, ['#ff4030', '#60e070', '#ffb040'][index]!, 1.6)
+    glowBox('z-', -5.67, -2.6 + index * 0.16, 1.5 - index * 0.12, 0.04, 0.04, 0.002, ['#ff4030', '#60e070', '#ffb040'][index]!, 1.6)
   }
   mount('z-', -5.67, -2.8, 1.15, [0.3, 0.3, 0.01], { name: 'paint', color: '#b89a3a' }, 0, Math.PI / 4)
   rod([-2.8, 1.98, -5.3], [-2.8, 5.0, -5.3], 0.03, iron, 6)
@@ -993,7 +1005,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   decalGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(decals.normal, 3))
   decalGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(decals.uv, 2))
   decalGeometry.computeBoundingSphere()
-  const decalMesh = new THREE.Mesh(decalGeometry, own(new THREE.MeshStandardMaterial({ name: 'breach-decal', map: atlas, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, roughness: 0.95 })))
+  const decalMesh = new THREE.Mesh(decalGeometry, own(decalBias(new THREE.MeshStandardMaterial({ name: 'breach-decal', map: atlas, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, roughness: 0.95 }))))
   decalMesh.receiveShadow = true
   decalMesh.renderOrder = 1
   decalMesh.name = 'decals'
@@ -1019,6 +1031,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   for (const list of shared.values()) {
     const mesh = list[0]!
     if (list.length > 1) {
+      mesh.userData.parts = partsOf(list)
       mesh.geometry = merge(list.map(item => item.geometry))
       mesh.castShadow = list.some(item => item.castShadow)
     }
@@ -1054,6 +1067,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     material.vertexColors = true
     material.color.set('#ffffff')
     const mesh = new THREE.Mesh(merge(geometries), material)
+    mesh.userData.parts = partsOf(list)
     mesh.castShadow = list[0]!.castShadow
     mesh.receiveShadow = list[0]!.receiveShadow
     for (const item of list) { item.removeFromParent(); item.geometry.dispose() }

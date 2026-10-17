@@ -97,11 +97,11 @@ function wall(axis: 'x' | 'z', line: number, from: number, to: number, height: n
       const face = line + side * (thickness / 2 + 0.006)
       const top = Math.min(1.35, y1)
       dress(axis === 'x'
-        ? { kind: 'box', size: [b - a, top, 0.012], at: [(a + b) / 2, top / 2, face], look: 'paint', color: '#5f7562', cast: false }
-        : { kind: 'box', size: [0.012, top, b - a], at: [face, top / 2, (a + b) / 2], look: 'paint', color: '#5f7562', cast: false })
+        ? { kind: 'box', size: [b - a - 0.008, top, 0.012], at: [(a + b) / 2, top / 2, face], look: 'paint', color: '#5f7562', cast: false }
+        : { kind: 'box', size: [0.012, top, b - a - 0.008], at: [face, top / 2, (a + b) / 2], look: 'paint', color: '#5f7562', cast: false })
       dress(axis === 'x'
-        ? { kind: 'box', size: [b - a, 0.05, 0.03], at: [(a + b) / 2, top, face], look: 'paint', color: '#3f4a3e', cast: false }
-        : { kind: 'box', size: [0.03, 0.05, b - a], at: [face, top, (a + b) / 2], look: 'paint', color: '#3f4a3e', cast: false })
+        ? { kind: 'box', size: [b - a + 0.01, 0.05, 0.03], at: [(a + b) / 2, top, face], look: 'paint', color: '#3f4a3e', cast: false }
+        : { kind: 'box', size: [0.03, 0.05, b - a + 0.01], at: [face, top, (a + b) / 2], look: 'paint', color: '#3f4a3e', cast: false })
     }
   }
   let cursor = from
@@ -144,8 +144,8 @@ function drum(x: number, z: number, color = '#4f5a44', tipped = false) {
 function crate(x: number, z: number, size: number, y = 0, color = '#5a5236', yaw = 0) {
   if (y === 0) box([x, size / 2, z], [size, size, size], { look: 'paint', color, hit: 'wood', render: false })
   dress({ kind: 'box', size: [size, size, size], at: [x, y + size / 2, z], rotate: [0, yaw, 0], look: 'paint', color, wood: true })
-  dress({ kind: 'box', size: [size + 0.02, 0.07, size + 0.02], at: [x, y + size * 0.72, z], rotate: [0, yaw, 0], look: 'metal', color: '#2c2b25', cast: false })
-  dress({ kind: 'box', size: [size + 0.02, 0.07, size + 0.02], at: [x, y + size * 0.2, z], rotate: [0, yaw, 0], look: 'metal', color: '#2c2b25', cast: false })
+  dress({ kind: 'box', size: [size + 0.04, 0.07, size + 0.04], at: [x, y + size * 0.72, z], rotate: [0, yaw, 0], look: 'metal', color: '#2c2b25', cast: false })
+  dress({ kind: 'box', size: [size + 0.04, 0.07, size + 0.04], at: [x, y + size * 0.2, z], rotate: [0, yaw, 0], look: 'metal', color: '#2c2b25', cast: false })
   const c = Math.cos(yaw), s = Math.sin(yaw), h = size / 2
   const local = (lx: number, ly: number, lz: number): Vec3 => [x + lx * c + lz * s, y + ly, z - lx * s + lz * c]
   for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) dress({ kind: 'box', size: [0.08, size + 0.012, 0.08], at: local(lx * (h - 0.03), size / 2, lz * (h - 0.03)), rotate: [0, yaw, 0], look: 'paint', color: '#3e3a2a', cast: false, wood: true })
@@ -189,7 +189,7 @@ function desk(x: number, z: number, yaw: 0 | 1 = 0, typewriter = true) {
     dress({ kind: 'box', size: yaw ? [0.012, 0.18, 0.36] : [0.36, 0.18, 0.012], at: yaw ? [x - 0.386, y, z - 0.46] : [x - 0.46, y, z + 0.386], look: 'paint', color: index % 2 ? '#75634b' : '#6b5a44', cast: false })
     dress({ kind: 'box', size: yaw ? [0.02, 0.025, 0.12] : [0.12, 0.025, 0.02], at: yaw ? [x - 0.396, y + 0.04, z - 0.46] : [x - 0.46, y + 0.04, z + 0.396], look: 'metal', color: '#2b2d29', cast: false })
   }
-  dress({ kind: 'box', size: yaw ? [0.02, 0.03, size[2] + 0.04] : [size[0] + 0.04, 0.03, 0.02], at: yaw ? [x - size[0] / 2 - 0.02, 0.765, z] : [x, 0.765, z + size[2] / 2 + 0.02], look: 'metal', color: '#2b2d29', cast: false })
+  dress({ kind: 'box', size: yaw ? [0.02, 0.03, size[2] + 0.06] : [size[0] + 0.06, 0.03, 0.02], at: yaw ? [x - size[0] / 2 - 0.02, 0.758, z] : [x, 0.758, z + size[2] / 2 + 0.02], look: 'metal', color: '#2b2d29', cast: false })
   dress({ kind: 'box', size: [0.3, 0.012, 0.22], at: [x - 0.3, 0.785, z + 0.1], rotate: [0, 0.4, 0], look: 'stained', color: '#d6cfb7', cast: false })
   dress({ kind: 'box', size: [0.24, 0.012, 0.32], at: [x - 0.42, 0.79, z - 0.08], rotate: [0, -0.3, 0], look: 'stained', color: '#c9c0a4', cast: false })
 }
@@ -390,7 +390,7 @@ voids.push({ min: [-5.4, -4.85], max: [-1.5, 1.7] })
 block([-5.4, 0, -4.85], [-1.5, 3.25, 1.7], { look: 'stained', color: '#a8a493', contact: false })
 
 const hallSouth: Opening[] = [{ from: -0.8, to: 0.8, bottom: 0, top: 2.4 }, { from: 3.6, to: 5.0, bottom: 0, top: 2.2 }]
-wall('x', -5, -7.3, 7.3, 5.3, 0.3, 'stained', hallSouth, '#b9b6a4', -1)
+wall('x', -5, -7.3, 7.3, 5.0, 0.3, 'stained', hallSouth, '#b9b6a4', -1)
 const clerestory = (from: number, to: number): Opening => ({ from, to, bottom: 3.3, top: 4.4 })
 wall('z', -7.15, -17.3, -4.85, 5.3, 0.3, 'brick', [clerestory(-9, -7), clerestory(-13, -11), clerestory(-16.2, -14.5)], undefined, 1)
 wall('z', 7.15, -17.3, -4.85, 5.3, 0.3, 'brick', [clerestory(-9, -7), clerestory(-13, -11), clerestory(-16.2, -14.5)], undefined, -1)
