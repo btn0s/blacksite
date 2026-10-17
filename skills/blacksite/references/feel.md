@@ -24,6 +24,8 @@ Players expect **coyote time** (0.1 s after leaving a ledge) and a **jump buffer
 
 ## Camera
 
+Explosions and heavy impacts move the camera through one spring-recovered impulse, never random shake: `createCameraImpulse()` from `@blacksite/subject/feel` for any camera rig, or `controller.blast(source, strength)` on the Character Controller. It falls off with distance and leans away from the source.
+
 | Number | Value |
 |---|---|
 | First-person eye height | 1.63 m standing, 1.0 m crouched, smoothed at exp(−20·dt) |

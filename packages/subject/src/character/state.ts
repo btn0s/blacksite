@@ -5,6 +5,7 @@ import { createAlsPlayer, type AlsPlayerCommand } from 'als-ue5-r3f/app/AlsPlaye
 import type { CharacterProps } from 'als-ue5-r3f/app/Character'
 import { createArmsState, type ArmsWeapon } from '../arms/state'
 import { createCameraFeel } from '../feel/camera'
+import type { ImpulsePoint } from '../feel/impulse'
 import { createAimRecoil } from '../feel/recoil'
 import { PAD_LOOK, type PadLook } from '../input'
 
@@ -143,6 +144,7 @@ export function createCharacterController(config: CharacterConfig) {
     swapShoulder() { controller.rightShoulder = !controller.rightShoulder },
     inspect() { arms.inspectSequence++ },
     hurt(amount: number, side: number) { controller.feel.hurt(amount, side) },
+    blast(source: ImpulsePoint, strength = 1) { controller.feel.impulse.blast(source, strength, controller.eye, controller.control.yaw) },
     drive(next: CharacterDriver | null) { controller.driver = next },
     teleport(position: Vec3, yaw: number, pitch = config.start.pitch ?? 0) {
       controller.control.yaw = yaw

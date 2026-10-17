@@ -14,6 +14,7 @@ import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { ArmsViewmodel, portraitFov, type ArmsPresentation } from '../ArmsViewmodel'
 import type { ArmsWeapon } from '../arms/state'
 import { WorldWeapon } from '../found/WorldWeapon'
+import { applyCameraImpulse } from '../feel/impulse'
 import { RECOIL_TUNING } from '../feel/recoil'
 import { aimCandidates, characterInput, padLookDegrees, type AimTarget } from '../input'
 import { readActionIntent } from '../intent'
@@ -377,6 +378,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
       scratch.right.set(1, 0, 0).applyQuaternion(camera.quaternion)
       controller.muzzle.copy(eye).addScaledVector(aim.direction, 0.1).addScaledVector(scratch.right, arms.aiming ? 0.025 : 0.1).addScaledVector(scratch.up, -0.12)
       if (status.view === 'head' && sample.headBone) sample.headBone.scale.setScalar(0.001)
+      if (!controller.override) applyCameraImpulse(camera, controller.feel.impulse.pose)
     }
 
     const runtime = controller.weapon

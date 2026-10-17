@@ -1,4 +1,5 @@
 import { CAMERA_FEEL } from './model'
+import { createCameraImpulse } from './impulse'
 import { driveWith, resetSpring, spring, wander } from './spring'
 
 export type CameraMotion = { speed: number; lateral: number; grounded: boolean; sprinting: boolean; aim: number }
@@ -15,8 +16,7 @@ export const toHorizontal = (vertical: number, aspect = WIDE) => 2 * Math.atan(M
 export const toVertical = (horizontal: number, aspect = WIDE) => 2 * Math.atan(Math.tan(horizontal * DEGREES / 2) / aspect) / DEGREES
 
 export function createCameraFeel() {
-  const dip = spring()
-  const flinch = spring()
+  const impulse = createCameraImpulse()
   const roll = spring()
   const sprintFov = spring()
   const punch = spring()
@@ -29,6 +29,7 @@ export function createCameraFeel() {
   let footfall = 0
   return {
     pose,
+    impulse,
     get phase() { return phase },
     get bob() { return bob },
     get fov() { return fov },
@@ -37,23 +38,21 @@ export function createCameraFeel() {
     land(speed: number) {
       const impact = Math.min(CAMERA_FEEL.dip.maxImpact, Math.max(0, speed))
       lands++
-      dip.v -= impact * CAMERA_FEEL.dip.land
-      flinch.v += impact * CAMERA_FEEL.flinch.land * (wander(lands) > 0 ? 1 : -1)
+      impulse.kick({ dip: -impact * CAMERA_FEEL.dip.land, roll: impact * CAMERA_FEEL.flinch.land * (wander(lands) > 0 ? 1 : -1) })
       punch.v -= impact * CAMERA_FEEL.fov.land
     },
     jump() {
-      dip.v += CAMERA_FEEL.dip.jump
+      impulse.kick({ dip: CAMERA_FEEL.dip.jump })
       punch.v += CAMERA_FEEL.fov.jump
     },
     crouch(crouched: boolean) {
-      dip.v -= crouched ? CAMERA_FEEL.dip.crouch : -CAMERA_FEEL.dip.stand
-      flinch.v += crouched ? CAMERA_FEEL.flinch.crouch : -CAMERA_FEEL.flinch.stand
+      impulse.kick({ dip: crouched ? -CAMERA_FEEL.dip.crouch : CAMERA_FEEL.dip.stand, roll: crouched ? CAMERA_FEEL.flinch.crouch : -CAMERA_FEEL.flinch.stand })
     },
     shot(aim: number, fired = 1) {
       punch.v += CAMERA_FEEL.fov.shot * fired * (1 - aim * CAMERA_FEEL.fov.shotAim)
     },
     hurt(damage: number, side: number) {
-      flinch.v += (side > 0 ? -1 : 1) * (CAMERA_FEEL.flinch.hit + damage * CAMERA_FEEL.flinch.hitPerDamage)
+      impulse.kick({ roll: (side > 0 ? -1 : 1) * (CAMERA_FEEL.flinch.hit + damage * CAMERA_FEEL.flinch.hitPerDamage) })
     },
     step(motion: CameraMotion, hip: number, aimed: number, dt: number, kick?: { pitch: number; roll: number }) {
       const { stride: strideFeel, bob: bobFeel, fov: fovFeel } = CAMERA_FEEL
@@ -68,22 +67,22 @@ export function createCameraFeel() {
       const camBob = bob * (1 - aim)
       driveWith(sprintFov, sprinting * fovFeel.sprint, fovFeel.sprintSpring, dt)
       driveWith(punch, 0, fovFeel.punch, dt)
-      driveWith(dip, 0, CAMERA_FEEL.dip.spring, dt)
-      driveWith(flinch, 0, CAMERA_FEEL.flinch.spring, dt)
+      const kicked = impulse.step(dt)
       driveWith(roll, -motion.lateral * CAMERA_FEEL.strafeRoll.gain * (1 - aim), CAMERA_FEEL.strafeRoll.spring, dt)
       const wide = toHorizontal(hip)
       hipFov = hip
       fov = toVertical(wide + (toHorizontal(aimed) - wide) * aim + sprintFov.x * (1 - aim) + punch.x * (1 - aim * CAMERA_FEEL.fov.aimKeep))
       pose.x = Math.sin(phase) * bobFeel.lateral * camBob
-      pose.y = (Math.cos(2 * phase) - 1) * bobFeel.vertical * camBob + dip.x * CAMERA_FEEL.dip.metres
+      pose.y = (Math.cos(2 * phase) - 1) * bobFeel.vertical * camBob + kicked.y
       pose.z = 0
-      pose.pitch = kick?.pitch ?? 0
+      pose.pitch = (kick?.pitch ?? 0) + kicked.pitch
       pose.yaw = 0
-      pose.roll = roll.x + flinch.x * CAMERA_FEEL.flinch.radians + Math.sin(phase) * bobFeel.roll * camBob + (kick?.roll ?? 0)
+      pose.roll = roll.x + kicked.roll + Math.sin(phase) * bobFeel.roll * camBob + (kick?.roll ?? 0)
       return pose
     },
     reset() {
-      for (const state of [dip, flinch, roll, sprintFov, punch]) resetSpring(state)
+      for (const state of [roll, sprintFov, punch]) resetSpring(state)
+      impulse.reset()
       phase = bob = 0
       Object.assign(pose, createCameraPose())
     },

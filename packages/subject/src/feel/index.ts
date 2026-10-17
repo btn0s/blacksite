@@ -2,6 +2,7 @@ export { CAMERA_FEEL, GUN_FEEL, READINESS, SOUND_FEEL, WEAPON_HEFT, aimTime } fr
 export { AIM_RECOIL, RECOIL_TUNING, createAimRecoil, handsTuning, type AimRecoil, type RecoilTuning } from './recoil'
 export { applyGunPose, createViewmodelFeel, type ViewmodelFeel } from './viewmodel'
 export { createCameraFeel, createCameraPose, toHorizontal, toVertical, type CameraFeel, type CameraMotion, type CameraPose } from './camera'
+export { applyCameraImpulse, blastFalloff, createCameraImpulse, type CameraImpulse, type CameraKick, type ImpulsePoint, type ImpulsePose } from './impulse'
 export { createGunFeel, type GunFeel, type GunMotion, type GunPose, type GunShot } from './gun'
 export { advanceReadiness, consumeFire, createReadiness, ready, type LowerReason, type Readiness, type ReadinessPhase } from './readiness'
 export { PUSH_RATE, damp, drive, driveWith, resetSpring, smoother, soft, spring, wander, type Spring, type Tuning } from './spring'

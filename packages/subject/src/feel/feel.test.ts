@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createCameraFeel } from './camera'
+import { createCameraImpulse } from './impulse'
 import { createGunFeel } from './gun'
 import { createAimRecoil, RECOIL_TUNING } from './recoil'
 import { advanceReadiness, createReadiness } from './readiness'
@@ -53,6 +54,27 @@ describe('feel', () => {
     let dip = 0
     for (let i = 0; i < 30; i++) dip = Math.min(dip, camera.step({ speed: 0, lateral: 0, grounded: true, sprinting: false, aim: 0 }, 90, 68, 1 / 60).y)
     expect(dip).toBeLessThan(-0.002)
+  })
+
+  it('answers a blast with a recovering kick that fades with distance and leans away', () => {
+    const peak = (distance: number, side: number) => {
+      const impulse = createCameraImpulse()
+      impulse.blast({ x: side * distance, y: 1.6, z: -distance }, 1, { x: 0, y: 1.6, z: 0 }, 0)
+      let pitch = 0
+      let roll = 0
+      for (let i = 0; i < 30; i++) { const pose = impulse.step(1 / 60); pitch = Math.max(pitch, pose.pitch); roll = Math.abs(pose.roll) > Math.abs(roll) ? pose.roll : roll }
+      for (let i = 0; i < 240; i++) impulse.step(1 / 60)
+      return { pitch, roll, rest: Math.abs(impulse.pose.pitch) + Math.abs(impulse.pose.roll) + Math.abs(impulse.pose.y) }
+    }
+    const near = peak(4, 1)
+    const far = peak(40, 1)
+    expect(near.pitch).toBeGreaterThan(0.005)
+    expect(near.pitch).toBeLessThan(0.05)
+    expect(far.pitch).toBeLessThan(near.pitch * 0.1)
+    expect(near.roll).toBeLessThan(0)
+    expect(peak(4, -1).roll).toBeGreaterThan(0)
+    expect(near.rest).toBeLessThan(1e-4)
+    expect(peak(200, 1).pitch).toBe(0)
   })
 
   it('kicks the gun back and settles', () => {

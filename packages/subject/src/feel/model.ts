@@ -7,6 +7,7 @@ export const CAMERA_FEEL = {
   dip: { spring: [3.2, 0.5] as Tuning, metres: 0.05, land: 0.42, maxImpact: 8, jump: 0.7, crouch: 0.9, stand: 0.5 },
   flinch: { spring: [3.5, 0.45] as Tuning, radians: 0.02, land: 0.12, crouch: 0.5, stand: 0.3, hit: 1.2, hitPerDamage: 0.03 },
   strafeRoll: { gain: 0.006, spring: [2.6, 0.8] as Tuning },
+  impulse: { dip: 6, pitch: 24, roll: 30, falloff: 6, reach: 80 },
   fov: { sprint: 2, sprintSpring: [2.2, 1] as Tuning, punch: [6, 0.6] as Tuning, shot: 0.2, shotAim: 0.5, jump: 2, land: 0.5, aimKeep: 0.6 },
 } as const
 
