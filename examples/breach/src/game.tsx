@@ -11,13 +11,13 @@ import { Look } from '@blacksite/look/r3f'
 import { autoQuality, depthDefaults, type Atmosphere, type QualityTier } from '@blacksite/look'
 import { ZONE } from '@blacksite/look/presets'
 import type { QueryHit, WeaponEvent } from '@blacksite/armory'
-import { InputProvider, MENU, useConsoleNavigation, useInputContext } from '@blacksite/input'
-import { BODY_LAYER, CharacterController, CharacterOverlay, createCharacterController, useCharacterStatus, useLocalSession, useTouchActive, type AimTarget, type AlsFootstepSoundRequest, type CharacterHandle as Player } from '@blacksite/subject'
+import { InputProvider } from '@blacksite/input'
+import { BODY_LAYER, CharacterController, CharacterOverlay, CharacterPause, createCharacterController, useCharacterStatus, useLocalSession, useTouchActive, type AimTarget, type AlsFootstepSoundRequest, type CharacterHandle as Player } from '@blacksite/subject'
 import type { ArmsPresentation } from '@blacksite/subject/arms'
 import type { Intent } from '@blacksite/warden'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
 import { internalPixelRatio, setAnisotropy, texturesReady } from '@blacksite/look/world'
-import { Loading, Menu, Screen, TitleCard } from '@blacksite/ui/hud'
+import { Loading, Screen, TitleCard } from '@blacksite/ui/hud'
 import { createBreachAudio, type BreachAudio } from './audio'
 import { PLAYER_ID, type PlayerState } from './authority'
 import { CheckProbe, type Controls } from './check'
@@ -715,16 +715,6 @@ function Scene({ player, now, paused, tier, audio, restartRef, onArms, onFirstFr
   </>
 }
 
-function Pause({ player, onRestart }: { player: Player; onRestart: () => void }) {
-  const resume = () => { player.setPaused(false); player.lock() }
-  const navigation = useConsoleNavigation(resume)
-  useInputContext(MENU)
-  return <Menu root={navigation.root} title="Paused" items={[
-    { id: 'resume', label: 'Resume', onPress: resume },
-    { id: 'restart', label: 'Restart', onPress: () => { resume(); onRestart() } },
-  ]} />
-}
-
 export function Game() {
   const player = useMemo(createPlayer, [])
   return <InputProvider runtime={player.input}><Shell player={player} /></InputProvider>
@@ -761,7 +751,7 @@ function Shell({ player }: { player: Player }) {
     <TitleCard title="Breach" />
     {live && <Hud touch={touch} onRestart={() => restartRef.current()} />}
     <CharacterOverlay controller={player} visible={live} prompt="Click to fight" hintsClassName="breach-hints" />
-    {live && status.paused && <Pause player={player} onRestart={() => restartRef.current()} />}
+    {live && status.paused && <CharacterPause controller={player} items={[{ id: 'restart', label: 'Restart', onPress: () => restartRef.current() }]} />}
     <Loading title="Breach" detail={error ?? (progress < 0.85 ? 'Loading the squad' : 'Clearing the rubble')} progress={progress} done={live} />
   </Screen>
 }

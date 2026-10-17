@@ -1,6 +1,7 @@
 const STALL_MS = 2500
 const REFRESH_HZ = 144
 const STEP_MS = 30000
+const EDGE_INSET = 14
 
 export async function runStress({ page, scratch, contract, profile, name, log }) {
   const input = { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space', ...(contract?.input ?? {}) }
@@ -17,14 +18,14 @@ export async function runStress({ page, scratch, contract, profile, name, log })
         await wait(150 + (index * 61) % 300)
       }
     }],
-    ['restart', input.restart && (async () => {
+    ['restart', contract?.character && (async () => {
       await page.mouse.click(width / 2, height / 2)
       for (let index = 0; index < 6; index++) {
         await page.keyboard.down(input.move)
         if (index % 2) await page.keyboard.down(input.sprint)
         await wait(150 + (index * 233) % 700)
         if (index % 3 === 0) await page.keyboard.press(input.jump)
-        await page.keyboard.press(input.restart)
+        await page.evaluate(() => window.__blacksite.character.respawn())
         await wait(index % 3 === 0 ? 16 : 120 + (index * 191) % 500)
         await release()
       }
@@ -52,7 +53,30 @@ export async function runStress({ page, scratch, contract, profile, name, log })
       await page.evaluate(() => document.fullscreenElement ? document.exitFullscreen().catch(() => {}) : null)
       await wait(400)
     }],
-    ['edge', contract?.scripts.includes('edge') && (() => page.evaluate(() => window.__blacksite.scripts.edge()))],
+    ['edge', contract?.character && (async () => {
+      const bounds = await page.evaluate(() => window.__blacksite.character.bounds())
+      if (!bounds) throw new Error('the character reports no world bounds')
+      const [minX, , minZ] = bounds.min
+      const [maxX, , maxZ] = bounds.max
+      const inset = Math.min(EDGE_INSET, (maxX - minX) / 4, (maxZ - minZ) / 4)
+      for (const [sx, sz] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) {
+        const x = sx > 0 ? maxX - inset : minX + inset
+        const z = sz > 0 ? maxZ - inset : minZ + inset
+        await page.evaluate(([x, z, ax, az]) => {
+          const character = window.__blacksite.character
+          character.respawn({ x, z })
+          character.face({ x: ax, y: 0, z: az })
+          character.move({ forward: 1, sprint: true })
+        }, [x, z, x + sx * 1000, z + sz * 1000])
+        for (let hop = 0; hop < 4; hop++) {
+          await wait(400)
+          await page.evaluate(() => window.__blacksite.character.move({ forward: 1, sprint: true, jump: true }))
+        }
+        await wait(600)
+      }
+      await page.evaluate(() => { const character = window.__blacksite.character; character.move(null); character.respawn() })
+      await wait(600)
+    })],
   ]
   const ran = []
   const absent = steps.filter(([, body]) => !body).map(([step]) => step)

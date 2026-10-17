@@ -649,6 +649,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         }),
       },
       input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
+      character: runner.check,
       model: { feel: model.feel, budget: { ...model.budget, voices: shared.sound.cap } },
     })
     exposed.current = check

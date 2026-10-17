@@ -14,7 +14,7 @@ canvas { display: block; touch-action: none; image-rendering: pixelated; filter:
 .hud-hints span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .hud-hints kbd { padding: 1px 6px; border: 1px solid #ffffff38; border-bottom-width: 2px; border-radius: 3px; background: #0c0e0bb0; font: 500 11px/1.5 'IBM Plex Mono', ui-monospace, monospace; color: #f0ecdb; }
 
-.hud-prompt { position: absolute; z-index: 6; left: 50%; top: 70%; transform: translateX(-50%); padding: 8px 14px; border: 1px solid #e2a23b80; background: #0c0e0bb8; font: 600 14px 'Barlow Condensed', sans-serif; letter-spacing: 0.14em; text-transform: uppercase; color: #f0ecdb; pointer-events: none; transition: opacity 240ms ease; }
+.hud-prompt { position: absolute; z-index: 6; left: 50%; top: 24%; transform: translateX(-50%); padding: 8px 14px; border: 1px solid #e2a23b80; background: #0c0e0bb8; font: 600 14px 'Barlow Condensed', sans-serif; letter-spacing: 0.14em; text-transform: uppercase; color: #f0ecdb; pointer-events: none; transition: opacity 240ms ease; }
 .hud-prompt--hidden { opacity: 0; }
 
 .hud-loading { position: absolute; z-index: 20; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 45%, #1a1e16, #0b0d0a 70%); transition: opacity 600ms ease; }

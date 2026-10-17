@@ -12,7 +12,7 @@ import type { CharacterDriver, CharacterHandle } from '@blacksite/subject'
 export type Controls = {
   drive(next: CharacterDriver | null): void
   place(position: readonly [number, number, number], yaw: number): void
-  player: Pick<CharacterHandle, 'position' | 'velocity' | 'grounded'>
+  player: Pick<CharacterHandle, 'position' | 'velocity' | 'grounded' | 'check'>
   override(pose: CameraPose | null): void
   restart(): void
   face(target: V3): void
@@ -136,6 +136,7 @@ export function CheckProbe({ driver, audio, ready, overlay, onWarmed, viewmodel 
       },
     },
     input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
+    character: driver.player.check,
     model: { feel: FEEL, budget: CHECK_BUDGET },
   }), [driver, audio, camera])
   useEffect(() => check.dispose, [check])

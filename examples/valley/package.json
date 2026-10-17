@@ -21,6 +21,7 @@
     "@blacksite/landscape": "workspace:*",
     "@blacksite/look": "workspace:*",
     "@blacksite/soundscape": "workspace:*",
+    "@blacksite/subject": "workspace:*",
     "@blacksite/ui": "workspace:*",
     "@react-three/fiber": "^9.8.2",
     "@react-three/rapier": "^2.2.0",
