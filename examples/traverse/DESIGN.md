@@ -19,8 +19,8 @@ The shipped version we build: the third-person traversal of a modern action game
 | Capsule | radius 0.30 m, half height 0.90 m (1.80 m tall) | ALS capsule, the UE mannequin proportions. |
 | Max step | 0.45 m | UE CharacterMovement default `MaxStepHeight`. Anything at or above 0.5 m is a mantle, not a step. ALS Web had no step-up; Traverse adds it in `vendor/als-web`. |
 | Walkable slope | 44.8° | UE CharacterMovement default walkable floor angle (z ≥ 0.71). |
-| Acceleration | 20 m/s² | ALS ground acceleration. Run speed is reached 90% in 0.17 s, inside feel.md's 0.25 s. |
-| Jump | 4.2 m/s, apex 0.90 m | ALS `JumpZVelocity` and 9.81 m/s² gravity. |
+| Acceleration | 20 m/s², 90% of run speed in 0.20 s | ALS ground acceleration. The continuous ramp takes 0.17 s; the 60 Hz step needs 11 steps and input is read on the next step, so the model predicts 12 steps (0.20 s), inside feel.md's 0.25 s. |
+| Jump | 4.2 m/s, discrete-step apex 0.865 m | ALS `JumpZVelocity`, 9.8 m/s² gravity and a 60 Hz semi-implicit physics step. The continuous trajectory reaches 0.90 m. |
 | Jump buffer | 0.1 s | feel.md: a press up to 0.1 s before landing still jumps. |
 | Coyote time | 0.1 s | feel.md: a press up to 0.1 s after running off a ledge still jumps. |
 | Landing | camera dip 0.12 m at full strength, critically damped at ω 9 | feel.md asks for a dip and a sound on landing; strength scales from 2 m/s to 8 m/s of fall speed. |
@@ -39,14 +39,14 @@ The shipped version we build: the third-person traversal of a modern action game
 
 | Number | Value | Source |
 | --- | --- | --- |
-| Planted-foot travel per contact | p95 ≤ 3 cm | feel.md: bound planted-foot slip at 3 cm per plant (measured 0.83 / 1.03 / 1.78 cm walking, running, sprinting). A contact is a run of frames with the foot within 2.5 cm of the ground, minus 2 edge frames. |
+| Planted-foot travel per contact | p95 ≤ 3 cm | feel.md: bound planted-foot slip at 3 cm per plant. The contact probe includes start, stop and gait changes. |
 | Planted-foot drift, flat / uneven | p95 ≤ 0.10 / 0.15 m/s | Foot skate is the classic motion-matching failure metric (Holden et al., Learned Motion Matching, 2020). Foot IK on stairs and slopes adds pelvis and foot offsets on top of the locked pose. |
 | Gait changes | same planted-contact bar | Start, stop and gait transitions are included in the contact checks. |
 | Foot-to-ground gap while planted | ≤ 0.04 m | Above 4 cm a foot visibly floats at the default camera distance. |
 | Stairs | riser 0.17 m, tread 0.28 m | Building-code stairs (IBC: riser ≤ 178 mm, tread ≥ 279 mm). |
 | Slopes on the route | 10°, 20°, 30° | Ramp, rubble and a fallen slab, all walkable. |
 
-"Planted" means the foot bone is within 0.06 m of the ground under it and the character is grounded and not in an action. A foot is sliding when its horizontal speed in that phase exceeds the bar.
+The contact probe measures the final rendered foot against an independent physics raycast. Grounded moving stance is selected by the authored signed `FootPlanted` curve at 0.75; it is measured even if the foot floats. An idle `FootLock` request at 0.99 acquires contact only after the ankle reaches within 2.5 cm of its calibrated floor height, then remains measured until the lock or grounded state ends. This prevents the stopping clip's early lock request from counting a foot that is still descending, without hiding a foot that later floats. Each contact discards one boundary frame at either end and requires three remaining samples. Drift is total horizontal travel divided by duration; excursion is maximum displacement from the first sample. Both idle feet must separately settle within 4 cm of the floor.
 
 ### Camera
 
@@ -138,16 +138,20 @@ Fixed views for critic captures, in world metres. Each bookmark has a position, 
 Each scripted run drives input the way a player does and measures against the model:
 
 - `mantle-ladder`: approach a ledge of each route height at walk, run and sprint; all reach the top.
-- `feet-flat`, `feet-stairs`, `feet-slope`: run across each; planted foot speed and gap within the bar.
+- `start`: run from rest; time to 90% of run speed and jump apex match the model.
+- `feet-flat`, `stairs`, `slope`: run across each; planted foot speed and gap within the bar.
+- `ramp-foot`: run and sprint into the foot of each rising ramp from 12 sub-step start offsets; none stalls.
+- `actions`: roll, ragdoll and get up, drop and land, and cross a low wall without stopping.
 - `camera-wall`: walk along walls and into corners while turning the camera; zero clip frames.
 - `shoulder`: swap shoulders while running; no frame step over the bar.
-- `route`: the reference run of the whole route; it completes, sets the par, and records a ghost.
+- `ghost`: a recorded take stays under the storage and pose-cost budgets at the player's scale.
+- `route`: the reference run of the whole route finishes under par with zero clip frames and draw calls under budget.
 
 
 ## Delivered parts inventory
 
 The route contains eight garage bays, seven apartment blocks, a boiler house and chimney, the stairwell, two arches and two sheds. The six trim families and eight decal families listed above are present. Props include 15 crates, 24 pallets, 23 stacked tyres, four cars, a transport hull, water tank, three benches, three radiators and six roof vents, in addition to the original barrels, trees and rubble. These are merged by material through the public world kit.
 
-Eight practical sources (three sodium lamps, three fluorescent tubes, two fires) share a maximum of four nearby point lights. The sun is the sole shadow caster. Eight located audio spots use outdoor, corridor and hall acoustic zones. Recorded concrete, metal, gravel and water footsteps each have five variants; the source and processing record is in `CREDITS.md` and `assets.credits.json`.
+Eight practical sources (three sodium lamps, three fluorescent tubes, two fires) share a maximum of four nearby point lights. The sun is the sole shadow caster. Nine located audio spots, including the steam outlet, use outdoor, corridor and hall acoustic zones. Recorded concrete, metal, gravel and water footsteps each have five variants; the source and processing record is in `CREDITS.md` and `assets.credits.json`.
 
 Checkpoint respawn poses are authored on safe floor surfaces independently of trigger bounds. The phone stick sprints at full travel; the six action buttons provide jump/mantle, roll, crouch, shoulder, ragdoll/get-up and checkpoint retry. After finishing, Retry starts the next race against the saved ghost.

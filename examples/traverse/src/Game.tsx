@@ -23,6 +23,7 @@ import { Probe, type ProbeApi } from './probe'
 import { Clock, type ClockHandle } from './hud'
 import { outfit } from './outfit'
 import { formatSplit, formatTime, locomotion } from './model'
+import creditsUrl from '../CREDITS.md?url'
 
 const bestKey = 'blacksite.traverse.best'
 const readBest = (): number[] | null => { try { const value = JSON.parse(localStorage.getItem(bestKey) ?? 'null'); return Array.isArray(value) ? value : null } catch { return null } }
@@ -36,6 +37,7 @@ type Shared = {
   touchLook: { current: { x: number; y: number } }
   touchMove: { current: { forward: number; right: number } }
   sound: TraverseAudio
+  ghost: { current: GhostPlayer | null }
   effects: { current: EffectsHandle | null }
   clock: { current: ClockHandle | null }
 }
@@ -43,7 +45,7 @@ type Shared = {
 function RaceDriver({ shared, onEvent, ghostVisible }: { shared: Shared; onEvent: (event: RaceEvent, now: number) => void; ghostVisible: boolean }) {
   const { scene } = useThree()
   const recorder = useRef<GhostRecorder | null>(null)
-  const ghost = useRef<GhostPlayer | null>(null)
+  const ghost = shared.ghost
   const pending = useRef<GhostTake | null>(null)
   const sourceRoot = useRef<THREE.Object3D | null>(null)
   useEffect(() => {
@@ -88,13 +90,19 @@ function RaceDriver({ shared, onEvent, ghostVisible }: { shared: Shared; onEvent
   return null
 }
 
-function Warmup({ onDone }: { onDone: () => void }) {
+function Warmup({ shared, onDone }: { shared: Shared; onDone: () => void }) {
   const { gl, scene, camera } = useThree()
   useFrame(() => {}, 1)
   useEffect(() => {
     let cancelled = false
-    const frame = requestAnimationFrame(() => {
+    let frame = 0
+    const compile = () => {
+      const ghost = shared.ghost.current?.object
+      if (!ghost || !shared.pose.current.ready) { frame = requestAnimationFrame(compile); return }
+      const visible = ghost.visible
+      ghost.visible = true
       void gl.compileAsync(scene, camera).then(() => {
+        ghost.visible = visible
         if (cancelled) return
         scene.traverse(object => {
           const material = (object as THREE.Mesh).material
@@ -104,9 +112,10 @@ function Warmup({ onDone }: { onDone: () => void }) {
         })
         onDone()
       })
-    })
+    }
+    frame = requestAnimationFrame(compile)
     return () => { cancelled = true; cancelAnimationFrame(frame) }
-  }, [gl, scene, camera, onDone])
+  }, [gl, scene, camera, shared, onDone])
   return null
 }
 
@@ -135,7 +144,7 @@ function Scene({ shared, spawn, onAction, onEvent, ghostVisible, api }: { shared
   const done = useCallback(() => setCompiled(true), [])
   return <>
     <Atmosphere />
-    {compiled ? <Look atmosphere="zone" sky={false} fog={false} /> : <Warmup onDone={done} />}
+    {compiled ? <Look atmosphere="zone" sky={false} fog={false} /> : <Warmup shared={shared} onDone={done} />}
     <Physics gravity={[0, -locomotion.gravity, 0]} timeStep={locomotion.physicsStep} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <Player command={shared.command} pose={shared.pose} time={time} audio={shared.sound} spawn={spawn} scripted={shared.scripted} touchLook={shared.touchLook} touchMove={shared.touchMove} onAction={onAction} />
       <Level route={shared.route} />
@@ -166,6 +175,7 @@ export function Game() {
       touchLook: { current: { x: 0, y: 0 } },
       touchMove: { current: { forward: 0, right: 0 } },
       sound,
+      ghost: { current: null },
       effects: { current: null },
       clock: { current: null },
     }
@@ -178,6 +188,7 @@ export function Game() {
   const [finish, setFinish] = useState<{ time: number; best: number; record: boolean } | null>(null)
   const [ghostVisible, setGhostVisible] = useState(true)
   const [checkpoint, setCheckpoint] = useState(0)
+  const [racing, setRacing] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -212,6 +223,7 @@ export function Game() {
     setFinish(null)
     setBanner(null)
     setCheckpoint(0)
+    setRacing(false)
     respawn(shared.route.spawn, shared.route.spawnYaw)
   }, [respawn, shared])
 
@@ -229,7 +241,7 @@ export function Game() {
   const onEvent = useCallback((event: RaceEvent, now: number) => {
     const effects = shared.effects.current
     const gates = shared.route.gates
-    if (event.kind === 'start') { shared.sound.play('start'); setCheckpoint(0); return }
+    if (event.kind === 'start') { shared.sound.play('start'); setCheckpoint(0); setRacing(true); return }
     if (event.kind === 'split') {
       shared.sound.play('checkpoint', 1, event.index)
       effects?.flash(gates[event.index + 1]!.at)
@@ -258,9 +270,10 @@ export function Game() {
       {ready && <Scene shared={shared} spawn={spawn} onAction={onAction} onEvent={onEvent} ghostVisible={ghostVisible} api={api} />}
     </Canvas>
     <TitleCard title={touch ? 'Traverse' : 'Traverse · The Block'} />
+    <a className="tr-credits" href={creditsUrl} target="_blank" rel="noreferrer">Credits</a>
     <Clock handle={shared.clock} checkpoint={checkpoint} total={total} best={shared.race.current.best} banner={banner} finish={finish} touch={touch} />
-    <Hints visible={!touch && !finish} items={[['WASD', 'Move'], ['Shift', 'Sprint · tap roll'], ['Space', 'Mantle'], ['C', 'Shoulder'], ['R', 'Restart']]} />
-    <Prompt text="Click to look around · run through the gate to start the clock" visible={ready && !touch && !locked} />
+    <Hints visible={!touch && !finish} items={[['WASD', 'Move'], ['Shift', 'Sprint · tap roll'], ['Space', 'Jump · mantle'], ['Ctrl', 'Crouch'], ['C', 'Shoulder'], ['X', 'Fall / up'], ['T', 'Retry'], ['R', 'Restart']]} />
+    <Prompt text={racing ? 'Click to look around' : 'Click to look around · run through the gate to start the clock'} visible={ready && !touch && !locked && !finish} />
     {touch && ready && <TouchPad
       onMove={(x, y) => { shared.touchMove.current.right = x; shared.touchMove.current.forward = -y }}
       onLook={(dx, dy) => { shared.touchLook.current.x += dx; shared.touchLook.current.y += dy }}

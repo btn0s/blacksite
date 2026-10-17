@@ -113,6 +113,7 @@ export function Player({ command, pose, time, audio, spawn, scripted, touchLook,
 
   return <>
     <Character key={spawn.revision} initialPosition={spawn.position} inputEnabled={false} inputSource={inputSource}
+      terrainFootLock
       poseSample={pose} worldTime={time} footstepSoundSink={audio} ragdollRef={ragdoll}
       onSizeChange={noop} onOverlayModeBridgeChange={noop} toggleRotationModeKey={null}
       showDebugControls={false} exposeDebugGlobals={false} gamepadEnabled={false} />

@@ -813,7 +813,7 @@ export function dress(level: LevelBuilder, context: DressingContext) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.xz += vec2(sin(swayTime * 1.9 + position.x * 0.7 + position.z * 0.3) + 0.4 * sin(swayTime * 4.3 + position.z), cos(swayTime * 1.3 + position.z * 0.6 + position.x * 0.2)) * sway;')
   }
   foliageMaterial.customProgramCacheKey = () => 'traverse-foliage'
-  const shaftMaterial = new THREE.MeshBasicMaterial({ name: 'traverse-shafts', map: atlas, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, color: new THREE.Color(1.25, 1.2, 1.08) })
+  const shaftMaterial = new THREE.MeshBasicMaterial({ name: 'traverse-shafts', map: atlas, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true, color: new THREE.Color(1.25, 1.2, 1.08) })
   const foliageMesh = meshOf(foliage, foliageMaterial, 0)
   foliageMesh.onBeforeRender = () => { time.value = performance.now() / 1000 }
   const shaftMesh = meshOf(shafts, shaftMaterial, 4)

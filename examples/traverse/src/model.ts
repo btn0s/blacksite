@@ -17,7 +17,7 @@ export const locomotion = {
 export const feel = {
   moveSpeed: locomotion.run,
   sprintSpeed: locomotion.sprint,
-  timeToTopSpeed: 0.9 * locomotion.run / locomotion.acceleration,
+  timeToTopSpeed: (Math.ceil(0.9 * locomotion.run / locomotion.acceleration / locomotion.physicsStep) + 1) * locomotion.physicsStep,
   jumpApex: locomotion.jumpSpeed ** 2 / (2 * locomotion.gravity) - locomotion.jumpSpeed * locomotion.physicsStep / 2,
   tolerance: 0.1,
 } as const
@@ -33,7 +33,9 @@ export const mantle = {
 
 export const feet = {
   plantedHeight: 0.025,
-  edgeFrames: 2,
+  stancePhase: 0.75,
+  authoredLock: 0.99,
+  edgeFrames: 1,
   flatDriftP95: 0.1,
   unevenDriftP95: 0.15,
   excursionP95: 0.03,
@@ -91,6 +93,7 @@ export const budget = {
   hitchMs: 33,
   firstPlayableMs: 5000,
   voices: 32,
+  phoneVoices: 16,
 } as const
 
 export const frame = {
@@ -107,9 +110,14 @@ export function nearPlaneRadius(near: number, verticalFovDegrees: number, aspect
   return Math.hypot(half, half * aspect, near)
 }
 
-export type FootSample = { t: number; x: number; y: number; z: number; ground: number; grounded: boolean }
+export type FootSample = { t: number; x: number; y: number; z: number; ground: number; grounded: boolean; planted: boolean; plant?: number; lock?: number }
 
 export type Contact = { seconds: number; drift: number; excursion: number; jitter: number }
+
+export function advanceFootContact(previous: boolean, input: { grounded: boolean; lock: number; gap: number; phase: number }) {
+  const groundedContact = input.grounded && input.lock >= feet.authoredLock && (previous || Math.abs(input.gap) <= feet.plantedHeight)
+  return { groundedContact, planted: input.grounded && (groundedContact || input.phase >= feet.stancePhase) }
+}
 
 export function contacts(samples: readonly FootSample[]) {
   const result: Contact[] = []
@@ -128,10 +136,10 @@ export function contacts(samples: readonly FootSample[]) {
       excursion = Math.max(excursion, flat(first, inner[index]!))
     }
     const seconds = end.t - first.t
-    if (seconds > 0) result.push({ seconds, drift: flat(first, end) / seconds, excursion, jitter: percentile(steps, 0.5) })
+    if (seconds > 0) result.push({ seconds, drift: steps.reduce((sum, step) => sum + step, 0) / seconds, excursion, jitter: percentile(steps, 0.5) })
   }
   for (const sample of samples) {
-    if (sample.grounded && sample.y - sample.ground <= feet.plantedHeight) run.push(sample)
+    if (sample.grounded && sample.planted && Number.isFinite(sample.ground)) run.push(sample)
     else flush()
   }
   flush()

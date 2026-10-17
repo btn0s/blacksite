@@ -49,34 +49,49 @@ const flicker = (t: number, seed: number) => {
 
 export function Practicals({ route }: { route: Route }) {
   const { camera } = useThree()
-  const lights = useMemo(() => route.lights.map(light => {
-    const glow = new THREE.Mesh(
-      light.kind === 'tube' ? new THREE.BoxGeometry(0.06, 0.04, 1.1) : light.kind === 'sodium' ? new THREE.SphereGeometry(0.13, 10, 6) : new THREE.SphereGeometry(0.01, 4, 2),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(light.color).multiplyScalar(light.kind === 'fire' ? 0 : 3.2), toneMapped: false }),
-    )
-    glow.position.set(...light.at)
-    glow.visible = light.kind !== 'fire'
-    if (light.kind === 'tube') glow.position.y -= 0.02
-    return { light, glow, level: 1 }
-  }), [route])
+  const fixtures = useMemo(() => {
+    const glows = [
+      new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.04, 1.1), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), route.lights.filter(light => light.kind === 'tube').length),
+      new THREE.InstancedMesh(new THREE.SphereGeometry(0.13, 10, 6), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), route.lights.filter(light => light.kind === 'sodium').length),
+    ]
+    const slots = [0, 0]
+    const matrix = new THREE.Matrix4()
+    const tint = new THREE.Color()
+    const lights = route.lights.map(light => {
+      const batch = light.kind === 'tube' ? 0 : light.kind === 'sodium' ? 1 : -1
+      const glow = glows[batch]
+      const slot = batch < 0 ? -1 : slots[batch]!
+      if (glow) {
+        slots[batch] = slot + 1
+        matrix.makeTranslation(light.at[0], light.at[1] - (light.kind === 'tube' ? 0.02 : 0), light.at[2])
+        glow.setMatrixAt(slot, matrix)
+        glow.setColorAt(slot, tint.set(light.color).multiplyScalar(3.2))
+      }
+      return { light, glow, slot, level: 1 }
+    })
+    for (const glow of glows) glow.computeBoundingSphere()
+    return { lights, glows, tint }
+  }, [route])
+  const { lights, glows, tint } = fixtures
   const points = useMemo(() => Array.from({ length: Math.min(frame.pointLights, lights.length) }, () => new THREE.PointLight('#ffffff', 0, 0, 2)), [lights])
   const order = useMemo(() => lights.map((_, index) => index), [lights])
   const distance = useMemo(() => new Float32Array(lights.length), [lights])
   const nearer = useMemo(() => (a: number, b: number) => distance[a]! - distance[b]!, [distance])
   useEffect(() => () => {
-    for (const { glow } of lights) { glow.geometry.dispose(); glow.material.dispose() }
+    for (const glow of glows) { glow.geometry.dispose(); glow.material.dispose(); glow.dispose() }
     for (const point of points) point.dispose()
-  }, [lights, points])
+  }, [glows, points])
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
     for (let index = 0; index < lights.length; index++) {
       const fixture = lights[index]!
-      const { light, glow } = fixture
-      distance[index] = glow.position.distanceToSquared(camera.position)
+      const { light, glow, slot } = fixture
+      distance[index] = (light.at[0] - camera.position.x) ** 2 + (light.at[1] - camera.position.y) ** 2 + (light.at[2] - camera.position.z) ** 2
       const level = light.kind === 'tube' ? flicker(t, index * 2.7) : light.kind === 'fire' ? 0.75 + 0.25 * Math.sin(t * 17 + Math.sin(t * 5.3) * 2) * Math.sin(t * 3.1) : 1
       fixture.level = level
-      glow.material.color.set(light.color).multiplyScalar(light.kind === 'fire' ? 0 : 3.2 * level)
+      if (glow) glow.setColorAt(slot, tint.set(light.color).multiplyScalar(3.2 * level))
     }
+    for (const glow of glows) if (glow.instanceColor) glow.instanceColor.needsUpdate = true
     order.sort(nearer)
     for (let rank = 0; rank < points.length; rank++) {
       const point = points[rank]!
@@ -87,7 +102,7 @@ export function Practicals({ route }: { route: Route }) {
       point.intensity = light.intensity * level
     }
   })
-  return <>{points.map((point, index) => <primitive key={`light-${index}`} object={point} />)}{lights.map(({ glow }, index) => <primitive key={`glow-${index}`} object={glow} />)}</>
+  return <>{points.map((point, index) => <primitive key={`light-${index}`} object={point} />)}{glows.map((glow, index) => <primitive key={`glow-${index}`} object={glow} />)}</>
 }
 
 export function Markers({ route, race }: { route: Route; race: { current: Race } }) {
@@ -95,7 +110,7 @@ export function Markers({ route, race }: { route: Route; race: { current: Race }
     const count = route.gates.length
     const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.035, 0.035, 2.6, 6), new THREE.MeshStandardMaterial({ color: '#2b2a24', roughness: 0.6, metalness: 0.4 }), count * 2)
     const lamps = new THREE.InstancedMesh(new THREE.BoxGeometry(0.09, 0.42, 0.09), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), count * 2)
-    const tapes = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 0.08), new THREE.MeshBasicMaterial({ color: '#d8c9a8', transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }), count)
+    const tapes = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 0.08), new THREE.MeshBasicMaterial({ color: '#d8c9a8', transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true }), count)
     const place = new THREE.Object3D()
     route.gates.forEach((gate, index) => {
       const baseY = gate.at[1] - gate.half[1]

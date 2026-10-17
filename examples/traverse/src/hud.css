@@ -1,4 +1,5 @@
 .hud-screen:has(.tr-hud--touch) > .hud-title { font-size: 12px; letter-spacing: 0.12em; }
+.tr-credits { position: absolute; z-index: 9; top: calc(4px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); min-height: 44px; display: grid; place-items: center; padding: 0 8px; font: 12px 'IBM Plex Mono', monospace; color: #d8d4c1; text-shadow: 0 1px 8px #000; }
 .tr-hud { position: absolute; z-index: 6; inset: 0; pointer-events: none; }
 .tr-clock { position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: grid; justify-items: center; gap: 2px; text-shadow: 0 1px 10px #000d; }
 .tr-time { font: 600 34px/1 'Barlow Condensed', sans-serif; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; color: #f0ecdb; }

@@ -13,7 +13,8 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "typecheck": "tsc --noEmit -p .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:traverse": "node scripts/check-traverse.mjs"
   },
   "dependencies": {
     "@blacksite/check": "workspace:*",
