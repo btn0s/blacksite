@@ -243,13 +243,15 @@ export function makeInputDevices() {
       actions.reset()
       update({ gameplayReady: false })
     },
-    rumble: (duration: number, strongMagnitude: number, weakMagnitude: number) => {
+    rumble: (duration: number, strongMagnitude: number, weakMagnitude: number, triggers?: { left: number; right: number }) => {
       if (!rumbleEnabled || !focused || !gameplay || snapshot.device === "keyboardMouse") return
-      const actuator = activePad()?.vibrationActuator
-      if (actuator?.playEffect)
-        void actuator
-          .playEffect("dual-rumble", { duration, startDelay: 0, strongMagnitude, weakMagnitude })
-          .catch(() => {})
+      const actuator = activePad()?.vibrationActuator as (GamepadHapticActuator & { effects?: ReadonlyArray<string> }) | undefined
+      if (!actuator?.playEffect) return
+      const params = { duration, startDelay: 0, strongMagnitude, weakMagnitude }
+      const effect = triggers && actuator.effects?.includes("trigger-rumble")
+        ? actuator.playEffect("trigger-rumble", { ...params, leftTrigger: triggers.left, rightTrigger: triggers.right })
+        : actuator.playEffect("dual-rumble", params)
+      void effect.catch(() => {})
     },
     mount: () => {
       start()

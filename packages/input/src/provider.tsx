@@ -16,6 +16,10 @@ export function useInputRuntime() {
   return runtime
 }
 
+export function useOptionalInputRuntime() {
+  return useContext(Runtime)
+}
+
 export function useInputContext(context: InputContext, enabled = true) {
   const hub = useInputRuntime().actions
   useEffect(() => enabled ? hub.addContext(context) : undefined, [hub, context, enabled])

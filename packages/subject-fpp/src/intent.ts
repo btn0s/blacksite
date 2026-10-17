@@ -1,8 +1,11 @@
-export type StandaloneIntent = { forward: number; right: number; jump: boolean }
+export type StandaloneIntent = { forward: number; right: number; jump: boolean; sprint: boolean; crouch: boolean; walk: boolean; aim: boolean }
 
-export function readStandaloneIntent(keys: ReadonlySet<string>): StandaloneIntent {
-  const forward = Number(keys.has('KeyW')) - Number(keys.has('KeyS'))
-  const right = Number(keys.has('KeyD')) - Number(keys.has('KeyA'))
-  const length = Math.max(1, Math.hypot(forward, right))
-  return { forward: forward / length, right: right / length, jump: keys.has('Space') }
+export type IntentLatch = { sprint: boolean; crouch: boolean }
+
+export function readStandaloneIntent(move: { x: number; y: number }, held: (action: string) => boolean, latch: IntentLatch = { sprint: false, crouch: false }): StandaloneIntent {
+  const length = Math.max(1, Math.hypot(move.x, move.y))
+  const forward = move.y / length
+  const aim = held('aim')
+  if (latch.sprint && (forward < 0.3 || aim || held('fire'))) latch.sprint = false
+  return { forward, right: move.x / length, jump: held('jump'), sprint: held('sprint') || latch.sprint, crouch: held('crouch') !== latch.crouch, walk: held('walk'), aim }
 }
