@@ -214,14 +214,14 @@ export function buildSteel() {
 
   bar([0.08, 2.0, 0.08], [3.2, 1.0, -25])
   bar([0.08, 2.0, 0.08], [6.8, 1.0, -25])
-  bar([3.8, 0.08, 0.08], [5.0, 2.0, -25])
+  bar([3.8, 0.08, 0.1], [5.0, 2.0, -25])
   gong('gong-a', 3.9, 1.96, -25, 'disc', 0.24, 0.42, '#e9dfc6', 15, 0.95)
   gong('gong-b', 5.0, 1.96, -25, 'square', 0.2, 0.36, '#d48a3a', 15, 1.12)
   gong('gong-c', 6.1, 1.96, -25, 'disc', 0.16, 0.5, '#e9dfc6', 20, 1.42)
 
   bar([0.1, 2.4, 0.1], [-1.1, 1.2, -50])
   bar([0.1, 2.4, 0.1], [1.1, 1.2, -50])
-  bar([2.3, 0.1, 0.1], [0, 2.4, -50])
+  bar([2.3, 0.1, 0.12], [0, 2.4, -50])
   gong('gong-far', 0, 2.36, -50, 'disc', 0.42, 0.5, '#c65a30', 50, 0.62)
 
   const frameMesh = new THREE.Mesh(mergeGeometries(frameParts.map(part => part.index ? part.toNonIndexed() : part), false), frame)

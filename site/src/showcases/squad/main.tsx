@@ -7,7 +7,7 @@ import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import type { AlsRagdollHandle } from 'als-ue5-r3f/app/AlsRemoteActor'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { Look } from '@blacksite/look/r3f'
-import { QUALITY, autoQuality } from '@blacksite/look/quality'
+import { QUALITY, autoQuality, depthDefaults } from '@blacksite/look/quality'
 import { ZONE } from '@blacksite/look/presets'
 import type { Atmosphere } from '@blacksite/look'
 import { createWardenSession, type WardenConfig } from '@blacksite/warden-react'
@@ -387,7 +387,7 @@ function App() {
   const followed = focus && snapshot?.agents.find(agent => agent.id === focus.id)
 
   return <Screen>
-    <Canvas shadows dpr={Math.min(internalPixelRatio(), QUALITY[quality].maxPixelRatio)} camera={{ fov: 50, near: 0.1, far: 500, position: [-24, 26, 30] }} gl={{ antialias: false, powerPreference: 'high-performance' }} style={{ touchAction: 'none' }} onCreated={state => attachPerfProbe(state.gl)}>
+    <Canvas shadows dpr={Math.min(internalPixelRatio(), QUALITY[quality].maxPixelRatio)} camera={{ fov: 50, near: depthDefaults(quality).near, far: 500, position: [-24, 26, 30] }} gl={{ antialias: false, powerPreference: 'high-performance' }} style={{ touchAction: 'none' }} onCreated={state => attachPerfProbe(state.gl)}>
       {ready && layer && <Scene intel={intel} layer={layer} focus={focus} setFocus={setFocus} roster={roster} />}
     </Canvas>
     <div className="squad-layer" ref={setLayer} />

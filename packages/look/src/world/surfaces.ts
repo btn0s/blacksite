@@ -72,7 +72,7 @@ export function patchGroundAO(material: THREE.MeshStandardMaterial, ao: GroundAO
 
 export type SurfaceMaps = { readonly map: THREE.Texture; readonly normalMap: THREE.Texture; readonly roughnessMap?: THREE.Texture; readonly metalnessMap?: THREE.Texture; readonly aoMap?: THREE.Texture }
 export type SurfaceSource = { readonly name: string; readonly tile: number; readonly maps: SurfaceMaps; readonly normalScale?: number; readonly roughness?: number; readonly metalness?: number }
-export type SurfaceOptions = { color?: string; scale?: number; ao?: GroundAO | false; side?: THREE.Side }
+export type SurfaceOptions = { color?: string; scale?: number; ao?: GroundAO | false; side?: THREE.Side; decal?: number }
 
 const materials = new Map<string, THREE.MeshStandardMaterial>()
 const sourced = new WeakMap<SurfaceSource, Map<string, THREE.MeshStandardMaterial>>()
@@ -108,7 +108,7 @@ export function releaseSurface(source: SurfaceSource) {
 }
 
 export function surface(name: SurfaceName | SurfaceSource, options: SurfaceOptions = {}) {
-  const key = `${typeof name === 'string' ? name : 'source'}|${options.color ?? ''}|${options.scale ?? 1}|${options.ao === false ? 'noao' : JSON.stringify(options.ao ?? '')}|${options.side ?? 0}`
+  const key = `${typeof name === 'string' ? name : 'source'}|${options.color ?? ''}|${options.scale ?? 1}|${options.ao === false ? 'noao' : JSON.stringify(options.ao ?? '')}|${options.side ?? 0}|${options.decal ?? ''}`
   if (typeof name !== 'string') return sourceSurface(name, key, options)
   const cached = materials.get(key)
   if (cached) return cached
@@ -126,6 +126,7 @@ export function surface(name: SurfaceName | SurfaceSource, options: SurfaceOptio
   })
   material.userData.tile = spec.tile * (options.scale ?? 1)
   if (options.ao !== false) patchGroundAO(material, options.ao || undefined)
+  if (options.decal) decalBias(material, DECAL_BIAS * options.decal)
   materials.set(key, material)
   return material
 }
@@ -200,11 +201,27 @@ function contact() {
   return contactTexture
 }
 
+export const DECAL_BIAS = 3e-4
+export const OVERLAY_BIAS = 1.5e-3
+
+export function decalBias<T extends THREE.Material>(material: T, bias = DECAL_BIAS) {
+  const previous = material.onBeforeCompile
+  const key = material.customProgramCacheKey
+  material.onBeforeCompile = (shader, renderer) => {
+    previous.call(material, shader, renderer)
+    shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>\nmvPosition.xyz *= ${(1 - bias).toFixed(6)};\ngl_Position = projectionMatrix * mvPosition;`)
+  }
+  material.customProgramCacheKey = () => `${key.call(material)}|decal${bias}`
+  material.userData.decalBias = bias
+  return material
+}
+
 const contactMaterials = new Map<number, THREE.MeshBasicMaterial>()
 export function contactShadow(width: number, depth: number, opacity = 0.55, spread = 1.4) {
   let material = contactMaterials.get(opacity)
   if (!material) {
     material = new THREE.MeshBasicMaterial({ map: contact(), transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, color: '#000000', fog: true })
+    decalBias(material, OVERLAY_BIAS)
     contactMaterials.set(opacity, material)
   }
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width + spread, depth + spread), material)
@@ -356,5 +373,5 @@ export function groundMaterial() {
 }
 
 export function puddleMaterial() {
-  return new THREE.MeshStandardMaterial({ name: 'look-puddle', color: '#2c2d27', roughness: 0.03, metalness: 0.55, envMapIntensity: 1.4, transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })
+  return decalBias(new THREE.MeshStandardMaterial({ name: 'look-puddle', color: '#2c2d27', roughness: 0.03, metalness: 0.55, envMapIntensity: 1.4, transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), OVERLAY_BIAS)
 }

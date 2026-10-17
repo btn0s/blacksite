@@ -137,10 +137,10 @@ export function Scene({ map, snapshot, selected, onSelect, knowledge, paths, cam
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -.02, 0]} receiveShadow><planeGeometry args={[map.width, map.depth]} /><meshStandardMaterial color="#747965" roughness={1} /></mesh>
     <MapGrid width={map.width} depth={map.depth} />
     {map.regions.map(region => <Label key={region.id} text={region.name.toUpperCase()} position={[region.center.x, .2, region.center.z]} size={1.3} color="#c1c7aa" />)}
-    {map.obstacles.map(obstacle => <group key={obstacle.id} position={[obstacle.x, obstacle.height / 2, obstacle.z]}>
-      <mesh castShadow receiveShadow><boxGeometry args={[obstacle.width, obstacle.height, obstacle.depth]} /><meshStandardMaterial color={obstacle.height > 1.6 ? '#363d33' : '#9a9d80'} roughness={.88} /></mesh>
-      <mesh position={[0, obstacle.height / 2 + .01, 0]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[Math.max(.1, obstacle.width - .12), Math.max(.1, obstacle.depth - .12)]} /><meshStandardMaterial color={obstacle.height > 1.6 ? '#4b5544' : '#acaf93'} roughness={.8} /></mesh>
-    </group>)}
+    {map.obstacles.map((obstacle, index) => { const height = obstacle.height + (index * .0037) % .05; const inset = (index * .0053) % .02; const bite = (index * .0071) % .02; return <group key={obstacle.id} position={[obstacle.x, height / 2, obstacle.z]}>
+      <mesh castShadow receiveShadow><boxGeometry args={[obstacle.width - inset, height, obstacle.depth - bite]} /><meshStandardMaterial color={obstacle.height > 1.6 ? '#363d33' : '#9a9d80'} roughness={.88} /></mesh>
+      <mesh position={[0, height / 2 + .01, 0]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[Math.max(.1, obstacle.width - .12), Math.max(.1, obstacle.depth - .12)]} /><meshStandardMaterial color={obstacle.height > 1.6 ? '#4b5544' : '#acaf93'} roughness={.8} /></mesh>
+    </group> })}
     {map.nodes.map(node => <mesh key={node.id} rotation={[-Math.PI / 2, 0, 0]} position={[node.position.x, .035, node.position.z]}><ringGeometry args={[.13, .2, 12]} /><meshBasicMaterial color={snapshot.reservations.some(r => r.resourceId === node.id) ? ALPHA : '#bcc1a3'} transparent opacity={.6} side={DoubleSide} /></mesh>)}
     <group position={[snapshot.objective.position.x, .06, snapshot.objective.position.z]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}><ringGeometry args={[2.55, 2.6, 64]} /><meshBasicMaterial color="#e6e5b5" transparent opacity={.7} side={DoubleSide} /></mesh>
