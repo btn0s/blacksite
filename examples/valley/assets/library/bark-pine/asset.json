@@ -1,0 +1,33 @@
+{
+  "id": "bark-pine",
+  "category": "material",
+  "ship": [
+    "1k/c.webp",
+    "1k/n.webp",
+    "1k/orm.webp"
+  ],
+  "files": {
+    "1k/c.webp": 155920,
+    "1k/n.webp": 446568,
+    "1k/orm.webp": 153528,
+    "1k/c.ktx2": 208054,
+    "1k/n.ktx2": 1282456,
+    "1k/orm.ktx2": 648853,
+    "512/c.webp": 43318,
+    "512/n.webp": 115060,
+    "512/orm.webp": 44236,
+    "512/c.ktx2": 62909,
+    "512/n.ktx2": 329364,
+    "512/orm.ktx2": 173256
+  },
+  "bytes": 756016,
+  "ktx2Bytes": 2139363,
+  "budget": 900000,
+  "withinBudget": true,
+  "over": [],
+  "maps": {
+    "color": "pine_bark_diff_2k.jpg",
+    "normal": "pine_bark_nor_gl_2k.jpg"
+  },
+  "packed": "arm"
+}

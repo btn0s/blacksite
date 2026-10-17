@@ -36,6 +36,7 @@ export type BlacksiteCheck = {
   version: 1
   ready: boolean
   bookmarks: Bookmark[]
+  flyover?: CameraPose[]
   camera(pose: CameraPose | null): void
   scripts?: Record<string, () => Promise<void>>
   player?(): PlayerSample | null
