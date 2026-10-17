@@ -248,9 +248,9 @@ export function makeActionHub() {
       }
     },
     tick(pad: Gamepad | null, now: number, gameplayReady = true) {
-      if (pad?.index !== previousPad) {
-        previousPad = pad?.index
-        evaluate = createEvaluator()
+      if (pad && pad.index !== previousPad) {
+        if (previousPad !== undefined) evaluate = createEvaluator()
+        previousPad = pad.index
       }
       frameMouse.x = mouseDelta.x
       frameMouse.y = mouseDelta.y

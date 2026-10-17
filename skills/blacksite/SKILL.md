@@ -106,7 +106,7 @@ Read [building-blocks.md](references/building-blocks.md) before wiring a block; 
 
 | Block | Package |
 |---|---|
-| Characters: an animated body, first and third person | `@blacksite/subject`, `@blacksite/subject-fpp`, ALS |
+| Characters: an animated body, first and third person | `@blacksite/subject`, ALS |
 | Weapons | Armory, `@blacksite/armory` |
 | AI: squads that perceive, plan and take cover | Warden, `@blacksite/warden` |
 | Destruction: buildings that break by structure | Cascade, `@blacksite/cascade` |
@@ -167,7 +167,7 @@ Flagship games in `examples/`, each built only on public packages. Read the one 
 | Blackout | Horror | Lighting, sound, atmosphere | Coming |
 | Arena | Multiplayer | Netcode that feels local | Coming |
 
-The site's showcases are smaller proofs of one block each: Checkpoint (characters), Firing Range (weapons), Squad (AI), Air Strike (destruction) and Arena (multiplayer), in `site/src/showcases/`.
+The site's showcases are smaller proofs of one block each: Checkpoint (characters), Squad (AI), Air Strike (destruction) and Arena (multiplayer), in `site/src/showcases/`.
 
 ## Rules
 

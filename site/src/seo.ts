@@ -26,7 +26,7 @@ const toolDescriptions: Record<string, string> = {
   characters: 'A player character for browser games that walks, sprints, climbs ledges, rolls and aims in first or third person, with a rooftop run to play.',
   world: 'Open-world terrain, grass, forests, wind and sky for browser games that hold up from your feet to distant mountains, with a valley to walk.',
   destruction: 'Concrete buildings for browser games that crack, lose their supports and collapse, with the physics running in a web worker.',
-  weapons: 'A first-person rifle and pistol for browser games on rigged arms, with recoil and server-checked hits, plus a squad fight and a firing range.',
+  weapons: 'A first-person rifle and pistol for browser games on rigged arms, with recoil and server-checked hits, plus a squad fight through a ruined factory.',
   multiplayer: 'Multiplayer rooms for browser games where each player moves their own character and the server checks every hit, with a bot to play against.',
   ai: 'Enemy squad AI for browser games: squads that see, hear, take cover and flank, in a simulation that gives the same result every time.',
   input: 'One input layer for browser games covering keyboard, mouse, gamepad and touch, plus menus, pause and settings screens a controller can drive.',

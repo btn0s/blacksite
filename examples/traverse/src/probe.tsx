@@ -9,6 +9,7 @@ import type { Shared } from './Game'
 import * as model from './model'
 import { advanceFootContact, contacts, nearPlaneRadius, percentile, type FootSample } from './model'
 import { GhostPlayer, GhostRecorder, ghostBytes, modelOf } from './ghost'
+import { yawOf } from './runner'
 
 type Vec3 = [number, number, number]
 
@@ -25,7 +26,7 @@ type Recording = { left: FootSample[]; right: FootSample[]; contact: [boolean, b
 const checkNames = ['start', 'feet-flat', 'stairs', 'slope', 'ramp-foot', 'mantle-ladder', 'actions', 'camera-wall', 'shoulder', 'ghost', 'route'] as const
 export type CheckName = (typeof checkNames)[number]
 
-const toDegrees = (radians: number) => radians * 180 / Math.PI
+const DEG = Math.PI / 180
 
 const feelLane = { start: [-10, 0, -22] as Vec3, yaw: Math.PI / 2 }
 
@@ -72,7 +73,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
   useFrame((_, delta) => {
     clock.current += delta
     const now = clock.current
-    const sample = shared.pose.current
+    const sample = shared.runner.als.pose.current
     const character = sample.character
     const grounded = character?.locomotionMode === 'Grounded' && character.locomotionAction === null
     if (sample.ready && grounded && ankle.current === null && character && character.locomotionState.speed < 0.05) {
@@ -105,7 +106,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
 
   useFrame(state => {
     const check = exposed.current
-    if (check && !check.probe.ready && shared.pose.current.ready) check.ready()
+    if (check && !check.probe.ready && shared.runner.als.pose.current.ready) check.ready()
     const pose = override.current
     if (pose) applyCameraPose(camera as Parameters<typeof applyCameraPose>[0], pose, state.size)
   }, ALS_FRAME_PRIORITY.Camera + 0.05)
@@ -134,24 +135,26 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
       while (clock.current < end) { if (test()) return true; await frame() }
       return test()
     }
-    const command = shared.command
-    const character = () => shared.pose.current.character
-    const position = () => shared.pose.current.ground
+    const runner = shared.runner
+    const command = { forward: 0, right: 0, sprint: false, walk: false, crouch: false, jump: false, fire: false, aim: false }
+    const steer = (heading: number) => { runner.control.yaw = yawOf(heading) }
+    const tilt = (degrees: number) => { runner.control.pitch = degrees * DEG }
+    const script = (on: boolean) => runner.drive(on ? command : null)
+    const character = () => shared.runner.als.pose.current.character
+    const position = () => shared.runner.als.pose.current.ground
     const idle = () => { command.forward = 0; command.right = 0; command.sprint = false; command.walk = false; command.crouch = false }
     const face = (x: number, z: number) => {
       const p = position()
-      command.yaw = toDegrees(Math.atan2(z - p.z, x - p.x))
+      steer(Math.atan2(z - p.z, x - p.x))
     }
 
     const place = async (at: Vec3, yaw: number) => {
       idle()
       api.respawn(at, yaw)
-      command.yaw = toDegrees(yaw)
-      command.pitch = -12
       await wait(0.3)
       const settled = await until(() => {
         const c = character()
-        return !!c && shared.pose.current.ready && c.locomotionMode === 'Grounded' && c.locomotionAction === null && position().distanceTo(new THREE.Vector3(...at)) < 1.5
+        return !!c && shared.runner.als.pose.current.ready && c.locomotionMode === 'Grounded' && c.locomotionAction === null && position().distanceTo(new THREE.Vector3(...at)) < 1.5
       }, 4)
       if (!settled) throw new Error(`could not place runner at ${at.join(', ')}`)
       await wait(0.5)
@@ -221,17 +224,17 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         await wait(1.2)
         const samples: number[][] = []
         const began = clock.current
-        command.yaw = toDegrees(feelLane.yaw)
-        shared.scripted.current = false
+        steer(feelLane.yaw)
+        script(false)
         window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', key: 'w' }))
         await until(() => {
-          const body = shared.pose.current.ownerRigidBody!.translation()
+          const body = shared.runner.als.pose.current.ownerRigidBody!.translation()
           const seen = position()
           samples.push([clock.current - began, body.x, body.z, seen.x, seen.z])
           return clock.current - began > 1.2
         }, 2)
         window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW', key: 'w' }))
-        shared.scripted.current = true
+        script(true)
         idle()
         const reach = (offset: number) => {
           for (let index = 1; index < samples.length; index++) {
@@ -246,7 +249,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         await wait(0.8)
         const ground = position().y
         let apex = 0
-        command.jumpSequence++
+        runner.jump()
         await until(() => { apex = Math.max(apex, position().y - ground); return apex > 0.3 && character()?.locomotionMode === 'Grounded' }, 2)
         const seen = reach(3)
         const latency = Math.abs(seen - model.feel.timeToTopSpeed) / model.feel.timeToTopSpeed
@@ -308,7 +311,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
             command.sprint = gait === 'sprint'
             const goal = 2
             const ok = await until(() => {
-              command.yaw = toDegrees(yaw)
+              steer(yaw)
               command.forward = 1
               const p = position()
               return (p.x - ramp.from[0]) * along.x + (p.z - ramp.from[2]) * along.z > goal
@@ -344,7 +347,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
           let pressedAt = -1
           const completed = await until(() => {
             const c = character()
-            command.yaw = toDegrees(ledge.yaw)
+            steer(ledge.yaw)
             command.forward = 1
             const p = position()
             const along = (p.x - origin.x) * Math.cos(ledge.yaw) + (p.z - origin.z) * Math.sin(ledge.yaw)
@@ -356,7 +359,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
             if (missed) return true
             highest = Math.max(highest, p.y)
             const face = faceDistance(p.x, p.y + 0.3, p.z, ledge.yaw)
-            if (c?.locomotionMode === 'Grounded' && c.locomotionAction === null && face < 0.7 && clock.current - pressedAt > 0.3 && jumps < 6) { jumps++; pressedAt = clock.current; command.jumpSequence++ }
+            if (c?.locomotionMode === 'Grounded' && c.locomotionAction === null && face < 0.7 && clock.current - pressedAt > 0.3 && jumps < 6) { jumps++; pressedAt = clock.current; runner.jump() }
             return highest >= top - 0.12 && mantled >= 0 && c?.locomotionAction === null && c.locomotionMode === 'Grounded'
           }, 7)
           const reached = completed && !missed
@@ -386,11 +389,11 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
           await place(spot.at, spot.yaw)
           start()
           const began = clock.current
-          const baseYaw = command.yaw
+          const baseYaw = runner.control.yaw
           await until(() => {
             const t = (clock.current - began) / 4
-            command.yaw = baseYaw + 360 * t
-            command.pitch = -55 + 95 * (0.5 + 0.5 * Math.sin(t * Math.PI * 4))
+            runner.control.yaw = baseYaw - 2 * Math.PI * t
+            tilt(-55 + 95 * (0.5 + 0.5 * Math.sin(t * Math.PI * 4)))
             command.forward = spot.back ? -0.6 : 0
             return t >= 1
           }, 5)
@@ -399,7 +402,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
           clips += record.clipFrames
           frames += record.frames
         }
-        command.pitch = -12
+        tilt(model.input.pitch)
         return result('camera-wall', { clipFrames: clips, frames, nearRadius: nearPlaneRadius((camera as THREE.PerspectiveCamera).near, (camera as THREE.PerspectiveCamera).fov, (camera as THREE.PerspectiveCamera).aspect) }, { clipFrames: model.camera.clipFrames }, frames > 100 && clips <= model.camera.clipFrames)
       },
       async actions() {
@@ -407,14 +410,14 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         start()
         command.forward = 1
         await wait(0.6)
-        command.rollSequence++
+        runner.roll()
         const rolled = await until(() => character()?.locomotionAction === 'Rolling', 1)
         const rollRecovered = await until(() => character()?.locomotionAction === null && character()?.locomotionMode === 'Grounded', 4)
         idle()
-        command.ragdollSequence++
+        runner.ragdoll()
         const ragdolled = await until(() => character()?.locomotionAction === 'Ragdolling', 1)
         await wait(0.8)
-        command.ragdollSequence++
+        runner.ragdoll()
         const gotUp = await until(() => character()?.locomotionAction === null && character()?.locomotionMode === 'Grounded', 6)
         const first = stop()
         await place([23, 0, 0.6], 0)
@@ -426,7 +429,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         const lowObstacleCrossed = await until(() => {
           const c = character()
           const p = position()
-          if (!pressed && faceDistance(p.x, p.y + 0.3, p.z, 0) < 0.65) { pressed = true; command.jumpSequence++ }
+          if (!pressed && faceDistance(p.x, p.y + 0.3, p.z, 0) < 0.65) { pressed = true; runner.jump() }
           if (c?.locomotionAction === 'Mantling') lowMantleSeen = true
           return p.x > 27 && p.y < 0.2 && c?.locomotionMode === 'Grounded' && c.locomotionAction === null
         }, 5)
@@ -457,7 +460,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
           for (let swap = 0; swap < 2; swap++) {
             start()
             await wait(0.1)
-            command.rightShoulder = !command.rightShoulder
+            runner.swapShoulder()
             const swapped = clock.current
             await wait(1.2)
             const record = stop()
@@ -483,7 +486,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
       },
       async ghost() {
         await place(feelLane.start, feelLane.yaw)
-        const root = shared.pose.current.rootBone
+        const root = shared.runner.als.pose.current.rootBone
         const source = root && modelOf(root)
         if (!source) return result('ghost', {}, {}, false, ['character model unavailable'])
         const recorder = new GhostRecorder(source)
@@ -533,7 +536,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
             const p = position()
             highest = Math.max(highest, p.y)
             const yaw = Math.atan2(point.at[2] - p.z, point.at[0] - p.x)
-            command.yaw = toDegrees(yaw)
+            steer(yaw)
             command.forward = 1
             const near = Math.hypot(point.at[0] - p.x, point.at[2] - p.z) < 3 && point.action === 'mantle'
             const flat = Math.hypot(point.at[0] - p.x, point.at[2] - p.z)
@@ -543,22 +546,22 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
             command.walk = flat < 1.5 && turning && !point.action
             command.sprint = !near && !command.walk && !route.zones.some(zone => zone.kind === 'stairwell' && p.x > zone.min[0] && p.x < zone.max[0] && p.z > zone.min[2] && p.z < zone.max[2])
             const free = c?.locomotionMode === 'Grounded' && c.locomotionAction === null && clock.current - pressedAt > 0.35
-            if (free && point.action === 'mantle' && faceDistance(p.x, p.y + 0.3, p.z, yaw) < 0.7) { pressedAt = clock.current; command.jumpSequence++ }
+            if (free && point.action === 'mantle' && faceDistance(p.x, p.y + 0.3, p.z, yaw) < 0.7) { pressedAt = clock.current; runner.jump() }
             if (point.action === 'jump') {
               const from = route.line[index - 1]!.at
               const length = Math.hypot(point.at[0] - from[0], point.at[2] - from[2])
               const dx = (point.at[0] - from[0]) / length
               const dz = (point.at[2] - from[2]) / length
-              command.yaw = toDegrees(Math.atan2(point.at[2] + dz * 2 - p.z, point.at[0] + dx * 2 - p.x))
+              steer(Math.atan2(point.at[2] + dz * 2 - p.z, point.at[0] + dx * 2 - p.x))
               const along = (p.x - point.at[0]) * dx + (p.z - point.at[2]) * dz
               const lateral = Math.abs((p.x - point.at[0]) * dz - (p.z - point.at[2]) * dx)
               const moved = Math.hypot(p.x - previous.x, p.z - previous.z)
               const aligned = moved > 0 && ((p.x - previous.x) * dx + (p.z - previous.z) * dz) / moved > 0.8
               previous.copy(p)
-              if (free && along > -0.6 && lateral < 1.2 && aligned) { pressedAt = clock.current; command.jumpSequence++; return true }
+              if (free && along > -0.6 && lateral < 1.2 && aligned) { pressedAt = clock.current; runner.jump(); return true }
               if (along > 0.2) retreat = true
               if (retreat && Math.hypot(from[0] - p.x, from[2] - p.z) < 0.6) retreat = false
-              if (retreat) command.yaw = toDegrees(Math.atan2(from[2] - p.z, from[0] - p.x))
+              if (retreat) steer(Math.atan2(from[2] - p.z, from[0] - p.x))
               return false
             }
             if (point.action === 'mantle' && highest >= point.at[1] - 0.12 && c?.locomotionAction === null && c.locomotionMode === 'Grounded') {
@@ -593,12 +596,12 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
       if (busy.current) throw new Error('a check is already running')
       busy.current = true
       last.current = null
-      shared.scripted.current = true
+      script(true)
       try {
         return await runs[name]()
       } finally {
         idle()
-        shared.scripted.current = false
+        script(false)
         busy.current = false
         api.restart()
       }
@@ -618,8 +621,8 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
     }
 
     const scripted = async (body: () => Promise<void>) => {
-      shared.scripted.current = true
-      try { await body() } finally { idle(); shared.scripted.current = false }
+      script(true)
+      try { await body() } finally { idle(); script(false) }
     }
 
     const bookmarks: Bookmark[] = [
@@ -631,11 +634,11 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
       bookmarks,
       camera: setCamera,
       player() {
-        const body = shared.pose.current.ownerRigidBody
+        const body = shared.runner.als.pose.current.ownerRigidBody
         if (!body) return null
         const v = body.linvel()
-        const seen = shared.pose.current.ground
-        return { position: [seen.x, seen.y, seen.z], velocity: [v.x, v.y, v.z], grounded: shared.pose.current.character?.locomotionMode === 'Grounded' }
+        const seen = shared.runner.als.pose.current.ground
+        return { position: [seen.x, seen.y, seen.z], velocity: [v.x, v.y, v.z], grounded: shared.runner.als.pose.current.character?.locomotionMode === 'Grounded' }
       },
       audio: () => shared.sound.sample(),
       scripts: {
@@ -646,6 +649,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         }),
       },
       input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
+      character: runner.check,
       model: { feel: model.feel, budget: { ...model.budget, voices: shared.sound.cap } },
     })
     exposed.current = check
@@ -655,9 +659,9 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
       model,
       checks: checkNames,
       bookmarks: route.bookmarks.map(bookmark => bookmark.name),
-      get ready() { return shared.pose.current.ready },
+      get ready() { return shared.runner.als.pose.current.ready },
       state() {
-        const sample = shared.pose.current
+        const sample = shared.runner.als.pose.current
         const c = sample.character
         const race = shared.race.current
         return { ready: sample.ready, position: sample.ground.toArray(), mode: c?.locomotionMode ?? null, action: c?.locomotionAction ?? null, speed: c?.locomotionState.speed ?? 0, race: race.state, next: race.next, camera: camera.position.toArray(), ankle: ankle.current }
@@ -666,9 +670,9 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
         if (name === null) { setCamera(null); return true }
         const bookmark = route.bookmarks.find(entry => entry.name === name)
         if (!bookmark) throw new Error(`unknown bookmark ${name}`)
-        shared.scripted.current = true
+        script(true)
         await place(bookmark.stand, bookmark.yaw)
-        shared.scripted.current = false
+        script(false)
         setCamera({ position: bookmark.position, target: bookmark.target, fov: bookmark.fov })
         await wait(0.6)
         return true

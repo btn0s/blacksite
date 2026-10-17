@@ -6,14 +6,13 @@ import type { BreachAudio } from './audio'
 import { clearLine, type Target, type V3 } from './geometry'
 import { BOOKMARKS, FEEL_START } from './layout'
 import { CHECK_BUDGET, FEEL } from './model'
-import type { Body } from './player'
+import type { CharacterDriver, CharacterHandle } from '@blacksite/subject'
 
-export type Driver = { forward: number; right: number; sprint: boolean; jump: boolean; fire: boolean; aim: boolean }
 
 export type Controls = {
-  drive(next: Driver | null): void
+  drive(next: CharacterDriver | null): void
   place(position: readonly [number, number, number], yaw: number): void
-  body: Body
+  player: Pick<CharacterHandle, 'position' | 'velocity' | 'grounded' | 'check'>
   override(pose: CameraPose | null): void
   restart(): void
   face(target: V3): void
@@ -56,7 +55,7 @@ export function CheckProbe({ driver, audio, ready, overlay, onWarmed, viewmodel 
     bookmarks,
     camera(next) { override.current = next; driver.override(next) },
     player() {
-      const body = driver.body
+      const body = driver.player
       return { position: [body.position.x, body.position.y, body.position.z], velocity: [body.velocity.x, body.velocity.y, body.velocity.z], grounded: body.grounded }
     },
     view: () => sampleView(camera, viewmodel?.()),
@@ -73,14 +72,14 @@ export function CheckProbe({ driver, audio, ready, overlay, onWarmed, viewmodel 
         driver.restart()
         await wait(300)
         driver.place(HALL_DOOR, 0)
-        const drive: Driver = { forward: 0, right: 0, sprint: false, jump: false, fire: false, aim: false }
+        const drive: CharacterDriver = { forward: 0, right: 0, sprint: false, jump: false, fire: false, aim: false }
         driver.drive(drive)
         const started = performance.now()
         let side = 1
         while (performance.now() - started < 12000) {
           driver.heal()
           const elapsed = performance.now() - started
-          const body = driver.body
+          const body = driver.player
           const targets = driver.targets()
           let best: Target | null = null
           let distance = Infinity
@@ -104,13 +103,13 @@ export function CheckProbe({ driver, audio, ready, overlay, onWarmed, viewmodel 
         driver.restart()
         await wait(300)
         driver.place(HALL_DOOR, 0)
-        const drive: Driver = { forward: 0, right: 0, sprint: false, jump: false, fire: false, aim: true }
+        const drive: CharacterDriver = { forward: 0, right: 0, sprint: false, jump: false, fire: false, aim: true }
         driver.drive(drive)
         const started = performance.now()
         let aimed: Target | null = null
         while (performance.now() - started < 10000) {
           driver.heal()
-          const body = driver.body
+          const body = driver.player
           const targets = driver.targets()
           if (aimed && !targets.some(target => target.id === aimed!.id)) break
           aimed = null
@@ -126,7 +125,7 @@ export function CheckProbe({ driver, audio, ready, overlay, onWarmed, viewmodel 
         }
         drive.fire = false
         if (aimed) {
-          const body = driver.body
+          const body = driver.player
           const away = Math.atan2(aimed.x - body.position.x, aimed.z - body.position.z)
           const side = { x: Math.cos(away), z: -Math.sin(away) }
           window.__blacksite?.camera({ position: [aimed.x + side.x * 2.9, 3.4, aimed.z + side.z * 2.9], target: [aimed.x, 0.3, aimed.z], fov: 70 })
@@ -137,6 +136,7 @@ export function CheckProbe({ driver, audio, ready, overlay, onWarmed, viewmodel 
       },
     },
     input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
+    character: driver.player.check,
     model: { feel: FEEL, budget: CHECK_BUDGET },
   }), [driver, audio, camera])
   useEffect(() => check.dispose, [check])

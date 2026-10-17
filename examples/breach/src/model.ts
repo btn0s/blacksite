@@ -1,5 +1,5 @@
 import type { WeaponDefinition } from '@blacksite/armory'
-import { FIELD_WEAPONS, foundTimings } from '@blacksite/subject-fpp/arms/model'
+import { FIELD_WEAPONS, foundTimings } from '@blacksite/subject/arms/model'
 
 export const DEG = Math.PI / 180
 export const SPEED_OF_SOUND = 343
@@ -9,9 +9,6 @@ export const MOVE = {
   crouchEye: 1.0,
   eyeSmoothing: 20,
   radius: 0.3,
-  height: 1.8,
-  crouchHeight: 1.12,
-  step: 0.45,
   walk: 1.75,
   run: 3.75,
   sprint: 6.5,
@@ -19,14 +16,9 @@ export const MOVE = {
   aim: 1.65,
   accelerate: [20, 7.5] as const,
   brake: [15, 12.5, 5] as const,
-  airControl: 0.25,
   jumpSpeed: 4.2,
   gravity: 9.8,
-  coyoteSeconds: 0.1,
-  bufferSeconds: 0.1,
-  crouchSeconds: 0.2,
   sprintOutSeconds: 0.22,
-  bobAmplitude: 0.012,
 }
 
 export const jumpApex = () => MOVE.jumpSpeed * MOVE.jumpSpeed / (2 * MOVE.gravity)
@@ -58,6 +50,13 @@ export const VIEW = {
   sensitivity: 0.0022,
   touchSensitivity: 0.0042,
   kickDecaySeconds: 0.08,
+}
+
+export const PAD = {
+  look: { yawDegreesPerSecond: 240, pitchDegreesPerSecond: 90, deadZone: 0.2, exponent: 2 },
+  assist: { slowdown: 0.4, magnetism: 0.2, snapAngle: 0 },
+  target: { chest: 1.3, crouchChest: 0.95, radius: 0.35, moving: 0.6 },
+  rumble: { rifle: { ms: 60, strong: 0.12, weak: 0.3, trigger: 0.45 }, pistol: { ms: 80, strong: 0.2, weak: 0.35, trigger: 0.6 } },
 }
 
 export type Kick = readonly [pitch: number, yaw: number]
@@ -215,7 +214,6 @@ export const PRESENTATION = {
   topple: { seconds: 0.55, lift: 0.13, bounce: { seconds: 0.3, angle: 0.1 } },
   ragdolls: { desktop: 3, phone: 2 },
   ragdoll: { desktop: 'als', phone: 'corpse' } as const,
-  physicsHz: { desktop: 60, phone: 30 },
 }
 
 export type CorpseShape = { from: string; to: string; radius: number; beyond?: number }

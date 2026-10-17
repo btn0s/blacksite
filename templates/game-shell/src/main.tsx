@@ -10,7 +10,7 @@ import { sound } from './game/sound'
 import '@blacksite/ui/globals.css'
 import './style.css'
 
-type Mode = { default: ComponentType }
+type Mode = { default: ComponentType<{ paused?: boolean }> }
 type Screen = 'play' | 'pause' | 'menu' | 'settings'
 const modes = import.meta.glob<Mode>('./prototypes/*/mode.tsx')
 const prototypes = Object.entries(modes).map(([path, load]) => ({ name: path.split('/')[2], Component: lazy(load) }))
@@ -63,7 +63,7 @@ function Shell() {
   const chosen = prototypes.find(item => item.name === mode)
   const Active = chosen?.Component || Game
   return <GameFrame className="game-frame" ratio={aspect}><div className="game-shell">
-    {(screen === 'play' || screen === 'pause') && <div className="scene"><Suspense fallback={<main className="panel"><h1>Loading…</h1></main>}>{Active ? <Active key={mode ?? 'game'} /> : <main className="panel"><h1>No game mode</h1><p>Add src/game/mode.tsx.</p></main>}</Suspense></div>}
+    {(screen === 'play' || screen === 'pause') && <div className="scene"><Suspense fallback={<main className="panel"><h1>Loading…</h1></main>}>{Active ? <Active key={mode ?? 'game'} paused={screen === 'pause'} /> : <main className="panel"><h1>No game mode</h1><p>Add src/game/mode.tsx.</p></main>}</Suspense></div>}
     {screen === 'menu' && <main ref={navigation.root} className="panel"><h1>New game</h1><p>Play the game or open a prototype.</p><Button onClick={() => { setMode(null); setScreen('play') }}>Play</Button><Button variant="outline" onClick={() => settings('menu')}>Settings</Button><h2>Prototypes</h2>{prototypes.length ? prototypes.map(item => <Button key={item.name} variant="secondary" onClick={() => { setMode(item.name); setScreen('play') }}>{item.name}</Button>) : <p>No prototypes yet.</p>}</main>}
     {screen === 'play' && <Button className="pause-button" onClick={() => setScreen('pause')}>Pause</Button>}
     {screen === 'pause' && <main ref={navigation.root} className="panel"><h1>Paused</h1><Button onClick={() => setScreen('play')}>Resume</Button><Button variant="outline" onClick={() => settings('pause')}>Settings</Button><Button variant="outline" onClick={() => setScreen('menu')}>Main menu</Button></main>}

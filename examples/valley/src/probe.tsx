@@ -3,7 +3,9 @@ import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { applyCameraPose, exposeCheck, type Bookmark, type CameraPose } from '@blacksite/check'
+import type { CharacterHandle } from '@blacksite/subject'
 import type { Shared } from './Game'
+import { yawOf } from './walker'
 import * as model from './model'
 import type { ValleyWorld } from './world'
 
@@ -12,7 +14,6 @@ type Waiter = { at: number; resolve: () => void }
 
 export type ProbeApi = { respawn(position: Vec3, yaw: number): void }
 
-const toDegrees = (radians: number) => radians * 180 / Math.PI
 
 export function resolvePose(world: ValleyWorld, pose: { position: Vec3; target: Vec3 }): { position: Vec3; target: Vec3 } {
   const [px, py, pz] = pose.position
@@ -20,7 +21,7 @@ export function resolvePose(world: ValleyWorld, pose: { position: Vec3; target: 
   return { position: [px, world.heightAt(px, pz) + py, pz], target: [tx, world.heightAt(tx, tz) + ty, tz] }
 }
 
-export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWorld; api: ProbeApi }) {
+export function Probe({ shared, walker, world, api }: { shared: Shared; walker: CharacterHandle; world: ValleyWorld; api: ProbeApi }) {
   const { camera, gl, scene } = useThree()
   const clock = useRef(0)
   const waiters = useRef<Waiter[]>([])
@@ -39,7 +40,7 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
   useFrame(state => {
     const check = exposed.current
     if (shared.warm.current > 0) shared.warm.current++
-    if (check && !check.probe.ready && shared.pose.current.ready && shared.landscape.current && shared.warm.current > 10) check.ready()
+    if (check && !check.probe.ready && walker.als.pose.current.ready && shared.landscape.current && shared.warm.current > 10) check.ready()
     const pose = override.current
     if (pose) applyCameraPose(camera as Parameters<typeof applyCameraPose>[0], pose, state.size)
   }, ALS_FRAME_PRIORITY.Camera + 0.05)
@@ -51,19 +52,19 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
       while (clock.current < end) { if (test()) return true; await wait(0) }
       return test()
     }
-    const command = shared.command
-    const position = () => shared.pose.current.ground
+    const command = { forward: 0, right: 0, sprint: false, walk: false, crouch: false, jump: false, fire: false, aim: false }
+    const steer = (heading: number) => { walker.control.yaw = yawOf(heading) }
+    const position = () => walker.als.pose.current.ground
     const idle = () => { command.forward = 0; command.right = 0; command.sprint = false; command.walk = false; command.crouch = false }
     const place = async (x: number, z: number, yaw: number) => {
       idle()
       const at: Vec3 = [x, world.heightAt(x, z) + 1.2, z]
       if (Math.hypot(position().x - x, position().z - z) > 1.5) api.respawn(at, yaw)
-      command.yaw = toDegrees(yaw)
-      command.pitch = -8
+      else steer(yaw)
       await wait(0.3)
       await until(() => {
-        const c = shared.pose.current.character
-        return !!c && shared.pose.current.ready && c.locomotionMode === 'Grounded' && c.locomotionAction === null && Math.hypot(position().x - x, position().z - z) < 1.5
+        const c = walker.als.pose.current.character
+        return !!c && walker.als.pose.current.ready && c.locomotionMode === 'Grounded' && c.locomotionAction === null && Math.hypot(position().x - x, position().z - z) < 1.5
       }, 4)
       await wait(0.4)
     }
@@ -72,7 +73,7 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
       for (const [x, z] of points) {
         const ok = await until(() => {
           const p = position()
-          command.yaw = toDegrees(Math.atan2(z - p.z, x - p.x))
+          steer(Math.atan2(z - p.z, x - p.x))
           command.forward = 1
           return Math.hypot(x - p.x, z - p.z) < 1.2
         }, 12)
@@ -81,8 +82,8 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
       idle()
     }
     const scripted = async (body: () => Promise<void>) => {
-      shared.scripted.current = true
-      try { await body() } finally { idle(); shared.scripted.current = false }
+      walker.drive(command)
+      try { await body() } finally { idle(); walker.drive(null) }
     }
     const setCamera = (pose: CameraPose | null) => {
       if (!pose && override.current) (camera as THREE.PerspectiveCamera).clearViewOffset()
@@ -109,12 +110,12 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
       flyover,
       camera: setCamera,
       player() {
-        const body = shared.pose.current.ownerRigidBody
+        const body = walker.als.pose.current.ownerRigidBody
         if (!body) return null
         const p = body.translation()
         const v = body.linvel()
-        const seen = shared.pose.current.ground
-        return { position: [seen.x, p.y, seen.z], velocity: [v.x, v.y, v.z], grounded: shared.pose.current.character?.locomotionMode === 'Grounded' }
+        const seen = walker.als.pose.current.ground
+        return { position: [seen.x, p.y, seen.z], velocity: [v.x, v.y, v.z], grounded: walker.als.pose.current.character?.locomotionMode === 'Grounded' }
       },
       audio: () => shared.sound.sample(),
       scripts: {
@@ -141,6 +142,7 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
         }),
       },
       input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
+      character: walker.check,
       model: { feel: model.feel, budget: model.budget, quality: model.quality },
     })
     exposed.current = check
@@ -151,8 +153,8 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
       state() {
         const landscape = shared.landscape.current
         return {
-          ready: shared.pose.current.ready,
-          position: shared.pose.current.ground.toArray(),
+          ready: walker.als.pose.current.ready,
+          position: walker.als.pose.current.ground.toArray(),
           camera: camera.position.toArray(),
           terrain: landscape?.terrain.stats,
           cover: landscape?.cover.stats,
@@ -172,7 +174,7 @@ export function Probe({ shared, world, api }: { shared: Shared; world: ValleyWor
       exposed.current = null
       if ((window as { __valley?: unknown }).__valley === valley) delete (window as { __valley?: unknown }).__valley
     }
-  }, [api, camera, gl, scene, shared, world])
+  }, [api, camera, gl, scene, shared, walker, world])
 
   return null
 }

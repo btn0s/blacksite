@@ -47,18 +47,10 @@ export const feel = {
 export const camera = { near: 0.1, shoulderOffset: 0.45 } as const
 
 export const input = {
-  mouseDegreesPerPixel: 0.0022 * 180 / Math.PI,
-  touchDegreesPerPixel: 0.0042 * 180 / Math.PI * 1.7,
-  padYawRate: 240,
-  padPitchRate: 90,
+  pitch: -8,
   pitchMin: -70,
   pitchMax: 55,
-  walkStick: 0.5,
-  stickDeadZone: 0.2,
-  touchSprint: 0.92,
-  rollTapSeconds: 0.25,
-  jumpBufferSeconds: 0.1,
-  coyoteSeconds: 0.1,
+  touchScale: 1.7,
 } as const
 
 export const budget = {

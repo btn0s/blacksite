@@ -68,7 +68,7 @@ export default defineConfig({
       name: 'blacksite-pages-assets',
       enforce: 'pre',
       transform(source, id) {
-        if ((!id.includes('/vendor/als-web/src/') && !id.includes('/packages/subject-fpp/src/arms/')) || !source.includes('/assets/')) return
+        if ((!id.includes('/vendor/als-web/src/') && !id.includes('/packages/subject/src/arms/')) || !source.includes('/assets/')) return
         return source.replace(/(['"`])\/assets\//g, (_, quote) => `${quote}${base}assets/`)
       },
     },

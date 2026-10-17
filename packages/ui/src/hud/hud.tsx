@@ -120,6 +120,16 @@ export function Actions({ items }: { items: Array<{ id: string; label: string; d
   return <div className="hud-actions">{items.map(item => <button key={item.id} type="button" disabled={item.disabled} onClick={event => { event.stopPropagation(); item.onPress() }} onPointerDown={event => event.stopPropagation()}>{item.label}</button>)}</div>
 }
 
+export type MenuItem = { id: string; label: string; onPress: () => void }
+
+export function Menu({ title, detail, items, root }: { title: string; detail?: string; items: MenuItem[]; root?: (element: HTMLDivElement | null) => void }) {
+  return <div ref={root} className="hud-menu" role="dialog" aria-label={title}>
+    <strong>{title}</strong>
+    {detail && <span>{detail}</span>}
+    <div>{items.map(item => <button key={item.id} type="button" onClick={event => { event.stopPropagation(); item.onPress() }}>{item.label}</button>)}</div>
+  </div>
+}
+
 export function Status({ label, value, tone }: { label: string; value: string; tone?: 'alert' }) {
   return <div className={`hud-status${tone ? ` hud-status--${tone}` : ''}`}><span>{label}</span><strong>{value}</strong></div>
 }

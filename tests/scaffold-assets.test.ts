@@ -43,7 +43,7 @@ it('ships MIT ALS assets alongside game manifests without replacing game overrid
   const scratch = mkdtempSync(path.join(tmpdir(), 'blacksite-public-'));
   try {
     const assets = path.join(scratch, 'vendor/blacksite/vendor/als-web/public/assets');
-    const actionAssets = path.join(scratch, 'vendor/blacksite/packages/subject-fpp/assets');
+    const actionAssets = path.join(scratch, 'vendor/blacksite/packages/subject/assets');
     const output = path.join(scratch, 'dist/assets');
     mkdirSync(assets, { recursive: true });
     mkdirSync(actionAssets, { recursive: true });
@@ -80,7 +80,7 @@ it('serves and builds site assets under its base path from an explicit engine ch
     const engine = path.join(scratch, 'engine');
     const site = path.join(scratch, 'site');
     const alsAssets = path.join(engine, 'vendor/als-web/public/assets');
-    const actionAssets = path.join(engine, 'packages/subject-fpp/assets');
+    const actionAssets = path.join(engine, 'packages/subject/assets');
     const publicAssets = path.join(site, 'public/assets');
     for (const directory of [alsAssets, actionAssets, publicAssets]) mkdirSync(directory, { recursive: true });
     writeFileSync(path.join(alsAssets, 'skm-als.glb'), 'MIT mannequin');

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { applyCameraPose, exposeCheck, sampleView, type CameraPose, type FeelModel, type PlayerSample } from '@blacksite/check'
+import { applyCameraPose, exposeCheck, sampleView, type CameraPose, type CheckCharacter, type FeelModel, type PlayerSample } from '@blacksite/check'
 import { BUDGET, FEEL } from './model'
 import { sound } from './sound'
 import { bookmarks } from './yard'
 
 const checkFeel: FeelModel = { moveSpeed: FEEL.moveSpeed, sprintSpeed: FEEL.sprintSpeed, timeToTopSpeed: FEEL.timeToTopSpeed, jumpApex: FEEL.jumpApex, tolerance: FEEL.tolerance }
 
-export function CheckProbe({ player, ready, reset, onCameraOverride, feel = checkFeel, priority = 0.5, viewmodel }: {
+export function CheckProbe({ player, ready, reset, onCameraOverride, feel = checkFeel, priority = 0.5, viewmodel, character }: {
   player: () => PlayerSample | null
   viewmodel?: () => readonly number[]
   ready: () => boolean
@@ -15,6 +15,7 @@ export function CheckProbe({ player, ready, reset, onCameraOverride, feel = chec
   onCameraOverride?: (active: boolean) => void
   feel?: FeelModel
   priority?: number
+  character?: CheckCharacter
 }) {
   const camera = useThree(state => state.camera)
   const size = useThree(state => state.size)
@@ -35,7 +36,8 @@ export function CheckProbe({ player, ready, reset, onCameraOverride, feel = chec
     scripts: { feelStart: async () => latest.current.reset?.() },
     input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
     model: { feel, budget: BUDGET },
-  }), [camera, feel])
+    character,
+  }), [camera, feel, character])
   useEffect(() => () => { latest.current.onCameraOverride?.(false); check.dispose() }, [check])
   useFrame(() => {
     if (!check.probe.ready && latest.current.ready()) {

@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useRapier, type RapierCollider } from '@react-three/rapier'
 import * as THREE from 'three'
 import { FEEL, createMotor, stepMotor, type Motor } from './model'
-import { held, take, value } from './input'
+import { PLAY, held, input, take, value } from './input'
 import { sound } from './sound'
 import { surfaceAt, yard } from './yard'
 
@@ -55,6 +55,7 @@ export function WalkerBody({ walker, view = 'eye' }: { walker: Walker; view?: 'e
     return { collider, controller }
   }, [world, rapier, walker])
   useEffect(() => () => { walker.collider = null; world.removeCharacterController(parts.controller); world.removeCollider(parts.collider, false) }, [world, parts, walker])
+  useEffect(() => input.actions.addContext(PLAY), [])
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05)
@@ -100,9 +101,6 @@ export function WalkerBody({ walker, view = 'eye' }: { walker: Walker; view?: 'e
       camera.position.set(walker.position.x, walker.position.y + 1.7, walker.position.z).addScaledVector(forward, -4.2)
     }
     camera.updateMatrixWorld()
-    camera.getWorldDirection(forward)
-    sound.setListener({ position: [camera.position.x, camera.position.y, camera.position.z], forward: [forward.x, forward.y, forward.z] })
-    sound.update(dt)
   })
   return null
 }

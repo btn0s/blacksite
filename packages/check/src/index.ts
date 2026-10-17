@@ -36,6 +36,15 @@ export type AudioSample = { voices: number; plays?: AudioPlay[] }
 
 export type CheckInput = { move?: string; sprint?: string; jump?: string }
 
+export type CheckMove = { forward?: number; right?: number; sprint?: boolean; jump?: boolean }
+
+export type CheckCharacter = {
+  respawn(at?: { x: number; z: number; yaw?: number }): void
+  move(input: CheckMove | null): void
+  face(point: { x: number; y: number; z: number }): void
+  bounds(): { min: readonly [number, number, number]; max: readonly [number, number, number] } | null
+}
+
 export type BlacksiteCheck = {
   version: 1
   ready: boolean
@@ -47,6 +56,7 @@ export type BlacksiteCheck = {
   view?(): ViewSample | null
   audio?(): AudioSample
   input?: CheckInput
+  character?: CheckCharacter
   model?: CheckModel
 }
 
