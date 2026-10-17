@@ -1,9 +1,9 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { featured, limits, parts, resolveLegacy, tools } from './content'
+import { featured, limits, resolveLegacy, tools } from './content'
 import { githubUrl, linkFor, rewriteHref } from './docs'
-import { examples, invocationOf, parseFrontmatter, referenceGroups, referenceNotes, steps } from './skill-meta'
+import { blockLinks, instincts, invocationOf, parseFrontmatter, referenceGroups, referenceNotes } from './skill-meta'
 import { pages } from './seo'
 import { showcases } from './showcases/registry'
 
@@ -86,6 +86,7 @@ describe('showcases', () => {
       expect(readFileSync(resolve(root, 'site/frames', `${showcase.frame}.html`), 'utf8')).toContain(`../src/showcases/${showcase.id}/`)
       if (showcase.thumbnail) expect(existsSync(resolve(root, 'site/public', showcase.thumbnail))).toBe(true)
       expect(showcase.summary.length, showcase.id).toBeGreaterThan(20)
+      expect(showcase.summary.length, showcase.id).toBeLessThanOrEqual(90)
       expect(showcase.tryThis.length, showcase.id).toBeGreaterThan(10)
     }
   })
@@ -97,13 +98,14 @@ describe('showcases', () => {
 
 describe('copy', () => {
   it('names no other engine or system codename in what visitors read', () => {
-    const text = JSON.stringify([tools.map(({ packages: _, agent: { commands: __, ...agent }, ...tool }) => ({ ...tool, agent })), featured, parts, limits, steps, examples, referenceNotes, pages, showcases.map(({ summary, tryThis, title }) => ({ summary, tryThis, title }))])
+    const text = JSON.stringify([tools.map(({ packages: _, agent: { commands: __, ...agent }, ...tool }) => ({ ...tool, agent })), featured, limits, blockLinks, instincts, referenceNotes, pages, showcases.map(({ summary, tryThis, title }) => ({ summary, tryThis, title }))])
     expect(text).not.toMatch(/Unreal|Unity|Godot|\bUE5\b|Armory|Warden|Relay|Cascade/)
-    expect(text).not.toMatch(/feel shipped|shipped game|shipped version|student project|\bSlice\b|first playable|hitch|pop-in|coyote|viewmodel|first attempt|feels thin|most agents|instead of writing|from scratch/i)
+    expect(text).not.toMatch(/feel shipped|shipped game|shipped version|student project|\bSlice\b|first playable|hitch|pop-in|coyote|viewmodel|first attempt|feels thin|most agents|instead of writing|from scratch|real numbers|numbers file|numbers down|\b26 (guides|reference)/i)
+    for (const page of ['Home', 'SkillsPage', 'ToolPage', 'GetStartedPage']) expect(readFileSync(resolve(import.meta.dirname, `pages/${page}.tsx`), 'utf8'), page).not.toMatch(/real numbers|numbers file|numbers down|first attempt|feels thin/i)
   })
 
   it('shows no status labels', () => {
-    const text = JSON.stringify([tools, featured, parts, limits, steps, examples, referenceNotes, pages, showcases.map(({ summary, tryThis, title }) => ({ summary, tryThis, title }))])
+    const text = JSON.stringify([tools, featured, limits, blockLinks, instincts, referenceNotes, pages, showcases.map(({ summary, tryThis, title }) => ({ summary, tryThis, title }))])
     expect(text).not.toMatch(/\b(usable|experimental|in progress|early version|v0|coming soon|beta|alpha)\b/i)
     for (const page of ['Home', 'ToolPage', 'SkillsPage', 'GetStartedPage']) expect(readFileSync(resolve(import.meta.dirname, `pages/${page}.tsx`), 'utf8'), page).not.toMatch(/status|Usable|Experimental|In progress|Early version/i)
   })

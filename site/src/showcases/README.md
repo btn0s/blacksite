@@ -36,7 +36,7 @@ export const showcase: Showcase = {
 ```
 
 - `tool` is the tool slug: `characters`, `destruction`, `weapons`, `multiplayer`, `ai` or `input`.
-- `summary` says what the demo is and `tryThis` gives one thing to do in it. The tool page shows both under the demo's name. Write them as plain sentences with real numbers.
+- `summary` says what the demo is and `tryThis` gives one thing to do in it. The tool page shows `summary` under the demo's name and `tryThis` as a caption under the stage; the home page shows only `summary`. Write `summary` as one plain sentence about what you do in the game, with no measurements, and keep `tryThis` short.
 - `keyboard` and `touch` fill the "?" panel in the corner of the canvas. Keep the in-canvas `Hints` to five keys or fewer.
 - `thumbnail` is a 1600×900 WebP in `site/public/thumbs/`. It is the poster before the demo starts and the image for the tool's share card. When you add or change a thumbnail, run `pnpm meta:images` to rebuild the 1200×630 share images in `site/public/og/`. The site tests fail until you do.
 - `order` sorts several showcases on one tool page. Each one gets a name, its summary, a full-width stage and a Play button.

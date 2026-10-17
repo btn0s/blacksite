@@ -20,4 +20,4 @@ const touch: Control[] = [
   { action: 'Intel: Alpha, Bravo or off', keys: ['Intel'] },
 ]
 
-export const showcase: Showcase = { tool: 'ai', title: 'Squad', summary: 'Two squads of five fight across a yard of containers, trucks and crates, taking cover, flanking and covering each other.', tryThis: 'Click a soldier to follow them, or press T for the tactical view.', thumbnail: 'thumbs/ai.webp', keyboard, touch }
+export const showcase: Showcase = { tool: 'ai', title: 'Squad', summary: 'Watch two squads take cover and flank each other across a container yard.', tryThis: 'Click a soldier to follow them, or press T for the tactical view.', thumbnail: 'thumbs/ai.webp', keyboard, touch }

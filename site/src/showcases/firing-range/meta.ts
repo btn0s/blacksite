@@ -3,8 +3,8 @@ import type { Showcase } from '../registry'
 export const showcase: Showcase = {
   tool: 'weapons',
   title: 'Firing Range',
-  summary: 'A rifle and a pistol on rigged first-person arms, with recoil, impacts and targets at marked distances.',
-  tryThis: 'Aim down sights with the right mouse button, then press F to inspect the weapon in your hands.',
+  summary: 'Shoot a rifle and a pistol at targets down a range.',
+  tryThis: 'Aim with the right mouse button, then press F to inspect the weapon.',
   thumbnail: 'thumbs/weapons.webp',
   keyboard: [
     { action: 'Fire', keys: ['Left mouse'] },

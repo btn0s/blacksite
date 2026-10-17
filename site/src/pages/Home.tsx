@@ -21,21 +21,18 @@ export function Home() {
 
     <section className="section" id="games" aria-labelledby="games-title">
       <h2 className="section-title" id="games-title">Example games</h2>
-      <p className="section-lede">Each one is built only on Blacksite’s public packages, the same way your game would be. They run in this browser; pick one to play it.</p>
       <div className="demos">
         {games.map(game => <a key={game.id} className="demo-tile" href={`${link(`tools/${game.tool}`)}#${game.id}`}>
           {game.thumbnail && <img src={asset(game.thumbnail)} alt="" width={1600} height={900} loading="lazy" />}
           <h3>{game.title}</h3>
-          <p className="demo-kind">{game.kind}</p>
+          <p className="caption">{game.kind}</p>
           <p>{game.summary}</p>
-          <p className="demo-try"><span>Try:</span> {game.tryThis}</p>
         </a>)}
       </div>
     </section>
 
     <section className="section" aria-labelledby="blocks-title">
       <h2 className="section-title" id="blocks-title">Building blocks</h2>
-      <p className="section-lede">Finished game systems the agent builds your game from. Each one has a page with a demo you can play.</p>
       <div className="block-table" role="table">
         <div className="block-row block-row--head" role="row"><span role="columnheader">Block</span><span role="columnheader">What it gives your game</span></div>
         {tools.map(tool => <div className="block-row" role="row" key={tool.slug}>

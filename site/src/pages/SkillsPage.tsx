@@ -1,47 +1,26 @@
-import { limits, parts } from '../content'
+import { Fragment } from 'react'
+import { limits } from '../content'
 import { Inline } from '../components'
 import { githubUrl, linkFor } from '../docs'
-import { base } from '../links'
-import { examples, referenceGroups, references, steps } from '../skills'
+import { asset, base, link } from '../links'
+import { showcases } from '../showcases/registry'
+import { blockLinks, checkOutput, exampleGames, instincts, referenceGroups, references } from '../skills'
 
 export function SkillsPage() {
   const byName = new Map(references.map(reference => [reference.name, reference]))
+  const games = exampleGames.flatMap(id => showcases.filter(showcase => showcase.id === id))
   return <div className="page how">
     <header className="tool-head">
       <h1 className="page-title">How it works</h1>
-      <p className="lede">Blacksite is one skill your coding agent reads, plus {references.length} reference files it opens when the work needs them. Describe a game to Claude Code, Codex or Cursor, without naming Blacksite, and the agent plans it with you, builds it from tested parts and checks that no frame takes longer than 33 ms before it sends you a link to play.</p>
+      <p className="lede">Coding agents can write a game’s code, but they don’t have a game developer’s instincts. Blacksite gives your agent four things.</p>
     </header>
 
-    <section className="section section--first" aria-labelledby="steps-title">
-      <h2 className="section-title" id="steps-title">What the agent does</h2>
-      <ol className="how-steps">
-        {steps.map(step => <li key={step.title}><h3>{step.title}</h3><p>{step.text}</p></li>)}
-      </ol>
-    </section>
-
-    <section className="section" aria-labelledby="examples-title">
-      <h2 className="section-title" id="examples-title">What the agent knows to build</h2>
-      <p className="section-lede">For each feature, the skill gives the agent the details and numbers that real games use.</p>
-      <div className="compare-table" role="table">
-        <div className="compare-row compare-row--head" role="row"><span role="columnheader">You ask for</span><span role="columnheader">What the agent builds</span></div>
-        {examples.map(example => <div className="compare-row" role="row" key={example.ask}>
-          <span role="cell">{example.ask}</span>
-          <span role="cell">{example.built}</span>
-        </div>)}
-      </div>
-    </section>
-
-    <section className="section" aria-labelledby="parts-title">
-      <h2 className="section-title" id="parts-title">What comes with it</h2>
-      <ul className="parts">
-        {parts.map(part => <li key={part.name}><a href={linkFor(base, part.path)}><Inline text={part.name} /></a> {part.text}</li>)}
-      </ul>
-    </section>
-
-    <section className="section" aria-labelledby="knows-title">
-      <h2 className="section-title" id="knows-title">What the agent knows</h2>
+    <section className="section section--first" aria-labelledby="instincts-title">
+      <h2 className="section-title" id="instincts-title">Game-dev instincts</h2>
+      <p className="section-body">Your agent learns how shipped games handle the details players notice:</p>
+      <ul className="limits instincts">{instincts.map(line => <li key={line}>{line}</li>)}</ul>
       <details className="refs">
-        <summary>All {references.length} reference files</summary>
+        <summary>All guides</summary>
         {referenceGroups.map(group => <div className="ref-group" key={group.title}>
           <h3>{group.title}</h3>
           <div className="skill-table" role="table">
@@ -53,6 +32,29 @@ export function SkillsPage() {
           </div>
         </div>)}
       </details>
+    </section>
+
+    <section className="section" aria-labelledby="blocks-title">
+      <h2 className="section-title" id="blocks-title">Building blocks</h2>
+      <p className="section-body">Finished systems for the parts that are hardest to get right: {blockLinks.map((block, index) => <Fragment key={block.tool}>{index > 0 && (index === blockLinks.length - 1 ? ' and ' : ', ')}<a href={link(`tools/${block.tool}`)}>{block.label}</a></Fragment>)}. <a href={linkFor(base, 'docs/player-templates.md')}>Starter templates</a> and a library of <a href={linkFor(base, 'assets/README.md')}>free assets</a> come with them.</p>
+    </section>
+
+    <section className="section" aria-labelledby="games-title">
+      <h2 className="section-title" id="games-title">Example games</h2>
+      <p className="section-body">Breach, Traverse and Valley are built only from these blocks. Your agent starts from the closest one.</p>
+      <div className="game-thumbs">
+        {games.map(game => <a key={game.id} href={`${link(`tools/${game.tool}`)}#${game.id}`}>
+          {game.thumbnail && <img src={asset(game.thumbnail)} alt="" width={1600} height={900} />}
+          <span>{game.title}</span>
+        </a>)}
+      </div>
+    </section>
+
+    <section className="section" aria-labelledby="checks-title">
+      <h2 className="section-title" id="checks-title">Checks</h2>
+      <p className="section-body">Your agent can’t watch or listen to its game, so <code>blacksite check</code> plays it on desktop and phone and reports what’s wrong: dropped frames, slow loading, flickering surfaces, sounds that repeat. The agent fixes them before you play.</p>
+      <pre className="check-output"><code>{checkOutput}</code></pre>
+      <p className="caption">From a real check of Breach’s production build, trimmed to one line per check.</p>
     </section>
 
     <section className="section" aria-labelledby="limits-title">

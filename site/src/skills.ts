@@ -1,7 +1,7 @@
 import sources from 'virtual:blacksite-skills'
 import { invocationOf, parseFrontmatter, referenceNotes, titleOf, type Reference, type Skill } from './skill-meta'
 
-export { examples, referenceGroups, steps } from './skill-meta'
+export { blockLinks, checkOutput, exampleGames, instincts, referenceGroups } from './skill-meta'
 
 export const skills: Skill[] = Object.entries(sources).filter(([file]) => file.endsWith('/SKILL.md')).map(([file, source]) => {
   const folder = file.split('/')[0]!

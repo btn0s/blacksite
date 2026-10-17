@@ -24,4 +24,4 @@ const touch: Control[] = [
   { action: 'First or third person', keys: ['View'] },
 ]
 
-export const showcase: Showcase = { tool: 'characters', title: 'Checkpoint', summary: 'A checkpoint in a ruined town to walk, sprint, crouch, climb and roll through, in first or third person.', tryThis: 'Press V to switch between first and third person, then X to fall limp and X again to get up.', thumbnail: 'thumbs/characters.webp', keyboard, touch }
+export const showcase: Showcase = { tool: 'characters', title: 'Checkpoint', summary: 'Walk, sprint, climb and roll through a ruined town, in first or third person.', tryThis: 'Press V to switch view, then X to fall limp and X again to get up.', thumbnail: 'thumbs/characters.webp', keyboard, touch }

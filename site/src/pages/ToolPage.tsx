@@ -28,9 +28,9 @@ export function ToolPage({ tool }: { tool: Tool }) {
       <div className="showcase-head">
         <h2 className="demo-name" id={`${demo.id}-title`}>{demo.title}</h2>
         <p>{demo.summary}</p>
-        {demo.tryThis && <p className="demo-try"><span>Try:</span> {demo.tryThis}</p>}
       </div>
       <Suspense fallback={<div className="stage stage--loading" />}><DemoFrame demo={demo} autoplay={demos.length === 1} /></Suspense>
+      {demo.tryThis && <p className="caption demo-try">Try: {demo.tryThis}</p>}
     </section>)}
 
     <section className="tool-notes" aria-labelledby="use-title">

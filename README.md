@@ -6,7 +6,7 @@ Blacksite gives your agents best practices from real games, top-quality examples
 
 Blacksite covers characters with hundreds of animations, multiplayer, buildings that collapse and squads that flank you, at 120 fps on a desktop and 60 fps on a phone. It gives the agent:
 
-- **One skill.** `SKILL.md` is what the agent reads for anything about a game. It tells the agent what each feature includes in real games: footsteps triggered by the feet, 3 to 5 samples per surface and never the same one twice; enemies with a 0.2 s reaction delay and aim that starts wide. 26 reference files hold the numbers for light, sound, movement, frame budgets and each building block.
+- **One skill.** `SKILL.md` is what the agent reads for anything about a game. It tells the agent what each feature includes in real games: footsteps triggered by the feet, 3 to 5 samples per surface and never the same one twice; enemies with a 0.2 s reaction delay and aim that starts wide. 26 guides cover how a scene is lit, how a game should sound, how fast the player moves, how to keep every frame smooth on a phone, and how to use each building block.
 - **Building blocks.** Finished game systems the agent builds your game from.
 - **Templates, an open asset library and checks.** Four starting projects, 146 open-licence assets, and `blacksite check`, which measures a running game on desktop and phone.
 - **Example games.** Breach, Traverse and Valley, each built only on the public packages.
@@ -28,12 +28,12 @@ Then describe a game to your agent. The skill loads by itself for anything game-
 | Reference | What the agent does with it |
 | --- | --- |
 | `design`, `setup`, `prototype`, `combine`, `optimise`, `ship` | The workflow: interview one question at a time, create the project, build each risky mechanic alone, join what works, bring it within budget, and deploy only when you ask. |
-| `craft`, `feel`, `sound`, `performance` | How to light, dress, tune and mix a game, with numbers, and what to cut first when a frame takes too long. |
-| `characters`, `als`, `weapons`, `ai`, `destruction`, `multiplayer`, `input` | One per building block, pointing to its guide, with its numbers, its gaps and the failures that shaped it. |
+| `craft`, `feel`, `sound`, `performance` | How to light, dress, tune and mix a game, with exact values, and what to cut first when a frame takes too long. |
+| `characters`, `als`, `weapons`, `ai`, `destruction`, `multiplayer`, `input` | One per building block, pointing to its guide, with its settings, its gaps and the failures that shaped it. |
 | `architecture`, `assets`, `catalog` | Who owns which state, how to use assets you already own, and every package and command. |
 | `verify` | `blacksite check`: how long frames take, frames over 33 ms, objects that appear late, movement speed, sounds that repeat, and screenshots to review, on desktop and phone. |
 
-The agent asks one question at a time and sizes the job, writes the real numbers into one file, lists the parts the finished scene needs, builds the risky parts alone and joins them, makes the scene move and make sound, and checks its own work before it hands you a link. It deploys only when you ask. Each step writes a file into the game project, so you can stop and resume anywhere.
+The agent asks one question at a time and sizes the job, writes the game's speeds, ranges and frame times into one file, lists the parts the finished scene needs, builds the risky parts alone and joins them, makes the scene move and make sound, and checks its own work before it hands you a link. It deploys only when you ask. Each step writes a file into the game project, so you can stop and resume anywhere.
 
 ## Building blocks
 

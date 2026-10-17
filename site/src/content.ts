@@ -145,14 +145,6 @@ export const featured = [
   { showcase: 'firing-range', kind: 'Weapons demo' },
 ]
 
-export const parts = [
-  { name: '`SKILL.md`', text: 'is what the agent reads for anything about a game. Its 26 reference files hold the numbers it builds to.', path: 'skills/blacksite/SKILL.md' },
-  { name: 'Building blocks', text: 'are finished systems for characters, weapons, enemy AI, destruction, multiplayer, open worlds and input.', path: 'packages' },
-  { name: 'Templates', text: 'are four starting projects: first person, third person, multiplayer and blank.', path: 'docs/player-templates.md' },
-  { name: 'The open asset library', text: 'has 146 textures, props, skies, plants and sounds under open licences.', path: 'assets/README.md' },
-  { name: '`blacksite check`', text: 'measures a running game on desktop and phone and saves screenshots to review.', path: 'skills/blacksite/references/verify.md' },
-]
-
 export const limits = [
   'Desktop browsers come first. Phones aim for 60 fps and leave out two lighting effects.',
   'Characters share one mannequin body. Your own rigged character isn’t supported yet.',

@@ -3,21 +3,35 @@ export type Skill = { name: string; description: string; summary: string; invoca
 export type Reference = { name: string; title: string; summary: string; path: string }
 export type ReferenceNote = { label: string; summary: string }
 
-export const steps = [
-  { title: 'It asks, then sizes the job', text: 'It asks you one question at a time, then proposes one finished space with 5 to 10 minutes of play.' },
-  { title: 'It writes the numbers down first', text: 'Speeds, damage and ranges go into one file the whole game reads, so a wrong number has one place to fix.' },
-  { title: 'It lists the parts first', text: 'You approve a list of the lights, materials, props and sounds the scene needs, and nothing goes in that isn’t on it.' },
-  { title: 'It tries the risky parts alone', text: 'A gun, a jump or an enemy is built and played on its own first, and only the ones that work go into the game.' },
-  { title: 'It adds motion and sound', text: 'Wind, dust and ambience go in, and every player action gets a sound, something to see and a camera response.' },
-  { title: 'It checks its work and sends a link', text: 'It runs the game on desktop and a slowed-down phone, fixes what fails, such as any frame over 33 ms, then sends you a link to play.' },
+export const blockLinks = [
+  { tool: 'characters', label: 'characters' },
+  { tool: 'weapons', label: 'weapons' },
+  { tool: 'ai', label: 'enemy AI' },
+  { tool: 'destruction', label: 'destruction' },
+  { tool: 'multiplayer', label: 'multiplayer' },
+  { tool: 'world', label: 'open worlds' },
+  { tool: 'input', label: 'input' },
 ]
 
-export const examples = [
-  { ask: 'Footsteps', built: '3 to 5 samples per surface, triggered by the animation’s foot plants, never the same one twice in a row, with a landing sound scaled by fall speed' },
-  { ask: 'A gun', built: 'A 600 RPM weapon with recoil the view recovers from, a kick in the arms on screen, a visible tracer on one round in three, bullet marks and dust that match the surface, and an echo that matches the room' },
-  { ask: 'Smart enemies', built: 'Vision cones and hearing, a 0.2 s reaction delay, cover, squad roles, callouts that tell you what they’re doing, and aim that starts wide and tightens' },
-  { ask: 'A jump', built: 'About 0.9 m high, still allowed 0.1 s after you run off a ledge, a press up to 0.1 s before landing still counts, a dip in the camera on landing and a landing sound' },
+export const instincts = [
+  'Footsteps follow the animation’s foot plants, and the same sample never plays twice in a row.',
+  'A flashlight lags the view slightly, and its beam shows in the haze.',
+  'Enemies react after a fifth of a second, call out what they’re doing, and their aim starts wide.',
+  'A distant explosion is heard after it’s seen, and gunfire echoes like the room it’s in.',
+  'Every action gets something to see, something to hear and a camera response.',
 ]
+
+export const exampleGames = ['breach', 'traverse', 'valley']
+
+export const checkOutput = `$ blacksite check dist
+pass  perf    phone   cpu p95 10.16 ms (budget 16.7)
+pass  hitch   phone   0 frames over 33 ms; first playable 3732 ms (budget 5000)
+pass  feel    desktop moveSpeed 3.76/3.75, sprintSpeed 6.49/6.5, jumpApex 0.9/0.9
+pass  audio   desktop voices max 18/28, 150 plays, 0 back-to-back repeats
+pass  pop     desktop 0 moving frames and 0 still views flagged of 71
+pass  zfight  desktop 0 z-fighting pixels over 8 views
+pass  critic  desktop 16 captures, 0 console errors
+checks passed`
 
 export const referenceGroups = [
   { title: 'Planning and building the game', names: ['design', 'setup', 'prototype', 'combine', 'ship'] },
@@ -39,7 +53,7 @@ export const referenceNotes: Record<string, ReferenceNote> = {
   'far-field': { label: 'Terrain to the horizon', summary: 'Terrain and forests that carry on past where you can walk, with no visible change in detail as you move.' },
   foliage: { label: 'Grass and trees', summary: 'Ground cover that is dense at your feet and thins with distance without a line, and trees that glow when the sun is behind them.' },
   wind: { label: 'Wind', summary: 'One wind that the grass, trees, particles and ambience all follow, so you see and hear a gust cross the meadow.' },
-  feel: { label: 'Movement and aim', summary: 'Speeds, acceleration, jump height, jump timing and camera numbers, which the checks then measure in the running game.' },
+  feel: { label: 'Movement and aim', summary: 'How fast the player walks and sprints, how high they jump and how the camera moves, which the checks then measure in the running game.' },
   sound: { label: 'Sound', summary: 'Room tone, sounds placed in the world, footsteps, event cues, and a reverb that tells you which room you are in.' },
   performance: { label: 'Speed targets', summary: '120 fps on desktop, 60 on phones, no frame over 33 ms, playable within 5 seconds of opening the link, and what to cut first when a frame runs over.' },
   optimise: { label: 'Fixing a slow game', summary: 'Measures, finds the slow thread, and fixes the largest cost first, keeping a change only if the frame time moves.' },
