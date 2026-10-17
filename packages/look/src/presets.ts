@@ -32,7 +32,7 @@ export const HAZE: Atmosphere = {
 };
 
 export const NATURE: Atmosphere = {
-  exposure: 1.35,
+  exposure: 1.42,
   fog: { color: [0.66, 0.72, 0.8], density: 0.00012 },
   sky: {
     zenith: [0.3, 0.45, 0.7],
@@ -42,15 +42,16 @@ export const NATURE: Atmosphere = {
   },
   sun: { color: [1, 0.86, 0.66], direction: normalize([-0.55, 0.42, 0.62]), strength: 3.2 },
   fill: { sky: [0.58, 0.61, 0.64], ground: [0.26, 0.22, 0.15], strength: 0.9 },
-  grade: { lut: null, vignette: 0.2, split: 0.05, aberration: 0, grain: 0.006, curve: 'filmic', saturation: 0.86, bloom: 0.45, tint: [1.04, 1, 0.92] },
+  grade: { lut: lut('nature'), vignette: 0.16, split: 0, aberration: 0, grain: 0.006, curve: 'filmic', bloom: 0.45 },
   physical: {
-    rayleigh: 0.6,
-    mie: 11,
+    rayleigh: 0.4,
+    mie: 30,
     mieAnisotropy: 0.8,
     ozone: 1,
     illuminance: 5.5,
     elevation: 400,
-    aerial: 3,
+    aerial: 1.1,
+    sky: 2.2,
     disk: 1,
     heightFog: { density: 0.00028, base: 120, falloff: 60, tint: [1, 0.97, 0.9] },
     clouds: { coverage: 0.37, altitude: 2.2, density: 1.05, scale: 1.4, wind: 1 },

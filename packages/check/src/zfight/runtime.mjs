@@ -59,6 +59,7 @@ export async function runZFight({ page, scratch, files, out, profile, contract, 
       bookmark: label,
       pixels: probe.pixels,
       unstable: probe.unstable,
+      edgeFlicker: probe.edgeFlicker,
       noiseFloor: floor,
       covered: round(probe.covered, 3),
       pass: probe.pixels <= floor && probe.covered >= 0.02,
@@ -69,17 +70,19 @@ export async function runZFight({ page, scratch, files, out, profile, contract, 
       depth: probe.depth,
       target: `${probe.width}x${probe.height}${probe.floats ? ' float' : ''}`,
     })
-    log(`${profile}: zfight ${label} ${probe.pixels} px (floor ${floor})`)
+    log(`${profile}: zfight ${label} ${probe.pixels} px (floor ${floor}), edge flicker ${probe.edgeFlicker} px`)
   }
   if (contract) await page.evaluate(() => window.__blacksite.camera(null))
   const total = results.reduce((sum, item) => sum + item.pixels, 0)
+  const edgeFlicker = results.reduce((sum, item) => sum + item.edgeFlicker, 0)
   return {
     pass: results.every(item => item.pass),
     total,
+    edgeFlicker,
     bookmarks: results,
     depth: results[0]?.depth ?? world.depth,
     files: results.map(item => item.file),
-    method: 'object-ID buffer per bookmark, 6 renders with sub-pixel projection jitter and 0.7 mm camera nudges through the game own materials; a pixel counts when its winning ID flips between renders and at least half of the 5x5 pixels around it flip too, which excludes silhouette edges',
+    method: 'object-ID buffer per bookmark, 6 renders with sub-pixel projection jitter and 0.7 mm camera nudges plus 5 renders with the nudges alone, through the game own materials; a pixel counts when its winning ID flips between renders, at least three quarters of the 5x5 pixels around it flip too, and it also flips under the nudges alone; pixels that pass the first two tests but only flip under jitter are edge aliasing and are reported as edgeFlicker',
   }
 }
 
@@ -89,5 +92,5 @@ export function zfightDetail(result) {
   const worst = [...result.bookmarks].sort((a, b) => b.pixels - a.pixels)[0]
   const depth = result.depth
   const where = worst && worst.pixels > 0 ? `; worst ${worst.bookmark} ${worst.pixels} px${worst.pairs[0] ? ` between ${worst.pairs[0].a?.name} and ${worst.pairs[0].b?.name}` : ''}` : ''
-  return `${result.total} z-fighting pixels over ${result.bookmarks.length} views (${depth ? `${depth.float ? 'float ' : ''}${depth.bits}-bit ${depth.orthographic ? 'orthographic' : depth.logarithmic ? 'logarithmic' : depth.reversed ? 'reversed' : 'standard'} depth, near ${round(depth.near)}` : 'depth unknown'})${where}`
+  return `${result.total} z-fighting pixels over ${result.bookmarks.length} views, ${result.edgeFlicker ?? 0} px edge flicker (${depth ? `${depth.float ? 'float ' : ''}${depth.bits}-bit ${depth.orthographic ? 'orthographic' : depth.logarithmic ? 'logarithmic' : depth.reversed ? 'reversed' : 'standard'} depth, near ${round(depth.near)}` : 'depth unknown'})${where}`
 }

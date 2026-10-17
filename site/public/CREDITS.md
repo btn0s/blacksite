@@ -537,3 +537,16 @@ Licence: https://www.usgs.gov/information-policies-and-instructions/copyrights-a
 ## Breach selected library assets
 
 Breach ships `gunfire-ak47`, `gunfire-pistol-9mm`, `step-boots-concrete`, `step-metal-ladder`, `step-wood-oga`, `step-gravel-oga`, `step-water-oga`, and `wood-planks-old` from the catalog ledger above. Gunfire and footsteps are selected, trimmed takes, normalized and encoded to Opus with AAC fallback. Old Planks 02 is resized and packed into colour, normal and ORM maps. Complete original and derivative authors, source links and licences are retained above and in Breach’s own credits.
+
+## Traverse recorded audio
+
+The Traverse example ships the following selected open-library recordings. Blacksite normalized and encoded them as Opus with AAC fallback. Traverse retains five original takes per footstep surface, decodes at 24 kHz, and divides wind and drips into three excerpts with 400 ms wrap crossfades. Landings layer a synthesized low thump under recorded footsteps.
+
+- "Dripping water loop" by qubodup (https://opengameart.org/content/dripping-water-loop), CC0 1.0.
+- "Wind Soundscape from Gem Lake" by J. Job, Rocky Mountain National Park (National Park Service) (https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm), public domain.
+- "Footsteps on different surfaces: boots" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from "footstep-concrete.wav" by swuing (https://freesound.org/s/38873/), CC BY 3.0.
+- "Footsteps on different surfaces: gravel" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from the Gravel Footsteps pack by Ali_6868 (https://freesound.org/people/Ali_6868/packs/21608/), CC0.
+- "Footsteps on different surfaces: metal" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from "fboots on aluminum ladder 01" by Eelke (https://freesound.org/s/462598/), CC BY.
+- "Footsteps on different surfaces: water" by congusbongus (https://opengameart.org/content/footsteps-on-different-surfaces), CC BY 3.0. Derived from "Water Footsteps" by EminYILDIRIM (https://freesound.org/s/608663/) and "footstep-concrete.wav" by swuing (https://freesound.org/s/38873/), CC BY.
+
+Footstep derivatives are licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). The basement drip is [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/); the National Park Service wind recording is public domain.
