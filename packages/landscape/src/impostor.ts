@@ -230,6 +230,7 @@ uniform float impostorFrames;
 uniform vec3 impostorTint;
 uniform float impostorContact;
 uniform float impostorBlur;
+uniform vec3 impostorFarTint;
 varying vec2 vImpostorGrid;
 varying vec2 vImpostorUv;
 varying vec3 vImpostorFade;
@@ -271,7 +272,7 @@ if (bsCoverage < 0.5) discard;
 #endif
 float bsDitherValue = bsDither(gl_FragCoord.xy);
 if (bsDitherValue >= min(vImpostorFade.x, vImpostorFade.y)) discard;
-diffuseColor.rgb *= bsA.rgb / max(bsCoverage, 0.001) * impostorTint;
+diffuseColor.rgb *= bsA.rgb / max(bsCoverage, 0.001) * impostorTint * mix(vec3(1.0), impostorFarTint, bsSmudge * bsSmudge);
 diffuseColor.a = bsAlpha;
 vec3 bsLocalNormal = normalize(bsN.rgb / max(bsN.a, 0.001) * 2.0 - 1.0);
 vec3 bsBaked = normalize(bsRotY(bsLocalNormal, vImpostorYaw.x, vImpostorYaw.y));
@@ -292,6 +293,7 @@ export interface ImpostorMaterialOptions {
   readonly tint?: readonly [number, number, number]
   readonly contact?: number
   readonly blur?: number
+  readonly farTint?: readonly [number, number, number]
 }
 
 export function createImpostorMaterial(options: ImpostorMaterialOptions): MeshStandardMaterial {
@@ -309,6 +311,7 @@ export function createImpostorMaterial(options: ImpostorMaterialOptions): MeshSt
     impostorTint: { value: new Vector3(...(options.tint ?? [1, 1, 1])) },
     impostorContact: { value: options.contact ?? 1 },
     impostorBlur: { value: options.blur ?? 1.25 },
+    impostorFarTint: { value: new Vector3(...(options.farTint ?? [1, 1, 1])) },
   }
   material.userData.impostor = uniforms
   patchMaterial(material, `world-impostor-${options.singleFrame ? 1 : 4}-${options.alphaToCoverage ? 'a2c' : 'cut'}`, shader => {

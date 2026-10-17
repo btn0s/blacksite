@@ -17,6 +17,7 @@ The pure `src/model.ts` owns these numbers. Distances are metres, time is second
 | Ground cover maximum / radius | 80,000 / 75 m | 24,000 / 45 m |
 | Grass / flowers / stones / litter mix | 86 / 8 / 3 / 3 percent | same |
 | Sun shadow reach / cascades | 180 m / 3 | 90 m / 2 |
+| Render pixel ratio | 1 | 2 (Valley only; the shared low tier stays at 1.25) |
 | Main-thread p95 | 8.3 ms | 16.7 ms |
 | CPU allocation: input + character | 2.0 ms | 4.0 ms |
 | CPU allocation: world selection + wind | 0.8 ms | 1.5 ms |

@@ -19,7 +19,7 @@ import { ValleyAudio } from './audio'
 import { Landscape, type BarkSet, type LandscapeHandle } from './Landscape'
 import { Probe, type ProbeApi } from './probe'
 import { outfit } from './outfit'
-import { locomotion, site, type Tier } from './model'
+import { locomotion, site, tiers, type Tier } from './model'
 import { asset, buildValley, colliderHeights, type ValleyWorld } from './world'
 import { atmosphereFor } from './atmosphere'
 
@@ -183,7 +183,7 @@ export function Game() {
   const api = useMemo<ProbeApi>(() => ({ respawn }), [respawn])
   const ready = world !== null && bark !== null && spawn !== null
   return <InputProvider runtime={runtime}><div className="hud-screen">
-    <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 55, ...depthDefaults(tier, { far: site.far }).camera, position: [0, 260, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }}
+    <Canvas shadows dpr={tiers[tier].pixelRatio ? Math.min(devicePixelRatio, tiers[tier].pixelRatio) : internalPixelRatio()} camera={{ fov: 55, ...depthDefaults(tier, { far: site.far }).camera, position: [0, 260, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }}
       onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
       {ready && <Scene shared={shared} world={world} bark={bark} tier={tier} spawn={spawn} onAction={onAction} api={api} />}
     </Canvas>

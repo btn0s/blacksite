@@ -206,7 +206,7 @@ uniform vec3 terrainViewer;
 uniform vec4 canopyParams;
 uniform vec3 canopyColor;
 uniform vec3 canopyShade;
-vec4 bsCrowns(vec2 p, uint salt, vec3 view, out float cover) {
+vec4 bsCrowns(vec2 p, uint salt, vec3 view, float fill, out float cover) {
   vec2 cell = floor(p);
   vec2 local = p - cell;
   vec2 along = view.xy;
@@ -221,7 +221,7 @@ vec4 bsCrowns(vec2 p, uint salt, vec3 view, out float cover) {
   for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
     ivec2 id = ivec2(cell) + ivec2(i, j);
     vec2 centre = vec2(float(i), float(j)) + 0.2 + 0.6 * vec2(bsHash(id, salt), bsHash(id, salt + 2u));
-    float radius = 0.4 + 0.3 * bsHash(id, salt + 4u);
+    float radius = (0.4 + 0.3 * bsHash(id, salt + 4u)) * fill;
     vec2 r = local - centre;
     vec2 e = vec2(dot(r, side), dot(r, along)) / (radius * stretch);
     float d2 = dot(e, e);
@@ -298,17 +298,24 @@ if (vTerrainCanopy > 0.001) {
   float s0 = canopyParams.w * exp2(l0);
   vec3 bsToEye = cameraPosition - vTerrainWorld;
   vec2 bsAway = -bsToEye.xz / max(length(bsToEye.xz), 1e-3);
-  vec3 bsView = vec3(bsAway, clamp(dot(bsToEye, bsBase) / max(length(bsToEye), 1e-3), 0.0, 1.0));
+  vec3 bsGeo = normalize(cross(dFdx(vTerrainWorld), dFdy(vTerrainWorld)));
+  bsGeo *= sign(bsGeo.y + 1e-4);
+  vec3 bsEye = bsToEye / max(length(bsToEye), 1e-3);
+  float bsSteep = smoothstep(0.25, 0.65, 1.0 - min(bsGeo.y, bsBase.y));
+  vec3 bsView = vec3(bsAway, clamp(max(max(dot(bsEye, bsBase), dot(bsEye, bsGeo)), mix(0.3, 0.75, bsSteep)), 0.0, 1.0));
+  float bsStand = smoothstep(0.42, 0.62, bsNoise(vTerrainWorld.xz * 0.0024, 91u));
+  float bsLight = smoothstep(0.5, 0.72, bsNoise(vTerrainWorld.xz * 0.0041, 93u)) * (1.0 - bsStand);
+  float bsFill = mix(0.78, 1.08, bsNoise(vTerrainWorld.xz * 0.0031, 95u));
   float k0;
   float k1;
 #ifdef CANOPY_DITHER
   float pick = step(fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))), lf);
-  vec4 c0 = bsCrowns(vTerrainWorld.xz / (s0 * (1.0 + pick)), pick > 0.5 ? 74u + uint(l0) * 13u : 61u + uint(l0) * 13u, bsView, k0);
+  vec4 c0 = bsCrowns(vTerrainWorld.xz / (s0 * (1.0 + pick)), pick > 0.5 ? 74u + uint(l0) * 13u : 61u + uint(l0) * 13u, bsView, bsFill, k0);
   vec4 c1 = c0;
   k1 = k0;
 #else
-  vec4 c0 = bsCrowns(vTerrainWorld.xz / s0, 61u + uint(l0) * 13u, bsView, k0);
-  vec4 c1 = bsCrowns(vTerrainWorld.xz / (s0 * 2.0), 74u + uint(l0) * 13u, bsView, k1);
+  vec4 c0 = bsCrowns(vTerrainWorld.xz / s0, 61u + uint(l0) * 13u, bsView, bsFill, k0);
+  vec4 c1 = bsCrowns(vTerrainWorld.xz / (s0 * 2.0), 74u + uint(l0) * 13u, bsView, bsFill, k1);
 #endif
   vec3 lump = normalize(mix(c0.xyz, c1.xyz, lf));
   float top = mix(k0, k1, lf);
@@ -322,10 +329,11 @@ if (vTerrainCanopy > 0.001) {
   sunSide = smoothstep(-0.25, 0.55, dot(normalize((viewMatrix * vec4(lump, 0.0)).xyz), directionalLights[0].direction));
 #endif
   float crownAo = mix(0.52 - 0.48 * relief, mix(0.16, 1.0, smoothstep(0.0, 0.75, rim)) * mix(0.28, 1.0, sunSide), covered);
-  vec3 cellAlbedo = mix(canopyShade, canopyColor * (0.62 + tone * 0.76), crownAo);
-  vec3 meanAlbedo = mix(canopyShade, canopyColor * 0.95, 0.5);
+  vec3 standColor = canopyColor * mix(mix(vec3(1.0), vec3(1.22, 1.16, 0.8), bsLight), vec3(0.5, 0.68, 0.9), bsStand);
+  vec3 cellAlbedo = mix(canopyShade, standColor * (0.62 + tone * 0.76), crownAo);
+  vec3 meanAlbedo = mix(canopyShade, standColor * 0.95, 0.5 * bsFill);
   vec3 canopyAlbedo = mix(meanAlbedo, cellAlbedo, lumpFade);
-  canopyAlbedo *= 0.85 + bsMacro * 0.3;
+  canopyAlbedo *= (0.85 + bsMacro * 0.3) * mix(0.84, 1.0, smoothstep(canopyParams.y, canopyParams.z + 450.0, bsDist));
   bsAlbedo = mix(bsAlbedo, canopyAlbedo, vTerrainCanopy);
   bsWorldNormal = normalize(mix(bsWorldNormal, canopyNormal, vTerrainCanopy));
   bsRough = mix(bsRough, 0.9, vTerrainCanopy);
