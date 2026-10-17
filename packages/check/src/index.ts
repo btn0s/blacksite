@@ -28,7 +28,7 @@ export type CheckModel = { feel?: FeelModel; budget?: BudgetModel; quality?: Qua
 
 export type PlayerSample = { position: Vec3; velocity?: Vec3; grounded?: boolean }
 
-export type ViewSample = { position: Vec3; quaternion: [number, number, number, number]; fov: number }
+export type ViewSample = { position: Vec3; quaternion: [number, number, number, number]; fov: number; viewmodel?: readonly number[] }
 
 export type AudioPlay = { cue: string; sample: string }
 
@@ -70,7 +70,7 @@ type SampledCamera = {
   fov?: number
 }
 
-export function sampleView(camera: SampledCamera): ViewSample {
+export function sampleView(camera: SampledCamera, viewmodel?: readonly number[]): ViewSample {
   camera.updateWorldMatrix(true, false)
   const m = camera.matrixWorld.elements
   const sx = Math.hypot(m[0], m[1], m[2]), sy = Math.hypot(m[4], m[5], m[6]), sz = Math.hypot(m[8], m[9], m[10])
@@ -81,7 +81,7 @@ export function sampleView(camera: SampledCamera): ViewSample {
   else if (a > e && a > i) { const s = 2 * Math.sqrt(1 + a - e - i); q = [0.25 * s, (b + d) / s, (c + g) / s, (h - f) / s] }
   else if (e > i) { const s = 2 * Math.sqrt(1 + e - a - i); q = [(b + d) / s, 0.25 * s, (f + h) / s, (c - g) / s] }
   else { const s = 2 * Math.sqrt(1 + i - a - e); q = [(c + g) / s, (f + h) / s, 0.25 * s, (d - b) / s] }
-  return { position: [m[12], m[13], m[14]], quaternion: q, fov: camera.fov ?? 0 }
+  return { position: [m[12], m[13], m[14]], quaternion: q, fov: camera.fov ?? 0, ...(viewmodel ? { viewmodel: [...viewmodel] } : {}) }
 }
 
 type PoseCamera = {

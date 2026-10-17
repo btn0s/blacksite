@@ -8,9 +8,9 @@ Something you see, something you hear, and something the camera or controller do
 
 | Action | See | Hear | Feel |
 |---|---|---|---|
-| Fire | Muzzle flash light for one frame, tracer on one round in three, casing | Shot plus a room-matched tail | Recoil kick, viewmodel kick |
+| Fire | Muzzle flash light for one frame, tracer on one round in three, casing | Shot plus a room-matched tail | Recoil kick that returns, viewmodel kick, a 0.2° FOV punch |
 | Hit an enemy | Hit marker, blood or sparks by material, the enemy flinching | Impact by material, a hit tick | Short controller pulse |
-| Take damage | Direction indicator, red vignette | Impact, a grunt | Camera shake scaled to damage |
+| Take damage | Direction indicator, red vignette | Impact, a grunt | A roll away from the hit, scaled by damage |
 | Land | Dust | Land sound by surface and speed | Camera dip |
 | Explosion | Flash light for 0.1 s, fireball, smoke that hangs 5–10 s, debris with contact shadows, a scorch decal | Delayed by distance at 343 m/s, with a low-pass tail | Shake falling off with distance |
 | Low health | A red vignette that pulses with the heartbeat | Muffled audio, regeneration you can hear start | |
@@ -23,7 +23,7 @@ Something you see, something you hear, and something the camera or controller do
 | Pistol | Semi | 300 RPM | 12 / 72 | 1.35 s | 38 | 150 m | 0.002 rad |
 | Bow | Semi | 66 RPM | 1 / 30 | 0.7 s | 80 | 180 m | Projectile at 55 m/s with gravity |
 
-These are Armory's presets. Step the weapon on a fixed 1/60 s clock, so the fire rate doesn't depend on the frame rate. Recoil is a per-shot kick the view recovers from: 55% stays as climb and recovers at 28/s, the rest settles at 11/s (`feel.md`). The Firing Range scales kick by 0.7 and narrows the FOV while aiming.
+These are Armory's presets. Step the weapon on a fixed 1/60 s clock, so the fire rate doesn't depend on the frame rate. Recoil is a per-shot kick the view fully recovers from: the climb holds while firing and settles once the trigger is released, on a hands spring (`feel.md`). The Firing Range scales kick by 0.7 and narrows the FOV while aiming.
 
 Shipped shooters also have a learnable recoil pattern, spread that grows with sustained fire and movement, headshots at 2× or more, and damage falloff past an effective range. Armory's definitions take an authored `pattern` and a `spread` block (hip, aim, move and crouch cones, bloom per shot that recovers); damage is still flat on any hit, with no hit zones, armour, penetration or falloff, and there's no melee, grenades or throwables. Build those in the game.
 
@@ -33,27 +33,27 @@ Breach's tuned rifle and pistol, in `examples/breach/src/model.ts`. A starting p
 
 | Number | Rifle | Pistol |
 |---|---|---|
-| Time to aim | 0.25 s | 0.15 s |
+| Time to aim | 0.3 s | 0.26 s (lighter weapons aim faster) |
 | Aim FOV | 55° | 62° |
 | Spread, hip / aimed | 1.1° / 0.12° | 0.9° / 0.15° |
 | Spread added moving / sprinting | +1.6° / +4° | +1.2° / +3° |
 | Spread crouched | ×0.75 | ×0.8 |
 | Bloom | +0.18° a shot up to 2.2°, recovering over 0.43 s after 0.1 s | +0.35° a shot up to 1.8°, recovering over 0.3 s after 0.2 s |
 | Recoil pattern | 30 authored kicks: about 6.5° of climb, then pulls left and right, ±0.04° jitter | 8 kicks of 1.3–1.5°, alternating sideways |
-| Recoil the view recovers | 60% over 0.43 s | 85% over 0.25 s |
+| Recoil recovery | All of it; settles at 2.92/s from 0.22 s after the last shot, first shot ×1.7 | All of it; settles at 7/s, first shot ×1.2 |
 
 - **Aiming steadies the gun.** Kick is scaled by 0.75 while aiming.
 - **Sprinting costs a beat.** A 0.22 s delay before a sprinting player can fire.
 - **Headshots pay.** Hit zones multiply damage: head 4×, chest 1×, limbs 0.75×.
 - **Pools, not allocation.** Tracers travel at 520 m/s; 256 pooled decals and 48 pooled casings.
 
-## Hit confirmation and shake (proposed)
+## Hit confirmation and camera response (proposed)
 
 From Breach (`examples/breach/src/model.ts`, `game.tsx`).
 
 - **The player knows they hit.** A hit marker for 0.12 s, a kill marker for 0.32 s, larger (×1.35) and in a different colour, and a third colour for a headshot. The muzzle flash lasts 0.05 s.
 - **The target answers the hit.** Every hit on a soldier gets a marker, a flesh sound, a blood puff, a flinch, and a bark from a squadmate on a kill. The flinch lasts 0.35 s: the soldier can't fire and moves at 0.35× speed.
-- **One shake value, squared.** Shake is a single trauma value capped at 1. The camera turns by trauma² × 1.4° (roll at 0.6× of pitch), and trauma decays at exp(−9·dt). Squaring keeps small hits subtle and big ones violent. Damage adds damage ÷ 30, each shot adds 0.08, a landing over 1.5 m/s adds its speed ÷ 20. Each shot also kicks the view 0.18°, recovering in 0.08 s. A pose override (the checks) turns shake off.
+- **Springs, not noise.** Breach's random shot shake added noise on top of its authored recoil pattern. The camera answers on springs instead (`feel.md`): a shot punches the FOV 0.2° and the view follows the gun's rise and roll; a hit rolls the view away from its source by 1.2 + 0.03 × damage on a loose spring; a landing dips and rolls by fall speed. A pose override (the checks) turns all of it off.
 
 ## The HUD (proposed)
 

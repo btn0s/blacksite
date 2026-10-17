@@ -6,6 +6,7 @@ import { Look } from '@blacksite/look/r3f'
 import { autoQuality, depthDefaults, type QualityTier } from '@blacksite/look'
 import { ALS_WEAPONS, createWeaponRuntime, type QueryHit, type WeaponEvent } from '@blacksite/armory'
 import { StandaloneSubject, createStandaloneRecoil, createStandaloneTouch, type StandaloneIntent } from '@blacksite/subject-fpp'
+import { RECOIL_TUNING, createCameraFeel } from '@blacksite/subject-fpp/feel'
 import { ArmsViewmodel, FIELD_SET, VIEWMODEL, VIEWMODEL_CLIPS, VIEWMODEL_WEAPONS, createArmsState, foundTimings, portraitFov, switchSeconds, type ArmsPresentation, type ArmsRig, type ArmsState } from '@blacksite/subject-fpp/arms'
 import { exposeCheck, applyCameraPose, sampleView, type Bookmark, type CameraPose } from '@blacksite/check'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
@@ -59,6 +60,8 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
   const warmFrames = useRef(0)
   const size = useThree(state => state.size)
   const recoil = useMemo(createStandaloneRecoil, [])
+  const feel = useMemo(createCameraFeel, [])
+  const look = useMemo(() => ({ pitch: 0, yaw: 0 }), [])
   const effects = useMemo(() => createEffects(scene), [scene])
   const weapon = useMemo(() => createWeaponRuntime({ ownerId: 'player', seed: 7, definitions: rig === 'found' ? definitions.map(definition => ({ ...definition, ...foundTimings(FIELD_SET, definition.id as WeaponId) })) : definitions, initialWeaponId: 'rifle' }), [rig])
   const [presentation, setPresentation] = useState<ArmsPresentation | null>(null)
@@ -86,7 +89,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     bookmarks,
     camera(next) { override.current = next },
     player() { const position = control.current.position; return { position: [position.x, position.y, position.z], grounded: control.current.height <= 0 } },
-    view: () => sampleView(camera),
+    view: () => sampleView(camera, arms.debug.holder),
     audio: audio.sample,
     input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
     model: { feel: RANGE_FEEL, budget: RANGE_BUDGET },
@@ -197,6 +200,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
       const kick = (pistol ? 1.7 : 2.1) * (arms.aiming ? 0.7 : 1)
       recoil.pitch += event.recoil.pitch * kick
       recoil.yaw += event.recoil.yaw * kick * 1.6
+      feel.shot(arms.debug.aimAmount)
       audio.shot(pistol ? 'pistol' : 'rifle')
       effects.eject(camera, pistol)
       state.flash = 0.05
@@ -250,7 +254,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
 
   const writeIntent = (intent: StandaloneIntent, dt: number) => {
     const state = control.current
-    if (capturing.current) return state.position
+    if (capturing.current) { feel.reset(); return state.position }
     state.clock += dt
     if (commands.inspect) { commands.inspect = false; arms.inspectSequence++ }
     if (commands.reload) { commands.reload = false; state.reload = true }
@@ -268,18 +272,22 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     const nextZ = THREE.MathUtils.clamp(position.z + moveZ * speed * dt, nextX >= BOUNDS.laneMinX ? BOUNDS.minZ : BOUNDS.lineZ, BOUNDS.maxZ)
     position.set(nextX, position.y, nextZ)
     const jumping = intent.jump || commands.jump
-    if (jumping && !state.jumpHeld && state.height <= 0) state.vertical = jumpSpeed
+    if (jumping && !state.jumpHeld && state.height <= 0) { state.vertical = jumpSpeed; feel.jump() }
     state.jumpHeld = jumping
     if (state.height > 0 || state.vertical > 0) {
       state.height += state.vertical * dt - 0.5 * gravity * dt * dt
       state.vertical -= gravity * dt
-      if (state.height <= 0) { arms.landSpeed = -state.vertical; arms.landSequence++; audio.land(-state.vertical); state.height = 0; state.vertical = 0 }
+      if (state.height <= 0) { arms.landSpeed = -state.vertical; arms.landSequence++; feel.land(-state.vertical); audio.land(-state.vertical); state.height = 0; state.vertical = 0 }
     }
     position.y = eye + state.height
     const moving = Math.hypot(intent.forward, intent.right) > 0.05
     arms.speed = moving ? speed : 0
     arms.sprinting = sprinting
     arms.aiming = (state.aimHeld || commands.aim) && !sprinting
+    const grounded = state.height <= 0 && state.vertical <= 0
+    const lateral = moving ? intent.right * speed : 0
+    feel.step({ speed: arms.speed, lateral, grounded, sprinting, aim: arms.debug.aimAmount }, RANGE_MOVEMENT.worldFov, VIEWMODEL_WEAPONS[arms.weapon].aimFov, dt, arms.kick)
+    arms.motion = { forward: moving ? intent.forward * speed : 0, lateral, grounded, crouching: false, look, walk: feel.phase, bob: feel.bob }
     state.accumulated = Math.min(state.accumulated + dt, 0.1)
     while (state.accumulated >= weapon.fixedDeltaSeconds) {
       state.accumulated -= weapon.fixedDeltaSeconds
@@ -322,7 +330,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
       if (sample.weapon !== arms.weapon || sample.aiming !== arms.aiming || sample.reloading !== (arms.debug.action === 'reload') || sample.magazine !== (arms.empty ? 0 : capacity)) drill.set({ weapon: arms.weapon, aiming: arms.aiming, reloading: arms.debug.action === 'reload', capacity, magazine: arms.empty ? 0 : capacity })
     }
     const weaponId = capturing.current ? arms.weapon : drill.get().weapon
-    const fov = portraitFov(RANGE_MOVEMENT.worldFov + (VIEWMODEL_WEAPONS[weaponId].aimFov - RANGE_MOVEMENT.worldFov) * arms.debug.aimAmount, size.width / size.height)
+    const fov = portraitFov(capturing.current ? RANGE_MOVEMENT.worldFov + (VIEWMODEL_WEAPONS[weaponId].aimFov - RANGE_MOVEMENT.worldFov) * arms.debug.aimAmount : feel.fov, size.width / size.height)
     if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix() }
   })
 
@@ -337,7 +345,7 @@ function Scene({ tier, rig, worldReady, onReady }: { tier: QualityTier; rig: Com
     <primitive object={range.group} />
     <primitive object={steelSet.group} />
     <ArmsViewmodel key={rig} state={arms} rig={rig} render="external" onPresentation={setPresentation} />
-    <StandaloneSubject onIntent={writeIntent} onFire={useCallback((firing: boolean, aim: { origin: THREE.Vector3; direction: THREE.Vector3 }) => { control.current.firing = firing; control.current.aim.direction.copy(aim.direction) }, [])} onReload={useCallback(() => { control.current.reload = true }, [])} touch={touchInput} recoil={recoil} sensitivity={Math.min(1, camera.fov / RANGE_MOVEMENT.worldFov)} />
+    <StandaloneSubject onIntent={writeIntent} onFire={useCallback((firing: boolean, aim: { origin: THREE.Vector3; direction: THREE.Vector3 }) => { control.current.firing = firing; control.current.aim.direction.copy(aim.direction) }, [])} onReload={useCallback(() => { control.current.reload = true }, [])} touch={touchInput} recoil={recoil} recoilFeel={RECOIL_TUNING[arms.weapon]} pose={feel.pose} look={look} sensitivity={feel.lookScale} />
   </>
 }
 

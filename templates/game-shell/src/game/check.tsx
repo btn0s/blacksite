@@ -7,8 +7,9 @@ import { bookmarks } from './yard'
 
 const checkFeel: FeelModel = { moveSpeed: FEEL.moveSpeed, sprintSpeed: FEEL.sprintSpeed, timeToTopSpeed: FEEL.timeToTopSpeed, jumpApex: FEEL.jumpApex, tolerance: FEEL.tolerance }
 
-export function CheckProbe({ player, ready, reset, onCameraOverride, feel = checkFeel, priority = 0.5 }: {
+export function CheckProbe({ player, ready, reset, onCameraOverride, feel = checkFeel, priority = 0.5, viewmodel }: {
   player: () => PlayerSample | null
+  viewmodel?: () => readonly number[]
   ready: () => boolean
   reset?: () => void
   onCameraOverride?: (active: boolean) => void
@@ -29,7 +30,7 @@ export function CheckProbe({ player, ready, reset, onCameraOverride, feel = chec
       if (!next) { camera.clearViewOffset(); camera.updateProjectionMatrix() }
     },
     player: () => latest.current.player(),
-    view: () => sampleView(camera),
+    view: () => sampleView(camera, viewmodel?.()),
     audio: () => sound.sample(),
     scripts: { feelStart: async () => latest.current.reset?.() },
     input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },

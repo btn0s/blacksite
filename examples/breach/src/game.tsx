@@ -11,6 +11,7 @@ import { autoQuality, depthDefaults, type Atmosphere, type QualityTier } from '@
 import { ZONE } from '@blacksite/look/presets'
 import { createWeaponRuntime, type QueryHit, type WeaponEvent } from '@blacksite/armory'
 import { StandaloneSubject, createStandaloneRecoil, createStandaloneTouch, type StandaloneIntent, type StandaloneView } from '@blacksite/subject-fpp'
+import { RECOIL_TUNING, createCameraFeel } from '@blacksite/subject-fpp/feel'
 import { ArmsViewmodel, createArmsState, portraitFov, type ArmsPresentation } from '@blacksite/subject-fpp/arms'
 import type { Intent } from '@blacksite/warden'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
@@ -124,7 +125,8 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
   const effects = useMemo(() => effectsFor(scene), [scene])
   const arms = useMemo(() => { const state = createArmsState(); state.aimSeconds = WEAPONS.rifle.adsSeconds; return state }, [])
   const recoil = useMemo(createStandaloneRecoil, [])
-  const recovery = useMemo(() => ({ fraction: WEAPONS.rifle.recoveryFraction as number, seconds: WEAPONS.rifle.recoverySeconds as number }), [])
+  const feel = useMemo(createCameraFeel, [])
+  const look = useMemo(() => ({ pitch: 0, yaw: 0 }), [])
   const view = useMemo<StandaloneView>(() => ({ yaw: START.yaw, pitch: 0, reset: true }), [])
   const body = useMemo(() => createBody(START.position), [])
   const weapon = useRef(createWeaponRuntime({ ownerId: PLAYER_ID, seed: 7, definitions, initialWeaponId: 'rifle' }))
@@ -150,7 +152,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
   }, [tier, phone])
   const game = useRef({
     firing: false, reload: false, weapon: 'rifle' as WeaponId, aimHeld: false, accumulated: 0, clock: 0, flash: 0, enemyFlash: 0,
-    aim: { origin: new THREE.Vector3(), direction: new THREE.Vector3(0, 0, -1) }, health: PLAYER.health as number, lastHurt: -10, shake: 0,
+    aim: { origin: new THREE.Vector3(), direction: new THREE.Vector3(0, 0, -1) }, health: PLAYER.health as number, lastHurt: -10, crouched: false,
     phase: 'play' as 'play' | 'dead' | 'exfil', restartAt: 0, cleared: [false, false, false], exfil: false, startedAt: 0,
     shots: 0, hits: 0, kills: 0, barkAt: new Map<string, number>(), squadBarkAt: -10, subtitleId: 0, damageId: 0,
     rounds: new Map<string, number>(), down: new Set<string>(), downAt: new Map<string, number>(), laid: new Set<string>(), settled: new Map<string, number>(), dead: new Set<string>(), pushes: new Map<string, THREE.Vector3>(),
@@ -202,8 +204,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     state.drops.clear()
     arms.weapon = 'rifle'
     arms.aimSeconds = WEAPONS.rifle.adsSeconds
-    recovery.fraction = WEAPONS.rifle.recoveryFraction
-    recovery.seconds = WEAPONS.rifle.recoverySeconds
+    feel.reset()
     arms.equipSequence++
     scratch.corpses.clear()
     chips.reset()
@@ -216,7 +217,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     syncPlayer()
     squad.reset(state.seed, { ...playerState })
     hud.reset({ objective: OBJECTIVES[0]! })
-  }, [arms, body, chips, recovery, scratch, squad, view])
+  }, [arms, body, chips, feel, scratch, squad, view])
 
   useEffect(() => {
     squad.start()
@@ -300,11 +301,11 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     if (state.phase !== 'play') return
     state.health = Math.max(0, state.health - amount)
     state.lastHurt = state.clock
-    state.shake = Math.min(1, state.shake + amount / 30)
     audio.hurt(amount)
     const angle = Math.atan2(from.x - body.position.x, from.z - body.position.z)
     const facing = Math.atan2(-Math.sin(view.yaw), -Math.cos(view.yaw))
     const relative = facing - angle
+    feel.hurt(amount, Math.sin(relative))
     const now = hud.get()
     hud.set({ health: state.health, damage: [...now.damage.filter(item => item.until > state.clock), { id: ++state.damageId, angle: relative, until: state.clock + 0.9 }].slice(-4) })
     if (state.health <= 0) {
@@ -433,8 +434,6 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
       arms.weapon = event.weaponId as WeaponId
       const definition = WEAPONS[arms.weapon]
       arms.aimSeconds = definition.adsSeconds
-      recovery.fraction = definition.recoveryFraction
-      recovery.seconds = definition.recoverySeconds
       arms.equipSequence++
       audio.equip()
       return
@@ -447,7 +446,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
       const kick = arms.aiming ? 0.75 : 1
       recoil.pitch += event.recoil.pitch * kick
       recoil.yaw += event.recoil.yaw * kick
-      state.shake = Math.min(1, state.shake + 0.08)
+      feel.shot(arms.debug.aimAmount)
       audio.shot(pistol ? 'pistol' : 'rifle')
       effects.eject(camera, pistol)
       state.flash = FEEDBACK.muzzleFlashSeconds
@@ -512,11 +511,20 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     state.sprinting = events.sprinting
     const footing = footingAt(body.position.x, body.position.z)
     if (events.step) audio.footstep(footing, events.sprinting ? 1 : body.crouch > 0.5 ? 0.35 : 0.7)
-    if (events.landed > 1.5) { audio.footstep(footing, Math.min(1, events.landed / 5), true); state.shake = Math.min(1, state.shake + events.landed / 20) }
-    if (events.jumped) audio.footstep(footing, 0.5)
+    if (events.landed > 1.5) audio.footstep(footing, Math.min(1, events.landed / 5), true)
+    if (events.landed > 0) { feel.land(events.landed); arms.landSpeed = events.landed; arms.landSequence++ }
+    if (events.jumped) { audio.footstep(footing, 0.5); feel.jump() }
+    const crouched = body.crouch > 0.5
+    if (crouched !== state.crouched) { state.crouched = crouched; feel.crouch(crouched) }
     arms.speed = events.speed
     arms.sprinting = events.sprinting
     arms.aiming = playing && (state.aimHeld || commands.aim || !!drive?.aim) && !events.sprinting
+    const sinYaw = Math.sin(view.yaw), cosYaw = Math.cos(view.yaw)
+    const forward = -sinYaw * body.velocity.x - cosYaw * body.velocity.z
+    const lateral = cosYaw * body.velocity.x - sinYaw * body.velocity.z
+    const definition = WEAPONS[arms.weapon]
+    feel.step({ speed: events.speed, lateral, grounded: body.grounded, sprinting: events.sprinting, aim: arms.debug.aimAmount }, VIEW.fov, definition.adsFov, step, arms.kick)
+    arms.motion = { forward, lateral, grounded: body.grounded, crouching: crouched, look, walk: feel.phase, bob: feel.bob }
     const eye = eyePosition(body, scratch.eye)
     if (state.phase === 'dead') { state.deathTilt = Math.min(1, state.deathTilt + step * 1.6); eye.y -= state.deathTilt * (body.eye - 0.35) }
     state.accumulated = Math.min(state.accumulated + step, 0.1)
@@ -672,16 +680,9 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     const screen = hud.get()
     if (screen.subtitles.some(line => line.until <= state.clock)) hud.set({ subtitles: screen.subtitles.filter(line => line.until > state.clock) })
     if (screen.damage.some(item => item.until <= state.clock)) hud.set({ damage: screen.damage.filter(item => item.until > state.clock) })
-    if (state.shake > 0.001 && !override.current) {
-      const amount = state.shake * state.shake
-      camera.rotateX((Math.random() - 0.5) * VIEW.shake.hit * amount)
-      camera.rotateZ((Math.random() - 0.5) * VIEW.shake.hit * amount * 0.6)
-    }
     if (state.phase === 'dead') camera.rotateZ(state.deathTilt * 0.5)
-    state.shake *= Math.exp(-VIEW.shake.decay * step)
-    const definition = WEAPONS[arms.weapon]
-    const fov = portraitFov(arms.aiming ? definition.adsFov : VIEW.fov, camera.aspect)
-    if (!override.current && Math.abs(camera.fov - fov) > 0.01) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-VIEW.fovBlend * step)); camera.updateProjectionMatrix() }
+    const fov = portraitFov(feel.fov, camera.aspect)
+    if (!override.current && Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix() }
     const texel = 52 / lights.sun.shadow.mapSize.x
     const cx = Math.round(body.position.x / texel) * texel, cz = Math.round(body.position.z / texel) * texel
     lights.sun.target.position.set(cx, 0, cz)
@@ -716,8 +717,8 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
       <Soldiers roster={roster} frozen={frozen} client={squad} handles={handles} phone={phone} />
     </Physics>
     <ArmsViewmodel state={arms} render="external" onPresentation={setPresentation} />
-    <StandaloneSubject view={view} onIntent={writeIntent} onFire={useCallback((firing: boolean, aim: { origin: THREE.Vector3; direction: THREE.Vector3 }) => { game.current.firing = firing; game.current.aim.direction.copy(aim.direction) }, [])} onReload={useCallback(() => { game.current.reload = true }, [])} touch={touchInput} recoil={recoil} sensitivity={Math.min(1, camera.fov / VIEW.fov)} recoilKept={0.55} recovery={recovery} />
-    <CheckProbe driver={driver} audio={audio} ready={live} overlay={presentation} onWarmed={onFirstFrame} />
+    <StandaloneSubject view={view} onIntent={writeIntent} onFire={useCallback((firing: boolean, aim: { origin: THREE.Vector3; direction: THREE.Vector3 }) => { game.current.firing = firing; game.current.aim.direction.copy(aim.direction) }, [])} onReload={useCallback(() => { game.current.reload = true }, [])} touch={touchInput} recoil={recoil} recoilFeel={RECOIL_TUNING[arms.weapon]} pose={override.current ? undefined : feel.pose} look={look} sensitivity={feel.lookScale} />
+    <CheckProbe driver={driver} audio={audio} ready={live} overlay={presentation} onWarmed={onFirstFrame} viewmodel={() => arms.debug.holder} />
   </>
 }
 

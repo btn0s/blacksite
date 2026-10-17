@@ -21,7 +21,6 @@ All numbers live in `src/model.ts` and drive the game. Metres, seconds and degre
 | Coyote time / jump buffer | 0.1 s / 0.1 s | feel.md |
 | Capsule | radius 0.3 m, height 1.8 m standing, 1.12 m crouched; 0.45 m step | ALS |
 | Eye height | 1.63 m standing, 1.0 m crouched, smoothed at exp(−20·dt) | feel.md |
-| Landing dip | 6 cm | Tuned |
 | Sprint-out time | 0.22 s | Tuned; the delay before a sprinting player can fire |
 
 The body is our own: a capsule that slides on the level's boxes with exact ballistic gravity (the standalone first-person subject has no gravity or collision).
@@ -30,29 +29,30 @@ The body is our own: a capsule that slides on the level's boxes with exact balli
 
 | Number | Value | Source |
 | --- | --- | --- |
-| World FOV | 75° vertical, blended at 14/s | feel.md |
+| World FOV | 75° vertical; ADS eases with the viewmodel; sprint +2° and shot, jump and land punches on springs (horizontal degrees) | Subject FPP camera feel |
 | Viewmodel FOV | 56° | Subject FPP default |
-| Shot camera kick | 0.18°, decays at 9/s | Tuned visual punch on top of the pattern climb |
-| Damage camera punch | 1.4° | Tuned |
+| Shot camera kick | Camera pitch and roll follow the gun's rise and roll springs at 30% and 12% (1.8 Hz, critically damped); FOV punch +0.2° | Subject FPP gun feel |
+| Damage camera punch | Flinch roll spring (3.5 Hz, ζ 0.45), 1.2 + 0.03 per damage, away from the hit side | Subject FPP camera feel |
+| Landing | Dip spring (3.2 Hz, ζ 0.5), FOV punch −0.5° and flinch ±0.12 per m/s of impact, gun drop | Subject FPP camera and gun feel |
 
 ### Weapons (Armory definitions built by `armoryDefinitions()`)
 
 | Number | Rifle | Pistol | Source |
 | --- | --- | --- | --- |
-| Rate | 10 rounds/s (600 rpm) | 5 rounds/s cap, semi | CS:GO AK-47 `cycletime 0.1` |
+| Rate | 10 rounds/s (600 rpm) | 5 rounds/s cap, semi | Public rifle reference, 0.1 s cycle |
 | Magazine / reserve | 30 / 150 | 8 / 40 | Standard rifle and Makarov magazines |
 | Reload / empty reload | 1.73 s / 3.0 s | 2.33 s / 2.67 s | Found field set clip lengths through `foundTimings` |
 | Equip | 0.83 s | 0.83 s | Found holster plus draw, the longer direction |
-| Damage / range | 36 / 120 m | 28 / 60 m | CS:GO AK-47 36 base damage |
-| Head / chest / limb multiplier | 4 / 1 / 0.75 | same | CS:GO hitgroup multipliers |
-| ADS time | 0.25 s | 0.15 s | Typical assault rifle and pistol ADS times in modern military shooters |
+| Damage / range | 36 / 120 m | 28 / 60 m | Public rifle reference, 36 base damage |
+| Head / chest / limb multiplier | 4 / 1 / 0.75 | same | Public hit-zone reference |
+| ADS time | 0.3 s | 0.26 s | Subject FPP feel: 0.3 s scaled by heft (+35% per unit), quintic ease, out 20% faster, settle bump on arrival |
 | ADS FOV | 55° | 62° | Tuned iron-sight zoom (1.35× and 1.2×) |
 | Hip / ADS cone | 1.1° / 0.12° | 0.9° / 0.15° | Tuned so ADS is a sniper and the hip is a room-clearing shotgun |
-| Moving / crouched | +1.6° / ×0.75 | +1.2° / ×0.8 | Tuned after CS:GO's stance inaccuracy |
-| Bloom | +0.18° per shot, cap 2.2°, recovers in 0.43 s | +0.35°, cap 1.8°, 0.3 s | CS:GO AK-47 `recovery time stand` 0.43 s |
-| Spray | 30-shot authored pattern: 9 shots climb about 6.5°, then pulls left, right, left | 8-shot alternating climb of 1.3–1.5° | Shaped after the CS:GO AK-47 spray (climb then sway) |
+| Moving / crouched | +1.6° / ×0.75 | +1.2° / ×0.8 | Tuned after public stance-inaccuracy references |
+| Bloom | +0.18° per shot, cap 2.2°, recovers in 0.43 s | +0.35°, cap 1.8°, 0.3 s | Public rifle reference, 0.43 s standing recovery |
+| Spray | 30-shot authored pattern: 9 shots climb about 6.5°, then pulls left, right, left | 8-shot alternating climb of 1.3–1.5° | Shaped after a public rifle spray reference (climb then sway) |
 | Spray reset | 0.43 s without a shot | 0.3 s | Same as recovery |
-| Climb recovery | 60% of the climb returns over 0.43 s after release | 85% over 0.25 s | Tuned; Battlefield and Rainbow Six recover part of the climb |
+| Climb recovery | All of the climb returns: 0.9/s while firing, 2.92/s from 0.22 s after the last shot | 7/s | Subject FPP `RECOIL_TUNING`; the camera follows the climb through a 3.9 Hz hands spring (pistol 5.1 Hz) |
 
 Bloom recovery waits one firing interval after the last shot (0.1 s rifle, 0.2 s pistol), then recovers over 0.43 s or 0.3 s. Sustained fire therefore accumulates the authored per-shot bloom. Sprinting lowers the weapon; leaving sprint starts the 0.22 s sprint-out delay before a shot may fire. Recoil recovery follows the currently equipped weapon.
 

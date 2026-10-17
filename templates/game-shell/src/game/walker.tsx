@@ -13,6 +13,7 @@ export type Walker = {
   yaw: number
   pitch: number
   stride: number
+  lookScale: number
   collider: RapierCollider | null
   reset(): void
 }
@@ -24,6 +25,7 @@ export function createWalker(): Walker {
     yaw: 0,
     pitch: 0,
     stride: 0,
+    lookScale: 1,
     collider: null,
     reset() {
       walker.position.set(...yard.spawn)
@@ -63,8 +65,8 @@ export function WalkerBody({ walker, view = 'eye' }: { walker: Walker; view?: 'e
       center = collider.translation()
     }
     const look = value('look')
-    walker.yaw += look.x
-    walker.pitch = THREE.MathUtils.clamp(walker.pitch - look.y, -FEEL.pitchLimit, FEEL.pitchLimit)
+    walker.yaw += look.x * walker.lookScale
+    walker.pitch = THREE.MathUtils.clamp(walker.pitch - look.y * walker.lookScale, -FEEL.pitchLimit, FEEL.pitchLimit)
     const move = value('move')
     const wasGrounded = walker.motor.grounded
     const falling = walker.motor.velocity.y

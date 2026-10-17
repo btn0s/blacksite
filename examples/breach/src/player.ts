@@ -9,7 +9,6 @@ export type Body = {
   eye: number
   coyote: number
   buffer: number
-  dip: number
   stride: number
   airborne: number
   jumpHeld: boolean
@@ -19,7 +18,7 @@ export type Drive = { forward: number; right: number; yaw: number; sprint: boole
 export type BodyEvents = { step: boolean; landed: number; jumped: boolean; sprinting: boolean; speed: number }
 
 export function createBody(position: readonly [number, number, number]): Body {
-  return { position: { x: position[0], y: position[1], z: position[2] }, velocity: { x: 0, y: 0, z: 0 }, grounded: true, crouch: 0, eye: MOVE.eye, coyote: 0, buffer: 0, dip: 0, stride: 0, airborne: 0, jumpHeld: false }
+  return { position: { x: position[0], y: position[1], z: position[2] }, velocity: { x: 0, y: 0, z: 0 }, grounded: true, crouch: 0, eye: MOVE.eye, coyote: 0, buffer: 0, stride: 0, airborne: 0, jumpHeld: false }
 }
 
 export function placeBody(body: Body, position: readonly [number, number, number]) {
@@ -30,7 +29,6 @@ export function placeBody(body: Body, position: readonly [number, number, number
   body.grounded = true
   body.crouch = 0
   body.eye = MOVE.eye
-  body.dip = 0
   body.stride = 0
   body.coyote = 0
   body.buffer = 0
@@ -96,7 +94,6 @@ export function stepBody(body: Body, drive: Drive, dt: number): BodyEvents {
   if (body.position.y <= ground + 1e-3 && body.velocity.y <= 0) {
     if (!body.grounded) {
       events.landed = -body.velocity.y
-      body.dip = Math.min(1, events.landed / 6) * MOVE.landDip
     }
     body.position.y = ground
     body.velocity.y = 0
@@ -109,7 +106,6 @@ export function stepBody(body: Body, drive: Drive, dt: number): BodyEvents {
   }
   const eye = MOVE.eye + (MOVE.crouchEye - MOVE.eye) * body.crouch
   body.eye += (eye - body.eye) * (1 - Math.exp(-MOVE.eyeSmoothing * dt))
-  body.dip *= Math.exp(-10 * dt)
   const moving = Math.hypot(body.velocity.x, body.velocity.z)
   if (body.grounded && moving > 0.6) {
     body.stride += dt
@@ -123,7 +119,7 @@ export function stepBody(body: Body, drive: Drive, dt: number): BodyEvents {
 
 export function eyePosition(body: Body, out: V3) {
   out.x = body.position.x
-  out.y = body.position.y + body.eye - body.dip
+  out.y = body.position.y + body.eye
   out.z = body.position.z
   return out
 }

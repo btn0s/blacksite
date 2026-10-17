@@ -21,7 +21,7 @@ Movement, camera, aim and controls: the numbers shipped character systems use, a
 | Template walker | 1.75 m/s walk, 3.75 run, 6.5 sprint, 0.25 s to top speed, 0.9 m apex | `src/game/model.ts` |
 | Firing range | 3.1 m/s walk, 5.2 sprint, 1.8 aiming | Firing Range |
 
-Players expect **coyote time** (0.1 s after leaving a ledge) and a **jump buffer** (0.1 s before landing); the template's motor has both, the ALS character and Subject don't. Add a camera dip on landing; the walker already plays the landing sound. The standalone first-person subject has no gravity, collision or jump, which is why the `fpp` template puts it on the walker.
+Players expect **coyote time** (0.1 s after leaving a ledge) and a **jump buffer** (0.1 s before landing); the template's motor has both, the ALS character and Subject don't. Add a camera dip on landing (below); the walker already plays the landing sound. The standalone first-person subject has no gravity, collision or jump, which is why the `fpp` template puts it on the walker.
 
 ## Camera
 
@@ -30,7 +30,7 @@ Players expect **coyote time** (0.1 s after leaving a ledge) and a **jump buffer
 | First-person eye height | 1.63 m standing, 1.0 m crouched, smoothed at exp(−20·dt) |
 | World FOV, first person | 75° (35–110 allowed), Arena uses 88° on desktop |
 | Aim FOV | 58° default; rifle 50°, pistol 60° in the Firing Range |
-| FOV blend | exp(−14·dt) |
+| FOV | Hip to aim on the ADS curve, plus sprint and punch springs; summed in horizontal degrees at 16:9, then converted to vertical |
 | Viewmodel FOV | 56°, in its own pass |
 | Near plane | 0.05 m world, 0.005 m viewmodel (see `craft.md` for the depth-buffer case for 0.1 m) |
 | Mouse | 0.0022 rad per pixel × sensitivity (0.25–2, default 1) |
@@ -39,8 +39,9 @@ Players expect **coyote time** (0.1 s after leaving a ledge) and a **jump buffer
 | Gamepad look | 240°/s yaw, 90°/s pitch, radial dead zone 0.2 |
 | Third-person FOV | 90° horizontal, converted to vertical for the aspect |
 | Third-person orbit camera | 1° per pixel with no sensitivity prop; Checkpoint scales pointer events by 0.55 |
-| Aim blend in the viewmodel | 16/s; sprint blend 10/s; bob 0.006 walking, 0.012 sprinting |
-| Recoil | 55% of each kick stays as climb (recovers at 28/s), the rest settles at 11/s |
+| ADS time | 0.3 s × (1 + 0.35 × (heft − 1)): rifle 0.3 s, pistol 0.26 s, on a quintic ease. Out takes 0.8× as long. Measured to 90%: about 0.24 s in, 0.19 s out |
+| Sprint pose | A cubic Hermite over 0.26 s, raised again before the weapon can fire |
+| Recoil | Every kick returns (below) |
 
 A third-person camera has a shoulder offset, a collision-traced spring arm, lag on position but not on aim, and a narrower FOV when aiming.
 
@@ -48,11 +49,31 @@ A third-person camera has a shoulder offset, a collision-traced spring arm, lag 
 
 From Breach and Traverse (`examples/*/src/model.ts`).
 
-- **Landing dip scales with fall speed.** First person: 6 cm × min(1, landing speed ÷ 6 m/s). Third person: up to 0.12 m, critically damped at ω 9, scaling from 2 to 8 m/s of fall speed. The arms add their own dip: 0.0075 m per m/s, at most 0.04 m, on a spring (stiffness 95, damping 11).
+- **Landing dip scales with fall speed.** First person: see the springs below; the camera moves about 2 mm and the arms carry the weight. Third person: up to 0.12 m, critically damped at ω 9, scaling from 2 to 8 m/s of fall speed. The arms add their own dip: 0.0075 m per m/s, at most 0.04 m, on a spring (stiffness 95, damping 11).
 - **Crouch takes 0.2 s**, not one frame.
 - **The spring arm snaps in and eases out.** Pull the camera in within one frame to avoid a wall, and ease it back out over about 0.4 s to avoid a pop, with a 0.15 m sphere probe. No frame ever has geometry inside the near plane.
 - **A shoulder swap is a move, not a cut.** A 0.5 m shoulder offset swapped over 0.5 s, with no step over 0.12 m in one 1/60 s frame.
-- **Shake is one trauma value** shared by hits, shots and landings (`combat.md`).
+- **Hits and landings roll the view**, on the same flinch spring (`combat.md`).
+
+## Camera and weapon motion
+
+Every number below is in `@blacksite/subject-fpp/feel` (`CAMERA_FEEL`, `GUN_FEEL`, `RECOIL_TUNING`). Breach, the Firing Range and the `fpp` template all use it: `createCameraFeel` for the eye, `createAimRecoil` for the view's recoil, and the arms runtimes for the viewmodel. Springs are exact (closed form, frame-rate independent), written as frequency in Hz and damping ratio.
+
+| Motion | Value |
+|---|---|
+| Walk bob | Phase advances by distance: stride 1.15 m + 0.35 m × min(1, speed ÷ 5.9). Amplitude min(1.5, speed ÷ 4.3) × 1.25, ×1.35 sprinting, gone in ADS. Vertical 11 mm per unit on cos 2φ, lateral 12 mm on sin φ, roll 0.005 rad. Measured: 24 mm vertical at 3.75 m/s, 0.62° of roll |
+| Strafe roll | −0.006 rad per m/s of lateral speed, on a 2.6 Hz, ζ 0.8 spring; about 1.5° at a run |
+| Landing dip | A 3.2 Hz, ζ 0.5 spring kicked by 0.42 × fall speed (capped at 8 m/s), × 5 cm. Jumping lifts it, crouching drops it |
+| Flinch | Roll on a 3.5 Hz, ζ 0.45 spring × 0.02 rad: landings alternate sides, a hit rolls away from its source by 1.2 + 0.03 × damage |
+| FOV | Sprint +2° (2.2 Hz, critically damped). A punch spring (6 Hz, ζ 0.6): +0.2° a shot (halved in ADS), +2° on a jump, −0.5° × landing speed; ADS keeps 40% of it |
+| Look in ADS | Sensitivity × tan(FOV ÷ 2) ÷ tan(hip FOV ÷ 2), from the live FOV |
+| View recoil | Each kick adds to a climb and pushes a hands spring at 4.2 × √(recover ÷ 7) Hz, ζ 0.78 (light) to 0.87 (heavy). The climb settles at 0.9/s while firing; 0.22 s after the last shot it settles at the weapon's rate. The first shot of a spray kicks harder |
+| Recoil tuning | Rifle: recover 6, settle 2.92/s, first shot ×1.7. Pistol: recover 10.5, settle 7/s, first shot ×1.2. Measured on a 10-round rifle burst: 40% of the peak remains 0.5 s after release, 10% at 1 s |
+| Viewmodel recoil | Back 2.6, rise 0.8 and roll 0.7 per unit of punch; back on a 9.5 Hz, ζ 0.82 spring, rise and roll on the hands spring. ×0.72 in ADS, ×0.82 crouched, and ADS cuts the visible kick by a further 30%. The camera follows the rise by 0.3 and the roll by 0.12 on a 1.8 Hz spring. The rear sight moves about 7 mm a shot |
+| Sway | Look rate × 0.0355, soft-clamped to 0.1 rad (pitch 0.75 of that), on a 2.1 Hz, ζ 0.7 spring; the hands also reach toward the turn. ADS keeps 10%; firing tightens the grip |
+| Gun bob | A figure-eight at hip with the stride, a slower lope while sprinting, a small dip on each step in ADS; heavier weapons swing more and lag more |
+| ADS move | The gun arcs 3 cm in and settles with a small bump when it arrives |
+| Landing, viewmodel | Drops by 0.25 × fall speed (at most 1.6) on a 3 Hz, ζ 0.75 spring |
 
 ## First person
 
@@ -68,7 +89,10 @@ From Breach and Traverse (`examples/*/src/model.ts`).
 - **Frame order.** Control rotation, character, physics, pose, animation, camera, then attachments. Done the other way, held objects lag one frame behind. Physics was moved before pose and camera, and the arms attach after the final camera; the measured residual was 5.6e-15.
 - **Send gait, not speed.** Characters looked like they were in slow or fast motion because the bridge passed `desiredSpeed: 300/600`, values in cm/s, to an API in m/s and left out gait. At a real 3.75 m/s the graph picked Walking and played the walk at 2.5× instead of the run at 1.07×. The clocks were already correct, so no time multiplier was added. Send `desiredGait` (`Walking`, `Running`, `Sprinting`) and let the character pick its authored speed.
 - **Prove locomotion by foot slip.** A test actor moved at zero velocity advanced its animation clock for 3.8 s while its stride phase never changed and its foot slid over 10 m. Bound planted-foot slip instead: 3 cm per plant. Measured slip was 0.83 cm walking, 1.03 cm running and 1.78 cm sprinting.
-- **Scale look while aiming.** Multiply look sensitivity by the aim FOV over the hip FOV so the crosshair moves the same distance on screen.
+- **Scale look while aiming.** Multiply look sensitivity by tan(aim FOV ÷ 2) ÷ tan(hip FOV ÷ 2) so the crosshair moves the same distance on screen.
+- **Recoil comes back.** The Firing Range kept 96% of a burst's climb a second after release, and Breach kept 39%, because a fixed fraction of every kick was never recovered. With every kick returning, both keep about 10% at 1 s, and the player pulls down only during the burst.
+- **The camera barely moves; the arms do.** Breach's first-person landing dropped the eye 37 mm, which read as a stumble. The eye now moves about 2 mm and the viewmodel drops instead. The same goes for firing: the old springs threw the rear sight 36 mm toward the eye on every shot, and now it moves 7 mm.
+- **Measure the sight, not the holder.** A found rig's holder transform includes compensation for its authored fire clip, so it reported motion the player never saw. The capture records the rear sight in camera space.
 - **Pointer lock is optional.** Phones threw `WrongDocumentError` from an unconditional lock request, and nothing could drive a player without it, which blocked touch and Arena's bot. Skip lock on touch, catch a refused request, and give every controllable character a virtual input path (`setVirtual`, `keySubject`, `lookSubject`).
 - **Clear held input on blur.** A key held while the tab loses focus must release, or the player walks forever. Clear on disconnect and possession change too.
 - **Show the right glyphs.** Swap prompts to the last device used.
