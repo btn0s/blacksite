@@ -10,7 +10,7 @@ argument-hint: <idea>
 
 Use `$ARGUMENTS` as the idea. If it's empty, ask **What would you like to make?** and offer: a new game from an idea; continue a game; one mechanic; make an existing game look, feel or run better; ship a game; use assets you already own. Ask one question at a time and keep every choice the user makes.
 
-**Setup.** The building blocks, templates and checks come with the `blacksite` command. If it isn't installed (`blacksite doctor` fails), tell the user, and with their OK run the official installer: `curl -fsSL https://raw.githubusercontent.com/btn0s/blacksite/main/install.sh | sh`, or `irm https://raw.githubusercontent.com/btn0s/blacksite/main/install.ps1 | iex` in PowerShell on Windows. It needs Node, git and pnpm, clones Blacksite into `~/.blacksite` and puts `blacksite` on the PATH. Then continue.
+**Setup.** The building blocks, templates and checks come with the `blacksite` command. If it isn't installed (`blacksite doctor` fails), tell the user, and with their OK run the official installer with `--skip-agents`, since this skill is already installed: `curl -fsSL https://raw.githubusercontent.com/btn0s/blacksite/main/install.sh | sh -s -- --skip-agents`, or in PowerShell on Windows `& ([scriptblock]::Create((irm https://raw.githubusercontent.com/btn0s/blacksite/main/install.ps1))) '--skip-agents'`. It needs Node, git and pnpm, clones Blacksite into `~/.blacksite`, puts `blacksite` on the PATH and leaves every agent's skills alone. Then continue.
 
 ## The solved version
 

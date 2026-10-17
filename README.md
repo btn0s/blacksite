@@ -19,7 +19,7 @@ Blacksite covers characters with hundreds of animations, multiplayer, buildings 
 curl -fsSL https://raw.githubusercontent.com/btn0s/blacksite/main/install.sh | sh
 ```
 
-Then describe a game to your agent. The skill loads by itself for anything game-related; in Claude Code you can also run `/blacksite:blacksite <your idea>`. The installer clones this repository into `~/.blacksite` and puts `blacksite` on your PATH. On Windows, run [install.ps1](install.ps1) in PowerShell. An agent installing it can follow [AGENTS.md](AGENTS.md).
+Then describe a game to your agent. The skill loads by itself for anything game-related; in Claude Code you can also run `/blacksite:blacksite <your idea>`. The installer clones this repository into `~/.blacksite` and puts `blacksite` on your PATH. On Windows, run [install.ps1](install.ps1) in PowerShell. If you added the skill with `npx skills add btn0s/blacksite`, install the rest with `sh -s -- --skip-agents` at the end of the command above (or `install.ps1 --skip-agents`), so the installer doesn't register a second copy of the skill. An agent installing it can follow [AGENTS.md](AGENTS.md).
 
 ## The skill
 
