@@ -41,8 +41,8 @@ The body is our own: a capsule that slides on the level's boxes with exact balli
 | --- | --- | --- | --- |
 | Rate | 10 rounds/s (600 rpm) | 5 rounds/s cap, semi | CS:GO AK-47 `cycletime 0.1` |
 | Magazine / reserve | 30 / 150 | 8 / 40 | Standard rifle and Makarov magazines |
-| Reload | 2.43 s | 1.6 s | CS:GO AK-47 reload 2.43 s; PM tuned |
-| Equip | 0.5 s | 0.35 s | Tuned |
+| Reload / empty reload | 1.73 s / 3.0 s | 2.33 s / 2.67 s | Found field set clip lengths through `foundTimings` |
+| Equip | 0.83 s | 0.83 s | Found holster plus draw, the longer direction |
 | Damage / range | 36 / 120 m | 28 / 60 m | CS:GO AK-47 36 base damage |
 | Head / chest / limb multiplier | 4 / 1 / 0.75 | same | CS:GO hitgroup multipliers |
 | ADS time | 0.25 s | 0.15 s | Typical assault rifle and pistol ADS times in modern military shooters |

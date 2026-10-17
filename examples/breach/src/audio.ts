@@ -16,7 +16,7 @@ export type BreachAudio = {
   setListener(listener: Listener, room: RoomId): void
   shot(weapon: Weapon): void
   dry(): void
-  reload(weapon: Weapon, seconds: number): void
+  reload(weapon: Weapon, empty: boolean): void
   equip(): void
   casing(at: Point, footing: Footing): void
   impact(hit: Hit, at: Point): void
@@ -246,6 +246,8 @@ function cues(audio: BaseAudioContext): Record<string, CueDefinition> {
     'weapon.equip': widen(STARTER_CUES['weapon.equip']!),
     'weapon.reload.rifle': reloadCue('rifle', WEAPONS.rifle.reloadSeconds),
     'weapon.reload.pistol': reloadCue('pistol', WEAPONS.pistol.reloadSeconds),
+    'weapon.reload.rifle.empty': reloadCue('rifle', WEAPONS.rifle.emptyReloadSeconds),
+    'weapon.reload.pistol.empty': reloadCue('pistol', WEAPONS.pistol.emptyReloadSeconds),
     'impact.flesh': cue({ class: 'sfx', bus: 'sfx', gain: 0.9, reverbSend: 0.35, delayByDistance: true, attenuation: { near: 4, far: 85, rolloff: 0.9 } }, (p, c, s) => [
       burst(0, 'lowpass', 320 * c, 0.8, 1, 0.07 * s), burst(0, 'bandpass', 700 * c, 1.5, 0.4, 0.09 * s, 0.004), tone(0, 90 * p, 50 * p, 0.5, 0.08 * s),
     ]),
@@ -343,7 +345,6 @@ export function createBreachAudio(): BreachAudio {
   const listener: Listener = { x: 0, y: 0, z: 0, yaw: 0 }
   const blocked = new WeakMap<Vec3, { frame: number; value: boolean }>()
   const registered = new Set<string>()
-  const reloads: Record<Weapon, number> = { rifle: WEAPONS.rifle.reloadSeconds, pistol: WEAPONS.pistol.reloadSeconds }
   let context: AudioContext | null = null
   let sound: Soundscape | null = null
   let preparing: Promise<void> | null = null
@@ -456,11 +457,7 @@ export function createBreachAudio(): BreachAudio {
     },
     shot(weapon) { sound?.play(`weapon.${weapon}`) },
     dry() { sound?.play('weapon.dry') },
-    reload(weapon, seconds) {
-      if (!sound) return
-      if (reloads[weapon] !== seconds) { reloads[weapon] = seconds; sound.registerCue(`weapon.reload.${weapon}`, reloadCue(weapon, seconds)) }
-      sound.play(`weapon.reload.${weapon}`)
-    },
+    reload(weapon, empty) { sound?.play(empty ? `weapon.reload.${weapon}.empty` : `weapon.reload.${weapon}`) },
     equip() { sound?.play('weapon.equip') },
     casing(at, footing) { sound?.play(CASING[footing], { position: tuple(at) }) },
     impact(hit, at) { sound?.play(IMPACT[hit], { position: tuple(at) }) },
@@ -502,8 +499,6 @@ export function createBreachAudio(): BreachAudio {
       syllables = []
       preparing = null
       loading = null
-      reloads.rifle = WEAPONS.rifle.reloadSeconds
-      reloads.pistol = WEAPONS.pistol.reloadSeconds
       registered.clear()
       shared.sample()
     },

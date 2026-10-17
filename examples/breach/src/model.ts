@@ -1,4 +1,5 @@
 import type { WeaponDefinition } from '@blacksite/armory'
+import { FIELD_WEAPONS, foundTimings } from '@blacksite/subject-fpp/arms/model'
 
 export const DEG = Math.PI / 180
 export const SPEED_OF_SOUND = 343
@@ -73,16 +74,18 @@ const rifleKicks: Kick[] = [
 
 const pistolKicks: Kick[] = [[1.3, 0.1], [1.4, -0.15], [1.4, 0.2], [1.5, -0.2], [1.5, 0.15], [1.5, -0.1], [1.5, 0.2], [1.5, -0.2]]
 
+const FOUND = { rifle: foundTimings({ weapons: FIELD_WEAPONS }, 'rifle'), pistol: foundTimings({ weapons: FIELD_WEAPONS }, 'pistol') }
+
 export const WEAPONS = {
   rifle: {
     id: 'rifle', label: 'Rifle', roundsPerSecond: 10, magazine: 30, reserve: 150,
-    reloadSeconds: 2.43, equipSeconds: 0.5, damage: 36, range: 120,
+    ...FOUND.rifle, damage: 36, range: 120,
     adsSeconds: 0.25, adsFov: 55, kicks: rifleKicks, kickResetSeconds: 0.43, kickJitter: 0.04, recoveryFraction: 0.6, recoverySeconds: 0.43,
     spread: { hip: 1.1, aim: 0.12, move: 1.6, sprint: 4, crouch: 0.75, bloomPerShot: 0.18, bloomMax: 2.2, recoverySeconds: 0.43, recoveryDelaySeconds: 0.1 },
   },
   pistol: {
     id: 'pistol', label: 'Pistol', roundsPerSecond: 5, magazine: 8, reserve: 40,
-    reloadSeconds: 1.6, equipSeconds: 0.35, damage: 28, range: 60,
+    ...FOUND.pistol, damage: 28, range: 60,
     adsSeconds: 0.15, adsFov: 62, kicks: pistolKicks, kickResetSeconds: 0.3, kickJitter: 0.1, recoveryFraction: 0.85, recoverySeconds: 0.25,
     spread: { hip: 0.9, aim: 0.15, move: 1.2, sprint: 3, crouch: 0.8, bloomPerShot: 0.35, bloomMax: 1.8, recoverySeconds: 0.3, recoveryDelaySeconds: 0.2 },
   },
@@ -102,6 +105,7 @@ export function armoryDefinitions(): WeaponDefinition[] {
     magazineSize: weapon.magazine,
     initialReserve: weapon.reserve,
     reloadSeconds: weapon.reloadSeconds,
+    emptyReloadSeconds: weapon.emptyReloadSeconds,
     equipSeconds: weapon.equipSeconds,
     damage: weapon.damage,
     range: weapon.range,

@@ -413,7 +413,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
       audio.equip()
       return
     }
-    if (event.type === 'reload-started') { arms.reloadSequence++; audio.reload(event.weaponId as WeaponId, WEAPONS[event.weaponId as WeaponId].reloadSeconds); return }
+    if (event.type === 'reload-started') { arms.reloadSequence++; audio.reload(event.weaponId as WeaponId, arms.empty); return }
     if (event.type === 'trigger-blocked' && event.reason === 'empty') { audio.dry(); state.reload = true; return }
     if (event.type === 'shot') {
       const pistol = event.weaponId === 'pistol'
@@ -506,6 +506,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     }
     const snapshot = runtime.snapshot()
     const current = snapshot.weapons.find(entry => entry.id === snapshot.equippedWeaponId)!
+    arms.empty = current.magazine <= 0
     hud.set({
       weapon: snapshot.equippedWeaponId as WeaponId, magazine: current.magazine, reserve: current.reserve, capacity: WEAPONS[snapshot.equippedWeaponId as WeaponId].magazine,
       reloading: snapshot.status.kind === 'reloading', aiming: arms.aiming, spread: Math.min(4, snapshot.spread / DEG + (body.grounded ? 0 : 1.5)),

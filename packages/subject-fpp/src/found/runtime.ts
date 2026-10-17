@@ -161,6 +161,8 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
     up.copy(rigged.up).transformDirection(relative)
   }
 
+  let held = 0
+
   return {
     root,
     update(delta: number, worldView?: Quaternion) {
@@ -236,7 +238,8 @@ export function createFoundRuntime(assets: FoundAssets, set: FoundSet, state: Ar
       for (const clip of LOCOMOTION) rigged.actions[clip]?.setEffectiveWeight(locomotion[clip] * (1 - actionWeight))
       if (playing?.clip) rigged.actions[playing.clip]?.setEffectiveWeight(actionWeight)
       for (const entry of Object.values(weapons)) entry.holder.visible = entry === rigged
-      rigged.mixer.update(step)
+      held += step
+      if (!state.poseHold) { rigged.mixer.update(held); held = 0 }
 
       if (worldView) {
         if (hasView && step > 0) {
