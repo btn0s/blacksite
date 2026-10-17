@@ -395,6 +395,7 @@ function App() {
   }, [])
   useEffect(() => {
     const swap = (next: ComparisonRig) => {
+      commands.aim = false
       setRig(next)
       const url = new URL(location.href)
       if (next !== 'blacksite') url.searchParams.set('arms', next)
