@@ -1,6 +1,6 @@
 # First-person arms
 
-`ArmsViewmodel` from `@blacksite/subject-fpp/arms` draws a separately lit, camera-relative viewmodel after the world. Three rigs share one `ArmsState`:
+`ArmsViewmodel` from `@blacksite/subject/arms` draws a separately lit, camera-relative viewmodel after the world. Three rigs share one `ArmsState`:
 
 | `rig` | What it is | Licence |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ The found set replaced the procedural rig as the default because its authored re
 ## Use
 
 ```tsx
-import { ArmsViewmodel, createArmsState } from '@blacksite/subject-fpp/arms'
+import { ArmsViewmodel, createArmsState } from '@blacksite/subject/arms'
 
 const arms = createArmsState()
 
@@ -25,16 +25,16 @@ Keep one `ArmsState` per player. Update `weapon`, `aiming`, `speed` in metres pe
 
 Aim, firing and sprint cancel inspect smoothly. Reload and weapon switching suppress ADS until the action permits it. Animation does not authorize shots or refill magazines; Armory owns those decisions.
 
-`StandaloneSubject` accepts `touch` (`createStandaloneTouch()`), `recoil` (`createStandaloneRecoil()`) and `sensitivity`. Scale look sensitivity by aim FOV / hip FOV. It owns camera input; the arms derive sway from that finished camera pose without another mouse listener.
+The Character Controller with `views: ['arms']` keeps the `ArmsState` for you and scales look sensitivity by aim FOV / hip FOV. It owns camera input; the arms derive sway from that finished camera pose without another mouse listener.
 
 ## Found field set
 
-The set lives in `packages/subject-fpp/src/found/`. `FIELD_SET` (`sets.ts`) declares each weapon's GLB, frame ranges for `idle`, `fire`, `fireLast`, `reload`, `reloadEmpty`, `holster`, `draw` and `inspect`, the eye basis of the authored camera, a bone-local rear and front sight, eye relief, hip, sprint and pivot offsets, recoil scale and reload events. The runtime solves ADS each frame from the two sight landmarks, so the sight line lands on screen centre at any aspect. Missing clips are procedural: the rifle inspect, sprint, holster when a set has none, and walking bob. Below a 4:3 aspect `portrait.camera` moves the hip view back and up so both forearms stay in frame; ADS fades the offset to zero.
+The set lives in `packages/subject/src/found/`. `FIELD_SET` (`sets.ts`) declares each weapon's GLB, frame ranges for `idle`, `fire`, `fireLast`, `reload`, `reloadEmpty`, `holster`, `draw` and `inspect`, the eye basis of the authored camera, a bone-local rear and front sight, eye relief, hip, sprint and pivot offsets, recoil scale and reload events. The runtime solves ADS each frame from the two sight landmarks, so the sight line lands on screen centre at any aspect. Missing clips are procedural: the rifle inspect, sprint, holster when a set has none, and walking bob. Below a 4:3 aspect `portrait.camera` moves the hip view back and up so both forearms stay in frame; ADS fades the offset to zero.
 
 Gameplay must use the clip lengths. `foundTimings(FIELD_SET, weapon)` returns `reloadSeconds`, `emptyReloadSeconds` and `equipSeconds`; Armory's `emptyReloadSeconds` applies when the magazine is empty when the reload starts. Set `arms.empty` from the displayed magazine so the empty reload and last-shot clips play.
 
 ```ts
-import { FIELD_SET, foundTimings } from '@blacksite/subject-fpp/arms'
+import { FIELD_SET, foundTimings } from '@blacksite/subject/arms'
 
 const definitions = ALS_WEAPONS.map(weapon =>
   weapon.id === 'rifle' || weapon.id === 'pistol'
@@ -43,9 +43,9 @@ const definitions = ALS_WEAPONS.map(weapon =>
 )
 ```
 
-Authoritative servers import the same data without the renderer or GLB URLs: `foundTimings({ weapons: FIELD_WEAPONS }, weapon.id)` from `@blacksite/subject-fpp/arms/model` returns identical values.
+Authoritative servers import the same data without the renderer or GLB URLs: `foundTimings({ weapons: FIELD_WEAPONS }, weapon.id)` from `@blacksite/subject/arms/model` returns identical values.
 
-A replacement set must keep the same licence bar and declare the same fields; measure the sight landmarks from the weapon mesh, not from a screenshot. The bake and sleeve-dressing scripts are `packages/subject-fpp/scripts/bake-found-set.py` and `dress-viewmodel.py`.
+A replacement set must keep the same licence bar and declare the same fields; measure the sight landmarks from the weapon mesh, not from a screenshot. The bake and sleeve-dressing scripts are `packages/subject/scripts/bake-found-set.py` and `dress-viewmodel.py`.
 
 ### Migrating to the found default
 
@@ -56,9 +56,9 @@ A replacement set must keep the same licence bar and declare the same fields; me
 
 ## Procedural rig: motion model and parts list
 
-The authoritative model is `packages/subject-fpp/src/viewmodel/model.ts`; the short action curves are in `clips.ts`. Their public exports are `VIEWMODEL`, `VIEWMODEL_WEAPONS`, `VIEWMODEL_CLIPS` and `switchSeconds(to, from)`. These are Blacksite tuning values, not measurements claimed from a commercial title.
+The authoritative model is `packages/subject/src/viewmodel/model.ts`; the short action curves are in `clips.ts`. Their public exports are `VIEWMODEL`, `VIEWMODEL_WEAPONS`, `VIEWMODEL_CLIPS` and `switchSeconds(to, from)`. These are Blacksite tuning values, not measurements claimed from a commercial title.
 
-Armory's older `ALS_WEAPONS` equip timings are shorter than the procedural holster-plus-equip animation. When using `rig="blacksite"`, derive the weapon definitions from the same curves; the FPP template and Firing Range demonstrate this migration. For definitions that have one equip duration per destination, use the longer of the two source weapons:
+Armory's older `ALS_WEAPONS` equip timings are shorter than the procedural holster-plus-equip animation. When using `rig="blacksite"`, derive the weapon definitions from the same curves; the FPP template demonstrates this migration. For definitions that have one equip duration per destination, use the longer of the two source weapons:
 
 ```ts
 const definitions = ALS_WEAPONS.map(weapon =>
@@ -75,7 +75,7 @@ const definitions = ALS_WEAPONS.map(weapon =>
 )
 ```
 
-Apply these definitions on the authoritative simulation as well as the client. Servers can import the same values from `@blacksite/subject-fpp/arms/model`, which has no renderer or asset-loader imports. A multiplayer game retaining the older timings can keep `rig="als"` until both sides migrate together.
+Apply these definitions on the authoritative simulation as well as the client. Servers can import the same values from `@blacksite/subject/arms/model`, which has no renderer or asset-loader imports. A multiplayer game retaining the older timings can keep `rig="als"` until both sides migrate together.
 
 | Layer | What moves |
 | --- | --- |
@@ -90,7 +90,7 @@ Apply these definitions on the authoritative simulation as well as the client. S
 | Inspect | Two inspection angles, reversible interruption and support-hand release |
 | Land | A capped spring impulse proportional to impact speed |
 
-For any rig, the minimum visual parts are two skinned forearms with sleeves, two gloves, ten independently articulated fingers, two weapons, two detachable magazines, and a moving charging handle or slide on each weapon. Rifle and pistol have their own sight, wrist targets, elbow poles, grip poses and action curves. The Firing Range is the playable reference for all these states.
+For any rig, the minimum visual parts are two skinned forearms with sleeves, two gloves, ten independently articulated fingers, two weapons, two detachable magazines, and a moving charging handle or slide on each weapon. Rifle and pistol have their own sight, wrist targets, elbow poles, grip poses and action curves.
 
 The rifle calibration centres the front blade and pitches the model to retain a visible sight picture; the pistol uses its rear-sight target. Sight distances in the model are measured to those chosen points.
 
@@ -141,10 +141,10 @@ Owned-pack installation belongs in the user's game, through `blacksite assets se
 
 ## Verification
 
-Run the Firing Range capture harness and the standard `blacksite check` desktop and phone profiles. The capture harness pauses the animation clock and advances exact frame steps to expose the complete reload and equip, including handoffs. Its report includes model timings and contact residuals. Compare screenshots as well: zero wrist-target error cannot prove that a finger bends correctly or that a magazine is inside the hand.
+Run the standard `blacksite check` desktop and phone profiles. Compare screenshots as well: zero wrist-target error cannot prove that a finger bends correctly or that a magazine is inside the hand.
 
 Read the 1× view for framing and the 4× view for wrist deformation, finger placement, clipping, magazine contact and state transitions. Runtime tests cover the numerical model and the rig; a playtest still decides whether recoil, action weight and touch aiming feel right.
 
 ## Distribution
 
-Asset provenance and licence texts live beside the arms in `packages/subject-fpp/assets/arms/` and `packages/subject-fpp/assets/found/`. `cli/serve-assets.mjs` serves and copies them to `assets/viewmodel/CREDITS.md`, `assets/viewmodel/licenses/` and `assets/viewmodel/found/` in both the site and generated games. The pre-existing ALS option and original ALS action tracks retain their MIT notices. See `docs/viewmodel-research.md` for the Find shortlist and exclusions.
+Asset provenance and licence texts live beside the arms in `packages/subject/assets/arms/` and `packages/subject/assets/found/`. `cli/serve-assets.mjs` serves and copies them to `assets/viewmodel/CREDITS.md`, `assets/viewmodel/licenses/` and `assets/viewmodel/found/` in both the site and generated games. The pre-existing ALS option and original ALS action tracks retain their MIT notices. See `docs/viewmodel-research.md` for the Find shortlist and exclusions.

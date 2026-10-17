@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { MENU, useConsoleNavigation, useInputContext } from '@blacksite/input'
 import { Status } from '@blacksite/ui/hud'
 import { hud, useHud } from './store'
 import { FEEDBACK, PLAYER } from './model'
@@ -47,19 +48,26 @@ function Subtitles() {
   </div>
 }
 
-function Ending() {
+function Ending({ onRestart }: { onRestart: () => void }) {
+  const view = useHud('phase')
+  return view.phase === 'play' ? null : <Summary onRestart={onRestart} />
+}
+
+function Summary({ onRestart }: { onRestart: () => void }) {
   const view = useHud('phase', 'shots', 'hits', 'kills', 'time', 'restartIn')
-  if (view.phase === 'play') return null
+  const navigation = useConsoleNavigation()
+  useInputContext(MENU)
   const accuracy = view.shots ? Math.round(view.hits / view.shots * 100) : 0
   const minutes = Math.floor(view.time / 60), seconds = Math.floor(view.time % 60)
-  return <div className={`breach-ending breach-ending--${view.phase}`}>
+  return <div ref={navigation.root} className={`breach-ending breach-ending--${view.phase}`} role="dialog" aria-label="Round over">
     <strong>{view.phase === 'dead' ? 'You are down' : 'Exfiltrated'}</strong>
     <span>{view.kills} kills · {accuracy}% hits · {minutes}:{String(seconds).padStart(2, '0')}</span>
+    <button type="button" onClick={onRestart}>Restart now</button>
     <em>Restarting in {Math.max(0, Math.ceil(view.restartIn))}</em>
   </div>
 }
 
-export function Hud({ touch }: { touch: boolean }) {
+export function Hud({ touch, onRestart }: { touch: boolean; onRestart: () => void }) {
   const view = useHud('cleared', 'exfil', 'objective', 'health', 'weapon', 'reloading', 'magazine', 'reserve')
   const done = view.cleared.filter(Boolean).length
   return <div className="breach-hud">
@@ -79,6 +87,6 @@ export function Hud({ touch }: { touch: boolean }) {
       <span>{view.weapon === 'rifle' ? 'Rifle' : 'Pistol'}{view.reloading ? ' · reloading' : ''}</span>
       <strong className={view.magazine === 0 ? 'breach-low' : undefined}>{view.magazine}<small>/{view.reserve}</small></strong>
     </div>
-    <Ending />
+    <Ending onRestart={onRestart} />
   </div>
 }

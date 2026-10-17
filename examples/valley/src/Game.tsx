@@ -3,18 +3,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { CuboidCollider, HeightfieldCollider, Physics, RigidBody, type HeightfieldArgs } from '@react-three/rapier'
 import { InputProvider, makeInputDevices } from '@blacksite/input'
+import { CharacterController, CharacterOverlay, CharacterPause, useCharacterStatus, useLocalSession, type CharacterEvents, type CharacterHandle } from '@blacksite/subject'
 import { depthDefaults } from '@blacksite/look'
 import { Look } from '@blacksite/look/r3f'
 import { internalPixelRatio, isTouchDevice } from '@blacksite/look/world'
 import { BREEZE, createWind, type Wind } from '@blacksite/landscape'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
-import { Hints, Loading, Prompt, TitleCard, TouchPad, useTouch } from '@blacksite/ui/hud'
+import { Loading, TitleCard, useTouch } from '@blacksite/ui/hud'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
-import { createCharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
-import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
-import { createCommand, type Command } from './controls'
-import { Player, type Spawn } from './player'
+import { VALLEY_GLYPHS, createWalker, yawOf } from './walker'
 import { ValleyAudio } from './audio'
 import { Landscape, type BarkSet, type LandscapeHandle } from './Landscape'
 import { Probe, type ProbeApi } from './probe'
@@ -24,11 +22,6 @@ import { asset, buildValley, colliderHeights, type ValleyWorld } from './world'
 import { atmosphereFor } from './atmosphere'
 
 export type Shared = {
-  command: Command
-  pose: { current: ReturnType<typeof createCharacterPoseSample> }
-  scripted: { current: boolean }
-  touchLook: { current: { x: number; y: number } }
-  touchMove: { current: { forward: number; right: number } }
   sound: ValleyAudio
   wind: Wind
   landscape: { current: LandscapeHandle | null }
@@ -96,8 +89,7 @@ function Listener({ shared }: { shared: Shared }) {
   return null
 }
 
-function Scene({ shared, world, bark, tier, spawn, onAction, api }: { shared: Shared; world: ValleyWorld; bark: BarkSet; tier: Tier; spawn: Spawn; onAction: (action: string) => void; api: ProbeApi }) {
-  const time = useMemo(createWorldTimeState, [])
+function Scene({ shared, walker, world, bark, tier, events, api }: { shared: Shared; walker: CharacterHandle; world: ValleyWorld; bark: BarkSet; tier: Tier; events: CharacterEvents; api: ProbeApi }) {
   const [compiled, setCompiled] = useState(false)
   const done = useCallback(() => setCompiled(true), [])
   const sun = useMemo(() => new THREE.DirectionalLight(), [])
@@ -109,9 +101,9 @@ function Scene({ shared, world, bark, tier, spawn, onAction, api }: { shared: Sh
     <Landscape world={world} tier={tier} wind={shared.wind} sun={sun} bark={bark} handle={shared.landscape} />
     {compiled ? <Look atmosphere={atmosphere} quality={tier} sky fog environment sun={sun} fill={fill} onReady={onLook} /> : <Warmup onDone={done} />}
     <Physics gravity={[0, -locomotion.gravity, 0]} timeStep={locomotion.physicsStep} updatePriority={ALS_FRAME_PRIORITY.Physics}>
-      <Player command={shared.command} pose={shared.pose} time={time} audio={shared.sound} spawn={spawn} scripted={shared.scripted} touchLook={shared.touchLook} touchMove={shared.touchMove} onAction={onAction} />
+      <CharacterController controller={walker} events={events} />
       <Ground world={world} />
-      {compiled && <Probe shared={shared} world={world} api={api} />}
+      {compiled && <Probe shared={shared} walker={walker} world={world} api={api} />}
     </Physics>
     <Listener shared={shared} />
   </>
@@ -122,11 +114,6 @@ export function Game() {
   const touch = useTouch()
   const tier = useMemo(tierOf, [])
   const shared = useMemo<Shared>(() => ({
-    command: createCommand(site.spawnYaw * 180 / Math.PI),
-    pose: { current: createCharacterPoseSample() },
-    scripted: { current: false },
-    touchLook: { current: { x: 0, y: 0 } },
-    touchMove: { current: { forward: 0, right: 0 } },
     sound: new ValleyAudio(tier === 'low' ? 'phone' : 'desktop'),
     wind: createWind(BREEZE),
     landscape: { current: null },
@@ -135,8 +122,7 @@ export function Game() {
   const [world, setWorld] = useState<ValleyWorld | null>(null)
   const [bark, setBark] = useState<BarkSet | null>(null)
   const [progress, setProgress] = useState(0.04)
-  const [locked, setLocked] = useState(false)
-  const [spawn, setSpawn] = useState<Spawn | null>(null)
+  const walker = useMemo(() => world && createWalker(world.spawn, runtime), [world, runtime])
 
   useEffect(() => {
     let cancelled = false
@@ -153,51 +139,43 @@ export function Game() {
       setProgress(1)
       setBark(barkSet)
       setWorld(built)
-      setSpawn({ revision: 0, position: [built.spawn[0], built.spawn[1], built.spawn[2]], yaw: site.spawnYaw })
     })
-    const onLock = () => setLocked(document.pointerLockElement !== null)
-    document.addEventListener('pointerlockchange', onLock)
     const unlock = () => shared.sound.unlock()
     addEventListener('pointerdown', unlock)
     addEventListener('keydown', unlock)
     return () => {
       cancelled = true
-      document.removeEventListener('pointerlockchange', onLock)
       removeEventListener('pointerdown', unlock)
       removeEventListener('keydown', unlock)
       shared.sound.dispose()
     }
   }, [shared])
 
-  const respawn = useCallback((position: [number, number, number], yaw: number) => {
-    shared.command.yaw = yaw * 180 / Math.PI
-    shared.command.pitch = -8
-    shared.command.crouch = false
-    setSpawn(previous => ({ revision: (previous?.revision ?? 0) + 1, position, yaw }))
-  }, [shared])
-
-  const onAction = useCallback((action: string) => {
-    if (action === 'home' && world) respawn([world.spawn[0], world.spawn[1], world.spawn[2]], site.spawnYaw)
-  }, [respawn, world])
-
-  const api = useMemo<ProbeApi>(() => ({ respawn }), [respawn])
-  const ready = world !== null && bark !== null && spawn !== null
+  const ready = world !== null && bark !== null && walker !== null
   return <InputProvider runtime={runtime}><div className="hud-screen">
-    <Canvas shadows dpr={tiers[tier].pixelRatio ? Math.min(devicePixelRatio, tiers[tier].pixelRatio) : internalPixelRatio()} camera={{ fov: 55, ...depthDefaults(tier, { far: site.far }).camera, position: [0, 260, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }}
-      onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
-      {ready && <Scene shared={shared} world={world} bark={bark} tier={tier} spawn={spawn} onAction={onAction} api={api} />}
-    </Canvas>
+    {ready && <Valley shared={shared} walker={walker} world={world} bark={bark} tier={tier} />}
     <TitleCard title={touch ? 'Valley' : 'Valley · The High Meadow'} />
-    <Hints visible={!touch} items={[['WASD', 'Move'], ['Shift', 'Sprint'], ['Space', 'Jump'], ['R', 'Meadow']]} />
-    <Prompt text="Click to look around · walk down the path into the forest" visible={ready && !touch && !locked} />
-    {touch && ready && <TouchPad
-      onMove={(x, y) => { shared.touchMove.current.right = x; shared.touchMove.current.forward = -y }}
-      onLook={(dx, dy) => { shared.touchLook.current.x += dx; shared.touchLook.current.y += dy }}
-      onButton={(id, pressed) => {
-        if (id === 'home') { if (pressed) onAction('home'); return }
-        runtime.actions.setTouchButton(id, pressed)
-      }}
-      buttons={[{ id: 'jump', label: 'Jump' }, { id: 'crouch', label: 'Crouch' }, { id: 'home', label: 'Home' }]} />}
     <Loading title="Valley" detail={progress < 0.5 ? 'Loading the walker' : 'Growing the forest'} progress={progress} done={ready} />
   </div></InputProvider>
+}
+
+function Valley({ shared, walker, world, bark, tier }: { shared: Shared; walker: CharacterHandle; world: ValleyWorld; bark: BarkSet; tier: Tier }) {
+  const status = useCharacterStatus(walker)
+  const session = useLocalSession(walker)
+  const home = useCallback(() => walker.respawn(), [walker])
+  const respawn = useCallback((position: [number, number, number], heading: number) => walker.teleport(position, yawOf(heading)), [walker])
+  const events = useMemo<CharacterEvents>(() => ({
+    onFootstep: request => shared.sound.PlayFootstepSound(request),
+    onAction: action => { if (action === 'home') home() },
+  }), [home, shared])
+  const api = useMemo<ProbeApi>(() => ({ respawn }), [respawn])
+  return <>
+    <Canvas frameloop={session.frameloop} shadows dpr={tiers[tier].pixelRatio ? Math.min(devicePixelRatio, tiers[tier].pixelRatio) : internalPixelRatio()} camera={{ fov: 55, ...depthDefaults(tier, { far: site.far }).camera, position: [0, 260, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }}
+      onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
+      <Scene shared={shared} walker={walker} world={world} bark={bark} tier={tier} events={events} api={api} />
+    </Canvas>
+    <CharacterOverlay controller={walker} glyphs={VALLEY_GLYPHS} hints={['move', 'sprint', 'jump', 'roll', 'view', 'home']} prompt="Click to look around · walk down the path into the forest"
+      buttons={[{ id: 'jump', label: 'Jump' }, { id: 'roll', label: 'Roll' }, { id: 'crouch', label: 'Crouch' }, { id: 'home', label: 'Home' }]} />
+    {status.paused && <CharacterPause controller={walker} items={[{ id: 'home', label: 'Back to the meadow', onPress: home }]} />}
+  </>
 }

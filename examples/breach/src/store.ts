@@ -22,7 +22,6 @@ export type View = {
   exfil: boolean
   subtitles: Subtitle[]
   damage: Damage[]
-  locked: boolean
   time: number
   shots: number
   hits: number
@@ -32,7 +31,7 @@ export type View = {
 
 const initial: View = {
   phase: 'play', health: PLAYER.health, weapon: 'rifle', magazine: WEAPONS.rifle.magazine, capacity: WEAPONS.rifle.magazine, reserve: WEAPONS.rifle.reserve, reloading: false, aiming: false, spread: WEAPONS.rifle.spread.hip,
-  marker: 0, markerKind: 'hit', objective: 'Breach the works', cleared: [false, false, false], exfil: false, subtitles: [], damage: [], locked: false,
+  marker: 0, markerKind: 'hit', objective: 'Breach the works', cleared: [false, false, false], exfil: false, subtitles: [], damage: [],
   time: 0, shots: 0, hits: 0, kills: 0, restartIn: 0,
 }
 
@@ -48,7 +47,7 @@ export const hud = {
     view = { ...view, ...patch }
     for (const listener of listeners) listener()
   },
-  reset(patch: Partial<View> = {}) { view = { ...initial, locked: view.locked, ...patch }; for (const listener of listeners) listener() },
+  reset(patch: Partial<View> = {}) { view = { ...initial, ...patch }; for (const listener of listeners) listener() },
   subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
 }
 

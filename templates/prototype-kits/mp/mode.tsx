@@ -1,20 +1,40 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useFrame, type RootState } from '@react-three/fiber'
-import { MultiplayerScene, createSubject, driveSubject, pressSubject, wrapYaw, type MultiplayerShot, type MultiplayerStatus, type SubjectState } from '@blacksite/subject'
+import type { RootState } from '@react-three/fiber'
+import { ALS_WEAPONS } from '@blacksite/armory'
+import { InputProvider } from '@blacksite/input'
 import { createLoopbackRoom, type Connection } from '@blacksite/relay'
 import { createColyseusTransport } from '@blacksite/relay/colyseus'
-import type { ArmsPresentation } from '@blacksite/subject-fpp/arms'
+import { CharacterOverlay, Replication, createCharacterController, useCharacterStatus, type CharacterEvents, type ReplicationStatus } from '@blacksite/subject'
+import { FIELD_SET, VIEWMODEL_WEAPONS, foundTimings, type ArmsPresentation } from '@blacksite/subject/arms'
+import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { CheckProbe } from '../../game-shell/src/game/check'
 import { footsteps } from '../../game-shell/src/game/footsteps'
-import { PlayHud } from '../../game-shell/src/game/hud'
-import { held, take, value } from '../../game-shell/src/game/input'
-import { CHARACTER_FEEL, GAIT_SPEEDS } from '../../game-shell/src/game/model'
+import { input } from '../../game-shell/src/game/input'
+import { CHARACTER_FEEL, FEEL, GAIT_SPEEDS } from '../../game-shell/src/game/model'
 import { sound } from '../../game-shell/src/game/sound'
-import { Stage, Yard, surfacesReady, useSurfaces } from '../../game-shell/src/game/stage'
+import { Stage, surfacesReady, useSurfaces } from '../../game-shell/src/game/stage'
 import { yard } from '../../game-shell/src/game/yard'
 
-const DEGREES = 180 / Math.PI
 const relay = import.meta.env.VITE_RELAY_URL || (import.meta.env.DEV ? `${location.origin}/relay` : '')
+
+const WEAPONS = (['rifle', 'pistol'] as const).map(id => ({
+  definition: { ...ALS_WEAPONS.find(weapon => weapon.id === id)!, ...foundTimings(FIELD_SET, id) },
+  adsFov: VIEWMODEL_WEAPONS[id].aimFov,
+  adsSeconds: 0.2,
+  overlay: id === 'pistol' ? 'PistolTwoHanded' as const : 'Rifle' as const,
+}))
+
+function createPlayer() {
+  return createCharacterController({ views: ['arms', 'shoulder'], start: { position: yard.spawn, yaw: -Math.PI / 2 }, weapons: WEAPONS, gaits: GAIT_SPEEDS, fov: FEEL.fov, input })
+}
+
+const events: CharacterEvents = {
+  onFootstep: request => footsteps.PlayFootstepSound(request),
+  onWeapon(event) {
+    if (event.type === 'shot') sound.play(`weapon.${event.weaponId}`, { position: [event.origin.x, event.origin.y, event.origin.z] })
+    if (event.type === 'impact') sound.play('impact.concrete', { position: [event.hit.point.x, event.hit.point.y, event.hit.point.z], delay: true })
+  },
+}
 
 function useConnection() {
   const [joined, setJoined] = useState<{ connection: Connection; online: boolean } | null>(null)
@@ -30,48 +50,30 @@ function useConnection() {
   return joined
 }
 
-function Drive({ subject }: { subject: SubjectState }) {
-  useFrame((_, delta) => {
-    const look = value('look')
-    const command = subject.player.command
-    command.yaw = wrapYaw(command.yaw + look.x * DEGREES)
-    command.pitch = Math.max(-85, Math.min(85, command.pitch - look.y * DEGREES))
-    const move = value('move')
-    driveSubject(subject, { forward: move.y, right: move.x, sprint: held('sprint'), crouch: held('crouch'), walk: held('walk'), fire: held('fire'), aim: held('aim') })
-    for (const press of ['jump', 'reload', 'view', 'rifle', 'pistol'] as const) if (take(press)) pressSubject(subject, press)
-    sound.update(delta)
-  }, -5)
-  return null
-}
-
-export default function Mode({ onCreated, physicsProbe }: { onCreated?: (state: RootState) => void; physicsProbe?: ReactNode } = {}) {
+export default function Mode({ paused = false, onCreated, physicsProbe }: { paused?: boolean; onCreated?: (state: RootState) => void; physicsProbe?: ReactNode } = {}) {
   const joined = useConnection()
-  const subject = useMemo(() => createSubject({ cameraMode: 'switchable', spawn: yard.spawn }), [])
-  const [arms, setArms] = useState<ArmsPresentation | null>(null)
-  const [status, setStatus] = useState<MultiplayerStatus | null>(null)
+  const player = useMemo(createPlayer, [])
+  const character = useCharacterStatus(player)
+  const [presentation, setPresentation] = useState<ArmsPresentation | null>(null)
+  const [status, setStatus] = useState<ReplicationStatus | null>(null)
   const [cameraOverride, setCameraOverride] = useState(false)
   const ready = useSurfaces()
-  useEffect(() => subject.setVirtual(true), [subject])
-  const shot = (event: MultiplayerShot) => {
-    sound.play(`weapon.${subject.weapon}`, { position: [event.origin.x, event.origin.y, event.origin.z] })
-    if (event.point) sound.play('impact.concrete', { position: [event.point.x, event.point.y, event.point.z], delay: true })
-  }
-  return <>
-    <Stage physics={false} overlay={cameraOverride ? null : arms} onCreated={onCreated}>
-      <Drive subject={subject} />
-      {joined && <MultiplayerScene key={joined.connection.id} connection={joined.connection} offline={!joined.online} subject={subject} input="external" gaitSpeedOverrides={GAIT_SPEEDS} footsteps={footsteps} onArmsPresentation={setArms} onStatus={setStatus} onShot={shot} physicsProbe={physicsProbe}>
-        <Yard />
-      </MultiplayerScene>}
+  useEffect(() => player.setPaused(paused), [player, paused])
+  return <InputProvider runtime={input}>
+    <Stage physicsPriority={ALS_FRAME_PRIORITY.Physics} overlay={cameraOverride ? null : presentation} onCreated={onCreated}>
+      {joined && <Replication key={joined.connection.id} connection={joined.connection} controller={player} events={events} onPresentation={setPresentation} onStatus={setStatus} />}
       <CheckProbe
-        onCameraOverride={setCameraOverride}
+        onCameraOverride={active => { player.override = active; setCameraOverride(active) }}
         feel={CHARACTER_FEEL}
-        reset={() => subject.respawn(yard.spawn, 0)}
-        priority={-0.2}
-        ready={() => surfacesReady() && subject.frame.ready}
-        player={() => subject.frame.ready ? { position: [subject.frame.position.x, subject.frame.position.y, subject.frame.position.z], velocity: [subject.frame.velocity.x, subject.frame.velocity.y, subject.frame.velocity.z], grounded: subject.frame.grounded } : null} />
+        priority={ALS_FRAME_PRIORITY.Camera + 0.05}
+        reset={() => player.respawn()}
+        ready={() => surfacesReady() && player.als.pose.current.ready}
+        player={() => ({ position: [player.position.x, player.position.y, player.position.z], velocity: [player.velocity.x, player.velocity.y, player.velocity.z], grounded: player.grounded })}
+        character={player.check} />
+      {physicsProbe}
     </Stage>
-    {status?.view !== 'third-person' && <div className="reticle" aria-hidden="true" />}
+    {character.view === 'arms' && <div className="reticle" aria-hidden="true" />}
     <div className="room-status">{joined ? `${joined.online ? 'Online' : 'Offline'} · ${status?.players ?? 1} ${status?.players === 1 ? 'player' : 'players'} · ${status?.health ?? 100} hp` : 'Joining…'}</div>
-    <PlayHud ready={ready} hints={[['WASD', 'Move'], ['Mouse', 'Look'], ['LMB', 'Fire'], ['RMB', 'Aim'], ['R', 'Reload'], ['V', 'View'], ['1 / 2', 'Weapon'], ['Space', 'Jump']]} buttons={[{ id: 'fire', label: 'Fire' }, { id: 'aim', label: 'Aim' }, { id: 'jump', label: 'Jump' }, { id: 'reload', label: 'Reload' }, { id: 'view', label: 'View' }, { id: 'sprint', label: 'Sprint' }]} />
-  </>
+    <CharacterOverlay controller={player} visible={ready} />
+  </InputProvider>
 }

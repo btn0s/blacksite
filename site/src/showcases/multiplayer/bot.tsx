@@ -2,38 +2,39 @@ import { useEffect, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useRapier } from '@react-three/rapier'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
-import { keySubject, type MultiplayerReplica, type SubjectState } from '@blacksite/subject'
+import type { CharacterDriver, CharacterHandle, Replica } from '@blacksite/subject'
 import { ROUTE } from './arena'
 
-const wrap = (degrees: number) => ((degrees + 180) % 360 + 360) % 360 - 180
-const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ControlLeft', 'AltLeft'] as const
+const wrap = (radians: number) => Math.atan2(Math.sin(radians), Math.cos(radians))
+const yawOf = (heading: number) => -heading - Math.PI / 2
+const DEG = Math.PI / 180
 
 type Mood = 'run' | 'sprint' | 'walk' | 'crouch'
 
-export function Bot({ subject, replica, active }: { subject: SubjectState; replica: MultiplayerReplica | null; active: boolean }) {
+export function Bot({ fighter, replica, active }: { fighter: CharacterHandle; replica: Replica | null; active: boolean }) {
   const { world, rapier } = useRapier()
   const brain = useMemo(() => ({
-    waypoint: -1, mood: 'run' as Mood, moodUntil: 0, seen: 0, lostAt: 0, stuck: 0, jumpAt: 0, jumpHeld: false,
+    waypoint: -1, mood: 'run' as Mood, moodUntil: 0, seen: 0, lostAt: 0, stuck: 0, jumpAt: 0,
     strafe: 1, strafeUntil: 0, burstUntil: 0, restUntil: 0, crouchUntil: 0, error: { yaw: 0, pitch: 0 }, errorAt: 0, nextHop: 6,
   }), [])
+  const command = useMemo<CharacterDriver>(() => ({ forward: 0, right: 0, sprint: false, jump: false, fire: false, aim: false, crouch: false, walk: false }), [])
 
   useEffect(() => {
     if (!active) return
-    subject.setVirtual(true)
+    fighter.drive(command)
     return () => {
-      subject.input.fire = subject.input.aim = false
-      subject.setVirtual(false)
+      Object.assign(command, { forward: 0, right: 0, sprint: false, jump: false, fire: false, aim: false, crouch: false, walk: false })
+      fighter.drive(null)
     }
-  }, [subject, active])
+  }, [fighter, command, active])
 
   useFrame((_, rawDelta) => {
-    if (!active || !subject.frame.ready || !replica) return
+    if (!active || !fighter.als.pose.current.ready || !replica) return
     const dt = Math.min(rawDelta, 0.1)
     const now = performance.now() / 1000
-    const command = subject.player.command
-    const frame = subject.frame
-    const keys = new Set<string>()
-    const position = frame.position
+    const control = fighter.control
+    const position = fighter.position
+    const own = fighter.als.pose.current.ownerRigidBody
 
     if (brain.waypoint < 0) {
       let best = 0
@@ -52,88 +53,82 @@ export function Bot({ subject, replica, active }: { subject: SubjectState; repli
     }
 
     let target: { x: number; y: number; z: number } | null = null
+    const eye = fighter.eye
     for (const state of replica.states.values()) {
       if (state.id === replica.id || state.health <= 0) continue
-      const eye = frame.eye
       const dx = state.position.x - eye.x
       const dy = state.position.y + (state.locomotion?.stance === 'crouching' ? 0.8 : 1.25) - eye.y
       const dz = state.position.z - eye.z
       const range = Math.hypot(dx, dy, dz)
       if (range > 40 || range < 0.5) continue
       const ray = new rapier.Ray(eye, { x: dx / range, y: dy / range, z: dz / range })
-      const hit = world.castRay(ray, range, true, undefined, undefined, undefined, undefined, collider => !frame.ownerColliderHandles.has(collider.handle) && collider.parent()?.isFixed() === true)
+      const hit = world.castRay(ray, range, true, undefined, undefined, undefined, undefined, collider => collider.parent()?.handle !== own?.handle && collider.parent()?.isFixed() === true)
       if (hit && hit.timeOfImpact < range - 0.6) continue
       target = { x: dx, y: dy, z: dz }
     }
 
     const moveX = wx - position.x
     const moveZ = wz - position.z
-    let yaw = Math.atan2(moveZ, moveX) * 180 / Math.PI
+    let yaw = yawOf(Math.atan2(moveZ, moveX))
     let pitch = 0
     let engaged = false
     if (target) {
       if (!brain.seen) brain.seen = now
       brain.lostAt = now
       if (now > brain.errorAt) {
-        brain.error = { yaw: (Math.random() - 0.5) * 5, pitch: (Math.random() - 0.5) * 3 }
+        brain.error = { yaw: (Math.random() - 0.5) * 5 * DEG, pitch: (Math.random() - 0.5) * 3 * DEG }
         brain.errorAt = now + 0.45
       }
-      yaw = Math.atan2(target.z, target.x) * 180 / Math.PI + brain.error.yaw
-      pitch = Math.atan2(target.y, Math.hypot(target.x, target.z)) * 180 / Math.PI + brain.error.pitch
+      yaw = yawOf(Math.atan2(target.z, target.x)) + brain.error.yaw
+      pitch = Math.atan2(target.y, Math.hypot(target.x, target.z)) + brain.error.pitch
       engaged = now - brain.seen > 0.35
     } else if (now - brain.lostAt > 1.2) brain.seen = 0
 
-    const turn = (engaged ? 260 : 200) * dt
-    command.yaw = wrap(command.yaw + Math.max(-turn, Math.min(turn, wrap(yaw - command.yaw))))
-    command.pitch += (pitch - command.pitch) * (1 - Math.exp(-8 * dt))
+    const turn = (engaged ? 260 : 200) * DEG * dt
+    control.yaw = wrap(control.yaw + Math.max(-turn, Math.min(turn, wrap(yaw - control.yaw))))
+    control.pitch += (pitch - control.pitch) * (1 - Math.exp(-8 * dt))
 
-    const facing = command.yaw * Math.PI / 180
     const length = Math.hypot(moveX, moveZ) || 1
-    let forward = (moveX * Math.cos(facing) + moveZ * Math.sin(facing)) / length
-    let right = (-moveX * Math.sin(facing) + moveZ * Math.cos(facing)) / length
+    const sin = Math.sin(control.yaw), cos = Math.cos(control.yaw)
+    let forward = (-sin * moveX - cos * moveZ) / length
+    let right = (cos * moveX - sin * moveZ) / length
+    let crouch = false
     if (engaged) {
       if (now > brain.strafeUntil) { brain.strafe = Math.random() < 0.5 ? -1 : 1; brain.strafeUntil = now + 0.8 + Math.random() * 1.4 }
       right = right * 0.4 + brain.strafe * 0.8
       forward *= 0.5
       if (now > brain.crouchUntil + 2 && Math.random() < dt * 0.4) brain.crouchUntil = now + 1 + Math.random()
-      if (now < brain.crouchUntil) keys.add('ControlLeft')
-      subject.input.aim = true
-      const aimError = Math.abs(wrap(yaw - command.yaw))
-      if (now > brain.restUntil && aimError < 4) {
+      crouch = now < brain.crouchUntil
+      command.aim = true
+      const aimError = Math.abs(wrap(yaw - control.yaw))
+      if (now > brain.restUntil && aimError < 4 * DEG) {
         brain.burstUntil = now + 0.35 + Math.random() * 0.4
         brain.restUntil = brain.burstUntil + 0.5 + Math.random() * 0.8
       }
-      subject.input.fire = now < brain.burstUntil && aimError < 6
+      command.fire = now < brain.burstUntil && aimError < 6 * DEG
+      command.sprint = command.walk = false
     } else {
-      subject.input.aim = false
-      subject.input.fire = false
-      if (brain.mood === 'crouch') keys.add('ControlLeft')
-      if (brain.mood === 'walk') keys.add('AltLeft')
-      if (brain.mood === 'sprint' && forward > 0.8) keys.add('ShiftLeft')
+      command.aim = command.fire = false
+      crouch = brain.mood === 'crouch'
+      command.walk = brain.mood === 'walk'
+      command.sprint = brain.mood === 'sprint' && forward > 0.8
     }
-    if (forward > 0.35) keys.add('KeyW')
-    if (forward < -0.35) keys.add('KeyS')
-    if (right > 0.35) keys.add('KeyD')
-    if (right < -0.35) keys.add('KeyA')
+    const step = (value: number) => value > 0.35 ? 1 : value < -0.35 ? -1 : 0
+    command.forward = step(forward)
+    command.right = step(right)
 
-    const speed = Math.hypot(frame.velocity.x, frame.velocity.z)
-    brain.stuck = keys.size && speed < 0.6 && frame.grounded ? brain.stuck + dt : 0
+    const moving = command.forward !== 0 || command.right !== 0
+    brain.stuck = moving && fighter.speed < 0.6 && fighter.grounded ? brain.stuck + dt : 0
     const hop = brain.stuck > 0.35 || !engaged && brain.mood !== 'crouch' && now > brain.jumpAt + brain.nextHop
-    if (brain.jumpHeld) { keySubject(subject, 'Space', false); brain.jumpHeld = false }
-    else if (hop && frame.grounded && now > brain.jumpAt + 0.8) {
-      keySubject(subject, 'Space', true)
-      brain.jumpHeld = true
+    if (hop && fighter.grounded && now > brain.jumpAt + 0.8) {
+      command.jump = true
       brain.jumpAt = now
       brain.stuck = 0
       brain.nextHop = 5 + Math.random() * 6
-      keys.delete('ControlLeft')
+      crouch = false
     }
-
-    for (const code of MOVE_KEYS) {
-      const want = keys.has(code)
-      if (want !== subject.keys.has(code)) keySubject(subject, code, want)
-    }
-  }, ALS_FRAME_PRIORITY.ControlRotation - 0.2)
+    command.crouch = crouch
+  }, ALS_FRAME_PRIORITY.ControlRotation - 0.3)
 
   return null
 }

@@ -1,48 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { MOVE, jumpApex } from '../examples/breach/src/model'
+import { MOVE } from '../examples/breach/src/model'
 import { AttackBudget } from '../examples/breach/src/authority'
-import { createBody, placeBody, stepBody, type Drive } from '../examples/breach/src/player'
 import type { FromSquad, SoldierView, ToSquad } from '../examples/breach/src/protocol'
 import { SquadClient } from '../examples/breach/src/squad'
-
-const idle: Drive = { forward: 0, right: 0, yaw: 0, sprint: false, crouch: false, jump: false, aiming: false, firing: false, walk: false }
-
-describe('Breach player movement', () => {
-  it('restarts with no buffered jump or previous fall state', () => {
-    const body = createBody([0, 0, 22])
-    body.buffer = 0.09
-    body.coyote = 0.05
-    body.airborne = 2
-    placeBody(body, [0, 0, 22])
-    expect(body.buffer).toBe(0)
-    expect(body.coyote).toBe(0)
-    expect(body.airborne).toBe(0)
-  })
-
-  it('a held jump produces one ballistic jump until released', () => {
-    const body = createBody([0, 0, 22])
-    let jumps = 0
-    let apex = 0
-    for (let index = 0; index < 180; index++) {
-      if (stepBody(body, { ...idle, jump: true }, 1 / 60).jumped) jumps++
-      apex = Math.max(apex, body.position.y)
-    }
-    expect(jumps).toBe(1)
-    expect(apex).toBeCloseTo(jumpApex(), 2)
-    expect(body.grounded).toBe(true)
-    stepBody(body, idle, 1 / 60)
-    expect(stepBody(body, { ...idle, jump: true }, 1 / 60).jumped).toBe(true)
-  })
-
-  it('a standing jump remains below the corridor ceiling', () => {
-    const body = createBody([0, 0, -2.8])
-    body.position.y = 0.9
-    body.velocity.y = 4.2
-    body.grounded = false
-    for (let index = 0; index < 10; index++) stepBody(body, idle, 1 / 60)
-    expect(body.position.y + MOVE.height).toBeLessThanOrEqual(3)
-  })
-})
 
 describe('Breach overlapping encounters', () => {
   it('shares two attack slots between rooms and hands expired slots to waiting soldiers', () => {

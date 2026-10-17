@@ -1,88 +1,37 @@
-import { Suspense, useMemo, useState, type ReactNode } from 'react'
-import { useFrame, type RootState } from '@react-three/fiber'
-import { Character } from 'als-ue5-r3f/app/Character'
-import { AlsCamera } from 'als-ue5-r3f/app/AlsCamera'
-import { createCharacterPoseSample, type CharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
-import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
+import { useEffect, useMemo, type ReactNode } from 'react'
+import type { RootState } from '@react-three/fiber'
+import { InputProvider } from '@blacksite/input'
+import { CharacterController, CharacterOverlay, createCharacterController, type CharacterEvents } from '@blacksite/subject'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
-import type { AlsCharacterCodeInput } from 'als-ue5-r3f/als/AlsCharacter.hooks'
 import { CheckProbe } from '../../game-shell/src/game/check'
 import { footsteps } from '../../game-shell/src/game/footsteps'
-import { PlayHud } from '../../game-shell/src/game/hud'
-import { held, take, value } from '../../game-shell/src/game/input'
+import { input } from '../../game-shell/src/game/input'
 import { CHARACTER_FEEL, GAIT_SPEEDS } from '../../game-shell/src/game/model'
-import { sound } from '../../game-shell/src/game/sound'
 import { Stage, surfacesReady, useSurfaces } from '../../game-shell/src/game/stage'
 import { yard } from '../../game-shell/src/game/yard'
 
-const DEGREES = 180 / Math.PI
-
-function createControl() {
-  const control = { yaw: 0, pitch: 0, jumpSequence: 0 }
-  const source = (): AlsCharacterCodeInput => {
-    const move = value('move')
-    const yaw = control.yaw / DEGREES
-    const aiming = held('aim')
-    const crouch = held('crouch')
-    return {
-      active: true,
-      jumpSequence: control.jumpSequence,
-      movementDirection: { x: move.y * Math.cos(yaw) - move.x * Math.sin(yaw), z: move.y * Math.sin(yaw) + move.x * Math.cos(yaw) },
-      desiredGait: held('sprint') && !aiming && !crouch ? 'Sprinting' : held('walk') ? 'Walking' : 'Running',
-      desiredStance: crouch ? 'Crouching' : 'Standing',
-      desiredRotationMode: aiming ? 'Aiming' : 'ViewDirection',
-      viewYawAngle: control.yaw,
-      viewPitchAngle: control.pitch,
-      aiming,
-    }
-  }
-  return { control, source, rotation: () => ({ yaw: control.yaw, pitch: control.pitch }) }
+function createPlayer() {
+  return createCharacterController({ views: ['shoulder'], start: { position: yard.spawn, yaw: -Math.PI / 2 }, gaits: GAIT_SPEEDS, input })
 }
 
-function Look({ control }: { control: { yaw: number; pitch: number; jumpSequence: number } }) {
-  useFrame(() => {
-    const look = value('look')
-    control.yaw = ((control.yaw + look.x * DEGREES + 180) % 360 + 360) % 360 - 180
-    control.pitch = Math.max(-80, Math.min(80, control.pitch - look.y * DEGREES))
-    if (take('jump')) control.jumpSequence++
-  }, ALS_FRAME_PRIORITY.ControlRotation - 0.5)
-  useFrame((_, delta) => sound.update(delta))
-  return null
-}
+const events: CharacterEvents = { onFootstep: request => footsteps.PlayFootstepSound(request) }
 
-function Player({ pose }: { pose: { current: CharacterPoseSample } }) {
-  const time = useMemo(createWorldTimeState, [])
-  const drive = useMemo(createControl, [])
-  return <>
-    <Look control={drive.control} />
-    <Suspense fallback={null}>
-      <Character onSizeChange={() => {}} onOverlayModeBridgeChange={() => {}} poseSample={pose} worldTime={time} footstepSoundSink={footsteps} inputEnabled={false} inputSource={drive.source} gaitSpeedOverrides={GAIT_SPEEDS} toggleRotationModeKey={null} showDebugControls={false} initialPosition={yard.spawn} />
-    </Suspense>
-    <AlsCamera poseSample={pose} worldTime={time} footstepAudioRuntime={footsteps} toggleViewModeKey={null} gamepadEnabled={false} controlRotationSource={drive.rotation} />
-  </>
-}
-
-export default function Mode({ onCreated, physicsProbe }: { onCreated?: (state: RootState) => void; physicsProbe?: ReactNode } = {}) {
-  const pose = useMemo(() => ({ current: createCharacterPoseSample() }), [])
-  const [life, setLife] = useState(0)
+export default function Mode({ paused = false, onCreated, physicsProbe }: { paused?: boolean; onCreated?: (state: RootState) => void; physicsProbe?: ReactNode } = {}) {
+  const player = useMemo(createPlayer, [])
   const ready = useSurfaces()
-  return <>
+  useEffect(() => player.setPaused(paused), [player, paused])
+  return <InputProvider runtime={input}>
     <Stage physicsPriority={ALS_FRAME_PRIORITY.Physics} onCreated={onCreated}>
-      <Player key={life} pose={pose} />
+      <CharacterController controller={player} events={events} />
       <CheckProbe
         priority={ALS_FRAME_PRIORITY.Camera + 0.05}
         feel={CHARACTER_FEEL}
-        reset={() => setLife(value => value + 1)}
-        ready={() => surfacesReady() && pose.current.ready}
-        player={() => {
-          const body = pose.current.ownerRigidBody
-          if (!body) return null
-          const position = body.translation()
-          const velocity = body.linvel()
-          return { position: [position.x, position.y, position.z], velocity: [velocity.x, velocity.y, velocity.z] }
-        }} />
+        reset={() => player.respawn()}
+        ready={() => surfacesReady() && player.als.pose.current.ready}
+        player={() => ({ position: [player.position.x, player.position.y, player.position.z], velocity: [player.velocity.x, player.velocity.y, player.velocity.z], grounded: player.grounded })}
+        character={player.check} />
       {physicsProbe}
     </Stage>
-    <PlayHud ready={ready} hints={[['WASD', 'Move'], ['Mouse', 'Look'], ['Shift', 'Sprint'], ['Ctrl', 'Crouch'], ['Space', 'Jump'], ['RMB', 'Aim']]} buttons={[{ id: 'jump', label: 'Jump' }, { id: 'sprint', label: 'Sprint' }, { id: 'crouch', label: 'Crouch' }, { id: 'aim', label: 'Aim' }]} />
-  </>
+    <CharacterOverlay controller={player} visible={ready} />
+  </InputProvider>
 }

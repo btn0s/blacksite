@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Canvas, type RootState } from '@react-three/fiber'
+import { Canvas, useFrame, type RootState } from '@react-three/fiber'
 import { CuboidCollider, CylinderCollider, Physics, RigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
 import { Look } from '@blacksite/look/r3f'
 import { QUALITY, autoQuality, depthDefaults, type QualityTier } from '@blacksite/look/quality'
 import { internalPixelRatio, texturesReady } from '@blacksite/look/world'
-import { PLAY, input, requestLock } from './input'
+import { input, requestLock } from './input'
 import { FEEL, FIXED_STEP } from './model'
+import { sound } from './sound'
 import { yard } from './yard'
 
 export const tier: QualityTier = autoQuality()
@@ -39,7 +40,17 @@ function Lights({ onLights }: { onLights: (lights: { sun: THREE.DirectionalLight
   return <><primitive object={lights.sun} /><primitive object={lights.sun.target} /><primitive object={lights.fill} /></>
 }
 
-export function Yard() {
+function Listener() {
+  const forward = useMemo(() => new THREE.Vector3(), [])
+  useFrame(({ camera }, delta) => {
+    camera.getWorldDirection(forward)
+    sound.setListener({ position: [camera.position.x, camera.position.y, camera.position.z], forward: [forward.x, forward.y, forward.z] })
+    sound.update(Math.min(delta, 0.05))
+  }, 1)
+  return null
+}
+
+function Yard() {
   return <>
     <primitive object={yard.group} />
     <RigidBody type="fixed" colliders={false}>
@@ -50,9 +61,8 @@ export function Yard() {
   </>
 }
 
-export function Stage({ children, overlay = null, physics = true, physicsPriority, onCreated }: {
+export function Stage({ children, overlay = null, physicsPriority, onCreated }: {
   children: ReactNode
-  physics?: boolean
   overlay?: { scene: THREE.Scene; camera: THREE.Camera } | null
   physicsPriority?: number
   onCreated?: (state: RootState) => void
@@ -60,13 +70,12 @@ export function Stage({ children, overlay = null, physics = true, physicsPriorit
   const [lights, setLights] = useState<{ sun: THREE.DirectionalLight; fill: THREE.HemisphereLight } | null>(null)
   const ready = useSurfaces()
   useEffect(() => input.mount(), [])
-  useEffect(() => input.actions.addContext(PLAY), [])
   const dpr = Math.min(QUALITY[tier].maxPixelRatio, internalPixelRatio())
   return <Canvas shadows="percentage" dpr={[1, dpr]} camera={{ fov: FEEL.fov, near: depthDefaults(tier).near, far: 400, position: [-4, FEEL.eyeHeight, 0] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={state => { const canvas = state.gl.domElement; canvas.addEventListener('click', () => requestLock(canvas)); onCreated?.(state) }}>
     <Lights onLights={setLights} />
+    <Listener />
     {lights && <Look atmosphere="zone" quality={tier} environment sun={lights.sun} fill={lights.fill} overlay={overlay} />}
-    {ready && !physics && children}
-    {ready && physics && <Physics timeStep={FIXED_STEP} gravity={[0, -FEEL.gravity, 0]} updatePriority={physicsPriority}>
+    {ready && <Physics timeStep={FIXED_STEP} gravity={[0, -FEEL.gravity, 0]} updatePriority={physicsPriority}>
       <Yard />
       {children}
     </Physics>}

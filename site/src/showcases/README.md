@@ -12,7 +12,7 @@ The frame is a full-screen page with one root and one module script:
 
 ```html
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"><meta name="theme-color" content="#0d0f0c"><title>Firing Range · Weapons · Blacksite</title></head><body><div id="root"></div><script type="module" src="../src/showcases/firing-range/main.tsx"></script></body></html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"><meta name="theme-color" content="#0d0f0c"><title>Squad · AI · Blacksite</title></head><body><div id="root"></div><script type="module" src="../src/showcases/squad/main.tsx"></script></body></html>
 ```
 
 The build picks up every `site/frames/*.html` automatically, so `site/vite.config.ts` needs no edit.
@@ -25,13 +25,13 @@ The build picks up every `site/frames/*.html` automatically, so `site/vite.confi
 import type { Showcase } from '../registry'
 
 export const showcase: Showcase = {
-  tool: 'weapons',
-  title: 'Firing Range',
-  summary: 'A rifle and a pistol on rigged first-person arms, with recoil, impacts and targets at marked distances.',
-  tryThis: 'Aim down sights with the right mouse button, then press F to inspect the weapon in your hands.',
-  thumbnail: 'thumbs/weapons.webp',
-  keyboard: [{ action: 'Fire', keys: ['Left mouse'] }],
-  touch: [{ action: 'Fire', keys: ['Fire'] }],
+  tool: 'ai',
+  title: 'Squad',
+  summary: 'Watch two squads take cover and flank each other across a container yard.',
+  tryThis: 'Click a soldier to follow them, or press T for the tactical view.',
+  thumbnail: 'thumbs/ai.webp',
+  keyboard: [{ action: 'Follow a soldier', keys: ['Click'] }],
+  touch: [{ action: 'Follow a soldier', keys: ['Tap'] }],
 }
 ```
 
@@ -53,7 +53,7 @@ Registered showcases replace the old demos listed in `content.ts` for that tool.
 `@blacksite/ui/hud` provides:
 
 - `Screen`, a wrapper that adds grain and the vignette;
-- `TitleCard`, the small in-canvas tag, for example `Weapons · Firing Range`;
+- `TitleCard`, the small in-canvas tag, for example `AI · Squad`;
 - `Hints`, one line that fades;
 - `Prompt` and `Loading`;
 - `Status` and `Actions`, for buttons in the bottom-right corner;

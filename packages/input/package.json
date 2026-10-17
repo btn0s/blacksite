@@ -16,6 +16,7 @@
     "./observations": "./src/observations.ts",
     "./settings": "./src/settings.ts",
     "./aim-assist": "./src/aimAssist.ts",
+    "./stick": "./src/stick.ts",
     "./effect": "./src/effect.ts"
   },
   "peerDependencies": {

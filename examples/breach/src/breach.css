@@ -37,6 +37,8 @@
 .breach-ending--dead strong { color: #ff8a6a; }
 .breach-ending span { font: 500 13px 'IBM Plex Mono', monospace; letter-spacing: 0.1em; color: #d8d4c1; }
 .breach-ending em { font: 500 12px 'IBM Plex Mono', monospace; letter-spacing: 0.16em; text-transform: uppercase; color: #a9b57e; font-style: normal; }
+.breach-ending button { pointer-events: auto; min-height: 44px; margin-top: 6px; padding: 6px 18px; border: 1px solid #f0ecdb50; border-radius: 3px; background: #0c0e0bb8; color: #f0ecdb; font: 600 15px 'Barlow Condensed', sans-serif; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.breach-ending button:hover, .breach-ending button[data-console-selected] { border-color: #e2a23b; background: #e2a23bd8; color: #1a1307; }
 @media (max-width: 640px) {
   .breach-hud .hud-status { top: calc(92px + env(safe-area-inset-top)); bottom: auto; left: calc(12px + env(safe-area-inset-left)); right: calc(12px + env(safe-area-inset-right)); transform: none; }
   .breach-hud .hud-status strong { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

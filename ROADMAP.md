@@ -28,7 +28,7 @@ The game-dev instincts your coding agent is missing. Blacksite gives your agents
 
 Being built now, or next. Each item is done when the line after the dash is true.
 
-- **Showcase demos.** Polished scenes per capability (movement, demolition, firing range, squad AI, arena) built only on the public packages — the site's demos look and play like games.
+- **Showcase demos.** Polished scenes per capability (movement, demolition, first-person weapons, squad AI, arena) built only on the public packages — the site's demos look and play like games.
 - **Agent guides for the remaining systems.** Cascade, Warden, Relay and Armory get what ALS now has: a mental model, units, the input contract, tested recipes and symptom-indexed gotchas, plus a skill — an agent can do a common task from the guide alone.
 - **Touch controls for the player templates.** `fpp`, `tpp` and `mp` playable on a phone — the same check Cascade walk mode already passes.
 - **Measurement.** Pick reference devices (a desktop and an iPhone/Android pair), a benchmark harness that runs headless and writes JSON, and a frame-time breakdown per system — every demo reports where its frame time goes.

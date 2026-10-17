@@ -5,20 +5,22 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./Subject": "./src/Subject.tsx",
-    "./controller": "./src/controller.ts"
+    "./intent": "./src/intent.ts",
+    "./arms": "./src/ArmsViewmodel.tsx",
+    "./arms/model": "./src/arms/model.ts",
+    "./feel": "./src/feel/index.ts",
+    "./input": "./src/input.ts"
   },
   "dependencies": {
+    "@blacksite/armory": "workspace:*",
     "@blacksite/input": "workspace:*",
     "@blacksite/relay": "workspace:*",
+    "@blacksite/ui": "workspace:*",
+    "@react-three/fiber": "^9.8.2",
     "@react-three/rapier": "^2.2.0",
-    "koota": "^0.6.6",
-    "@react-three/fiber": "^9.8.1",
-    "react": "^19.2.0",
-    "three": "^0.185.1",
     "als-ue5-r3f": "workspace:*",
-    "@blacksite/subject-fpp": "workspace:*",
-    "@blacksite/armory": "workspace:*"
+    "react": "^19.3.1",
+    "three": "^0.186.1"
   },
   "license": "FSL-1.1-ALv2"
 }

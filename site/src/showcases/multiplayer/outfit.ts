@@ -36,23 +36,3 @@ export function outfit(gltf: GLTF) {
   })
   return gltf
 }
-
-const metal = ['#34352f', '#2a2b27', '#3f3d36', '#23241f']
-
-export function gunmetal(scene: THREE.Object3D) {
-  let index = 0
-  scene.traverse(object => {
-    if (!(object instanceof THREE.Mesh)) return
-    object.castShadow = true
-    for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
-      if (!(material instanceof THREE.MeshStandardMaterial) || material.userData.gunmetal) continue
-      material.userData.gunmetal = true
-      material.color.set(metal[index++ % metal.length]!)
-      material.metalness = 0.55
-      material.roughness = 0.5
-    }
-  })
-}
-
-export const ARMS_CHARACTER_URL = () => new URL('/assets/skm-als.glb', location.href).href
-export const WEAPON_URLS = ['/assets/skm-als-rifle.glb', '/assets/skm-als-pistol.glb'] as const

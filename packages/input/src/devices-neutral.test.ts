@@ -25,6 +25,7 @@ function session() {
   runtime.actions.addContext(createGameplayContext([
     { action: "move", control: { device: "gamepad", stick: "left" } },
     { action: "fire", control: { device: "gamepad", button: 7 } },
+    { action: "jump", control: { device: "gamepad", button: 0 }, trigger: "pressed" },
   ]))
   runtime.setGameplay(true)
   const frame = () => callback(now += 16)
@@ -108,6 +109,39 @@ describe("gamepad neutral gate", () => {
       test.hold(true)
       test.frame()
       test.active()
+    } finally { test.stop() }
+  })
+
+  it("lets a press that starts from rest act on its first frame", () => {
+    const test = session()
+    try {
+      test.frame()
+      expect(test.runtime.snapshot().gameplayReady).toBe(false)
+      test.hold(true)
+      test.frame()
+      expect(test.runtime.snapshot().gameplayReady).toBe(true)
+      test.active()
+      test.runtime.setGameplay(false)
+      test.runtime.setGameplay(true)
+      test.frame()
+      test.inactive()
+      test.hold(false)
+      test.frame()
+      test.hold(true)
+      test.frame()
+      test.active()
+    } finally { test.stop() }
+  })
+
+  it("emits the press that activates the pad", () => {
+    const test = session()
+    try {
+      const events: ActionEvent[] = []
+      test.runtime.actions.subscribe(event => events.push(event))
+      test.frame()
+      test.button(0, true)
+      test.frame()
+      expect(events.map(event => event.action)).toEqual(["jump"])
     } finally { test.stop() }
   })
 })

@@ -54,6 +54,8 @@ export class SquadClient {
   private pending: TimedEvent[] = []
   private listeners = new Set<() => void>()
 
+  constructor(private readonly clock: () => number = () => performance.now()) {}
+
   start() {
     if (this.worker) return
     this.worker = new Worker(new URL('./squad.worker.ts', import.meta.url), { type: 'module' })
@@ -106,13 +108,16 @@ export class SquadClient {
     }
   }
 
-  now = () => performance.now() - (Number.isFinite(this.offset) ? this.offset : performance.now())
+  now = () => {
+    const time = this.clock()
+    return time - (Number.isFinite(this.offset) ? this.offset : time)
+  }
   renderTime() { return this.now() - DELAY_MS }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
 
   private push(tick: number, soldiers: SoldierView[], events: SquadEvent[]) {
     const t = tick * TICK_MS
-    const sample = performance.now() - t
+    const sample = this.clock() - t
     this.offset = sample < this.offset ? sample : this.offset + Math.min(sample - this.offset, 0.5) * 0.05
     this.seq++
     const rosterChanged = soldiers.length !== this.roster.length

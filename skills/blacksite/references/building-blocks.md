@@ -6,15 +6,15 @@ Sections: [The scaffold](#the-scaffold) · [Characters](#characters-subject-and-
 
 ## The scaffold
 
-Every profile boots straight into play and fills the viewport, including portrait phones, with a "Click to play" prompt that takes pointer lock. Escape or the pad's Start opens Pause; Main menu, Settings and the developer list of prototypes hang off Pause and support controller navigation. `src/game/mode.tsx` is the profile's game: a walker in the starter yard (`blank`), arms and a rifle (`fpp`), the ALS body and camera (`tpp`), or Relay with the offline loopback (`mp`). The same kit is also listed as `src/prototypes/controller-<profile>`.
+Every profile boots straight into play and fills the viewport, including portrait phones, with a "Click to play" prompt that takes pointer lock. Escape or the pad's Start opens Pause; Main menu, Settings and the developer list of prototypes hang off Pause and support controller navigation. `src/game/mode.tsx` is the profile's game: a walker in the starter yard (`blank`), or the Character Controller with arms and a rifle (`fpp`), the shoulder view (`tpp`), or both views under Relay with the offline loopback (`mp`). The same kit is also listed as `src/prototypes/controller-<profile>`.
 
 | File | What it is | Change it when |
 |---|---|---|
-| `src/game/model.ts` | `FEEL`, `BUDGET`, `FIXED_STEP` and the motor rule (acceleration, coyote time, jump buffer, jump velocity from apex). Walker movement, ALS gait overrides and the check read it. ALS acceleration is measured by the check; the walker's time to top speed is also asserted. | You tune anything. Never hard-code a number in a component. |
+| `src/game/model.ts` | `FEEL`, `BUDGET`, `FIXED_STEP` and the motor rule (acceleration, coyote time, jump buffer, jump velocity from apex). The controller's gaits, the `blank` walker and the check read it. ALS acceleration is measured by the check; the walker's time to top speed is also asserted. | You tune anything. Never hard-code a number in a component. |
 | `src/game/input.ts` | The `play` context for `@blacksite/input`: keyboard, mouse, gamepad and touch bound to `move`, `look`, `jump`, `sprint`, `crouch`, `walk`, `fire`, `aim`, `reload`, `view`, `rifle`, `pistol` and `pause`. `value()`, `held()` and `take()` read it. | You add a verb. Bind every device to it in the same place. |
-| `src/game/stage.tsx` | The canvas, `<Look atmosphere="zone">` with `autoQuality()`, sun and fill, fixed-step physics and the yard. It mounts the input runtime and the `play` context. | You change the level, the atmosphere or the lights. |
+| `src/game/stage.tsx` | The canvas, `<Look atmosphere="zone">` with `autoQuality()`, sun and fill, fixed-step physics, the sound listener on the camera and the yard. | You change the level, the atmosphere or the lights. |
 | `src/game/yard.ts` | A starter yard from `@blacksite/look/world`, `surfaceAt()` for footsteps, and the check bookmarks. | You build the real level. Keep a bookmark on every area that matters. |
-| `src/game/walker.tsx` | A kinematic capsule driven by the motor, with footsteps and landings. | The design needs a different body. |
+| `src/game/walker.tsx` | `blank` only: a kinematic capsule driven by the motor, with footsteps and landings. | The design needs a body that isn't the ALS character. |
 | `src/game/check.tsx` | `CheckProbe`: `window.__blacksite` with bookmarks, camera override, `player()`, `audio()`, input, model and `ready()` once the world has loaded. | The ready condition or player changes. |
 | `src/game/sound.ts` | The `@blacksite/soundscape` mixer for the device tier, in the `outdoor` zone. The shell prepares it during loading and starts it on the first gesture. | Rooms need their own zone, or the game needs its own cues. |
 | `src/game/footsteps.ts` | Routes ALS foot plants and the camera listener into the mixer. | Surfaces change. |
@@ -25,38 +25,36 @@ The shell's Settings audio toggle drives the master bus. Bundled world and Subje
 
 ## Characters (Subject and ALS)
 
-An animated player body that walks, runs, sprints, crouches, mantles, rolls, ragdolls and aims, in first or third person. It is ALS Web, an MIT-licensed port of the ALS Refactored animation system to three.js and Rapier ([github.com/btn0s/als-web](https://github.com/btn0s/als-web)), with Subject on top for games that own their input.
+An animated player body that walks, runs, sprints, crouches, mantles, rolls, ragdolls and aims, in first or third person. It is ALS Web, an MIT-licensed port of the ALS Refactored animation system to three.js and Rapier ([github.com/btn0s/als-web](https://github.com/btn0s/als-web)), with the Character Controller in Subject on top. Build every character game on the Character Controller and pick its views.
 
 | Need | Use |
 |---|---|
-| Solo first person, arms only | `@blacksite/subject-fpp`: `StandaloneSubject` and `ArmsViewmodel` from `/arms`. The game owns movement and returns the camera position. |
-| Solo third person | The ALS `Character` and `AlsCamera`, driven from `@blacksite/input` through `inputSource` and `controlRotationSource` with `inputEnabled={false}`. Template: `templates/prototype-kits/als-tpp/mode.tsx`. |
-| Switchable view, or a body the game drives | `@blacksite/subject`: `createSubject()` plus `Character inputEnabled={false} inputSource={createSubjectInputSource(subject)}`. |
+| A player character, any view | `@blacksite/subject`: `createCharacterController({ views })` and `<CharacterController>` inside `<Physics>`. `views` is an ordered list of `arms`, `head` and `shoulder`; one entry locks the view. A local session (`useLocalSession`) owns the clock and stops the world under the pause menu. Examples: `examples/breach/` (`['arms']`), `examples/traverse/` and `examples/valley/` (`['shoulder', 'head']`). |
+| A body the game drives (bots, scripted runs) | `controller.drive({ forward, right, sprint, jump, fire, aim })`; `drive(null)` hands control back. Write `controller.control.yaw` and `pitch` to aim. |
+| A multiplayer player | `<Replication connection controller>` from `@blacksite/subject` in place of `<CharacterController>`. |
 | Remote players, or AI puppets | One `AlsSnapshotBuffer` per actor, drawn with `AlsRemoteActor`. Squad does this. |
 
 ALS ships its own agent guide; read it instead of guessing. It's at `vendor/als-web/docs/guide/` in Blacksite, or `vendor/blacksite/vendor/als-web/docs/guide/` in a generated game. Start with `overview.md` (who owns what, frame order, units, the input contract), then the recipe for the task in `recipes/` (local, camera, weapon, montage, actions, remote, fpp-arms, foot-ik, lifecycle, performance), with `api.md` for imports and `gotchas.md` for symptoms.
 
-Other guides: `docs/arms.md` (the first-person arms viewmodel and its `public/assets/arms.json` manifest), `docs/player-templates.md` (what each scaffold profile mounts), `packages/subject/AGENTS.md`, `packages/subject-fpp/AGENTS.md`. Working examples: `site/src/showcases/characters/` (Checkpoint, third person with the check contract), `firing-range/` (first person), `multiplayer/` (Subject, both views), `squad/soldiers.tsx` (remote actors).
+Other guides: `docs/arms.md` (the first-person arms viewmodel and its `public/assets/arms.json` manifest), `docs/player-templates.md` (what each scaffold profile mounts), `packages/subject/AGENTS.md`, `packages/subject/DESIGN.md`. Working examples: `site/src/showcases/characters/` (Checkpoint, third person with the check contract), `multiplayer/` (the controller under Replication with a bot, both views), `squad/soldiers.tsx` (remote actors), and `examples/breach/` (first person).
 
 - Wrap the scene in `<Physics gravity={[0, -9.8, 0]} timeStep={1/60} updatePriority={ALS_FRAME_PRIORITY.Physics}>`.
 - Preload the character with `preloadAlsCharacterGltf` behind the loading screen.
-- With Subject: read `subject.frame` (eye, aim origin and direction, muzzle) after `ALS_FRAME_PRIORITY.Camera + 0.02` to drive Armory; `subject.addRecoil(pitch, yaw)` for recoil; `subject.respawn(position, yaw)`.
-- Touch: `subject.setVirtual(true)`, then `keySubject` and `lookSubject`.
+- Pass `weapons` and the controller runs Armory, recoil and the arms itself; `onWeapon` events carry shots and impacts for presentation. `controller.respawn(seed, position, yaw)` and `controller.teleport(position, yaw)` move the player.
+- Touch and pad come from `@blacksite/input`; `CharacterOverlay` draws the touch controls and hides them while a pad is in use.
+- Pass `character={controller.check}` to the check contract so the stress run can respawn and drive the player.
 - For the check contract, apply a camera pose override at `ALS_FRAME_PRIORITY.Camera + 0.05`, before the look renders at priority 1 ([verify.md](verify.md)).
 
 What isn't there yet:
 
 - No swimming, ladders, climbing, slide, prone, lean, wall-run, coyote time or jump buffer. Build them in the game.
-- No explicit roll or mantle request through Subject: only `jumpSequence`. Roll exists on ALS's own double-tap path.
-- The standalone first-person subject has no physics, so a first-person game needs its own character controller.
-- Subject has no gamepad and doesn't read `@blacksite/input`; its keys are fixed.
 - `AlsCamera` has no sensitivity prop (1° per pixel). Scale the pointer events instead, as Checkpoint does (×0.55).
 - The arms viewmodel animates the rifle and the pistol only.
 - The body is the ALS mannequin, coloured per game. Bringing another skinned character isn't supported.
 
 ## Weapons (Armory)
 
-Armory (`@blacksite/armory`) is a deterministic weapon simulation: fire modes, cadence, magazines, reloads, equips, spread, recoil and hitscan or ballistic projectiles. It renders nothing and sends nothing; the game feeds it aim and collision queries and turns its events into presentation. Guides: `packages/armory/AGENTS.md` (the contract), `docs/arms.md` (the arms viewmodel), `site/src/showcases/firing-range/` (the complete reference, with recoil, arms, impacts, steel targets and synthesized audio), `templates/prototype-kits/fpp/mode.tsx` (the smallest integration), `packages/relay/src/index.ts` (Armory on the server for multiplayer hits).
+Armory (`@blacksite/armory`) is a deterministic weapon simulation: fire modes, cadence, magazines, reloads, equips, spread, recoil and hitscan or ballistic projectiles. It renders nothing and sends nothing; the game feeds it aim and collision queries and turns its events into presentation. Guides: `packages/armory/AGENTS.md` (the contract), `docs/arms.md` (the arms viewmodel), `examples/breach/` (the complete reference, with recoil, arms, impacts and synthesized audio), `templates/prototype-kits/fpp/mode.tsx` (the smallest integration), `packages/relay/src/index.ts` (Armory on the server for multiplayer hits).
 
 - One runtime per owner: `createWeaponRuntime({ ownerId, seed, definitions: ALS_WEAPONS })`.
 - Step it from a fixed-step accumulator, clamped to 0.1 s: `weapon.step({ tick, trigger, reload, selectWeaponId, aim, muzzle }, queries)` while the accumulator holds a full `fixedDeltaSeconds` (1/60).
@@ -64,7 +62,7 @@ Armory (`@blacksite/armory`) is a deterministic weapon simulation: fire modes, c
 - Map events to presentation: `shot` to recoil, flash, tracer, sound and `arms.fireSequence++`; `reload-started` to `arms.reloadSequence++`; `switch-started` to `arms.weapon` and `arms.equipSequence++`; `trigger-blocked` (empty) to a dry fire; `impact` to decals and dust.
 - Draw the arms with `<ArmsViewmodel state={arms} render="external" onPresentation={…} />` and pass the presentation to `<Look overlay>`. The default `found` rig plays an authored, CC BY rifle and pistol set with procedural sway, bob, recoil, ADS and sprint on top; credit it in the game. `rig="blacksite"` is the CC0 procedural rig; `rig="als"` matches local arms to the remote body.
 - Set Armory durations from the animation: `{ ...weapon, ...foundTimings(FIELD_SET, weapon.id) }` gives `reloadSeconds`, `emptyReloadSeconds` and `equipSeconds`. Drive reload foley from the set's clip events. Set `arms.empty` from the magazine, increment `inspectSequence` for inspect, and send landing speed with `landSequence`.
-- Authoritative servers call `foundTimings({ weapons: FIELD_WEAPONS }, id)` from `@blacksite/subject-fpp/arms/model`; this entry point has no renderer, asset-loader or GLB imports.
+- Authoritative servers call `foundTimings({ weapons: FIELD_WEAPONS }, id)` from `@blacksite/subject/arms/model`; this entry point has no renderer, asset-loader or GLB imports.
 - A definition may add an authored recoil `pattern` and a `spread` block with bloom; pass the shooter's `stance` and read `spread` and `patternIndex` from the snapshot for a crosshair (`packages/armory/AGENTS.md`). The `ALS_WEAPONS` presets use neither.
 - For a new viewmodel, read `docs/arms.md` before replacing a mesh or authoring an action. Declare an authored set's frame ranges, eye basis and bone-local sight landmarks; ADS is solved from the landmarks.
 
@@ -72,7 +70,7 @@ What isn't there yet:
 
 - No damage falloff, hit zones, headshots, armour or penetration: damage is flat on any hit.
 - No melee, grenades or throwables.
-- Aiming changes nothing in Armory unless the definition's `spread` says so; the Firing Range scales kick by 0.7 and narrows the FOV in game code.
+- Aiming changes nothing in Armory unless the definition's `spread` says so; scale the kick and narrow the FOV in game code.
 - The arms animate the rifle and pistol only. The bow's projectile path is untested in a shipped scene.
 - The `fpp` template answers Armory's queries with Rapier rays (a sphere sweep is approximated by its centre ray), excluding the player's capsule. Give targets their own colliders and map `colliderId` to them.
 - No lag compensation on the server (`multiplayer.md`).
@@ -114,11 +112,11 @@ What isn't there yet:
 
 ## Multiplayer (Relay)
 
-Relay (`@blacksite/relay`) is the replication seam: a transport-agnostic match authority, client prediction and reconciliation, interpolation, and two transports, Colyseus and an in-memory loopback. `@blacksite/subject` mounts it as `MultiplayerSubject` or `MultiplayerScene` with first-person arms, ALS remote bodies and Armory hits checked on the server. Guides: `packages/relay/AGENTS.md` (the v0 contract and what it doesn't do), `docs/player-templates.md` (the `mp` profile, `/relay`, the offline loopback, `LoopbackSplitView` and `cameraMode`), `templates/multiplayer-server/README.md` (the scaffolded server), `vendor/als-web/docs/guide/recipes/remote.md` (remote ALS bodies), `site/src/showcases/multiplayer/` (Arena: loopback plus a bot, with snapshots, interpolation and server hits), [architecture.md](architecture.md) (the Controller → Pawn → Intent model and transport choice).
+Relay (`@blacksite/relay`) is the replication seam: a transport-agnostic match authority, client prediction and reconciliation, interpolation, and two transports, Colyseus and an in-memory loopback. `Replication` from `@blacksite/subject` mounts the Character Controller on it, with ALS remote bodies and Armory hits checked on the server. Guides: `packages/relay/AGENTS.md` (the v0 contract and what it doesn't do), `docs/player-templates.md` (the `mp` profile, `/relay` and the offline loopback), `templates/multiplayer-server/README.md` (the scaffolded server), `vendor/als-web/docs/guide/recipes/remote.md` (remote ALS bodies), `site/src/showcases/multiplayer/` (Arena: loopback plus a bot, with snapshots, interpolation and server hits), [architecture.md](architecture.md) (the Controller → Pawn → Intent model and transport choice).
 
 - Scaffold with `--profile mp`. `pnpm dev` runs the Colyseus match server on port 2567 and Vite together; Vite proxies `/relay` with WebSocket upgrades.
 - Client: `createColyseusTransport(import.meta.env.VITE_RELAY_URL || \`${location.origin}/relay\`)`, or `createLoopbackRoom()` offline, then `connect()`.
-- Mount `<MultiplayerSubject connection={…} cameraMode="switchable" />`, or `<MultiplayerScene>` inside your own canvas.
+- Mount `<Replication connection={connection} controller={player} />` inside `<Physics>`; `onStatus` reports players, health and hits.
 - Server: `startMatchServer(port)` from `@blacksite/relay/server`; `createMatch({ spawns, obstacles, respawnMs })` for the level. Relay's `shot` and `hit` messages drive remote combat cues.
 
 What isn't there yet:
@@ -141,7 +139,6 @@ What isn't there yet:
 
 What isn't there yet:
 
-- The showcases still drive characters with synthetic key events from `TouchPad`, `keySubject` or `StandaloneTouch`. Every scaffolded game uses the runtime (`src/game/input.ts`).
 - No rebinding UI or saved bindings; settings aren't consumed.
 - Aim assist needs a target-candidate builder that doesn't exist.
 
@@ -150,7 +147,7 @@ What isn't there yet:
 Use `@blacksite/look` on every game: `<Look atmosphere="zone" quality={tier} environment sun={sun} fill={fill} />` in React Three Fiber, or `createLook(renderer, scene, camera, …)` and `look.render(dt)` in plain three. It brings HDR, half-resolution AO, bloom, a grade with a shoulder tonemap and a LUT, vignette, aberration and grain. Pass your own sun and hemisphere lights so the atmosphere drives their colour. Guides: `packages/look/README.md` and `packages/look/AGENTS.md` (the `Atmosphere` data, the presets, the sky, the quality tiers and the overlay).
 
 - **Exposure:** change it with an atmosphere of your own, `{ ...ZONE, exposure: 1.22 }`. Never set `renderer.toneMapping` or `toneMappingExposure`.
-- **Viewmodels go through the overlay.** `look.addOverlay(scene, camera)` or `<Look overlay>` replaced Arena's post-composer arms pass and the Firing Range's hand-inserted composer pass. `ArmsViewmodel render="external"` hands its presentation to the look, and `MultiplayerScene` passes it out through `onArmsPresentation`. The overlay runs after AO and before bloom with depth cleared, so the arms get the world's grade and never clip.
+- **Viewmodels go through the overlay.** `look.addOverlay(scene, camera)` or `<Look overlay>` replaced Arena's post-composer arms pass and hand-inserted composer passes. `ArmsViewmodel render="external"` hands its presentation to the look, and `<CharacterController onPresentation>` passes it out. The overlay runs after AO and before bloom with depth cleared, so the arms get the world's grade and never clip.
 - **Antialiasing comes from the composer's MSAA**, not the canvas. Create the canvas with `antialias: false`.
 - **Quality:** `autoQuality()` picks the tier (`performance.md`); `internalPixelRatio()` from `@blacksite/look/world` applies the pixel-ratio cap. `depthDefaults(tier)` gives the near plane per tier; `logarithmic: true` for a far plane past 1 km.
 - **Shadows:** the world kit's `createAtmosphere` makes the one texel-snapped shadow frustum that follows the player.

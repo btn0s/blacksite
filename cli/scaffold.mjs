@@ -128,9 +128,9 @@ async function main() {
   const localRef = options['blacksite-ref']?.startsWith('file://') ? options['blacksite-ref'] : null
   await initializeSubmodule(root, localRef || blacksiteUrl, 'vendor/blacksite', localRef ? null : options['blacksite-ref'])
   emit(options.json, 'submodules', 'done', 'Recursive Blacksite submodule initialized')
-  const packageIds = [...requested].map(id => id === 'subject' && profile === 'fpp' ? 'subject-fpp' : id)
-  if (profile === 'mp') packageIds.push('subject-fpp')
-  const needsAls = profile === 'tpp' || packageIds.includes('subject') || packageIds.includes('subject-fpp')
+  const packageIds = [...requested]
+  if (['fpp', 'mp'].includes(profile) && !packageIds.includes('subject')) packageIds.push('subject')
+  const needsAls = profile === 'tpp' || packageIds.includes('subject')
   const base = ['ui', 'look', 'input', 'check', 'soundscape']
   const closure = await packageClosure(path.join(root, 'vendor/blacksite'), [...base, ...packageIds])
   const workspace = ['packages:', ...closure.map(item => `  - '${item}'`), ...(needsAls ? ["  - 'vendor/blacksite/vendor/als-web'"] : []), 'allowBuilds:', '  esbuild: true', ...(profile === 'mp' ? ['  msgpackr-extract: false'] : []), 'minimumReleaseAge: 0', ''].join('\n')
@@ -170,7 +170,7 @@ async function main() {
   await mkdir(path.join(root, 'scripts'), { recursive: true })
   await cp(path.join(rootDirectory, 'cli', 'budget-check.mjs'), path.join(root, 'scripts', 'budget-check.mjs'), { force: true })
   const worldTextures = (await readdir(path.join(root, 'vendor/blacksite/packages/look/assets/world'))).filter(file => file.endsWith('.webp')).map(file => `assets/${file.replace(/\.webp$/, '')}-*.webp`)
-  const armsTextures = needsAls ? (await readdir(path.join(root, 'vendor/blacksite/packages/subject-fpp/assets/materials'))).filter(file => file.endsWith('.webp')).map(file => `assets/${file.replace(/\.webp$/, '')}-*.webp`) : []
+  const armsTextures = needsAls ? (await readdir(path.join(root, 'vendor/blacksite/packages/subject/assets/materials'))).filter(file => file.endsWith('.webp')).map(file => `assets/${file.replace(/\.webp$/, '')}-*.webp`) : []
   await writeFile(path.join(root, 'budget.config.json'), JSON.stringify({ maxChunkBytes: 4000000, maxTotalJsBytes: 8000000, maxAssetBytes: 20000000, fixedStepHz: 60, tiers: { desktop: { targetFps: 120, renderScale: 1 }, mobile: { targetFps: 60, renderScale: 0.75, effectScale: 0.5, distanceScale: 0.6, densityScale: 0.5, updateRateScale: 0.5 } }, legacyAssetPaths: ['assets/skm-als.glb', 'assets/skm-als-pistol.glb', 'assets/skm-als-rifle.glb', ...worldTextures, ...armsTextures], requiresFixedStep: true }, null, 2) + '\n')
   await cp(path.join(templateDirectory, 'loading', 'warmup.ts'), path.join(root, 'scripts', 'warmup.ts'), { force: true })
   await cp(path.join(templateDirectory, 'monorepo', 'gitignore.txt'), path.join(root, '.gitignore'), { force: true })

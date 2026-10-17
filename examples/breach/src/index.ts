@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
-import { preloadArms } from '@blacksite/subject-fpp/arms'
+import { preloadArms } from '@blacksite/subject/arms'
 import { Game } from './game'
 
 export function mount(element: HTMLElement) {

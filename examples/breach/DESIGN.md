@@ -29,11 +29,11 @@ The body is our own: a capsule that slides on the level's boxes with exact balli
 
 | Number | Value | Source |
 | --- | --- | --- |
-| World FOV | 75° vertical; ADS eases with the viewmodel; sprint +2° and shot, jump and land punches on springs (horizontal degrees) | Subject FPP camera feel |
-| Viewmodel FOV | 56° | Subject FPP default |
-| Shot camera kick | Camera pitch and roll follow the gun's rise and roll springs at 30% and 12% (1.8 Hz, critically damped); FOV punch +0.2° | Subject FPP gun feel |
-| Damage camera punch | Flinch roll spring (3.5 Hz, ζ 0.45), 1.2 + 0.03 per damage, away from the hit side | Subject FPP camera feel |
-| Landing | Dip spring (3.2 Hz, ζ 0.5), FOV punch −0.5° and flinch ±0.12 per m/s of impact, gun drop | Subject FPP camera and gun feel |
+| World FOV | 75° vertical; ADS eases with the viewmodel; sprint +2° and shot, jump and land punches on springs (horizontal degrees) | Subject camera feel |
+| Viewmodel FOV | 56° | Subject default |
+| Shot camera kick | Camera pitch and roll follow the gun's rise and roll springs at 30% and 12% (1.8 Hz, critically damped); FOV punch +0.2° | Subject gun feel |
+| Damage camera punch | Flinch roll spring (3.5 Hz, ζ 0.45), 1.2 + 0.03 per damage, away from the hit side | Subject camera feel |
+| Landing | Dip spring (3.2 Hz, ζ 0.5), FOV punch −0.5° and flinch ±0.12 per m/s of impact, gun drop | Subject camera and gun feel |
 
 ### Weapons (Armory definitions built by `armoryDefinitions()`)
 
@@ -45,14 +45,14 @@ The body is our own: a capsule that slides on the level's boxes with exact balli
 | Equip | 0.83 s | 0.83 s | Found holster plus draw, the longer direction |
 | Damage / range | 36 / 120 m | 28 / 60 m | Public rifle reference, 36 base damage |
 | Head / chest / limb multiplier | 4 / 1 / 0.75 | same | Public hit-zone reference |
-| ADS time | 0.3 s | 0.26 s | Subject FPP feel: 0.3 s scaled by heft (+35% per unit), quintic ease, out 20% faster, settle bump on arrival |
+| ADS time | 0.3 s | 0.26 s | Subject feel: 0.3 s scaled by heft (+35% per unit), quintic ease, out 20% faster, settle bump on arrival |
 | ADS FOV | 55° | 62° | Tuned iron-sight zoom (1.35× and 1.2×) |
 | Hip / ADS cone | 1.1° / 0.12° | 0.9° / 0.15° | Tuned so ADS is a sniper and the hip is a room-clearing shotgun |
 | Moving / crouched | +1.6° / ×0.75 | +1.2° / ×0.8 | Tuned after public stance-inaccuracy references |
 | Bloom | +0.18° per shot, cap 2.2°, recovers in 0.43 s | +0.35°, cap 1.8°, 0.3 s | Public rifle reference, 0.43 s standing recovery |
 | Spray | 30-shot authored pattern: 9 shots climb about 6.5°, then pulls left, right, left | 8-shot alternating climb of 1.3–1.5° | Shaped after a public rifle spray reference (climb then sway) |
 | Spray reset | 0.43 s without a shot | 0.3 s | Same as recovery |
-| Climb recovery | All of the climb returns: 0.9/s while firing, 2.92/s from 0.22 s after the last shot | 7/s | Subject FPP `RECOIL_TUNING`; the camera follows the climb through a 3.9 Hz hands spring (pistol 5.1 Hz) |
+| Climb recovery | All of the climb returns: 0.9/s while firing, 2.92/s from 0.22 s after the last shot | 7/s | Subject `RECOIL_TUNING`; the camera follows the climb through a 3.9 Hz hands spring (pistol 5.1 Hz) |
 
 Bloom recovery waits one firing interval after the last shot (0.1 s rifle, 0.2 s pistol), then recovers over 0.43 s or 0.3 s. Sustained fire therefore accumulates the authored per-shot bloom. Sprinting lowers the weapon; leaving sprint starts the 0.22 s sprint-out delay before a shot may fire. Recoil recovery follows the currently equipped weapon.
 

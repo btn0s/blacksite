@@ -19,7 +19,7 @@ export async function writeKit(kit, target, place = 'prototype') {
 async function ensureKitPackages(project, kit, prototypeName) {
   const multiplayer = ['mp'].includes(kit)
   const needsAls = ['als-tpp', 'tpp', 'subject', 'mp', 'fpp'].includes(kit)
-  const requested = kit === 'fpp' ? ['subject-fpp', 'armory'] : ['mp'].includes(kit) ? ['subject', 'armory', 'relay', 'protocol'] : ['als-tpp', 'tpp'].includes(kit) ? [] : kit ? [kit] : []
+  const requested = kit === 'fpp' ? ['subject', 'armory'] : ['mp'].includes(kit) ? ['subject', 'armory', 'relay', 'protocol'] : ['als-tpp', 'tpp'].includes(kit) ? [] : kit ? [kit] : []
   if ((!requested.length && !['als-tpp', 'tpp'].includes(kit)) || !existsSync(path.join(project, '.stack-complete'))) return
   const manifestFile = path.join(project, 'package.json')
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8'))
@@ -37,7 +37,7 @@ async function ensureKitPackages(project, kit, prototypeName) {
     const budgetFile = path.join(project, 'budget.config.json')
     if (existsSync(budgetFile)) {
       const budget = JSON.parse(await readFile(budgetFile, 'utf8'))
-      const textures = (await readdir(path.join(packagesRoot, 'subject-fpp/assets/materials'))).filter(file => file.endsWith('.webp')).map(file => `assets/${file.replace(/\.webp$/, '')}-*.webp`)
+      const textures = (await readdir(path.join(packagesRoot, 'subject/assets/materials'))).filter(file => file.endsWith('.webp')).map(file => `assets/${file.replace(/\.webp$/, '')}-*.webp`)
       budget.legacyAssetPaths = [...new Set([...(budget.legacyAssetPaths || []), ...textures])]
       await writeFile(budgetFile, `${JSON.stringify(budget, null, 2)}\n`)
     }

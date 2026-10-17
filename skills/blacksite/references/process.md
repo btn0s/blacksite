@@ -20,9 +20,9 @@ Turn an idea into an approved `docs/game-design.md`, a `budget.config.json` and 
 
 | Answer | Profile | Uses |
 |---|---|---|
-| Solo, first person | `fpp` | Arms-only `@blacksite/subject-fpp` and Armory on the template's walker, with gravity, collision, jump and ray hits. |
-| Solo, third person | `tpp` | The ALS body and camera (`building-blocks.md`). |
-| Multiplayer, first or third person | `mp` | Local arms, ALS remote bodies, Relay over Colyseus with an offline loopback, V switching the view. |
+| Solo, first person | `fpp` | The Character Controller with `['arms']`: found arms, rifle and pistol through Armory. |
+| Solo, third person | `tpp` | The Character Controller with `['shoulder']` (`building-blocks.md`). |
+| Multiplayer, first or third person | `mp` | The controller with `['arms', 'shoulder']` under Replication, ALS remote bodies, Relay over Colyseus with an offline loopback, V switching the view. |
 | Anything else | `blank` | A walker in the starter yard, with the look, input, sound and check already wired. |
 
 Add Warden for squads, Cascade for destruction and Armory for weapons only where the design calls for them.
