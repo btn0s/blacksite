@@ -275,8 +275,8 @@ if (vTerrainCanopy > 0.001) {
   }
   float covered = step(0.0, top);
   vec3 lump = normalize(vec3(dome.x, dome.z * 0.9, dome.y));
-  vec3 canopyNormal = normalize(mix(bsBase, lump, 0.65 * lumpFade * covered + 0.2));
-  float crownAo = mix(0.42, 0.62 + 0.38 * dome.z, covered);
+  vec3 canopyNormal = normalize(mix(bsBase, lump, 0.4 * lumpFade * covered + 0.15));
+  float crownAo = mix(0.58, 0.72 + 0.28 * dome.z, covered);
   vec3 cellAlbedo = mix(canopyShade, canopyColor * (0.78 + tone * 0.44), crownAo);
   vec3 meanAlbedo = mix(canopyShade, canopyColor, 0.62);
   vec3 canopyAlbedo = mix(meanAlbedo, cellAlbedo, lumpFade);

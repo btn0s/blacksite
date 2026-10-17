@@ -329,6 +329,7 @@ export async function runChecks(options) {
             }
           }
           const still = []
+          if (contract.scripts.includes('freeze')) await page.evaluate(() => window.__blacksite.scripts.freeze())
           for (const bookmark of bookmarks) {
             await setPose(page, bookmark, 30)
             const first = await shoot(page, out, `pop/still-${bookmark.name}-0.png`, false)
@@ -336,6 +337,7 @@ export async function runChecks(options) {
             const second = await shoot(page, out, `pop/still-${bookmark.name}-1.png`, false)
             still.push({ name: bookmark.name, first, second })
           }
+          if (contract.scripts.includes('unfreeze')) await page.evaluate(() => window.__blacksite.scripts.unfreeze())
           const moveDiffs = await diffImages(scratch, files.url, tiles.slice(1).map((tile, index) => [tiles[index].src, tile.src]))
           const stillDiffs = await diffImages(scratch, files.url, still.map(item => [item.first, item.second]))
           const flagged = []

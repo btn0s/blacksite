@@ -102,8 +102,11 @@ An `Atmosphere` is plain data: `exposure`; `fog` as `{ color, near, far }` (`Fog
 | --- | --- | --- | --- | --- | --- | --- |
 | `zone` (`ZONE`) | Cold overcast grey-green ruins | 1.12 | linear 14 to 150, `[0.34, 0.37, 0.35]` | 0.85 | strength 1.5, pale | `luts/zone.cube`, vignette 0.38, aberration 0.12, grain 0.035 |
 | `haze` (`HAZE`) | Warm late-afternoon haze | 1.08 | exp2 density 0.011, `[0.55, 0.5, 0.37]` | 0.25 | strength 3.4, amber, low | `luts/haze.cube`, vignette 0.42, aberration 0.1, grain 0.025 |
+| `nature` (`NATURE`) | Warm painterly open country | 1.35 | physical: aerial perspective and height fog | physical sky with clouds, coverage 0.38 | physical, 3.2 illuminance | filmic curve, saturation 0.92, bloom 0.45, vignette 0.2, grain 0.006 |
 
 The sky dome is a back-faced unit sphere drawn at the far plane, so its size never fights the camera. It blends horizon to zenith, projects three-octave fbm cloud cover onto the dome, thins the cover toward the sun, adds a sun glow and disc when the overcast is low, and fades below the horizon into the ground colour. `createSky`, `createSkyMaterial` and `bakeSkyEnvironment` are exported for scenes that manage their own composer.
+
+Set `atmosphere.physical` and the look draws a physically based sky instead: transmittance, multiple-scattering and sky-view lookup tables, a cloud layer with analytic edge antialiasing, an environment baked from that sky, and an aerial-perspective pass that reads the depth buffer to add in-scattering and height fog to every surface, replacing three's fog. `createPhysicalSky`, `createAtmosphereLuts` and `AerialEffect` are exported. The quality tier sets the lookup table sizes and cloud octaves. The technique is ported from web-ocean under MIT; see `NOTICE.md`.
 
 ## Quality tiers
 

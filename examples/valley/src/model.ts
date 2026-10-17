@@ -24,7 +24,7 @@ export const tiers = {
   low: { trees: 28000, nearTrees: 42, nearFade: [28, 42] as const, impostorFar: [440, 660] as const, frameSize: 128, coverDistance: 45, coverDensity: 0.55, cascades: 2, shadowDistance: 90, shadowMap: 1024, a2c: false, singleFrame: true },
 } as const
 
-export const canopy = { height: 13, crown: 8.5, lead: 90 } as const
+export const canopy = { height: 13, crown: 5.5, lead: 90 } as const
 
 export const locomotion = {
   walk: 1.75,
