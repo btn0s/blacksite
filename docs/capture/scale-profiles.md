@@ -2,7 +2,7 @@
 
 Stage: capture. Status: planned.
 
-A scale profile is one setting per game, `blacksite.profile.ts`, chosen during design (`skills/blacksite/references/design.md`). The camera and scale of the game (first person, third person, top-down, vehicle, air) set the defaults for every expensive system, so an FPS gets bullet holes and short shadow range while an air-strike game gets building collapse and long, low-resolution shadows. Each system can override its value.
+A scale profile is one setting per game, `blacksite.profile.ts`, chosen during design (`skills/blacksite/references/process.md`). The camera and scale of the game (first person, third person, top-down, vehicle, air) set the defaults for every expensive system, so an FPS gets bullet holes and short shadow range while an air-strike game gets building collapse and long, low-resolution shadows. Each system can override its value.
 
 Starting presets. These numbers are inputs to the capture work, not decisions:
 

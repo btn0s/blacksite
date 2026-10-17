@@ -1,6 +1,6 @@
 # Open asset library
 
-Draft for the spine's `references/assets.md`. This library selects assets that allow redistribution of the files in an open repository, commercial game use and public demo use. The target is a muted industrial zone with photographic surfaces, readable geometry and varied recorded sound. A compatible licence is the entry requirement; a useful result still needs scale, appearance, motion, audio and performance review.
+Draft for the skill's asset guidance in `references/process.md` (Assets). This library selects assets that allow redistribution of the files in an open repository, commercial game use and public demo use. The target is a muted industrial zone with photographic surfaces, readable geometry and varied recorded sound. A compatible licence is the entry requirement; a useful result still needs scale, appearance, motion, audio and performance review.
 
 The [source research](research.md) records primary licence evidence and category choices. The [shipped-file audit](audit.md), with exact paths and hashes in [audit.json](audit.json), covers the existing repository. ALS is excluded by owner instruction. The catalog is a set of selected sources, not a claim that every entry has already been fetched and judged in a game.
 
