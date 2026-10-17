@@ -15,6 +15,7 @@ import { bakePhysicalEnvironment, createPhysicalSky } from './physical';
 import type { PhysicalSky } from './physical';
 import { bakeSkyEnvironment, createSky } from './sky';
 import type { Sky } from './sky';
+import { SoftPass } from './soft';
 
 export const POST_TUNING = {
   ao: { intensity: 1.8, radius: 0.35 },
@@ -29,6 +30,7 @@ export interface LookOptions {
   readonly fog?: boolean;
   readonly sun?: DirectionalLight | null;
   readonly fill?: HemisphereLight | null;
+  readonly particles?: Scene | null;
 }
 
 export interface Look {
@@ -59,6 +61,7 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
   renderer.toneMapping = NoToneMapping;
   const composer = new EffectComposer(renderer, { frameBufferType: HalfFloatType, multisampling: QUALITY[quality].multisampling });
   composer.addPass(new RenderPass(scene, camera));
+  if (options.particles) composer.addPass(new SoftPass(scene, camera, options.particles));
 
   const size = renderer.getDrawingBufferSize(new Vector2());
   const ao = new N8AOPostPass(scene, camera, size.x || 1, size.y || 1);

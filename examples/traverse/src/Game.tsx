@@ -31,6 +31,7 @@ const readBest = (): number[] | null => { try { const value = JSON.parse(localSt
 
 type Shared = {
   route: Route
+  particles: THREE.Scene
   command: Command
   pose: { current: ReturnType<typeof createCharacterPoseSample> }
   race: { current: Race }
@@ -145,7 +146,7 @@ const Scene = memo(function Scene({ shared, spawn, onAction, onEvent, ghostVisib
   const done = useCallback(() => setCompiled(true), [])
   return <>
     <Atmosphere />
-    {compiled ? <Look atmosphere="zone" sky={false} fog={false} /> : <Warmup shared={shared} onDone={done} />}
+    {compiled ? <Look atmosphere="zone" sky={false} fog={false} particles={shared.particles} /> : <Warmup shared={shared} onDone={done} />}
     <Physics gravity={[0, -locomotion.gravity, 0]} timeStep={locomotion.physicsStep} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <Player command={shared.command} pose={shared.pose} time={time} audio={shared.sound} spawn={spawn} scripted={shared.scripted} touchLook={shared.touchLook} touchMove={shared.touchMove} onAction={onAction} />
       <Level route={shared.route} />
@@ -154,7 +155,7 @@ const Scene = memo(function Scene({ shared, spawn, onAction, onEvent, ghostVisib
     </Physics>
     <Practicals route={shared.route} />
     <Markers route={shared.route} race={shared.race} />
-    <Effects route={shared.route} pose={shared.pose} handle={shared.effects} sound={shared.sound} />
+    <Effects route={shared.route} particles={shared.particles} pose={shared.pose} handle={shared.effects} sound={shared.sound} />
     <RaceDriver shared={shared} onEvent={onEvent} ghostVisible={ghostVisible} />
   </>
 })
@@ -169,6 +170,7 @@ export function Game() {
     const sound = new TraverseAudio(route, isTouchDevice() ? 'phone' : 'desktop')
     return {
       route,
+      particles: new THREE.Scene(),
       command: createCommand(route.spawnYaw),
       pose: { current: createCharacterPoseSample() },
       race: { current: createRace(readBest()) },

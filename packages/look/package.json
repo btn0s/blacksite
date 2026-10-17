@@ -12,6 +12,7 @@
     "./grade": "./src/grade.ts",
     "./quality": "./src/quality.ts",
     "./world": "./src/world/index.ts",
+    "./soft": "./src/soft.ts",
     "./luts/*": "./luts/*"
   },
   "scripts": {

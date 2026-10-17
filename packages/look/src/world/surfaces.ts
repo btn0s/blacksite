@@ -36,7 +36,7 @@ function texture(file: string, color: boolean) {
   if (cached) return cached
   let done: (value: unknown) => void = () => {}
   pending.push(new Promise(resolve => { done = resolve }))
-  const loaded = loader.load(TEXTURES[file]!, done, undefined, done)
+  const loaded = loader.load(TEXTURES[file]!, texture => { if (color) textureMean(texture); done(texture) }, undefined, done)
   loaded.wrapS = loaded.wrapT = THREE.RepeatWrapping
   loaded.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace
   loaded.anisotropy = anisotropy
@@ -374,4 +374,45 @@ export function groundMaterial() {
 
 export function puddleMaterial() {
   return decalBias(new THREE.MeshStandardMaterial({ name: 'look-puddle', color: '#2c2d27', roughness: 0.03, metalness: 0.55, envMapIntensity: 1.4, transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), OVERLAY_BIAS)
+}
+
+const textureMeans = new WeakMap<THREE.Texture, THREE.Color>()
+
+function textureMean(texture: THREE.Texture) {
+  const cached = textureMeans.get(texture)
+  if (cached) return cached
+  const image = texture.image as (CanvasImageSource & { width: number; height: number }) | undefined
+  if (!image?.width || typeof document === 'undefined') return null
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = 32
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context) return null
+  context.drawImage(image, 0, 0, 32, 32)
+  const data = context.getImageData(0, 0, 32, 32).data
+  const space = texture.colorSpace === THREE.SRGBColorSpace ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace
+  const mean = new THREE.Color(0, 0, 0)
+  const texel = new THREE.Color()
+  for (let index = 0; index < data.length; index += 4) mean.add(texel.setRGB(data[index]! / 255, data[index + 1]! / 255, data[index + 2]! / 255, space))
+  mean.multiplyScalar(4 / data.length)
+  textureMeans.set(texture, mean)
+  return mean
+}
+
+export function surfaceAlbedo(hit: THREE.Intersection, target = new THREE.Color()) {
+  const mesh = hit.object as THREE.Mesh
+  const material = (Array.isArray(mesh.material) ? mesh.material[hit.face?.materialIndex ?? 0] : mesh.material) as THREE.MeshStandardMaterial | undefined
+  if (!material?.color || !material.visible || material.colorWrite === false) return null
+  target.copy(material.color)
+  const mean = material.map ? textureMean(material.map) : null
+  if (mean) target.multiply(mean)
+  const instanced = mesh as THREE.InstancedMesh
+  if (hit.instanceId !== undefined && instanced.instanceColor) target.multiply(new THREE.Color().fromBufferAttribute(instanced.instanceColor, hit.instanceId))
+  const colors = mesh.geometry.getAttribute('color')
+  if (material.vertexColors && colors && hit.face) {
+    const vertex = new THREE.Color()
+    const sum = new THREE.Color(0, 0, 0)
+    for (const index of [hit.face.a, hit.face.b, hit.face.c]) sum.add(vertex.fromBufferAttribute(colors as THREE.BufferAttribute, index))
+    target.multiply(sum.multiplyScalar(1 / 3))
+  }
+  return target
 }

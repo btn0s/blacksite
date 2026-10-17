@@ -5,7 +5,8 @@ import type { CharacterPoseSample } from 'als-ue5-r3f/app/CharacterPoseSample'
 import type { Route } from './route'
 import type { TraverseAudio } from './audio'
 import { input as tuning, look } from './model'
-import { isTouchDevice } from '@blacksite/look/world'
+import { isTouchDevice, surfaceAlbedo } from '@blacksite/look/world'
+import { createSoftParticleMaterial } from '@blacksite/look/soft'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 
 export type EffectsHandle = { flash(at: readonly [number, number, number]): void; dust(at: THREE.Vector3, amount: number): void }
@@ -50,27 +51,30 @@ function pointsMaterial() {
   })
 }
 
-function cloud(count: number) {
+function cloud(count: number, material: THREE.Material = pointsMaterial()) {
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3).setUsage(THREE.DynamicDrawUsage))
   geometry.setAttribute('size', new THREE.BufferAttribute(new Float32Array(count), 1).setUsage(THREE.DynamicDrawUsage))
   geometry.setAttribute('alpha', new THREE.BufferAttribute(new Float32Array(count), 1).setUsage(THREE.DynamicDrawUsage))
   geometry.setAttribute('tint', new THREE.BufferAttribute(new Float32Array(count * 3), 3).setUsage(THREE.DynamicDrawUsage))
+  geometry.setAttribute('seed', new THREE.BufferAttribute(Float32Array.from({ length: count }, Math.random), 1))
   geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5)
-  const points = new THREE.Points(geometry, pointsMaterial())
+  const points = new THREE.Points(geometry, material)
   points.frustumCulled = false
   points.renderOrder = 2
   return points
 }
 
-type Puff = { x: number; y: number; z: number; vx: number; vy: number; vz: number; age: number; life: number; size: number; grow: number; shade: [number, number, number]; peak: number }
+type Puff = { x: number; y: number; z: number; vx: number; vy: number; vz: number; age: number; life: number; size: number; grow: number; shade: readonly [number, number, number]; peak: number; glow: boolean }
 
-const dustShade: [number, number, number] = [0.56, 0.53, 0.47]
+const capacity = 160
+
+const powder = { floor: 0.3, gain: 0.5, chroma: 0.6 }
 const smokeShade: [number, number, number] = [0.3, 0.29, 0.27]
 const steamShade: [number, number, number] = [0.68, 0.71, 0.67]
 const flashShade: [number, number, number] = [1.0, 0.75, 0.38]
 
-export function Effects({ route, pose, handle, sound }: { route: Route; pose: MutableRefObject<CharacterPoseSample>; handle: { current: EffectsHandle | null }; sound: TraverseAudio }) {
+export function Effects({ route, particles, pose, handle, sound }: { route: Route; particles: THREE.Scene; pose: MutableRefObject<CharacterPoseSample>; handle: { current: EffectsHandle | null }; sound: TraverseAudio }) {
   const { camera, gl } = useThree()
   const count = useMemo(() => Math.round(look.ash * (isTouchDevice() ? look.phoneDensity : 1)), [])
   const ash = useMemo(() => {
@@ -88,19 +92,25 @@ export function Effects({ route, pose, handle, sound }: { route: Route; pose: Mu
     }
     return { points, seeds: Float32Array.from({ length: count }, () => Math.random() * 100) }
   }, [])
-  const puffs = useMemo(() => cloud(160), [])
+  const media = useMemo(() => cloud(capacity, createSoftParticleMaterial()), [])
+  useEffect(() => {
+    particles.add(media)
+    return () => { particles.remove(media) }
+  }, [particles, media])
+  const sparks = useMemo(() => cloud(capacity), [])
   useEffect(() => () => {
-    ash.points.geometry.dispose()
-    ;(ash.points.material as THREE.Material).dispose()
-    puffs.geometry.dispose()
-    ;(puffs.material as THREE.Material).dispose()
-  }, [ash, puffs])
+    for (const points of [ash.points, media, sparks]) {
+      points.geometry.dispose()
+      ;(points.material as THREE.Material).dispose()
+    }
+  }, [ash, media, sparks])
   const live = useRef<Puff[]>([])
   const smokeClock = useRef(0)
   const previous = useRef<{ mode: string | null; action: string | null; vz: number; airborne: number }>({ mode: null, action: null, vz: 0, airborne: 0 })
   const forward = useMemo(() => new THREE.Vector3(), [])
   const spot = useMemo(() => new THREE.Vector3(), [])
   const dip = useRef({ y: 0, v: 0 })
+  const probe = useMemo(() => ({ ray: new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, 0.8), tint: new THREE.Color() }), [])
 
   useFrame((_, rawDelta) => {
     const dt = Math.min(rawDelta, 1 / 20)
@@ -112,20 +122,35 @@ export function Effects({ route, pose, handle, sound }: { route: Route; pose: Mu
     camera.position.y += state.y
   }, ALS_FRAME_PRIORITY.Camera + 0.02)
 
-  const spawn = (puff: Omit<Puff, 'age'>) => { if (live.current.length < 160) live.current.push({ ...puff, age: 0 }) }
+  const spawn = (puff: Omit<Puff, 'age' | 'glow'>, glow = false) => { if (live.current.filter(item => item.glow === glow).length < capacity) live.current.push({ ...puff, glow, age: 0 }) }
+  const surfaceTint = (at: THREE.Vector3): readonly [number, number, number] | null => {
+    if (route.surfaceAt(at.x, at.y, at.z) === 'water') return null
+    probe.ray.ray.origin.set(at.x, at.y + 0.4, at.z)
+    for (const hit of probe.ray.intersectObject(route.group, true)) {
+      const albedo = surfaceAlbedo(hit, probe.tint)
+      if (albedo) {
+        const luminance = Math.max(1e-3, 0.2126 * albedo.r + 0.7152 * albedo.g + 0.0722 * albedo.b)
+        const lift = (powder.floor + powder.gain * luminance) / luminance
+        return [albedo.r, albedo.g, albedo.b].map(channel => (luminance + (channel - luminance) * powder.chroma) * lift) as [number, number, number]
+      }
+    }
+    return null
+  }
   const api = useMemo<EffectsHandle>(() => ({
     flash(at) {
       for (let i = 0; i < 26; i++) {
         const angle = (i / 26) * Math.PI * 2
-        spawn({ x: at[0], y: at[1] - 0.6 + Math.random() * 1.6, z: at[2], vx: Math.cos(angle) * 0.4, vy: 0.6 + Math.random() * 0.8, vz: Math.sin(angle) * 1.6, life: 0.7 + Math.random() * 0.4, size: 0.1, grow: 0.05, shade: flashShade, peak: 0.9 })
+        spawn({ x: at[0], y: at[1] - 0.6 + Math.random() * 1.6, z: at[2], vx: Math.cos(angle) * 0.4, vy: 0.6 + Math.random() * 0.8, vz: Math.sin(angle) * 1.6, life: 0.7 + Math.random() * 0.4, size: 0.1, grow: 0.05, shade: flashShade, peak: 0.9 }, true)
       }
     },
     dust(at, amount) {
+      const shade = surfaceTint(at)
+      if (!shade) return
       const count = Math.round(6 + amount * 12)
       for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2
         const speed = 0.5 + Math.random() * 1.2 * amount
-        spawn({ x: at.x, y: at.y + 0.05, z: at.z, vx: Math.cos(angle) * speed, vy: 0.15 + Math.random() * 0.35, vz: Math.sin(angle) * speed, life: 0.9 + Math.random() * 0.7, size: 0.25 + Math.random() * 0.2, grow: 0.9, shade: dustShade, peak: 0.42 * Math.min(1, 0.5 + amount) })
+        spawn({ x: at.x, y: at.y + 0.05, z: at.z, vx: Math.cos(angle) * speed, vy: 0.15 + Math.random() * 0.35, vz: Math.sin(angle) * speed, life: 0.9 + Math.random() * 0.7, size: 0.25 + Math.random() * 0.2, grow: 0.9, shade, peak: 0.55 * Math.min(1, 0.5 + amount) })
       }
     },
   }), [])
@@ -139,7 +164,7 @@ export function Effects({ route, pose, handle, sound }: { route: Route; pose: Mu
     const t = clock.elapsedTime
     const scale = gl.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad((camera as THREE.PerspectiveCamera).fov) / 2))
     ;(ash.points.material as THREE.ShaderMaterial).uniforms.scale!.value = scale
-    ;(puffs.material as THREE.ShaderMaterial).uniforms.scale!.value = scale
+    ;(sparks.material as THREE.ShaderMaterial).uniforms.scale!.value = scale
 
     const position = ash.points.geometry.getAttribute('position') as THREE.BufferAttribute
     const array = position.array as Float32Array
@@ -167,7 +192,7 @@ export function Effects({ route, pose, handle, sound }: { route: Route; pose: Mu
       for (const fire of fires) {
         if (Math.hypot(fire.at[0] - cx, fire.at[2] - cz) > 45) continue
         spawn({ x: fire.at[0] + (Math.random() - 0.5) * 0.3, y: fire.at[1] + 0.4, z: fire.at[2] + (Math.random() - 0.5) * 0.3, vx: 0.15 + Math.random() * 0.1, vy: 0.7 + Math.random() * 0.3, vz: (Math.random() - 0.5) * 0.1, life: 3.2, size: 0.35, grow: 0.7, shade: smokeShade, peak: 0.32 })
-        if (Math.random() < 0.5) spawn({ x: fire.at[0], y: fire.at[1] + 0.25, z: fire.at[2], vx: (Math.random() - 0.5) * 0.6, vy: 1.6 + Math.random() * 1.2, vz: (Math.random() - 0.5) * 0.6, life: 0.6 + Math.random() * 0.5, size: 0.035, grow: 0, shade: flashShade, peak: 1 })
+        if (Math.random() < 0.5) spawn({ x: fire.at[0], y: fire.at[1] + 0.25, z: fire.at[2], vx: (Math.random() - 0.5) * 0.6, vy: 1.6 + Math.random() * 1.2, vz: (Math.random() - 0.5) * 0.6, life: 0.6 + Math.random() * 0.5, size: 0.035, grow: 0, shade: flashShade, peak: 1 }, true)
       }
       for (const vent of vents) {
         if (Math.hypot(vent.at[0] - cx, vent.at[2] - cz) > 45) continue
@@ -207,10 +232,6 @@ export function Effects({ route, pose, handle, sound }: { route: Route; pose: Mu
     camera.getWorldDirection(forward)
     sound.listen(camera.position, forward, sample.ready ? sample.ground.y : 0, rawDelta)
 
-    const puffPosition = puffs.geometry.getAttribute('position') as THREE.BufferAttribute
-    const puffSize = puffs.geometry.getAttribute('size') as THREE.BufferAttribute
-    const puffAlpha = puffs.geometry.getAttribute('alpha') as THREE.BufferAttribute
-    const puffTint = puffs.geometry.getAttribute('tint') as THREE.BufferAttribute
     const list = live.current
     let write = 0
     for (let i = 0; i < list.length; i++) {
@@ -227,20 +248,29 @@ export function Effects({ route, pose, handle, sound }: { route: Route; pose: Mu
       list[write++] = puff
     }
     list.length = write
-    for (let i = 0; i < 160; i++) {
-      const puff = list[i]
-      if (!puff) { puffAlpha.setX(i, 0); continue }
-      const k = puff.age / puff.life
-      puffPosition.setXYZ(i, puff.x, puff.y, puff.z)
-      puffSize.setX(i, puff.size * (1 + puff.grow * k * 3))
-      puffAlpha.setX(i, puff.peak * Math.min(1, k * 8) * (1 - k) * (1 - k))
-      puffTint.setXYZ(i, ...puff.shade)
+    for (const points of [media, sparks]) {
+      const glow = points === sparks
+      const position = points.geometry.getAttribute('position') as THREE.BufferAttribute
+      const size = points.geometry.getAttribute('size') as THREE.BufferAttribute
+      const alpha = points.geometry.getAttribute('alpha') as THREE.BufferAttribute
+      const tint = points.geometry.getAttribute('tint') as THREE.BufferAttribute
+      let slot = 0
+      for (const puff of list) {
+        if (puff.glow !== glow) continue
+        const k = puff.age / puff.life
+        position.setXYZ(slot, puff.x, puff.y, puff.z)
+        size.setX(slot, puff.size * (1 + puff.grow * k * 3))
+        alpha.setX(slot, puff.peak * Math.min(1, k * 8) * (1 - k) * (1 - k))
+        tint.setXYZ(slot, ...puff.shade)
+        slot++
+      }
+      for (let i = slot; i < capacity; i++) alpha.setX(i, 0)
+      position.needsUpdate = size.needsUpdate = alpha.needsUpdate = tint.needsUpdate = true
     }
-    puffPosition.needsUpdate = puffSize.needsUpdate = puffAlpha.needsUpdate = puffTint.needsUpdate = true
   })
 
   return <>
     <primitive object={ash.points} />
-    <primitive object={puffs} />
+    <primitive object={sparks} />
   </>
 }

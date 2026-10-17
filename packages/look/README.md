@@ -56,6 +56,10 @@ The sampling layout follows the three-patch construction described by [Heitz and
 const removeViewmodel = look.addOverlay(viewmodelScene, viewmodelCamera)
 ```
 
+## Soft particles
+
+Dust, smoke and steam drawn with `createSoftParticleMaterial()` from `@blacksite/look/soft` are lit by the scene's strongest `DirectionalLight` (wrapped diffuse with mild forward scattering), its `HemisphereLight` and `AmbientLight` sum, and `scene.fog`. They fade where they meet geometry and as they reach the camera. Add the `Points` to a `Scene` of your own and pass it as the `particles` option of `createLook` (or the `particles` prop of `<Look>`). A soft pass right after the scene render draws that scene with the main camera into the same buffer, depth-tested like any transparent object and faded against a copy of the frame's depth. Keeping particles in their own scene leaves the main scene's light setup untouched. Each point takes `size` (world diameter), `alpha`, `tint` (linear albedo) and `seed` attributes. Options: `softness` (contact fade depth as a fraction of the radius, default 1) and `scatter` (forward-scatter gain toward the sun, default 0.8). Without `particles` there is no soft pass; with an empty scene it does nothing. `surfaceAlbedo(hit)` from `@blacksite/look/world` returns the linear albedo under a raycast hit (material colour × texture mean × instance or vertex colour), for tinting what comes off a surface.
+
 ## React Three Fiber
 
 ```tsx

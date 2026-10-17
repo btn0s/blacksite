@@ -45,6 +45,7 @@ function shadowProxies(group: THREE.Group, span = 32) {
     proxy.castShadow = true
     proxy.receiveShadow = false
     proxy.matrixAutoUpdate = false
+    proxy.raycast = () => {}
     proxy.intersectsFrustum = (frustum: THREE.Frustum) => frustum.planes[0]!.normal.dot(frustum.planes[1]!.normal) < -0.999 && frustum.intersectsObject(proxy)
     return proxy
   })
