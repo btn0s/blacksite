@@ -28,7 +28,7 @@ export function thumbnailsFromMeta(): Map<string, string> {
   return found
 }
 
-export const specHash = (spec: ImageSpec) => createHash('sha256').update(JSON.stringify(spec)).update(readFileSync(resolve(publicDir, spec.source))).digest('hex')
+export const specHash = (spec: ImageSpec) => spec.images.reduce((hash, image) => hash.update(readFileSync(resolve(publicDir, image))), createHash('sha256').update(JSON.stringify(spec))).digest('hex')
 
 type Outline = { advance: number; commands: Command[] }
 const outlines = new WeakMap<Font, Map<string, Outline>>()
@@ -83,33 +83,57 @@ function text(face: Font, value: string, x: number, y: number, size: number, fil
   return `<path d="${chars.map((char, index) => pathData(outline(face, char).commands, x + offsets[index]!, y, scale)).join('')}" fill="${fill}"/>`
 }
 
-function overlay(spec: ImageSpec): string {
-  const { width, height } = imageSize, left = 72
-  const titleSize = spec.subtitle && spec.title.length <= 40 ? 76 : 60, titleLeading = titleSize * 1.12, titleLines = wrap(display, spec.title, titleSize, 1000, -0.02)
-  const subtitleLines = spec.subtitle ? wrap(body, spec.subtitle, 32, 900, 0) : []
-  let y = height - 72 - (subtitleLines.length - 1) * 44
-  const parts: string[] = []
-  for (const line of subtitleLines) { parts.push(text(body, line, left, y, 32, '#c4c4c8')); y += 44 }
-  y = height - 72 - (subtitleLines.length ? subtitleLines.length * 44 + 20 : 0) - (titleLines.length - 1) * titleLeading
-  for (const line of titleLines) { parts.push(text(display, line, left, y, titleSize, '#ececec', -0.02)); y += titleLeading }
+const left = 72, top = 72, inner = imageSize.width - left * 2
+
+function lines(face: Font, value: string, x: number, y: number, size: number, leading: number, width: number, fill: string, spacing = 0) {
+  const count = wrap(face, value, size, width, spacing).length
+  let fit = width
+  while (count > 1 && fit > size * 4 && wrap(face, value, size, fit - 8, spacing).length === count) fit -= 8
+  return wrap(face, value, size, fit, spacing).map((line, index) => text(face, line, x, y + index * leading, size, fill, spacing))
+}
+
+function overlay(spec: ImageSpec, slots: Slot[]): string {
+  const { width, height } = imageSize, parts: string[] = []
+  if (spec.images.length > 1) parts.push(...lines(display, spec.title, left, 222, 76, 86, inner, '#ececec', -0.02))
+  else if (spec.images.length === 1) {
+    const column = slots[0]!.x - left - 48
+    const titleLines = wrap(display, spec.title, 68, column, -0.02).length
+    parts.push(...lines(display, spec.title, left, 250, 68, 78, column, '#ececec', -0.02))
+    if (spec.subtitle) parts.push(...lines(body, spec.subtitle, left, 250 + (titleLines - 1) * 78 + 64, 34, 46, column, '#a3a3a8'))
+  } else {
+    parts.push(...lines(display, spec.title, left, 330, 88, 96, inner, '#ececec', -0.02))
+    if (spec.subtitle) parts.push(...lines(body, spec.subtitle, left, 330 + (wrap(display, spec.title, 88, inner, -0.02).length - 1) * 96 + 76, 38, 50, inner, '#a3a3a8'))
+  }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-    <defs>
-      <linearGradient id="foot" x1="0" x2="0" y1="1" y2="0"><stop offset="0" stop-color="${themeColor}" stop-opacity="0.92"/><stop offset="0.85" stop-color="${themeColor}" stop-opacity="0"/></linearGradient>
-      <linearGradient id="head" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${themeColor}" stop-opacity="0.75"/><stop offset="0.3" stop-color="${themeColor}" stop-opacity="0"/></linearGradient>
-    </defs>
-    ${spec.card ? '' : `<rect width="${width}" height="${height}" fill="url(#foot)"/><rect width="${width}" height="${height}" fill="url(#head)"/>`}
-    <rect x="${left}" y="70" width="22" height="22" rx="4" fill="${accent}"/>
-    ${text(display, 'Blacksite', left + 36, 90, 30, '#ececec')}
+    <rect x="${left}" y="${top}" width="22" height="22" rx="4" fill="${accent}"/>
+    ${text(display, 'Blacksite', left + 36, top + 20, 30, '#ececec')}
     ${parts.join('\n    ')}
   </svg>`
 }
 
-async function render(spec: ImageSpec): Promise<Buffer> {
+type Slot = { x: number; y: number; w: number; h: number }
+
+function slotsFor(spec: ImageSpec): Slot[] {
   const { width, height } = imageSize
-  const photo = spec.card ? sharp({ create: { width, height, channels: 3, background: themeColor } }) : sharp(resolve(publicDir, spec.source)).resize(width, height, { fit: 'cover', position: 'centre' })
-  const svg = overlay(spec)
+  if (spec.images.length > 1) {
+    const gap = 24, w = Math.round((inner - gap * (spec.images.length - 1)) / spec.images.length), h = Math.round(w * 9 / 16)
+    return spec.images.map((_, index) => ({ x: left + index * (w + gap), y: height - top - h, w, h }))
+  }
+  if (spec.images.length === 1) { const w = 520, h = 292; return [{ x: width - left - w, y: Math.round((height - h) / 2) + 20, w, h }] }
+  return []
+}
+
+async function rounded(file: string, slot: Slot) {
+  const mask = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${slot.w}" height="${slot.h}"><rect width="${slot.w}" height="${slot.h}" rx="14" fill="#fff"/></svg>`)
+  return sharp(resolve(publicDir, file)).resize(slot.w, slot.h, { fit: 'cover', position: 'centre' }).composite([{ input: mask, blend: 'dest-in' }]).png().toBuffer()
+}
+
+async function render(spec: ImageSpec): Promise<Buffer> {
+  const { width, height } = imageSize, slots = slotsFor(spec)
+  const svg = overlay(spec, slots)
   if (svg.includes('NaN')) throw new Error(`${spec.file}: text layout produced NaN`)
-  return photo.composite([{ input: Buffer.from(svg) }]).jpeg({ quality: 84, mozjpeg: true, chromaSubsampling: '4:2:0' }).toBuffer()
+  const pictures = await Promise.all(spec.images.map(async (file, index) => ({ input: await rounded(file, slots[index]!), left: slots[index]!.x, top: slots[index]!.y })))
+  return sharp({ create: { width, height, channels: 3, background: themeColor } }).composite([...pictures, { input: Buffer.from(svg) }]).jpeg({ quality: 88, mozjpeg: true, chromaSubsampling: '4:4:4' }).toBuffer()
 }
 
 const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="${accent}"/></svg>\n`

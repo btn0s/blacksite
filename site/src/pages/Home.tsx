@@ -1,4 +1,4 @@
-import { featured, installLine, repo, tools } from '../content'
+import { featured, skillsLine, tools } from '../content'
 import { CopyLine } from '../components'
 import { asset, link } from '../links'
 import { headline, subhead } from '../seo'
@@ -12,8 +12,8 @@ export function Home() {
         <h1>{headline}.</h1>
         <p className="hero-line">{subhead}</p>
         <div className="hero-install">
-          <CopyLine code={installLine} />
-          <a className="hero-alt" href={`${repo}/blob/main/install.ps1`}>On Windows, use install.ps1</a>
+          <CopyLine code={skillsLine} />
+          <a className="hero-alt" href={`${link('get-started')}#full-toolkit`}>Or install the full toolkit directly</a>
         </div>
         <p className="hero-links"><a className="hero-start" href={link('get-started')}>Get started →</a><a className="hero-quiet" href={link('skills')}>How it works →</a></p>
       </div>

@@ -1,7 +1,7 @@
 {
   "name": "Blacksite",
   "short_name": "Blacksite",
-  "description": "The game-dev instincts your coding agent is missing. Blacksite gives your agents best practices from real games, top-quality examples to learn from, and building blocks to build on.",
+  "description": "A game dev skill for Claude Code, Codex and Cursor. Your agent builds 3D browser games in three.js from best practices, examples and building blocks.",
   "start_url": "/",
   "display": "browser",
   "background_color": "#0e0e0f",

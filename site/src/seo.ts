@@ -10,14 +10,26 @@ export const imageSize = { width: 1200, height: 630 }
 
 export type PageMeta = { route: string; title: string; description: string; image: string; imageAlt: string; type: 'website' | 'article' }
 
+export const description = 'A game dev skill for Claude Code, Codex and Cursor. Your agent builds 3D browser games in three.js from best practices, examples and building blocks.'
+
+const toolTitles: Record<string, string> = {
+  characters: 'Character movement and animation for three.js',
+  world: 'Open-world terrain and foliage for browser games',
+  destruction: 'Building destruction physics for browser games',
+  weapons: 'First-person weapons for browser games',
+  multiplayer: 'Server-checked multiplayer for browser games',
+  ai: 'Enemy squad AI for browser games',
+  input: 'Gamepad, touch and menu input for browser games',
+}
+
 const toolDescriptions: Record<string, string> = {
-  characters: 'A player character that walks, sprints, climbs over ledges, rolls and aims in first or third person. Play Traverse, a timed rooftop run, in the browser.',
-  world: 'Terrain, grass, forests, wind and sky that hold up from your feet to mountains 16 km away. Walk a square kilometre of meadow in Valley.',
-  destruction: 'Concrete buildings that crack, lose their supports and fall, with the physics in a web worker. Call in a strike on a six-storey block.',
-  weapons: 'A rifle and a pistol on rigged first-person arms, with recoil and hits a server can check. Play Breach, a squad fight, or the firing range.',
-  multiplayer: 'Rooms where each player moves their own character, the server checks every hit, and other players animate like you do. Try it against a bot.',
-  ai: 'Enemy squads that see, hear, take cover and flank, in a simulation that gives the same result every time. Watch two squads of five fight.',
-  input: 'One input layer for keyboard, mouse, gamepad and touch, bound to named actions, plus menus, pause and settings screens a controller can drive.',
+  characters: 'A player character for browser games that walks, sprints, climbs ledges, rolls and aims in first or third person, with a rooftop run to play.',
+  world: 'Open-world terrain, grass, forests, wind and sky for browser games that hold up from your feet to distant mountains, with a valley to walk.',
+  destruction: 'Concrete buildings for browser games that crack, lose their supports and collapse, with the physics running in a web worker.',
+  weapons: 'A first-person rifle and pistol for browser games on rigged arms, with recoil and server-checked hits, plus a squad fight and a firing range.',
+  multiplayer: 'Multiplayer rooms for browser games where each player moves their own character and the server checks every hit, with a bot to play against.',
+  ai: 'Enemy squad AI for browser games: squads that see, hear, take cover and flank, in a simulation that gives the same result every time.',
+  input: 'One input layer for browser games covering keyboard, mouse, gamepad and touch, plus menus, pause and settings screens a controller can drive.',
 }
 
 const guideDescriptions: Record<string, string> = {
@@ -30,12 +42,12 @@ const guideDescriptions: Record<string, string> = {
 }
 
 export const pages: PageMeta[] = [
-  { route: '', title: `${siteName} — ${headline}`, description: subhead, image: 'og/home.jpg', imageAlt: `${siteName}: ${headline}`, type: 'website' },
-  { route: 'get-started', title: `Get started — ${siteName}`, description: 'Install Blacksite with one command, open Claude Code, Codex or Cursor in an empty folder, and say what game you want. The agent builds it and sends a link.', image: 'og/get-started.jpg', imageAlt: `Get started with ${siteName}`, type: 'article' },
-  { route: 'skills', title: `How it works — ${siteName}`, description: 'Blacksite gives your coding agent game-dev instincts: guides, building blocks, example games, and checks that play the game on desktop and phone.', image: 'og/skills.jpg', imageAlt: `How ${siteName} works`, type: 'article' },
-  { route: 'roadmap', title: `Roadmap — ${siteName}`, description: 'What works in Blacksite today, what is being built now, and what comes after that, for the skill and its building blocks.', image: 'og/roadmap.jpg', imageAlt: `${siteName} roadmap`, type: 'article' },
-  ...tools.map((tool): PageMeta => ({ route: `tools/${tool.slug}`, title: `${tool.name} — ${siteName}`, description: toolDescriptions[tool.slug] ?? tool.tagline, image: `og/${tool.slug}.jpg`, imageAlt: `${siteName} ${tool.name}: ${tool.tagline}`, type: 'article' })),
-  ...docList.filter(doc => doc.slug !== 'roadmap').map((doc): PageMeta => ({ route: `guides/${doc.slug}`, title: `${doc.title} — ${siteName}`, description: guideDescriptions[doc.slug] ?? doc.title, image: doc.tool ? `og/${doc.tool}.jpg` : 'og/home.jpg', imageAlt: `${siteName} ${doc.title}`, type: 'article' })),
+  { route: '', title: `${siteName}: game dev skills for your coding agents`, description, image: 'og/home.jpg', imageAlt: `${siteName}: ${headline}`, type: 'website' },
+  { route: 'get-started', title: `Get started with ${siteName}`, description: 'Install Blacksite with one command, open Claude Code, Codex or Cursor in an empty folder, and describe the game you want your agent to build.', image: 'og/get-started.jpg', imageAlt: `Get started with ${siteName}`, type: 'article' },
+  { route: 'skills', title: `How ${siteName} works: game dev skills for coding agents`, description: 'How Blacksite gives your coding agent game dev skills: guides, building blocks, example games, and checks that play the game on desktop and phone.', image: 'og/skills.jpg', imageAlt: `How ${siteName} works`, type: 'article' },
+  { route: 'roadmap', title: `${siteName} roadmap: what works today and what comes next`, description: 'What works in Blacksite today, what is being built now, and what comes after that, for the game dev skill and its building blocks.', image: 'og/roadmap.jpg', imageAlt: `${siteName} roadmap`, type: 'article' },
+  ...tools.map((tool): PageMeta => ({ route: `tools/${tool.slug}`, title: `${toolTitles[tool.slug] ?? tool.name} · ${siteName}`, description: toolDescriptions[tool.slug] ?? tool.tagline, image: `og/${tool.slug}.jpg`, imageAlt: `${siteName} ${tool.name}: ${tool.tagline}`, type: 'article' })),
+  ...docList.filter(doc => doc.slug !== 'roadmap').map((doc): PageMeta => ({ route: `guides/${doc.slug}`, title: `${doc.title} · ${siteName}`, description: guideDescriptions[doc.slug] ?? doc.title, image: doc.tool ? `og/${doc.tool}.jpg` : 'og/home.jpg', imageAlt: `${siteName} ${doc.title}`, type: 'article' })),
 ]
 
 export const metaFor = (route: string) => pages.find(page => page.route === route)

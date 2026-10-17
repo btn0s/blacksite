@@ -1,5 +1,6 @@
 export const repo = 'https://github.com/btn0s/blacksite'
 export const alsRepo = 'https://github.com/btn0s/als-web'
+export const skillsLine = 'npx skills add btn0s/blacksite'
 export const installLine = 'curl -fsSL https://raw.githubusercontent.com/btn0s/blacksite/main/install.sh | sh'
 
 export type Control = { action: string; keys: string[] }

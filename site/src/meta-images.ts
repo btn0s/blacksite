@@ -1,19 +1,30 @@
 import { tools } from './content'
-import { headline, subhead } from './seo'
+import { headline } from './seo'
 
-export type ImageSpec = { file: string; source: string; title: string; subtitle?: string; card: boolean }
+export type ImageSpec = { file: string; title: string; subtitle?: string; images: string[] }
 
-export const cardSource = 'thumbs/hero.webp'
+const pictured = new Set(['characters', 'weapons', 'world'])
+
+const lines: Record<string, string> = {
+  characters: 'Walk, sprint, climb, roll and fall.',
+  weapons: 'A rifle and a pistol in rigged arms.',
+  world: 'Terrain, grass, forests, wind and sky.',
+  destruction: 'Concrete buildings that crack and fall.',
+  multiplayer: 'Shared rooms where the server checks every hit.',
+  ai: 'Enemy squads that take cover and flank.',
+  input: 'Keyboard, mouse, gamepad and touch.',
+}
 
 export function imageSpecs(thumbnailFor: (tool: string) => string | undefined): ImageSpec[] {
+  const games = ['weapons', 'characters', 'world'].flatMap(tool => thumbnailFor(tool) ?? [])
   return [
-    { file: 'og/home.jpg', source: thumbnailFor('destruction') ?? cardSource, title: headline, subtitle: subhead, card: false },
-    { file: 'og/get-started.jpg', source: cardSource, title: 'Get started', subtitle: 'Install it, open your agent, and say what you want to make.', card: true },
-    { file: 'og/skills.jpg', source: cardSource, title: 'How it works', subtitle: 'Guides, building blocks, example games and checks for your coding agent.', card: true },
-    { file: 'og/roadmap.jpg', source: cardSource, title: 'Roadmap', subtitle: 'What works today and what comes next.', card: true },
+    { file: 'og/home.jpg', title: `${headline}.`, images: games },
+    { file: 'og/get-started.jpg', title: 'Get started', subtitle: 'Install it, open your agent, say what you want.', images: [] },
+    { file: 'og/skills.jpg', title: 'How it works', subtitle: 'Guides, building blocks, example games and checks.', images: [] },
+    { file: 'og/roadmap.jpg', title: 'Roadmap', subtitle: 'What works today and what comes next.', images: [] },
     ...tools.map(tool => {
-      const thumbnail = thumbnailFor(tool.slug)
-      return { file: `og/${tool.slug}.jpg`, source: thumbnail ?? cardSource, title: tool.name, subtitle: tool.tagline, card: !thumbnail }
+      const thumbnail = pictured.has(tool.slug) ? thumbnailFor(tool.slug) : undefined
+      return { file: `og/${tool.slug}.jpg`, title: tool.name, subtitle: lines[tool.slug] ?? tool.tagline, images: thumbnail ? [thumbnail] : [] }
     }),
   ]
 }

@@ -11,9 +11,23 @@ Blacksite covers characters with hundreds of animations, multiplayer, buildings 
 - **Templates, an open asset library and checks.** Four starting projects, 146 open-licence assets, and `blacksite check`, which measures a running game on desktop and phone.
 - **Example games.** Breach, Traverse and Valley, each built only on the public packages.
 
-[See the demos](https://blacksite-sable.vercel.app)
+[See the demos](https://blacksite-sable.vercel.app) · [Blacksite on skills.sh](https://skills.sh/btn0s/blacksite)
 
-## Quickstart
+## Install
+
+```sh
+npx skills add btn0s/blacksite
+```
+
+To pick the agent, or install for your user instead of the project:
+
+```sh
+npx skills add btn0s/blacksite -g -a claude-code
+npx skills add btn0s/blacksite -a codex
+npx skills add btn0s/blacksite -a cursor
+```
+
+If the `blacksite` command is missing, the skill offers to run the full installer. To install the full toolkit directly:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/btn0s/blacksite/main/install.sh | sh

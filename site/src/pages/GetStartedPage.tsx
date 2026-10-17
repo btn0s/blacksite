@@ -1,4 +1,4 @@
-import { installLine, repo } from '../content'
+import { installLine, repo, skillsLine } from '../content'
 import { CopyLine } from '../components'
 import { link } from '../links'
 import { skills } from '../skills'
@@ -13,8 +13,11 @@ export function GetStartedPage() {
     <ol className="steps">
       <li>
         <h2>Install</h2>
+        <CopyLine code={skillsLine} />
+        <p>It adds the skill to Claude Code, Codex or Cursor. The skill offers to install the <code>blacksite</code> command when it needs it.</p>
+        <p id="full-toolkit">Or install the full toolkit directly:</p>
         <CopyLine code={installLine} />
-        <p>It clones Blacksite into <code>~/.blacksite</code>, puts the <code>blacksite</code> command on your PATH, and adds the skill to each of Claude Code, Codex and Cursor that it finds. On Windows, run <a href={`${repo}/blob/main/install.ps1`}>install.ps1</a> in PowerShell.</p>
+        <p>On Windows, run <a href={`${repo}/blob/main/install.ps1`}>install.ps1</a> in PowerShell.</p>
       </li>
       <li>
         <h2>Open your agent in an empty folder</h2>

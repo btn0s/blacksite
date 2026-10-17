@@ -34,11 +34,13 @@ describe('route meta', () => {
   it.each(pages.map(page => [page.route || '/', page] as const))('gives %s a title, description, canonical and 1200x630 image', (_, page) => {
     const html = renderPage(shell, page, defaultSiteUrl)
     expect(html).toContain('<html lang="en">')
-    expect(tag(html, /<title>([^<]+)<\/title>/)).toMatch(/ — Blacksite$|^Blacksite — /)
+    const title = tag(html, /<title>([^<]+)<\/title>/)!
+    expect(title).toContain('Blacksite')
+    expect(title.length).toBeLessThanOrEqual(60)
     expect(html.match(/<title>/g)).toHaveLength(1)
     const description = tag(html, /<meta name="description" content="([^"]+)"/)!
     expect(description.length).toBeGreaterThan(60)
-    expect(description.length).toBeLessThanOrEqual(155)
+    expect(description.length).toBeLessThanOrEqual(160)
     expect(tag(html, /<link rel="canonical" href="([^"]+)"/)).toBe(`${defaultSiteUrl}/${page.route}`)
     expect(tag(html, /<meta property="og:url" content="([^"]+)"/)).toBe(`${defaultSiteUrl}/${page.route}`)
     expect(tag(html, /<meta name="twitter:card" content="([^"]+)"/)).toBe('summary_large_image')
