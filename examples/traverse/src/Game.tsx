@@ -5,6 +5,7 @@ import { Physics, useRapier } from '@react-three/rapier'
 import { InputProvider, makeInputDevices } from '@blacksite/input'
 import { Look } from '@blacksite/look/r3f'
 import { internalPixelRatio, isTouchDevice, texturesReady } from '@blacksite/look/world'
+import { autoQuality, depthDefaults } from '@blacksite/look/quality'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
 import { Hints, Loading, Prompt, Screen, TitleCard, TouchPad, useTouch } from '@blacksite/ui/hud'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
@@ -265,7 +266,7 @@ export function Game() {
   const api = useMemo<ProbeApi>(() => ({ respawn, restart }), [respawn, restart])
   const total = shared.route.gates.length - 1
   return <InputProvider runtime={runtime}><Screen>
-    <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 60, near: 0.1, far: 600, position: [-4, 2, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }}
+    <Canvas shadows dpr={internalPixelRatio()} camera={{ fov: 60, ...depthDefaults(autoQuality(), { far: 600 }).camera, position: [-4, 2, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }}
       onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
       {ready && <Scene shared={shared} spawn={spawn} onAction={onAction} onEvent={onEvent} ghostVisible={ghostVisible} api={api} />}
     </Canvas>

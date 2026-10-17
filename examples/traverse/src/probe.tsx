@@ -400,7 +400,7 @@ export function Probe({ shared, api }: { shared: Shared; api: ProbeApi }) {
           frames += record.frames
         }
         command.pitch = -12
-        return result('camera-wall', { clipFrames: clips, frames, nearRadius: nearPlaneRadius(model.camera.near, (camera as THREE.PerspectiveCamera).fov, (camera as THREE.PerspectiveCamera).aspect) }, { clipFrames: model.camera.clipFrames }, frames > 100 && clips <= model.camera.clipFrames)
+        return result('camera-wall', { clipFrames: clips, frames, nearRadius: nearPlaneRadius((camera as THREE.PerspectiveCamera).near, (camera as THREE.PerspectiveCamera).fov, (camera as THREE.PerspectiveCamera).aspect) }, { clipFrames: model.camera.clipFrames }, frames > 100 && clips <= model.camera.clipFrames)
       },
       async actions() {
         await place(feelLane.start, feelLane.yaw)

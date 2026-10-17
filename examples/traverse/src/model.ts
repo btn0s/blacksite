@@ -46,7 +46,6 @@ export const feet = {
 } as const
 
 export const camera = {
-  near: 0.1,
   clipFrames: 0,
   shoulderOffset: 0.5,
   shoulderSwapSeconds: 0.5,

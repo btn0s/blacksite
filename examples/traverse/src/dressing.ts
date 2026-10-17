@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { apc, lada, puddleMaterial, waterTower, type LevelBuilder, type SurfaceName } from '@blacksite/look/world'
+import { apc, decalBias, lada, puddleMaterial, waterTower, type LevelBuilder, type SurfaceName } from '@blacksite/look/world'
 import { feet } from './model'
 import type { Emitter, Light, Waypoint } from './route'
 
@@ -344,15 +344,15 @@ export function dress(level: LevelBuilder, context: DressingContext) {
         const broken = rand() < 0.22
         const h = broken ? 1.9 + rand() * 0.3 : 2.35 + rand() * 0.2
         box([w - 0.08, h, 0.16], slab, at(t, 0, h / 2 + 0.05), [0, yaw + jitter(0.02), jitter(0.02)])
-        if (broken) box([w * (0.3 + rand() * 0.3), 0.5, 0.16], slab, at(t + jitter(0.3) / count, 0, h + 0.2), [0, yaw, jitter(0.5)], false, false)
+        if (broken) box([w * (0.3 + rand() * 0.3), 0.5, 0.16], slab, at(t + jitter(0.3) / count, 0.06, h + 0.2), [0, yaw, jitter(0.5)], false, false)
         for (const y of [0.75, 1.6]) if (y < h - 0.2) box([w - 0.5, 0.12, 0.06], slab, at(t, 0.1, y), yaw, false, false)
         if (rand() < 0.55) mark(pick([R.stain, R.rust, R.moss, R.crack, R.tsoi, R.poster]), at(t + jitter(0.4) / count, 0.13, 1.3), face, pick([1.6, 1.4, 0.5, 1.2]), jitter(0.05))
       }
     } else if (style === 'hoarding') {
       const count = Math.ceil(length / 1.05)
-      for (let k = 0; k < count; k++) { const h = 2.35 + rand() * 0.35; box([1.12, h, 0.06], k % 3 === 2 ? sheetDark : sheet, at((k + 0.5) / count, jitter(0.06), h / 2), [jitter(0.03), yaw + jitter(0.04), jitter(0.03)], false, k % 4 === 0) }
-      for (let k = 0; k <= Math.ceil(length / 3); k++) box([0.14, 2.6, 0.14], wood, at(k / Math.ceil(length / 3), -0.12, 1.3), yaw, false, false)
-      for (const y of [0.5, 2.0]) box([length, 0.1, 0.08], wood, at(0.5, -0.12, y), yaw, false, false)
+      for (let k = 0; k < count; k++) { const h = 2.35 + rand() * 0.35; box([1.12, h, 0.06], k % 3 === 2 ? sheetDark : sheet, at((k + 0.5) / count, (k % 2 ? 0.04 : -0.04) + jitter(0.01), h / 2), [jitter(0.03), yaw + jitter(0.04), jitter(0.03)], false, k % 4 === 0) }
+      for (let k = 0; k <= Math.ceil(length / 3); k++) box([0.14, 2.6, 0.14], wood, at(k / Math.ceil(length / 3), -0.18, 1.3), yaw, false, false)
+      for (const y of [0.5, 2.0]) box([length, 0.1, 0.08], wood, at(0.5, -0.18, y), yaw, false, false)
       for (let k = 0; k < length / 5; k++) { const region = pick([R.rust, R.poster, R.tag3, R.stain, R.notice, R.tag]); mark(region, at(0.05 + rand() * 0.9, 0.08, 1.4 + jitter(0.3)), face, region === R.tag3 || region === R.tag ? 0.42 : region === R.notice ? 0.5 : region === R.poster ? 0.78 : 1.7, jitter(0.06)) }
     } else {
       let t = 0
@@ -468,7 +468,7 @@ export function dress(level: LevelBuilder, context: DressingContext) {
     const cx = x + 1.6
     wall(garageNumber(index), [cx, 1.78, -2.53], 0, 0.5, 0.25, jitter(0.08))
     mark(pick([R.rust, R.stain, R.rust]), [cx + jitter(0.8), 1.1, -2.53], 0, 1.4)
-    strip(pick([R.grime, R.moss]), [x, 0.4, -2.55], [x + 3.2, 0.4, -2.55], 0, 0.8)
+    strip(pick([R.grime, R.moss]), [x, 0.4, -2.53], [x + 3.2, 0.4, -2.53], 0, 0.8)
     mark(pick([R.stain, R.crack, R.soot, R.moss]), [cx + jitter(0.6), 1.4, -8.6], Math.PI, 1.6)
     strip(R.grime, [x, 0.4, -8.6], [x + 3.2, 0.4, -8.6], Math.PI, 0.8)
     floor(R.oil, [cx + jitter(0.6), 0.022, -1.4 + jitter(0.4)], 1.2, 1.0)
@@ -803,7 +803,7 @@ export function dress(level: LevelBuilder, context: DressingContext) {
   }
 
   const atlas = paintAtlas()
-  const decalMaterial = new THREE.MeshStandardMaterial({ name: 'traverse-decals', map: atlas, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, roughness: 0.9, envMapIntensity: 0.4 })
+  const decalMaterial = decalBias(new THREE.MeshStandardMaterial({ name: 'traverse-decals', map: atlas, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, roughness: 0.9, envMapIntensity: 0.4 }))
   const foliageMaterial = new THREE.MeshStandardMaterial({ name: 'traverse-foliage', map: atlas, alphaTest: 0.45, roughness: 0.95, envMapIntensity: 0.4 })
   const time = { value: 0 }
   foliageMaterial.onBeforeCompile = shader => {
@@ -815,7 +815,7 @@ export function dress(level: LevelBuilder, context: DressingContext) {
   foliageMaterial.customProgramCacheKey = () => 'traverse-foliage'
   const shaftMaterial = new THREE.MeshBasicMaterial({ name: 'traverse-shafts', map: atlas, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true, color: new THREE.Color(1.25, 1.2, 1.08) })
   const foliageMesh = meshOf(foliage, foliageMaterial, 0)
-  foliageMesh.onBeforeRender = () => { time.value = performance.now() / 1000 }
+  foliageMesh.onBeforeRender = () => { const now = document.timeline.currentTime; time.value = (typeof now === 'number' ? now : performance.now()) / 1000 }
   const shaftMesh = meshOf(shafts, shaftMaterial, 4)
   shaftMesh.receiveShadow = false
   level.mesh(meshOf(decals, decalMaterial, 2))

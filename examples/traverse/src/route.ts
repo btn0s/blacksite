@@ -124,8 +124,7 @@ export function buildRoute() {
 
   apartmentBlock(level, { at: [10, 0, -20.2], floors: 5, bays: 10, seed: 3, facing: Math.PI })
   apartmentBlock(level, { at: [10, 0, 20.2], floors: 5, bays: 10, seed: 4, facing: Math.PI })
-  box([12, 15, 36], panel, [4, 7.5, -20.2], undefined, true, false)
-  box([12, 15, 36], panel, [4, 7.5, 20.2], undefined, true, false)
+  for (const z of [-20.2, 20.2]) level.collider({ kind: 'box', half: [6, 7.5, 18], position: [4, 7.5, z], rotation: [0, 0, 0] })
   box([12, 11.6, 4.4], panel, [4, 9.2, 0])
   box([12, 0.3, 4.4], cast, [4, 3.25, 0], undefined, false, false)
   box([12, 0.06, 4.4], stained, [4, 0.03, 0], undefined, false, false)
@@ -244,7 +243,7 @@ export function buildRoute() {
   level.cylinder(1.3, 2.4, rust, { at: [118, upper + plant + 1.2, -7.5] }, 14)
   for (let index = 0; index < 3; index++) box([0.08, 2.4 + index, 0.08], metal, [118.5 + index * 0.6, upper + plant + 1.2 + index / 2, 1.5], undefined, false, false)
   emitters.push({ kind: 'tarp', at: [118, upper + plant + 0.5, 2] })
-  for (let index = 0; index < 8; index++) box([0.6 + rand(), 0.25, 0.6 + rand()], cast, [102 + rand() * 9, roof + 0.12, -9 + rand() * 12], [0, rand() * 3, 0], false)
+  for (let index = 0; index < 8; index++) box([0.6 + rand(), 0.25, 0.6 + rand()], cast, [102 + rand() * 9, roof + 0.25, -9 + rand() * 12], [0, rand() * 3, 0], false)
 
   const slabTop: Vec3 = [boiler.x1, upper, -3]
   const slabEnd = ramp('roof slab', slabTop, upper / Math.sin(degrees(30)), -30, 4, slab)
@@ -261,8 +260,7 @@ export function buildRoute() {
   const finishX = 164
   apartmentBlock(level, { at: [finishX, 0, -21.2], floors: 7, bays: 10, seed: 21 })
   apartmentBlock(level, { at: [finishX, 0, 19.2], floors: 7, bays: 10, seed: 22 })
-  box([12, 21, 36], panel, [finishX + 6, 10.5, -21.2], undefined, true, false)
-  box([12, 21, 36], panel, [finishX + 6, 10.5, 19.2], undefined, true, false)
+  for (const z of [-21.2, 19.2]) level.collider({ kind: 'box', half: [6, 10.5, 18], position: [finishX + 6, 10.5, z], rotation: [0, 0, 0] })
   box([12, 17.6, 4.4], panel, [finishX + 6, 12.2, -1], undefined, true)
   box([12, 0.3, 4.4], cast, [finishX + 6, 3.25, -1], undefined, false, false)
   lights.push({ kind: 'sodium', at: [finishX + 0.4, 3.0, -1], color: '#ffb35c', intensity: 9, distance: 14 })
