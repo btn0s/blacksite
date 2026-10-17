@@ -19,12 +19,12 @@ import { Hints, Loading, Prompt, Screen, TitleCard, TouchPad, useTouch } from '@
 import { createBreachAudio, type BreachAudio } from './audio'
 import { PLAYER_ID, type PlayerState } from './authority'
 import { CheckProbe, type Controls, type Driver } from './check'
-import { createChips } from './chips'
-import { createEffects } from './effects'
+import { createChips, type Chips } from './chips'
+import { createEffects, type Effects } from './effects'
 import { SOLIDS, castLevel, castTargets, clearLine, groundHit, zoneMultiplier, type Target, type V3 } from './geometry'
 import { Hud } from './hud'
 import { ENCOUNTERS, EXFIL, START, footingAt, roomAt } from './layout'
-import { breachTexturesReady, buildLevel } from './level'
+import { breachTexturesReady, buildLevel, type BreachLevel } from './level'
 import { AI, DEG, FEEDBACK, MOVE, PLAYER, PRESENTATION, VIEW, WEAPONS, animationBudget, animationInterval, armoryDefinitions, scheduleAnimation, footInterval, type HitZone, type RoomId } from './model'
 import { createBody, eyePosition, placeBody, stepBody } from './player'
 import { Soldiers, corpseOf, lod, releaseWeaponAim } from './soldiers'
@@ -37,6 +37,25 @@ type WeaponId = 'rifle' | 'pistol'
 const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
 const definitions = armoryDefinitions()
 const HOLD = 1 << 20
+const worlds = new Map<string, { level: BreachLevel; chips: Chips }>()
+const effectsByScene = new WeakMap<THREE.Scene, Effects>()
+
+function worldFor(quality: QualityTier, phone: boolean) {
+  const key = `${quality}:${phone}`
+  let world = worlds.get(key)
+  if (!world) {
+    const level = buildLevel({ quality, phone })
+    world = { level, chips: createChips(level.group, level.heroes) }
+    worlds.set(key, world)
+  }
+  return world
+}
+
+function effectsFor(scene: THREE.Scene) {
+  let effects = effectsByScene.get(scene)
+  if (!effects) { effects = createEffects(scene); effectsByScene.set(scene, effects) }
+  return effects
+}
 const ADMISSION = -2.25
 type Commands = { reload: boolean; swap: boolean; aim: boolean; crouch: boolean; jump: boolean; sprint: boolean }
 type TouchInput = ReturnType<typeof createStandaloneTouch>
@@ -101,9 +120,8 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
   const squad = useMemo(() => new SquadClient(), [])
   const keys = useMemo(() => new Set<string>(), [])
   const handles = useMemo(() => new Map<string, RefObject<AlsRagdollHandle | null>>(), [])
-  const level = useMemo(() => buildLevel({ quality: tier, phone }), [tier, phone])
-  const effects = useMemo(() => createEffects(scene), [scene])
-  const chips = useMemo(() => createChips(level.group, level.heroes), [level])
+  const { level, chips } = useMemo(() => worldFor(tier, phone), [tier, phone])
+  const effects = useMemo(() => effectsFor(scene), [scene])
   const arms = useMemo(() => { const state = createArmsState(); state.aimSeconds = WEAPONS.rifle.adsSeconds; return state }, [])
   const recoil = useMemo(createStandaloneRecoil, [])
   const recovery = useMemo(() => ({ fraction: WEAPONS.rifle.recoveryFraction as number, seconds: WEAPONS.rifle.recoverySeconds as number }), [])
@@ -148,7 +166,12 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
   }), [])
 
   useEffect(() => { scene.add(scratch.corpses); return () => { scene.remove(scratch.corpses) } }, [scene, scratch])
-  useEffect(() => () => { effects.dispose(); chips.dispose(); level.dispose() }, [effects, chips, level])
+  useEffect(() => () => { effects.dispose(); effectsByScene.delete(scene) }, [effects, scene])
+  useEffect(() => () => {
+    chips.dispose()
+    level.dispose()
+    for (const [key, world] of worlds) if (world.level === level) worlds.delete(key)
+  }, [chips, level])
   useEffect(() => { if (presentation) onArms() }, [presentation, onArms])
   useEffect(() => {
     setAnisotropy(gl)
