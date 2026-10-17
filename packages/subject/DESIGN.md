@@ -58,13 +58,14 @@ The request was a default perspective, a flag that allows switching, and an FPP 
 - **Remote players:** `AlsRemoteActor` takes the same `renderOverlayObject`, so `Replication` draws remote players' weapons the same way.
 - **What it replaces:** ALS's default rifle and pistol props are no longer used. They stay in `vendor/` untouched.
 
-## Pause is state, the menu belongs to the game
+## Pause is a menu, time belongs to the session
 
-- **The controller owns** the pause action (Esc, Start, losing pointer lock) and a `paused` status. A pause stops the world, the same way in every game:
-  - it stops the frame loop, so physics, animation, the weapon and every game frame stop together, and the clock restarts on resume with no catch-up step;
-  - it stops `now()`, the controller's world clock, for anything that runs off the frame loop (a worker simulation, timestamps, interpolation buffers);
-  - it releases pointer lock.
-- **Games don't shift clocks.** They read `now()` instead of `performance.now()` and need no pause code of their own, except telling an off-thread simulation to stop.
+- **The controller owns** the pause action (Esc, Start, losing pointer lock) and a `paused` status. Paused means the menu is open: the controller releases pointer lock and stops reading gameplay input. It never touches the clock.
+- **The session owns time.** Whoever owns the clock decides whether the world stops under the menu:
+  - a local single-player session (`useLocalSession`) stops the frame loop, so physics, animation, the weapon and every game frame stop together and resume with no catch-up step, and it stops its `now()` for anything that runs off the frame loop (a worker simulation, timestamps, interpolation buffers);
+  - a networked session keeps the world running under the menu; the character just stops taking input.
+- **Games don't shift clocks.** They read the session's `now()` instead of `performance.now()`.
+- **Body visibility drives animation cost.** The controller tells ALS whether the camera can see the body (the `BODY_LAYER` test). When it can't, ALS updates the graph at the shadow rate, the same mechanism remote characters use for distance.
 - **Menus belong to the game:**
   - the game shell already owns a pause screen with console navigation (`templates/game-shell/src/main.tsx`), so a shell game opens its screen from that status;
   - a standalone game like Breach draws its own menu from `@blacksite/ui/hud`'s `Menu` plus `useConsoleNavigation`.

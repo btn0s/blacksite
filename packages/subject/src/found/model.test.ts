@@ -11,6 +11,7 @@ const weapon = (clips: FoundWeapon['clips'], seconds?: FoundWeapon['seconds']): 
   sight: { bone: 'sight', rear: [0, 0, 0], front: [0, 0, 1] },
   eyeRelief: 0.3,
   hip: { position: [0, 0, 0], rotation: [0, 0, 0] },
+  world: { position: [0, 0, 0], rotation: [0, 0, 0], scale: 1 },
   sprint: { position: [0, 0, 0], rotation: [0, 0, 0] },
   pivot: [0, 0, 0],
   recoil: { hip: 0.5, aim: 1 },

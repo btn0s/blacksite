@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type RefObject } from 'react'
 import * as THREE from 'three'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { CuboidCollider, Physics, RigidBody, useAfterPhysicsStep, useRapier } from '@react-three/rapier'
@@ -12,7 +12,7 @@ import { autoQuality, depthDefaults, type Atmosphere, type QualityTier } from '@
 import { ZONE } from '@blacksite/look/presets'
 import type { QueryHit, WeaponEvent } from '@blacksite/armory'
 import { InputProvider, MENU, useConsoleNavigation, useInputContext } from '@blacksite/input'
-import { BODY_LAYER, CharacterController, CharacterOverlay, createCharacterController, useCharacterStatus, useTouchActive, type AimTarget, type AlsFootstepSoundRequest, type CharacterHandle as Player } from '@blacksite/subject'
+import { BODY_LAYER, CharacterController, CharacterOverlay, createCharacterController, useCharacterStatus, useLocalSession, useTouchActive, type AimTarget, type AlsFootstepSoundRequest, type CharacterHandle as Player } from '@blacksite/subject'
 import type { ArmsPresentation } from '@blacksite/subject/arms'
 import type { Intent } from '@blacksite/warden'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
@@ -106,10 +106,6 @@ function createPlayer() {
   })
 }
 
-function usePaused(player: Player) {
-  return useSyncExternalStore(player.subscribe, () => player.status().paused)
-}
-
 type LookHandle = Parameters<NonNullable<ComponentProps<typeof Look>['onReady']>>[0]
 
 function opaqueAo(look: LookHandle) {
@@ -127,13 +123,12 @@ function LevelColliders() {
   </RigidBody>
 }
 
-function Scene({ player, tier, audio, restartRef, onArms, onFirstFrame }: { player: Player; tier: QualityTier; audio: BreachAudio; restartRef: { current: () => void }; onArms: () => void; onFirstFrame: () => void }) {
+function Scene({ player, now, paused, tier, audio, restartRef, onArms, onFirstFrame }: { player: Player; now: () => number; paused: boolean; tier: QualityTier; audio: BreachAudio; restartRef: { current: () => void }; onArms: () => void; onFirstFrame: () => void }) {
   const camera = useThree(state => state.camera) as THREE.PerspectiveCamera
   const gl = useThree(state => state.gl)
   const scene = useThree(state => state.scene)
   const phone = coarse || tier === 'low'
-  const squad = useMemo(() => new SquadClient(player.now), [player])
-  const paused = usePaused(player)
+  const squad = useMemo(() => new SquadClient(now), [now])
   const handles = useMemo(() => new Map<string, RefObject<AlsRagdollHandle | null>>(), [])
   const { level, chips } = useMemo(() => worldFor(tier, phone), [tier, phone])
   const effects = useMemo(() => effectsFor(scene), [scene])
@@ -323,7 +318,7 @@ function Scene({ player, tier, audio, restartRef, onArms, onFirstFrame }: { play
   const corpseSlot = () => {
     const state = game.current
     if (state.corpses.size < PRESENTATION.ragdolls.phone) return true
-    const time = player.now() / 1000
+    const time = now() / 1000
     let oldest: string | null = null
     for (const id of state.corpses.keys()) if (!oldest || (state.downAt.get(id) ?? time) < (state.downAt.get(oldest) ?? time)) oldest = id
     const ragdoll = oldest ? state.corpses.get(oldest) : null
@@ -345,14 +340,14 @@ function Scene({ player, tier, audio, restartRef, onArms, onFirstFrame }: { play
     scratch.corpses.add(corpse)
     state.corpses.set(id, ragdoll)
     state.down.add(id)
-    state.downAt.set(id, player.now() / 1000)
+    state.downAt.set(id, now() / 1000)
     state.laid.add(id)
     freeze(id, true)
   }
 
   const rest = () => {
     const state = game.current
-    const time = player.now() / 1000
+    const time = now() / 1000
     for (const [id, ragdoll] of state.corpses) {
       const age = time - (state.downAt.get(id) ?? time)
       if (ragdoll.pelvis.velocity.lengthSq() < FEEDBACK.corpse.settledSpeed ** 2) state.settled.set(id, state.settled.get(id) ?? time)
@@ -379,7 +374,7 @@ function Scene({ player, tier, audio, restartRef, onArms, onFirstFrame }: { play
     if (axis.lengthSq() < 1e-6) axis.set(1, 0, 0)
     state.drops.set(id, { pivot, axis: axis.normalize(), base: feet.y, start: state.clock })
     state.down.add(id)
-    state.downAt.set(id, player.now() / 1000)
+    state.downAt.set(id, now() / 1000)
     state.laid.add(id)
     freeze(id, true)
   }
@@ -401,7 +396,7 @@ function Scene({ player, tier, audio, restartRef, onArms, onFirstFrame }: { play
     const state = game.current
     const falling = [...state.down].filter(other => !state.laid.has(other))
     if (falling.length < PRESENTATION.ragdolls[phone ? 'phone' : 'desktop']) return true
-    const time = player.now() / 1000
+    const time = now() / 1000
     let oldest: string | null = null
     for (const other of falling) if (!oldest || (state.downAt.get(other) ?? time) < (state.downAt.get(oldest) ?? time)) oldest = other
     const handle = oldest ? handles.get(oldest)?.current : null
@@ -584,8 +579,8 @@ function Scene({ player, tier, audio, restartRef, onArms, onFirstFrame }: { play
     state.enemyFlash = Math.max(0, state.enemyFlash - step)
     lights.flash.intensity = state.flash > 0 ? 16 * state.flash / FEEDBACK.muzzleFlashSeconds : 0
     lights.enemy.intensity = state.enemyFlash > 0 ? 9 * state.enemyFlash / FEEDBACK.muzzleFlashSeconds : 0
-    const now = squad.renderTime()
-    squad.drain(now, handleSquad)
+    const renderAt = squad.renderTime()
+    squad.drain(renderAt, handleSquad)
     const targets = scratch.targets
     targets.length = 0
     scratch.assist.length = 0
@@ -594,7 +589,7 @@ function Scene({ player, tier, audio, restartRef, onArms, onFirstFrame }: { play
     const alive = [0, 0, 0]
     for (const soldier of squad.roster) {
       if (soldier.alive) alive[encounterOf.get(soldier.id) ?? 0]!++
-      if (!squad.sample(soldier.id, now, scratch.sample)) continue
+      if (!squad.sample(soldier.id, renderAt, scratch.sample)) continue
       const sample = scratch.sample
       const speed = Math.hypot(soldier.vx, soldier.vz)
       if (sample.alive && speed > 0.6 && Math.hypot(sample.x - player.position.x, sample.z - player.position.z) < AI.hearingRange) {
@@ -626,9 +621,9 @@ function Scene({ player, tier, audio, restartRef, onArms, onFirstFrame }: { play
       } else if (!sample.alive && handleRef && !isDown && ragdollSlot(soldier.id)) {
         const push = state.pushes.get(soldier.id) ?? new THREE.Vector3(0, 0, -1)
         releaseWeaponAim(soldier.id)
-        if (handleRef.StartRagdolling({ initialImpulse: { boneName: 'spine_03', impulse: { x: push.x * 38, y: 6, z: push.z * 38 } } })) { state.down.add(soldier.id); state.downAt.set(soldier.id, player.now() / 1000) }
+        if (handleRef.StartRagdolling({ initialImpulse: { boneName: 'spine_03', impulse: { x: push.x * 38, y: 6, z: push.z * 38 } } })) { state.down.add(soldier.id); state.downAt.set(soldier.id, now() / 1000) }
       } else if (isDown && handleRef?.active && !state.laid.has(soldier.id)) {
-        const time = player.now() / 1000
+        const time = now() / 1000
         const age = time - (state.downAt.get(soldier.id) ?? time)
         if (handleRef.pelvis.velocity.lengthSq() < FEEDBACK.corpse.settledSpeed ** 2) state.settled.set(soldier.id, state.settled.get(soldier.id) ?? time)
         else state.settled.delete(soldier.id)
@@ -739,6 +734,7 @@ function Shell({ player }: { player: Player }) {
   const audio = useMemo(createBreachAudio, [])
   const touch = useTouchActive()
   const status = useCharacterStatus(player)
+  const session = useLocalSession(player)
   const tier = useMemo(autoQuality, [])
   const restartRef = useRef(() => {})
   const [armsReady, setArmsReady] = useState(false)
@@ -759,11 +755,11 @@ function Shell({ player }: { player: Player }) {
   const onFirstFrame = useCallback(() => setPlaying(true), [])
   const live = ready && playing
   return <Screen>
-    <Canvas shadows={tier !== 'low'} dpr={internalPixelRatio()} camera={{ fov: VIEW.fov, ...depthDefaults(tier, { far: 260 }).camera, position: [START.position[0], MOVE.eye, START.position[2]] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={state => attachPerfProbe(state.gl)}>
-      {world && <Scene player={player} tier={tier} audio={audio} restartRef={restartRef} onArms={onArms} onFirstFrame={onFirstFrame} />}
+    <Canvas frameloop={session.frameloop} shadows={tier !== 'low'} dpr={internalPixelRatio()} camera={{ fov: VIEW.fov, ...depthDefaults(tier, { far: 260 }).camera, position: [START.position[0], MOVE.eye, START.position[2]] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={state => attachPerfProbe(state.gl)}>
+      {world && <Scene player={player} now={session.now} paused={session.paused} tier={tier} audio={audio} restartRef={restartRef} onArms={onArms} onFirstFrame={onFirstFrame} />}
     </Canvas>
     <TitleCard title="Breach" />
-    {live && <Hud touch={touch} />}
+    {live && <Hud touch={touch} onRestart={() => restartRef.current()} />}
     <CharacterOverlay controller={player} visible={live} prompt="Click to fight" hintsClassName="breach-hints" />
     {live && status.paused && <Pause player={player} onRestart={() => restartRef.current()} />}
     <Loading title="Breach" detail={error ?? (progress < 0.85 ? 'Loading the squad' : 'Clearing the rubble')} progress={progress} done={live} />

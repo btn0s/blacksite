@@ -31,6 +31,7 @@ export function makeInputDevices() {
   const listeners = new Set<() => void>()
   const frames = new Set<(pad: Gamepad | null, now: number) => void>()
   const previous = new Map<number, string>()
+  const resting = new Set<number>()
   const announced = new Set<number>()
   const activated = new Set<number>()
   let gameplay = false
@@ -101,6 +102,7 @@ export function makeInputDevices() {
       announced.delete(event.gamepad.index)
       activated.delete(event.gamepad.index)
       previous.delete(event.gamepad.index)
+      resting.delete(event.gamepad.index)
       if (snapshot.index === event.gamepad.index)
         update({
           index: undefined,
@@ -138,6 +140,7 @@ export function makeInputDevices() {
         ) {
           activated.add(pad.index)
           const changed = snapshot.index !== pad.index
+          const fresh = gameplay && resting.has(pad.index)
           update({
             device: classifyGamepad(pad.id),
             source: "gamepad",
@@ -145,16 +148,19 @@ export function makeInputDevices() {
               "xbox" | "playstation" | "generic",
             index: pad.index,
             activated: true,
-            ...(changed ? { gameplayReady: false } : {}),
+            ...(fresh ? { gameplayReady: true } : changed ? { gameplayReady: false } : {}),
           })
         }
         previous.set(pad.index, signature)
+        if (pressed || moved) resting.delete(pad.index)
+        else resting.add(pad.index)
       }
       for (const index of announced) {
         if (!connected.some((pad) => pad.index === index)) {
           announced.delete(index)
           activated.delete(index)
           previous.delete(index)
+          resting.delete(index)
         }
       }
       if (

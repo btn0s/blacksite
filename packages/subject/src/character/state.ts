@@ -45,7 +45,6 @@ export const CHARACTER_AIM_ASSIST: AimAssistSettings = { ...aimAssistDefaults, s
 export const CHARACTER_RUMBLE: CharacterRumble = { ms: 60, strong: 0.12, weak: 0.3, trigger: 0.45 }
 
 const DEG = 180 / Math.PI
-const wall = () => performance.now()
 
 export type CharacterHandle = ReturnType<typeof createCharacterController>
 
@@ -65,8 +64,6 @@ export function createCharacterController(config: CharacterConfig) {
     status = { ...status, ...next }
     for (const listener of listeners) listener()
   }
-  let pausedAt: number | null = null
-  let pausedFor = 0
   const runtime = (seed: number) => definitions.length ? createWeaponRuntime({ ownerId, seed, definitions, initialWeaponId: first }) : null
   const controller = {
     config,
@@ -109,7 +106,6 @@ export function createCharacterController(config: CharacterConfig) {
     queued: { reload: false, jump: false },
     weaponOf: (id: string) => weapons.find(weapon => weapon.definition.id === id) ?? weapons[0],
     status: () => status,
-    now: () => (pausedAt ?? wall()) - pausedFor,
     subscribe(listener: () => void) {
       listeners.add(listener)
       return () => { listeners.delete(listener) }
@@ -150,13 +146,7 @@ export function createCharacterController(config: CharacterConfig) {
     lock() { controller.pointer.current?.() },
     setPaused(paused: boolean) {
       if (status.paused === paused) return
-      if (paused) {
-        pausedAt = wall()
-        if (typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock()
-      } else if (pausedAt !== null) {
-        pausedFor += wall() - pausedAt
-        pausedAt = null
-      }
+      if (paused && typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock()
       setStatus({ paused })
     },
     respawn(seed = config.seed ?? 7, position = config.start.position, yaw = config.start.yaw) {

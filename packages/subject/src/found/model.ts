@@ -15,6 +15,7 @@ export interface FoundWeapon {
   eyeRelief: number
   converge?: number
   hip: { position: Vec3; rotation: Vec3 }
+  world: { position: Vec3; rotation: Vec3; scale: number }
   sprint: { position: Vec3; rotation: Vec3 }
   pivot: Vec3
   recoil: { hip: number; aim: number }

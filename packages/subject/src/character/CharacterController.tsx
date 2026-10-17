@@ -12,6 +12,7 @@ import { createWorldTimeState } from 'als-ue5-r3f/engine/timeDilation'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { ArmsViewmodel, portraitFov, type ArmsPresentation } from '../ArmsViewmodel'
 import type { ArmsWeapon } from '../arms/state'
+import { WorldWeapon } from '../found/WorldWeapon'
 import { RECOIL_TUNING } from '../feel/recoil'
 import { aimCandidates, fppInput, padLookDegrees, type AimTarget } from '../input'
 import { readActionIntent } from '../intent'
@@ -49,7 +50,6 @@ const noop = () => {}
 export function CharacterController({ controller, queries, events, aimTargets, onPresentation, ragdollRef, renderWeapon, snapshotRateHz, manifestUrl }: CharacterControllerProps) {
   const camera = useThree(state => state.camera) as PerspectiveCamera
   const gl = useThree(state => state.gl)
-  const three = useThree(state => state.get)
   const hooks = useRef(events)
   hooks.current = events
   const targets = useRef(aimTargets)
@@ -91,6 +91,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
       overlayMode: command.overlay,
     }
   }, [als, scratch])
+  const bodyLod = useMemo(() => () => ({ visible: camera.layers.isEnabled(BODY_LAYER), shadow: true }), [camera])
   const controlRotation = useMemo(() => () => ({ yaw: als.command.yaw, pitch: als.command.pitch }), [als])
 
   useEffect(() => controller.input.mount(), [controller])
@@ -112,18 +113,6 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     else if (action === 'crouchToggle') scratch.latch.crouch = !scratch.latch.crouch
     hooks.current?.onAction?.(action, device)
   }), [controller, scratch])
-
-  useEffect(() => {
-    let resume: ReturnType<typeof three>['frameloop'] | null = null
-    const apply = () => {
-      const state = three()
-      if (controller.status().paused && resume === null) { resume = state.frameloop; state.setFrameloop('never') }
-      else if (!controller.status().paused && resume !== null) { state.setFrameloop(resume); resume = null }
-    }
-    apply()
-    const unsubscribe = controller.subscribe(apply)
-    return () => { unsubscribe(); if (resume !== null) three().setFrameloop(resume) }
-  }, [controller, three])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -385,7 +374,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
       <Suspense fallback={null}>
         <Character key={revision} initialPosition={als.spawn} poseSample={als.pose} worldTime={worldTime} footstepSoundSink={sink}
           onSizeChange={noop} onOverlayModeBridgeChange={noop} inputEnabled={false} ragdollInputEnabled={false} inputSource={inputSource}
-          ragdollRef={ragdollRef} teleportRef={controller.teleporter} gaitSpeedOverrides={controller.config.gaits} renderOverlayObject={renderWeapon}
+          ragdollRef={ragdollRef} teleportRef={controller.teleporter} gaitSpeedOverrides={controller.config.gaits} animationLod={bodyLod} renderOverlayObject={renderWeapon ?? (scene => <Suspense fallback={null}><WorldWeapon characterScene={scene} weapon={() => controller.arms.weapon} /></Suspense>)}
           onSnapshot={events?.onSnapshot} snapshotRateHz={snapshotRateHz} gamepadEnabled={false} toggleRotationModeKey={null} showDebugControls={false} exposeDebugGlobals={false} />
       </Suspense>
     </group>
