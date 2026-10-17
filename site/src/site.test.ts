@@ -67,7 +67,7 @@ describe('skills', () => {
 
 describe('tools', () => {
   it('gives every tool a page with guides, commands and honest status', () => {
-    expect(tools.map(tool => tool.slug)).toEqual(['characters', 'destruction', 'weapons', 'multiplayer', 'ai', 'input'])
+    expect(tools.map(tool => tool.slug)).toEqual(['characters', 'world', 'destruction', 'weapons', 'multiplayer', 'ai', 'input'])
     for (const tool of tools) {
       expect(tool.guides.length).toBeGreaterThan(0)
       expect(tool.statusNote.length).toBeGreaterThan(0)

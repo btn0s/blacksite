@@ -325,15 +325,29 @@ function scatterLeaves(species: TreeSpecies, random: () => number, leaves: Build
   const total = weights.reduce((sum, weight) => sum + weight, 0)
   const centre = new Vector3()
   const axis = new Vector3()
+  const offset = new Vector3()
+  const placed: { centre: Vector3; normal: Vector3; size: number }[] = []
+  const crowded = (normal: Vector3, size: number) => placed.some(other => {
+    if (Math.abs(other.normal.dot(normal)) < 0.94) return false
+    offset.subVectors(centre, other.centre)
+    const gap = Math.abs(offset.dot(other.normal))
+    return gap < 0.2 && offset.lengthSq() - gap * gap < ((size + other.size) * 0.5) ** 2
+  })
   eligible.forEach((branch, branchIndex) => {
     const cards = Math.max(1, Math.round(species.leafCount * weights[branchIndex]! / total))
     for (let index = 0; index < cards; index++) {
-      const t = 0.35 + (index + random()) / cards * 0.7
-      pointAt(branch, Math.min(1, t), centre)
-      centre.addScaledVector(randomUnit(random), species.leafSize * 0.35)
-      axis.copy(randomUnit(random))
-      const size = species.leafSize * (0.7 + random() * 0.55)
-      card(leaves, centre, facing(centre, branch), axis, size, 1, crown, crownRadius, species.height, branch.phase)
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const t = 0.35 + (index + random()) / cards * 0.7
+        pointAt(branch, Math.min(1, t), centre)
+        centre.addScaledVector(randomUnit(random), species.leafSize * 0.35)
+        axis.copy(randomUnit(random))
+        const size = species.leafSize * (0.7 + random() * 0.55)
+        const normal = facing(centre, branch).normalize()
+        if (crowded(normal, size)) continue
+        placed.push({ centre: centre.clone(), normal, size })
+        card(leaves, centre, normal, axis, size, 1, crown, crownRadius, species.height, branch.phase)
+        break
+      }
     }
   })
 }

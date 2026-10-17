@@ -1,5 +1,5 @@
 import { BlendFunction, Effect, EffectAttribute } from 'postprocessing';
-import { Data3DTexture, Uniform } from 'three';
+import { Data3DTexture, Uniform, Vector3 } from 'three';
 import type { GradeSpec } from './atmosphere';
 
 const GRADE_FRAGMENT = `
@@ -9,6 +9,7 @@ const GRADE_FRAGMENT = `
   uniform float aberration;
   uniform float grain;
   uniform float saturation;
+  uniform vec3 tint;
   uniform float lutSize;
   uniform mediump sampler3D lut;
 
@@ -60,6 +61,9 @@ const GRADE_FRAGMENT = `
     );
     vec3 tone = mix(vec3(0.78, 0.94, 1.3), vec3(1.14, 1.0, 0.8), lit);
     colour = mix(colour, colour * tone + vec3(0.004, 0.012, 0.03) * (1.0 - lit), split);
+    #ifdef LOOK_TINT
+      colour *= tint;
+    #endif
     #ifdef LOOK_SATURATION
       colour = mix(vec3(dot(colour, vec3(0.2126, 0.7152, 0.0722))), colour, saturation);
     #endif
@@ -85,6 +89,7 @@ export class GradeEffect extends Effect {
         ['aberration', new Uniform(0)],
         ['grain', new Uniform(0)],
         ['saturation', new Uniform(1)],
+        ['tint', new Uniform(new Vector3(1, 1, 1))],
         ['lutSize', new Uniform(1)],
         ['lut', new Uniform(null)],
       ]),
@@ -121,6 +126,8 @@ export class GradeEffect extends Effect {
     this.uniforms.get('aberration')!.value = grade.aberration;
     this.uniforms.get('grain')!.value = grade.grain;
     this.uniforms.get('saturation')!.value = grade.saturation ?? 1;
+    (this.uniforms.get('tint')!.value as Vector3).set(...(grade.tint ?? [1, 1, 1]));
+    this.toggle('LOOK_TINT', grade.tint !== undefined);
     this.toggle('LOOK_FILMIC', grade.curve === 'filmic');
     this.toggle('LOOK_SATURATION', grade.saturation !== undefined && grade.saturation !== 1);
   }

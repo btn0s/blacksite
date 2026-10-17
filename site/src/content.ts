@@ -59,6 +59,22 @@ export const tools: Tool[] = [
     ],
   },
   {
+    slug: 'world',
+    name: 'World',
+    status: 'Experimental',
+    tagline: 'Terrain to the horizon, foliage, sky and atmosphere.',
+    pitch: 'Open country that holds up from the grass at your feet to mountains 16 km away: terrain with continuous level of detail, scanned ground materials, grass and flowers, procedural forests with impostors, one wind field for everything that moves, and a physically based sky with clouds, aerial perspective and height fog.',
+    packages: ['@blacksite/landscape', '@blacksite/look'],
+    demos: [],
+    agent: {
+      reads: [{ label: 'Far field', path: 'skills/blacksite/references/far-field.md' }, { label: 'Foliage', path: 'skills/blacksite/references/foliage.md' }, { label: 'Wind', path: 'skills/blacksite/references/wind.md' }, { label: 'Atmosphere', path: 'skills/blacksite/references/atmosphere.md' }, { label: 'Materials', path: 'skills/blacksite/references/materials.md' }],
+      commands: [{ label: 'Find a real terrain and ground materials', code: 'blacksite assets suggest --idea "alpine meadow above a forested valley" --json' }],
+      note: 'The agent builds the world from the landscape package with the Valley as the reference: heightfields from real elevation data, cover families by mask, species for the forest, and the nature look for the sky.',
+    },
+    statusNote: 'Experimental. Terrain, ground cover, forests, wind and the physical sky work on desktop and phone. Ground cover runs on WebGL2; a WebGPU compute path, baked lighting and volumetric clouds are next.',
+    guides: [{ label: 'Landscape package', path: 'packages/landscape/README.md' }, { label: 'Look package', path: 'packages/look/README.md' }],
+  },
+  {
     slug: 'destruction',
     name: 'Destruction',
     codename: 'Cascade',
