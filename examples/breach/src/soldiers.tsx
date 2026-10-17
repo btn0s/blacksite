@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { AlsRemoteActor, type AlsRagdollHandle } from 'als-ue5-r3f/app/AlsRemoteActor'
 import { clone } from 'three/addons/utils/SkeletonUtils.js'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { SquadClient } from './squad'
 
 type Paint = { color: string; roughness: number; emissive?: string; emissiveIntensity?: number }
@@ -23,6 +24,43 @@ const KIT: Record<string, Paint> = {
 
 const painted = new Map<THREE.Material, THREE.Material>()
 const ours = new Set<THREE.Material>()
+const uniform = new THREE.MeshStandardMaterial({ color: 'white', roughness: 0.9, vertexColors: true })
+const uniforms = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry>()
+const combined = new WeakSet<THREE.Object3D>()
+
+function combineUniform(root: THREE.Object3D) {
+  if (combined.has(root)) return
+  const parts: THREE.SkinnedMesh[] = []
+  root.traverse(object => {
+    if (object instanceof THREE.SkinnedMesh && object.material instanceof THREE.MeshStandardMaterial && KIT[object.material.name] && object.material.name !== 'Eyes_MAT' && object.material.name !== 'M4A1_MAT') parts.push(object)
+  })
+  if (parts.length < 2) return
+  const first = parts[0]!
+  if (parts.some(part => part.parent !== first.parent || !part.matrix.equals(first.matrix) || part.skeleton.bones[0] !== first.skeleton.bones[0])) return
+  let geometry = uniforms.get(first.geometry)
+  if (!geometry) {
+    const geometries = parts.map(part => {
+      const geometry = part.geometry.clone()
+      const material = part.material as THREE.MeshStandardMaterial
+      const color = new THREE.Color(KIT[material.name]!.color)
+      const colors = new Float32Array(geometry.getAttribute('position').count * 3)
+      for (let i = 0; i < colors.length; i += 3) { colors[i] = color.r; colors[i + 1] = color.g; colors[i + 2] = color.b }
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+      return geometry
+    })
+    geometry = mergeGeometries(geometries, false) ?? undefined
+    for (const part of geometries) part.dispose()
+    if (!geometry) return
+    uniforms.set(first.geometry, geometry)
+  }
+  const mesh = new THREE.SkinnedMesh().copy(first, false)
+  mesh.name = 'breach-uniform'
+  mesh.geometry = geometry
+  mesh.material = uniform
+  first.parent!.add(mesh)
+  for (const part of parts) part.removeFromParent()
+  combined.add(root)
+}
 
 function paint(source: THREE.Material) {
   if (ours.has(source)) return source
@@ -40,6 +78,7 @@ function paint(source: THREE.Material) {
 }
 
 function dress(root: THREE.Object3D) {
+  combineUniform(root)
   let meshes = 0
   root.traverse(object => {
     if (!(object instanceof THREE.Mesh)) return
@@ -57,6 +96,14 @@ export const lod = new Map<string, Lod>()
 const wrappers = new Map<string, THREE.Group>()
 
 export function soldierRoot(id: string) { return wrappers.get(id) ?? null }
+
+export function releaseWeaponAim(id: string) {
+  const root = wrappers.get(id)
+  const attachment = root?.getObjectByName('VB hand_r_to_ik_hand_gun')
+  if (!attachment?.parent) return
+  root!.updateMatrixWorld(true)
+  for (const object of [...attachment.children]) if (!(object instanceof THREE.Bone)) attachment.parent.attach(object)
+}
 
 export function corpseOf(id: string) {
   const wrap = wrappers.get(id)
@@ -95,5 +142,10 @@ function Soldier({ id, client, handles }: { id: string; client: SquadClient; han
 }
 
 export function Soldiers({ roster, frozen, client, handles }: { roster: string[]; frozen: ReadonlySet<string>; client: SquadClient; handles: Map<string, RefObject<AlsRagdollHandle | null>> }) {
-  return <>{roster.filter(id => !frozen.has(id)).map(id => <Soldier key={`${client.round}:${id}`} id={id} client={client} handles={handles} />)}</>
+  const lifetime = useRef({ round: client.round, versions: new Map<string, number>() })
+  if (lifetime.current.round !== client.round) {
+    lifetime.current.round = client.round
+    for (const [id, handle] of handles) if (handle.current?.active) lifetime.current.versions.set(id, (lifetime.current.versions.get(id) ?? 0) + 1)
+  }
+  return <>{roster.filter(id => !frozen.has(id)).map(id => <Soldier key={`${lifetime.current.versions.get(id) ?? 0}:${id}`} id={id} client={client} handles={handles} />)}</>
 }

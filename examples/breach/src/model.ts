@@ -78,13 +78,13 @@ export const WEAPONS = {
     id: 'rifle', label: 'Rifle', roundsPerSecond: 10, magazine: 30, reserve: 150,
     reloadSeconds: 2.43, equipSeconds: 0.5, damage: 36, range: 120,
     adsSeconds: 0.25, adsFov: 55, kicks: rifleKicks, kickResetSeconds: 0.43, kickJitter: 0.04, recoveryFraction: 0.6, recoverySeconds: 0.43,
-    spread: { hip: 1.1, aim: 0.12, move: 1.6, sprint: 4, crouch: 0.75, bloomPerShot: 0.18, bloomMax: 2.2, recoverySeconds: 0.43 },
+    spread: { hip: 1.1, aim: 0.12, move: 1.6, sprint: 4, crouch: 0.75, bloomPerShot: 0.18, bloomMax: 2.2, recoverySeconds: 0.43, recoveryDelaySeconds: 0.1 },
   },
   pistol: {
     id: 'pistol', label: 'Pistol', roundsPerSecond: 5, magazine: 8, reserve: 40,
     reloadSeconds: 1.6, equipSeconds: 0.35, damage: 28, range: 60,
     adsSeconds: 0.15, adsFov: 62, kicks: pistolKicks, kickResetSeconds: 0.3, kickJitter: 0.1, recoveryFraction: 0.85, recoverySeconds: 0.25,
-    spread: { hip: 0.9, aim: 0.15, move: 1.2, sprint: 3, crouch: 0.8, bloomPerShot: 0.35, bloomMax: 1.8, recoverySeconds: 0.3 },
+    spread: { hip: 0.9, aim: 0.15, move: 1.2, sprint: 3, crouch: 0.8, bloomPerShot: 0.35, bloomMax: 1.8, recoverySeconds: 0.3, recoveryDelaySeconds: 0.2 },
   },
 } as const
 
@@ -120,6 +120,7 @@ export function armoryDefinitions(): WeaponDefinition[] {
       bloomPerShot: weapon.spread.bloomPerShot * DEG,
       bloomMax: weapon.spread.bloomMax * DEG,
       recoverySeconds: weapon.spread.recoverySeconds,
+      recoveryDelaySeconds: weapon.spread.recoveryDelaySeconds,
     },
     ballistics: { kind: 'hitscan' },
   }))
@@ -144,6 +145,7 @@ export const AI = {
   attackTokens: 2,
   tokenHoldSeconds: 3,
   tokenCooldownSeconds: 1.2,
+  tokenIdleSeconds: 0.5,
   burst: [3, 5] as const,
   burstPauseSeconds: [0.6, 1.2] as const,
   roundsPerSecond: 9,
@@ -198,6 +200,12 @@ export const FEEDBACK = {
   tracerSpeed: 520,
   decals: 256,
   casings: 48,
+  corpse: { minimumSeconds: 0.55, maximumSeconds: 2, settledSeconds: 0.2, settledSpeed: 0.5, groundedHeight: 0.65 },
+}
+
+export const PRESENTATION = {
+  animationInterval: { desktop: 2, phone: 3, hidden: 60 },
+  physicsHz: { desktop: 60, phone: 30 },
 }
 
 export const BUDGET = {

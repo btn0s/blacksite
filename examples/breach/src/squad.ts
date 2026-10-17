@@ -58,6 +58,7 @@ export class SquadClient {
     this.worker = new Worker(new URL('./squad.worker.ts', import.meta.url), { type: 'module' })
     this.worker.onmessage = ({ data }: MessageEvent<FromSquad>) => {
       if (data.type === 'error') { this.error = data.message; console.warn('squad', data.message); return }
+      if (data.round !== this.round) return
       this.push(data.tick, data.soldiers, data.events)
     }
   }
@@ -66,12 +67,13 @@ export class SquadClient {
 
   reset(seed: number, player: PlayerState) {
     this.round++
+    this.error = null
     this.offset = Number.POSITIVE_INFINITY
     this.history = []
     this.pending = []
     this.roster = []
     for (const buffer of this.buffers.values()) buffer.reset()
-    this.send({ type: 'reset', seed, player })
+    this.send({ type: 'reset', seed, round: this.round, player })
     for (const listener of this.listeners) listener()
   }
 

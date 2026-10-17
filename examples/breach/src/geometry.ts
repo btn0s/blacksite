@@ -122,6 +122,18 @@ export function supportHeight(x: number, z: number, radius: number, feet: number
   return height
 }
 
+export function ceilingHeight(x: number, z: number, radius: number, feet: number) {
+  let height = Infinity
+  for (const block of rayBlocks) {
+    if (block.min[1] <= feet + 0.01 || block.min[1] >= height) continue
+    const nx = Math.max(block.min[0], Math.min(x, block.max[0]))
+    const nz = Math.max(block.min[2], Math.min(z, block.max[2]))
+    if ((x - nx) ** 2 + (z - nz) ** 2 >= radius * radius) continue
+    height = block.min[1]
+  }
+  return height
+}
+
 export function slide(position: V3, radius: number, feet: number, head: number, step: number) {
   for (let pass = 0; pass < 3; pass++) {
     let moved = false

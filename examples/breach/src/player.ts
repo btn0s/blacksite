@@ -1,4 +1,4 @@
-import { slide, supportHeight, type V3 } from './geometry'
+import { ceilingHeight, slide, supportHeight, type V3 } from './geometry'
 import { MOVE, acceleration, braking, footInterval, moveSpeed } from './model'
 
 export type Body = {
@@ -12,13 +12,14 @@ export type Body = {
   dip: number
   stride: number
   airborne: number
+  jumpHeld: boolean
 }
 
 export type Drive = { forward: number; right: number; yaw: number; sprint: boolean; crouch: boolean; jump: boolean; aiming: boolean; firing: boolean; walk: boolean }
 export type BodyEvents = { step: boolean; landed: number; jumped: boolean; sprinting: boolean; speed: number }
 
 export function createBody(position: readonly [number, number, number]): Body {
-  return { position: { x: position[0], y: position[1], z: position[2] }, velocity: { x: 0, y: 0, z: 0 }, grounded: true, crouch: 0, eye: MOVE.eye, coyote: 0, buffer: 0, dip: 0, stride: 0, airborne: 0 }
+  return { position: { x: position[0], y: position[1], z: position[2] }, velocity: { x: 0, y: 0, z: 0 }, grounded: true, crouch: 0, eye: MOVE.eye, coyote: 0, buffer: 0, dip: 0, stride: 0, airborne: 0, jumpHeld: false }
 }
 
 export function placeBody(body: Body, position: readonly [number, number, number]) {
@@ -31,6 +32,10 @@ export function placeBody(body: Body, position: readonly [number, number, number
   body.eye = MOVE.eye
   body.dip = 0
   body.stride = 0
+  body.coyote = 0
+  body.buffer = 0
+  body.airborne = 0
+  body.jumpHeld = false
 }
 
 const events: BodyEvents = { step: false, landed: 0, jumped: false, sprinting: false, speed: 0 }
@@ -39,7 +44,8 @@ export function stepBody(body: Body, drive: Drive, dt: number): BodyEvents {
   events.step = false
   events.landed = 0
   events.jumped = false
-  const crouching = drive.crouch
+  const ceiling = ceilingHeight(body.position.x, body.position.z, MOVE.radius, body.position.y)
+  const crouching = drive.crouch || (body.crouch > 0.1 && ceiling - body.position.y < MOVE.height - 0.01)
   body.crouch += ((crouching ? 1 : 0) - body.crouch) * Math.min(1, dt / MOVE.crouchSeconds * 3)
   const sprinting = drive.sprint && drive.forward > 0.3 && !drive.aiming && !drive.firing && !crouching
   const speed = moveSpeed({ sprinting, crouched: crouching, aiming: drive.aiming, walking: drive.walk })
@@ -62,7 +68,8 @@ export function stepBody(body: Body, drive: Drive, dt: number): BodyEvents {
     body.velocity.z += dz / gap * change
   }
   body.coyote = body.grounded ? MOVE.coyoteSeconds : Math.max(0, body.coyote - dt)
-  body.buffer = drive.jump ? MOVE.bufferSeconds : Math.max(0, body.buffer - dt)
+  body.buffer = drive.jump && !body.jumpHeld ? MOVE.bufferSeconds : Math.max(0, body.buffer - dt)
+  body.jumpHeld = drive.jump
   if (body.buffer > 0 && body.coyote > 0 && body.velocity.y <= 0.01) {
     body.velocity.y = MOVE.jumpSpeed
     body.grounded = false
@@ -78,6 +85,12 @@ export function stepBody(body: Body, drive: Drive, dt: number): BodyEvents {
   if (!body.grounded) {
     body.position.y += body.velocity.y * dt - 0.5 * MOVE.gravity * dt * dt
     body.velocity.y -= MOVE.gravity * dt
+    const height = MOVE.height - (MOVE.height - MOVE.crouchHeight) * body.crouch
+    const overhead = ceilingHeight(body.position.x, body.position.z, MOVE.radius, feetBefore)
+    if (body.velocity.y > 0 && body.position.y + height > overhead) {
+      body.position.y = Math.max(feetBefore, overhead - height)
+      body.velocity.y = 0
+    }
   }
   const ground = supportHeight(body.position.x, body.position.z, MOVE.radius, Math.max(body.position.y, feetBefore), body.grounded ? MOVE.step : 0.05)
   if (body.position.y <= ground + 1e-3 && body.velocity.y <= 0) {

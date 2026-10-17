@@ -24,10 +24,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('rapier')) return 'rapier'
+          if (id.includes('/@dimforge/rapier3d-')) return 'rapier'
           if (id.includes('node_modules/three/')) return 'three'
-          if (id.includes('/packages/als') || id.includes('als-')) return 'als'
-          if (id.includes('node_modules/react') || id.includes('node_modules/scheduler') || id.includes('@react-three')) return 'react'
         },
       },
     },

@@ -26,7 +26,8 @@ class Source extends Node {
   type: OscillatorType = 'sine'
   playbackRate = new Param()
   frequency = new Param()
-  start() { }
+  startedAt = 0
+  start(at = 0) { this.startedAt = at }
   stop() { }
 }
 
@@ -44,6 +45,7 @@ class Context {
   }
   gains: Gain[] = []
   convolvers: Node[] = []
+  sources: Source[] = []
   buffers = 0
   createGain() { const gain = new Gain(); this.gains.push(gain); return gain }
   createDynamicsCompressor() { return Object.assign(new Node(), { threshold: new Param(), knee: new Param(), ratio: new Param(), attack: new Param(), release: new Param() }) }
@@ -55,8 +57,8 @@ class Context {
   createBiquadFilter() { return new Filter() }
   createStereoPanner() { return Object.assign(new Node(), { pan: new Param() }) }
   createPanner() { return Object.assign(new Node(), { panningModel: 'HRTF', distanceModel: 'linear', rolloffFactor: 0, positionX: new Param(), positionY: new Param(), positionZ: new Param() }) }
-  createBufferSource() { return new Source() }
-  createOscillator() { return new Source() }
+  createBufferSource() { const source = new Source(); this.sources.push(source); return source }
+  createOscillator() { const source = new Source(); this.sources.push(source); return source }
   createBuffer(channels: number, length: number, sampleRate: number) {
     this.buffers++
     const data = Array.from({ length: channels }, () => new Float32Array(length))
@@ -130,6 +132,27 @@ describe('soundscape voice lifecycle', () => {
     audio.update()
     await vi.advanceTimersByTimeAsync(300)
     expect(audio.sample().plays?.[0]?.cue).toBe('impact.steel')
+    audio.dispose()
+  })
+
+  it('selects nonrepeating variants in arrival order when nearby sounds overtake one another', async () => {
+    vi.useFakeTimers()
+    const context = new Context()
+    const audio = createSoundscape({ context: context as unknown as AudioContext, tier: 'phone', random: () => 0.5 })
+    audio.registerZone({ name: 'empty', impulse: 'outdoor', beds: [] })
+    audio.registerCue('arrival', { delayByDistance: true, selection: 'round-robin', variants: ['a', 'b'].map((id, index) => ({ id, layers: [{ kind: 'tone', frequency: 440 + index * 220, gain: 0.2, duration: 0.1 }] })) })
+    audio.setZone('empty')
+    await audio.start()
+    audio.play('arrival', { distance: 27.44 })
+    audio.play('arrival', { distance: 0 })
+    audio.play('arrival', { distance: 6.86 })
+    const plays = [...audio.sample().plays ?? []]
+    await vi.advanceTimersByTimeAsync(25)
+    plays.push(...audio.sample().plays ?? [])
+    await vi.advanceTimersByTimeAsync(60)
+    plays.push(...audio.sample().plays ?? [])
+    expect(plays.map(play => play.sample)).toEqual(['a', 'b', 'a'])
+    expect(context.sources.sort((a, b) => a.startedAt - b.startedAt).map(source => source.frequency.value)).toEqual([440, 660, 440])
     audio.dispose()
   })
 

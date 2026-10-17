@@ -46,7 +46,7 @@ export function CheckProbe({ driver, audio, ready }: { driver: Controls; audio: 
       const body = driver.body
       return { position: [body.position.x, body.position.y, body.position.z], velocity: [body.velocity.x, body.velocity.y, body.velocity.z], grounded: body.grounded }
     },
-    audio: () => audio.log.sample(),
+    audio: () => audio.sample(),
     scripts: {
       async feelStart() {
         driver.drive(null)
@@ -55,6 +55,7 @@ export function CheckProbe({ driver, audio, ready }: { driver: Controls; audio: 
         await wait(400)
       },
       async perf() {
+        audio.start()
         driver.restart()
         await wait(300)
         driver.place(HALL_DOOR, 0)

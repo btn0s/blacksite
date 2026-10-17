@@ -26,12 +26,12 @@ export type SquadEvent =
   | { kind: 'alert'; encounter: string; text: string }
 
 export type ToSquad =
-  | { type: 'reset'; seed: number; player: PlayerState }
+  | { type: 'reset'; seed: number; round: number; player: PlayerState }
   | { type: 'player'; player: PlayerState }
   | { type: 'damage'; id: string; amount: number; from: V3 }
   | { type: 'shot'; at: V3 }
   | { type: 'pause'; paused: boolean }
 
 export type FromSquad =
-  | { type: 'frame'; tick: number; soldiers: SoldierView[]; events: SquadEvent[] }
+  | { type: 'frame'; round: number; tick: number; soldiers: SoldierView[]; events: SquadEvent[] }
   | { type: 'error'; message: string }

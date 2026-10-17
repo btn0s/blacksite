@@ -20,6 +20,7 @@
     "@blacksite/cascade": "workspace:*",
     "@blacksite/check": "workspace:*",
     "@blacksite/look": "workspace:*",
+    "@blacksite/soundscape": "workspace:*",
     "@blacksite/subject-fpp": "workspace:*",
     "@blacksite/ui": "workspace:*",
     "@blacksite/warden": "workspace:*",

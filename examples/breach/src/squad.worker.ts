@@ -1,5 +1,5 @@
 import { DEFAULT_CONFIG, TICK_RATE, TacticalRuntime, type AgentView, type Intent } from '@blacksite/warden'
-import { BreachAuthority, PLAYER_ID, type PlayerState } from './authority'
+import { AttackBudget, BreachAuthority, PLAYER_ID, type PlayerState } from './authority'
 import { ENCOUNTERS, type Encounter } from './layout'
 import { AI } from './model'
 import type { FromSquad, SoldierView, SquadEvent, ToSquad } from './protocol'
@@ -14,15 +14,18 @@ const firing = new Set(['clear', 'suppressing', 'burst-recovery', 'acquisition-l
 let fights: Fight[] = []
 let player: PlayerState | null = null
 let tick = 0
+let round = 0
 let paused = false
 let events: SquadEvent[] = []
 let last = 0
+let attacks = new AttackBudget()
 
 function build(seed: number, start: PlayerState) {
   for (const fight of fights) fight.runtime.dispose()
   player = { ...start }
   tick = 0
   events = []
+  attacks = new AttackBudget()
   fights = ENCOUNTERS.map((encounter, index) => {
     const world = encounterWorld(encounter)
     const ids = new Map<string, string>(), back = new Map<string, string>()
@@ -33,7 +36,7 @@ function build(seed: number, start: PlayerState) {
       back.set(soldier.id, id)
       facing[id] = { yaw: soldier.facing, crouch: soldier.crouch }
     })
-    const authority = new BreachAuthority(world.map, seed + index * 7919, facing, start)
+    const authority = new BreachAuthority(world.map, seed + index * 7919, facing, start, id => attacks.allow(ids.get(id)!))
     const runtime = new TacticalRuntime(
       { ...DEFAULT_CONFIG, seed: seed + index, agentsPerTeam: encounter.soldiers.length, maxTicks: 36_000, scenarioId: 'breach' },
       world,
@@ -56,8 +59,8 @@ function activate(fight: Fight) {
 
 function view(fight: Fight, id: string): SoldierView {
   const agent = fight.views.get(id)
-  const state = agent ?? fight.authority.states.find(state => state.id === id)!
-  const aiming = !!agent && agent.alive && (agent.execution.skill === 'engage' || agent.execution.skill === 'suppress' || firing.has(agent.fireGate))
+  const state = fight.authority.states.find(state => state.id === id)!
+  const aiming = !!agent && state.alive && (agent.execution.skill === 'engage' || agent.execution.skill === 'suppress' || firing.has(agent.fireGate))
   return {
     id: fight.ids.get(id)!, x: state.position.x, z: state.position.z, vx: state.velocity.x, vz: state.velocity.z, yaw: state.yaw, pitch: state.pitch,
     crouch: state.stance !== 'stand', alive: state.alive, aiming, reloading: state.reloadingUntil > 0, active: fight.active,
@@ -67,6 +70,8 @@ function view(fight: Fight, id: string): SoldierView {
 function step() {
   if (!player) return
   tick++
+  const alive = new Set(fights.flatMap(fight => fight.authority.states.filter(state => state.team === 'bravo' && state.alive).map(state => fight.ids.get(state.id)!)))
+  attacks.begin(tick, alive)
   for (const fight of fights) {
     if (!fight.active && (inside(fight, player.x, player.z) || fight.authority.alive() < fight.encounter.soldiers.length)) activate(fight)
     fight.authority.setPlayer(player)
@@ -84,7 +89,7 @@ function step() {
     drain(fight)
   }
   const soldiers = fights.flatMap(fight => [...fight.ids.keys()].map(id => view(fight, id)))
-  scope.postMessage({ type: 'frame', tick, soldiers, events })
+  scope.postMessage({ type: 'frame', round, tick, soldiers, events })
   events = []
 }
 
@@ -103,7 +108,7 @@ function loop() {
 }
 
 scope.onmessage = ({ data }) => {
-  if (data.type === 'reset') { build(data.seed, data.player); last = performance.now() }
+  if (data.type === 'reset') { round = data.round; build(data.seed, data.player); last = performance.now() }
   else if (data.type === 'player') player = data.player
   else if (data.type === 'pause') { paused = data.paused; last = performance.now() }
   else if (data.type === 'damage') {

@@ -54,6 +54,8 @@ The body is our own: a capsule that slides on the level's boxes with exact balli
 | Spray reset | 0.43 s without a shot | 0.3 s | Same as recovery |
 | Climb recovery | 60% of the climb returns over 0.43 s after release | 85% over 0.25 s | Tuned; Battlefield and Rainbow Six recover part of the climb |
 
+Bloom recovery waits one firing interval after the last shot (0.1 s rifle, 0.2 s pistol), then recovers over 0.43 s or 0.3 s. Sustained fire therefore accumulates the authored per-shot bloom. Sprinting lowers the weapon; leaving sprint starts the 0.22 s sprint-out delay before a shot may fire. Recoil recovery follows the currently equipped weapon.
+
 The pattern is deterministic apart from a small jitter (0.04° rifle, 0.1° pistol): pull down and slightly right through the first nine rounds and the decals stay in a fist-sized group at 10 m.
 
 ### Player
@@ -87,11 +89,11 @@ Health 100. Regenerates at 25 per second after 5 s without damage (the regenerat
 
 Gunshot tails come from impulse responses generated at these RT60s; the reverb crossfades over 0.35 s when the listener crosses a room boundary.
 
-All sound sits behind one module, `src/audio.ts` (`createBreachAudio`), whose interface is cues (`shot`, `impact`, `crack`, `bark`, `footstep`, `sting` and so on) plus `setListener(position, room)`. Everything is synthesised; there are no sample files. When the Soundscape package lands, only that file changes. Every cue has four variants and never plays the same one twice in a row; voices are capped at 28 with priorities so shots and barks win; sound is delayed by distance at 343 m/s.
+All sound sits behind `src/audio.ts` (`createBreachAudio`) through the public Soundscape API. Its cue interface (`shot`, `impact`, `crack`, `bark`, `footstep`, `sting` and others) and `setListener(position, room)` use 27 recorded takes: four rifle, three pistol and four each for concrete, metal, wood, rubble and water footsteps. Gun recordings are CC0; footsteps are CC BY 3.0, credited in the shipped credits. Rifle and pistol recordings trim the original outdoor tail to 0.55 s and 0.45 s before the room convolution. Dirt steps, landing, handling, impacts, markers, barks and stings retain four first-party synthetic variants. No cue immediately repeats its previous variant. Soundscape prioritises shots and barks, caps voices at 28 desktop / 16 phone, and delays distant sounds by distance at 343 m/s. `prepare()` decodes the recordings and warms all seven reverb paths before the scene starts. The 18 s wind buffer carries slow gusts; room tone and the three spot-source families fill the interior. Headphone mix judgement remains part of the user playtest.
 
 ### Footsteps
 
-Interval 0.4 s walking, 0.3 s running (Source `m_flStepSoundTime` 400 / 300 ms), 0.26 s sprinting, 0.5 s crouched. Surfaces: concrete, rubble, metal grating, wood, dirt and water, each a distinct filtered impact.
+Interval 0.4 s walking, 0.3 s running (Source `m_flStepSoundTime` 400 / 300 ms), 0.26 s sprinting, 0.5 s crouched. Surfaces: concrete, rubble, metal grating, wood, dirt and water, with four recorded takes on concrete, rubble, metal, wood and water; dirt remains a distinct filtered impact.
 
 ### Budgets
 
@@ -101,7 +103,7 @@ Interval 0.4 s walking, 0.3 s running (Source `m_flStepSoundTime` 400 / 300 ms),
 | Frame, phone | 16.7 ms (60 fps) |
 | Draw calls | 260 desktop, 160 phone |
 | Point lights | constant count per quality tier, never toggled (a toggle recompiles every lit shader) |
-| Audio voices | 28 |
+| Audio voices | 28 desktop / 16 phone |
 | Decals | 256 pooled |
 | First playable | under 5 s |
 
@@ -116,15 +118,31 @@ Minimums from `craft.md`: each interior room has a key from a window or roof hol
 ### Set dressing
 
 - **Kit:** exterior walls with door and window openings, interior partitions, door frames, concrete pillars, a ceiling with roof holes, an overhead crane beam, broken window sills, a blown breach in the office wall, a perimeter wall with closed rust gates.
-- **Materials (5+):** cast concrete, brick, rusted metal, wood, packed dirt and rubble, standing water.
+- **Materials (5+):** cast concrete, brick, rusted metal, photographic old wood, packed dirt and rubble, standing water. The starter library’s CC0 Old Planks 02 by Rob Tuytel / Poly Haven supplies 1k colour, tangent normal and packed ORM at its 2 m physical tile size. It covers the records-office floor, crates and pallets; three WebP maps add 366 KB. Existing world-kit photographic surfaces remain on concrete and metal.
 - **Props:** lathes, workbenches, steel shelving, oil drums, crates, a burning barrel, an overturned reception desk, chairs, filing cabinets, desks, a safe, rubble piles, fallen slab pieces, sandbags, a wrecked Lada and an APC in the yards, apartment blocks on the skyline.
 - **Decals:** water stains, soot, cracks, peeling paint, painted room numbers, oil on the hall floor, puddles in the yard; bullet holes, scuffs and blood from play (256 pooled).
+
+### Built count ledger
+
+Counts below distinguish prop types from their small mesh pieces. Shared-material parts are merged before rendering. The `layout.ts` inventory has 183 collision/structure blocks, 839 dressing pieces, 40 rounded sandbags, 118 photographed wood pieces and 8 Cascade hero-cover meshes. `level.ts` adds the facade detail, skyline, wall fixtures, decals and atmosphere.
+
+| Space | Materials in layout, before floor/decals | Prop types and placed groups | Visible practicals |
+| --- | --- | --- | --- |
+| Yard | 10, plus ground blend / asphalt / water | 15+: two Ladas, two containers, one guard booth, one dumpster, seven drums, three tyre stacks, three pallet stacks plus one leaning pallet, two benches, six sandbag stacks, three rubble piles, two footings pairs, one cable spool, one lamp pole, eight distant dead trees and weeds | 3 |
+| Lobby | 8 | 12: reception desk, sofa, locker, counter, three chairs plus one fallen seat, two radiators, noticeboard, rubble pile, fallen slab, exposed rebar, service pipes and extinguisher | 2 |
+| Corridor | 6 | 8: fallen locker, two service pipes, cable tray, rubble pile, hose cabinet, posters, junction box and clamped conduit | 2 |
+| Store room | 6 | 10: four crates, three drums, shelving, shelf boxes, ladder, two gas cylinders, workbench and tools, tyre stack, posters and clamped conduit | 2 |
+| Machine hall | 8 | 14+: two lathes, two machine tables, drill press, three plinths, two shelving units, shelf boxes, three crates, seven drums plus fire barrel, two rubble piles and slabs, crane beam and suspended hooks, pipe runs, workbench, control cabinet and posters | 4 |
+| Records office | 6, plus wood floor | 13: four desks, three typewriters, four filing cabinets, two partitions, safe, fallen shelf, radiator, hanging coat, ten binders, paper litter, noticeboard, clock and framed print | 2 |
+| Exfil yard | 7, plus ground blend / water | 12: APC, rubble pile, two crates, two drums, pallet stack, tyre stack, cable spool, footings pair, two gas cylinders, broken bench, papers and weeds | 3 |
+
+Three roof openings carry three dust clouds (60 motes each on high, 24 on low) and three shaft volumes. Smoke rises from the yard barrel, the distant skyline and the exfil flare. Five caution-tape runs sway in the yard. Four atlas decal families (blotch, streak, crack, soot) cover interior wall edges, floors and ceilings; every wall also gets fixtures or posters. Three sky apartment blocks, a water tower and one chimney layer the skyline behind the playable building.
 
 ### Lighting
 
 - **Key:** overcast sun with shadows from the key only, through the window openings and roof holes; the shadow frustum follows the player, texel-snapped, refreshed every other frame.
 - **Fill:** sky hemisphere from Look at about a third of the key.
-- **Practicals:** a bare bulb in the lobby, a flickering fluorescent tube in the hall, the burning barrel, a red emergency lamp in the office, plus the yard's lamps.
+- **Practicals:** lobby pendant and luminous exit sign; two corridor cages; store-room cage and exit sign; two hall fluorescents, the burning barrel and exit sign; office emergency lamp and desk lamp; yard sodium lamp, fire barrel and amber gate fixture; two amber exfil wall fixtures and the signal flare. All 18 visible sources remain on phone. Nearest-source local light pools use a fixed count of 3 high / 2 medium / 0 low, reserving two transient shot lights within the model’s total caps of 5 / 4 / 2. Pool assignments use the player or critic camera with distance hysteresis and fade through zero before moving, so shaders never recompile and light positions never pop at full intensity. Fixture emissives remain visible on phone; its overcast sky and hemisphere carry the interior.
 
 ### Motion
 
@@ -151,7 +169,7 @@ Warden intents, each barked 0.8 s before it happens with a subtitle: advance, fl
 | `corridor` | 0, 1.63, 1.4 | 0, 1.5, -6 | The tight corridor and the store-room opening |
 | `hall` | 0, 1.63, -5.8 | -1, 1.5, -15 | Lathes, shafts, the burning barrel and the fluorescent tube |
 | `hall-north` | 4.4, 1.63, -16.4 | -4, 1.4, -7 | The longest sightline, back across the hall |
-| `office` | -1, 1.63, -18 | -5, 1.2, -23 | Desks, cabinets, the red lamp |
+| `office` | -1.4, 1.63, -21 | -6, 1.3, -21.8 | Desks, cabinets, the red lamp |
 | `exfil` | -0.6, 1.63, -21.2 | 9, 1.4, -22 | The breach out to the APC |
 
 ## Architecture

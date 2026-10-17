@@ -1,6 +1,6 @@
 .breach-hud { position: absolute; inset: 0; pointer-events: none; }
 .breach-pips { position: absolute; z-index: 5; top: calc(66px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
-.breach-pip { padding: 2px 7px; border: 1px solid #f0ecdb40; background: #0c0e0b80; font: 500 10.5px 'IBM Plex Mono', monospace; letter-spacing: 0.14em; text-transform: uppercase; color: #a8a491; text-shadow: 0 1px 6px #000c; }
+.breach-pip { padding: 2px 7px; border: 1px solid #f0ecdb40; background: #0c0e0b80; font: 500 12px 'IBM Plex Mono', monospace; letter-spacing: 0.14em; text-transform: uppercase; color: #a8a491; text-shadow: 0 1px 6px #000c; }
 .breach-pip--on { border-color: #a9b57e; color: #e4ecc4; background: #2f3a2280; }
 .breach-reticle { --gap: 8px; position: absolute; z-index: 4; left: 50%; top: 50%; width: 0; height: 0; transition: opacity 120ms ease; }
 .breach-reticle i { position: absolute; background: #f0ecdbd8; box-shadow: 0 0 2px #000a; transition: transform 60ms linear; }
@@ -25,21 +25,23 @@
 .breach-health, .breach-ammo { position: absolute; z-index: 5; bottom: calc(18px + env(safe-area-inset-bottom)); display: grid; text-shadow: 0 1px 10px #000c; }
 .breach-health { left: calc(20px + env(safe-area-inset-left)); justify-items: start; }
 .breach-ammo { right: calc(20px + env(safe-area-inset-right)); justify-items: end; }
-.breach-health span, .breach-ammo span { font: 500 10.5px 'IBM Plex Mono', monospace; letter-spacing: 0.18em; text-transform: uppercase; color: #a9b57e; }
+.breach-health span, .breach-ammo span { font: 500 12px 'IBM Plex Mono', monospace; letter-spacing: 0.18em; text-transform: uppercase; color: #a9b57e; }
 .breach-health strong, .breach-ammo strong { font: 600 38px/1 'Barlow Condensed', sans-serif; letter-spacing: 0.04em; color: #f0ecdb; font-variant-numeric: tabular-nums; }
 .breach-ammo small { font-size: 18px; color: #8d8b78; }
 .breach-low { color: #ff6a4a !important; }
-.breach-ammo--touch { bottom: calc(150px + env(safe-area-inset-bottom)); }
+.breach-ammo--touch { bottom: auto; top: calc(100px + env(safe-area-inset-top)); }
 .breach-health--touch { bottom: auto; top: calc(100px + env(safe-area-inset-top)); }
 .breach-ammo--touch strong, .breach-health--touch strong { font-size: 26px; }
 .breach-ending { position: absolute; z-index: 7; left: 50%; top: 38%; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 6px; padding: 18px 28px; background: #0c0e0bd0; border: 1px solid #f0ecdb30; text-shadow: 0 1px 10px #000c; }
 .breach-ending strong { font: 600 34px/1 'Barlow Condensed', sans-serif; letter-spacing: 0.12em; text-transform: uppercase; color: #f0ecdb; }
 .breach-ending--dead strong { color: #ff8a6a; }
 .breach-ending span { font: 500 13px 'IBM Plex Mono', monospace; letter-spacing: 0.1em; color: #d8d4c1; }
-.breach-ending em { font: 500 11px 'IBM Plex Mono', monospace; letter-spacing: 0.16em; text-transform: uppercase; color: #a9b57e; font-style: normal; }
+.breach-ending em { font: 500 12px 'IBM Plex Mono', monospace; letter-spacing: 0.16em; text-transform: uppercase; color: #a9b57e; font-style: normal; }
 @media (max-width: 640px) {
   .breach-hud .hud-status { top: calc(40px + env(safe-area-inset-top)); bottom: auto; }
   .breach-pips { top: calc(84px + env(safe-area-inset-top)); }
   .breach-subtitles { bottom: calc(190px + env(safe-area-inset-bottom)); }
   .breach-subtitles p { font-size: 13px; }
 }
+.breach-credits { display: grid; align-items: center; min-height: 44px; box-sizing: border-box; position: absolute; z-index: 8; top: calc(12px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right)); padding: 8px; pointer-events: auto; color: #c8c4b3; background: #0c0e0b80; font: 500 12px 'IBM Plex Mono', monospace; text-decoration: none; }
+.breach-credits:focus-visible { outline: 2px solid #e2a23b; }

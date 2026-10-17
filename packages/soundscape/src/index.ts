@@ -565,7 +565,7 @@ export function createSoundscape(options: SoundscapeOptions = {}) {
       return handle
     }
     const travel = (playOptions.delay ?? definition.delayByDistance ?? false) ? distanceOf(playOptions) / SPEED_OF_SOUND : 0
-    if (travel > 0.1) {
+    if (travel > 0) {
       if (audibilityOf(definition, playOptions) < 0.003 || (playOptions.volume ?? 1) <= 0) return null
       let active: VoiceHandle | null = null
       let stopped = false

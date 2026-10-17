@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { PLAYER, WEAPONS } from './model'
 
 export type Subtitle = { id: number; speaker: string; text: string; until: number }
 export type Damage = { id: number; angle: number; until: number }
@@ -30,7 +31,7 @@ export type View = {
 }
 
 const initial: View = {
-  phase: 'play', health: 100, weapon: 'rifle', magazine: 30, capacity: 30, reserve: 150, reloading: false, aiming: false, spread: 1,
+  phase: 'play', health: PLAYER.health, weapon: 'rifle', magazine: WEAPONS.rifle.magazine, capacity: WEAPONS.rifle.magazine, reserve: WEAPONS.rifle.reserve, reloading: false, aiming: false, spread: WEAPONS.rifle.spread.hip,
   marker: 0, markerKind: 'hit', objective: 'Breach the works', cleared: [false, false, false], exfil: false, subtitles: [], damage: [], locked: false,
   time: 0, shots: 0, hits: 0, kills: 0, restartIn: 0,
 }

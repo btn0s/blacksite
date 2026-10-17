@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Status } from '@blacksite/ui/hud'
 import { useHud } from './store'
+import { FEEDBACK, PLAYER } from './model'
+import creditsUrl from '../CREDITS.md?url'
 
 const ROOMS = ['Lobby', 'Hall', 'Records']
 
@@ -10,7 +12,7 @@ function Reticle() {
   useEffect(() => {
     if (!view.marker) return
     setFlash(true)
-    const timer = setTimeout(() => setFlash(false), view.markerKind === 'kill' ? 320 : 120)
+    const timer = setTimeout(() => setFlash(false), 1000 * (view.markerKind === 'kill' ? FEEDBACK.killMarkerSeconds : FEEDBACK.hitMarkerSeconds))
     return () => clearTimeout(timer)
   }, [view.marker, view.markerKind])
   const gap = 4 + view.spread * 7
@@ -19,7 +21,7 @@ function Reticle() {
 
 function Damage() {
   const view = useHud()
-  const hurt = 1 - view.health / 100
+  const hurt = 1 - view.health / PLAYER.health
   return <>
     <div className="breach-vignette" style={{ opacity: Math.min(0.85, hurt * 1.1) }} aria-hidden="true" />
     {view.damage.map(item => <div key={item.id} className="breach-damage" style={{ transform: `translate(-50%, -50%) rotate(${item.angle}rad)` }} aria-hidden="true"><i /></div>)}
@@ -50,6 +52,7 @@ export function Hud({ touch }: { touch: boolean }) {
   const view = useHud()
   const done = view.cleared.filter(Boolean).length
   return <div className="breach-hud">
+    <a className="breach-credits" href={creditsUrl} target="_blank" rel="noreferrer">Credits</a>
     <Damage />
     <Status label={view.exfil ? 'Exfil' : `Rooms ${done}/3`} value={view.objective} />
     <div className="breach-pips" aria-hidden="true">

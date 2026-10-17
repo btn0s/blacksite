@@ -1,13 +1,16 @@
 import * as THREE from 'three'
-import { LevelBuilder, apartmentBlock, apc, deadTree, groundMaterial, lada, puddleMaterial, surface, waterTower, worldBoxGeometry, worldPlaneGeometry, type SurfaceName } from '@blacksite/look/world'
+import { LevelBuilder, apartmentBlock, apc, deadTree, groundMaterial, lada, puddleMaterial, surface, waterTower, worldBoxGeometry, worldPlaneGeometry, type SurfaceName, type SurfaceSource } from '@blacksite/look/world'
 import { APC_AT, EXFIL, LEVEL, PATCHES, PRACTICALS, ROOMS, SHAFTS, type Block, type Practical, type Room, type Vec3 } from './layout'
-import type { RoomId } from './model'
+import { BUDGET, type RoomId } from './model'
+import woodColor from './assets/wood-planks-old/c.webp?url'
+import woodNormal from './assets/wood-planks-old/n.webp?url'
+import woodOrm from './assets/wood-planks-old/orm.webp?url'
 
 export type BreachLevel = {
   group: THREE.Group
   heroes: Map<string, THREE.Mesh>
   practicals: Array<{ light: THREE.PointLight; room: RoomId; base: number; kind: Practical['kind'] }>
-  update(time: number, dt: number, visibleRooms: ReadonlySet<RoomId>): void
+  update(time: number, dt: number, visibleRooms: ReadonlySet<RoomId>, listener?: { x: number; y: number; z: number }): void
   dispose(): void
 }
 
@@ -15,9 +18,10 @@ type Paint = { name: SurfaceName; color?: string; ao?: false }
 type Face = 'x+' | 'x-' | 'z+' | 'z-' | 'y+' | 'y-'
 type Cell = 'blotch' | 'streak' | 'crack' | 'soot'
 type Fixture = 'pendant' | 'cage' | 'tube' | 'fire' | 'emergency' | 'lamp' | 'sodium'
-type Spot = { kind: Practical['kind']; fixture: Fixture; at: Vec3; room: RoomId; phone: boolean; color?: string; intensity?: number; distance?: number; housing?: boolean }
+type Spot = { kind: Practical['kind']; fixture: Fixture; at: Vec3; room: RoomId; color?: string; intensity?: number; distance?: number; housing?: boolean }
 type Motes = { points: THREE.Points; room: RoomId; base: Float32Array; speed: Float32Array; height: number; bottom: number; range: number }
 type Tape = { from: number; count: number; base: Float32Array; across: THREE.Vector3; loose: boolean; seed: number }
+type LightSource = { position: THREE.Vector3; color: THREE.Color; room: RoomId; base: number; kind: Practical['kind']; distance: number; seed: number; score: number; selected: boolean }
 
 const LIGHTS: Record<Practical['kind'], { color: string; intensity: number; distance: number }> = {
   bulb: { color: '#ffc680', intensity: 9, distance: 7.5 },
@@ -28,14 +32,41 @@ const LIGHTS: Record<Practical['kind'], { color: string; intensity: number; dist
 const FIXTURE: Record<Practical['kind'], Fixture> = { bulb: 'pendant', tube: 'tube', fire: 'fire', emergency: 'emergency' }
 
 const SPOTS: Spot[] = [
-  ...PRACTICALS.map(practical => ({ kind: practical.kind, fixture: FIXTURE[practical.kind], at: practical.at, room: practical.room, phone: true })),
-  { kind: 'bulb', fixture: 'cage', at: [0, 2.7, -1.5], room: 'corridor', phone: true, intensity: 7, distance: 6 },
-  { kind: 'bulb', fixture: 'cage', at: [3.3, 2.65, -1.7], room: 'side', phone: false, intensity: 5, distance: 5.5 },
-  { kind: 'tube', fixture: 'tube', at: [-3.6, 4.36, -14.4], room: 'hall', phone: false, housing: true, intensity: 10, distance: 8 },
-  { kind: 'bulb', fixture: 'lamp', at: [-2.1, 0.79, -22.85], room: 'office', phone: false, color: '#ffbf70', intensity: 4, distance: 4 },
-  { kind: 'bulb', fixture: 'sodium', at: [4.3, 6.38, 29.25], room: 'yard', phone: true, color: '#ffb35a', intensity: 24, distance: 16 },
-  { kind: 'fire', fixture: 'fire', at: [7.8, 0.96, 12.8], room: 'yard', phone: false },
+  ...PRACTICALS.map(practical => ({ kind: practical.kind, fixture: FIXTURE[practical.kind], at: practical.at, room: practical.room })),
+  { kind: 'bulb', fixture: 'cage', at: [0, 2.7, -1.5], room: 'corridor', intensity: 7, distance: 6 },
+  { kind: 'bulb', fixture: 'cage', at: [0, 2.7, -4.1], room: 'corridor', intensity: 3, distance: 3 },
+  { kind: 'bulb', fixture: 'cage', at: [3.3, 2.65, -1.7], room: 'side', intensity: 5, distance: 5.5 },
+  { kind: 'tube', fixture: 'tube', at: [-3.6, 4.36, -14.4], room: 'hall', housing: true, intensity: 10, distance: 8 },
+  { kind: 'bulb', fixture: 'lamp', at: [-2.1, 0.79, -22.85], room: 'office', color: '#ffbf70', intensity: 4, distance: 4 },
+  { kind: 'bulb', fixture: 'sodium', at: [4.3, 6.38, 29.25], room: 'yard', color: '#ffb35a', intensity: 24, distance: 16 },
+  { kind: 'fire', fixture: 'fire', at: [7.8, 0.96, 12.8], room: 'yard' },
+  { kind: 'emergency', fixture: 'emergency', at: [-7.4, 1.95, 29.8], room: 'yard', color: '#ffb35a', intensity: 2.5, distance: 3.5 },
+  { kind: 'emergency', fixture: 'emergency', at: [15.8, 2.15, -23.4], room: 'exfil', color: '#ffb35a', intensity: 4, distance: 5 },
+  { kind: 'emergency', fixture: 'emergency', at: [13.8, 2.15, -26.8], room: 'exfil', color: '#ffb35a', intensity: 3, distance: 4 },
 ]
+
+let woodSource: SurfaceSource | undefined
+let woodReady: Promise<void> | undefined
+
+export function breachTexturesReady() {
+  if (woodReady) return woodReady
+  const loader = new THREE.TextureLoader()
+  const pending: Promise<void>[] = []
+  const load = (url: string, color: boolean) => {
+    let texture: THREE.Texture
+    pending.push(new Promise<void>((resolve, reject) => {
+      texture = loader.load(url, () => resolve(), undefined, reject)
+    }))
+    texture!.wrapS = texture!.wrapT = THREE.RepeatWrapping
+    texture!.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace
+    texture!.anisotropy = 4
+    return texture!
+  }
+  const map = load(woodColor, true), normalMap = load(woodNormal, false), orm = load(woodOrm, false)
+  woodSource = { name: 'breach-old-planks', tile: 2, maps: { map, normalMap, roughnessMap: orm, metalnessMap: orm, aoMap: orm }, roughness: 1 }
+  woodReady = Promise.all(pending).then(() => undefined)
+  return woodReady
+}
 
 const GAPS: Partial<Record<RoomId, Array<{ face: Face; from: number; to: number; floor: boolean }>>> = {
   lobby: [{ face: 'z-', from: -0.8, to: 0.8, floor: true }, { face: 'z-', from: -4.2, to: -2.6, floor: false }, { face: 'z-', from: 2.6, to: 4.2, floor: false }, { face: 'z+', from: -0.75, to: 0.75, floor: true }],
@@ -82,7 +113,7 @@ function flicker(kind: Practical['kind'], time: number, seed: number) {
   if (kind === 'fire') return 1 + 0.18 * ((noise(time * 4.2 + seed) * 0.65 + noise(time * 9.7 + seed * 3.1) * 0.35) * 2 - 1)
   if (kind === 'bulb') return 1 + 0.03 * (noise(time * 0.5 + seed) * 2 - 1)
   if (kind === 'emergency') return 0.94 + 0.06 * Math.sin(time * 1.6 + seed)
-  return 1
+  return 1 - 0.16 * Math.pow(Math.max(0, Math.sin((time + seed) * 0.6)), 16) * (0.5 + 0.5 * Math.sin(time * 38))
 }
 
 function floorOf(room: Room): Paint | null {
@@ -281,7 +312,15 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     const paint = floorOf(room)
     if (!paint) return
     const width = room.max[0] - room.min[0] + 0.5, depth = room.max[1] - room.min[1] + 0.5
-    level.plane(width, depth, paint, { at: [(room.min[0] + room.max[0]) / 2, 0.006 + index * 0.0012, (room.min[1] + room.max[1]) / 2] })
+    const at: Vec3 = [(room.min[0] + room.max[0]) / 2, 0.006 + index * 0.0012, (room.min[1] + room.max[1]) / 2]
+    if (room.floor === 'wood') {
+      void breachTexturesReady()
+      const floor = new THREE.Mesh(worldPlaneGeometry(width, depth, woodSource!.tile), surface(woodSource!, { color: '#b6afa0', ao: false }))
+      floor.position.set(...at)
+      floor.receiveShadow = true
+      floor.name = 'office-plank-floor'
+      add(floor)
+    } else level.plane(width, depth, paint, { at })
   })
 
   const asphalt: Paint = { name: 'asphalt', color: '#76766e', ao: false }
@@ -328,11 +367,30 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     level.box(size, paint, { at, collide: false, cast: block.cast, shadow: block.contact })
   }
 
+  const customParts = new Map<THREE.MeshStandardMaterial, THREE.BufferGeometry[]>()
   for (const item of LEVEL.decor) {
     const paint = tint(item.look, item.color)
     const place = { at: item.at, rotate: item.rotate, collide: false, cast: item.cast ?? true, shadow: false }
-    if (item.kind === 'box') level.box(item.size, paint, place)
+    if (item.wood || item.kind === 'sandbag') {
+      void breachTexturesReady()
+      const material = item.wood ? surface(woodSource!, { color: '#b6afa0' }) : surface(paint.name, { color: paint.color })
+      const geometry = item.wood ? worldBoxGeometry(...item.size, woodSource!.tile) : new THREE.CapsuleGeometry(0.5, 1, 2, 8).rotateZ(Math.PI / 2).scale(item.size[0] / 2, item.size[1], item.size[2])
+      if (item.kind === 'sandbag') {
+        const uv = geometry.getAttribute('uv')
+        for (let vertex = 0; vertex < uv.count; vertex++) uv.setXY(vertex, uv.getX(vertex) * 0.3, uv.getY(vertex) * 0.3)
+      }
+      const rotation = item.rotate ?? [0, 0, 0]
+      geometry.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(...rotation))).translate(...item.at)
+      const parts = customParts.get(material) ?? []
+      parts.push(geometry)
+      customParts.set(material, parts)
+    } else if (item.kind === 'box') level.box(item.size, paint, place)
     else level.cylinder(item.size[0], item.size[1], paint, place, item.segments ?? 12)
+  }
+  for (const [material, parts] of customParts) {
+    const mesh = new THREE.Mesh(merge(parts), material)
+    mesh.castShadow = mesh.receiveShadow = true
+    level.mesh(mesh)
   }
 
   const windowBay = (face: Face, plane: number, along: number, y: number, width: number, height: number, state: number) => {
@@ -474,6 +532,11 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   lada(level, [-13.5, 0, 18.5], 0, '#3b342d')
   lada(level, [-3.6, 0, 38], 0.35, '#55604f')
   apc(level, APC_AT, -Math.PI / 2 + 0.08)
+  const apcYaw = -Math.PI / 2 + 0.08
+  level.contact(6.8, 2.7, [APC_AT[0], APC_AT[2]], apcYaw)
+  for (const x of [-2.4, -0.8, 0.8, 2.4]) for (const z of [-1.35, 1.35]) {
+    level.contact(1.0, 0.55, [APC_AT[0] + x * Math.cos(apcYaw) + z * Math.sin(apcYaw), APC_AT[2] - x * Math.sin(apcYaw) + z * Math.cos(apcYaw)], apcYaw)
+  }
   for (const [x, z, height, yaw] of [[-25, 16, 7, 0.3], [26, 24, 8, 1.4], [-27, 36, 6.5, 2.2], [14, 38, 7.5, 0.8], [-16, -34, 8.5, 3.1], [22, -31, 7, 1.9], [-31, -8, 9, 0.2], [30, 2, 7.2, 1.1]] as const) deadTree(level, [x, 0, z], height, yaw, false)
   for (let index = 0; index < 7; index++) {
     const x = -42 + index * 12
@@ -710,6 +773,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   const tapeMap = own(texture(32, 4, u => (Math.floor(u * 8) % 2 ? [0.86, 0.84, 0.78, 1] : [0.66, 0.16, 0.12, 1]), { srgb: true, repeat: true }))
 
   const practicals: BreachLevel['practicals'] = []
+  const sources: LightSource[] = []
   const flames: Array<{ mesh: THREE.Mesh; room: RoomId; seed: number }> = []
   const embers: THREE.BufferGeometry[] = []
   const fixtures: Array<{ object: THREE.Object3D; room: RoomId }> = []
@@ -746,7 +810,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
       const [, edge, nx, nz] = edges.reduce((best, item) => item[0] < best[0] ? item : best)
       const across = nx !== 0
       level.box(across ? [0.1, 0.16, 0.26] : [0.26, 0.16, 0.1], { name: 'metal', color: '#2a2b26', ao: false }, { at: across ? [edge + nx * 0.05, y, z] : [x, y, edge + nz * 0.05], collide: false, cast: false, shadow: false })
-      glow(new THREE.BoxGeometry(across ? 0.02 : 0.22, 0.12, across ? 0.22 : 0.02), across ? [edge + nx * 0.11, y, z] : [x, y, edge + nz * 0.11], '#ff3a26', 2)
+      glow(new THREE.BoxGeometry(across ? 0.02 : 0.22, 0.12, across ? 0.22 : 0.02), across ? [edge + nx * 0.11, y, z] : [x, y, edge + nz * 0.11], spot.color ?? '#ff3a26', 2)
     } else if (spot.fixture === 'lamp') {
       level.cylinder(0.07, 0.02, iron, { at: [x, y, z], collide: false, cast: false, shadow: false }, 10)
       rod([x, y + 0.01, z], [x + 0.04, y + 0.33, z + 0.02], 0.01, iron, 4)
@@ -765,14 +829,17 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
       light = [x, y + 0.35, z]
       decal('soot', 'y+', [x, 0.006, z], 1.4, 1.4)
     }
-    if (options.phone && !spot.phone) return
     const spec = LIGHTS[spot.kind]
     const base = spot.intensity ?? spec.intensity
-    const point = new THREE.PointLight(spot.color ?? spec.color, base, spot.distance ?? spec.distance, 2)
-    point.castShadow = false
-    point.name = `practical-${spot.fixture}-${index}`
-    point.position.set(...light)
-    practicals.push({ light: add(point), room: spot.room, base, kind: spot.kind })
+    sources.push({ position: new THREE.Vector3(...light), color: new THREE.Color(spot.color ?? spec.color), room: spot.room, base, kind: spot.kind, distance: spot.distance ?? spec.distance, seed: index * 3.7, score: 0, selected: false })
+  })
+  const ranked = [...sources]
+  const lightSlots = Array.from({ length: Math.max(0, BUDGET.pointLights[options.quality] - 2) }, (_, index) => {
+    const light = new THREE.PointLight('#ffffff', 0, 1, 2)
+    light.name = `practical-pool-${index}`
+    const practical = { light: add(light), room: 'yard' as RoomId, base: 0, kind: 'bulb' as Practical['kind'] }
+    practicals.push(practical)
+    return { practical, source: null as LightSource | null, target: null as LightSource | null, gain: 0 }
   })
   if (embers.length) {
     const glowBed = new THREE.Mesh(merge(embers), own(new THREE.MeshBasicMaterial({ map: dot, color: new THREE.Color('#ff6a20').multiplyScalar(1.6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })))
@@ -852,18 +919,27 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   add(tapeMesh)
 
   const shaftMaterial = own(new THREE.MeshBasicMaterial({ map: beamMap, color: '#efe6d2', vertexColors: true, transparent: true, opacity: 0.11, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }))
+  shaftMaterial.onBeforeCompile = shader => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vShaftView;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvShaftView = mvPosition.xyz;')
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vShaftView;')
+      .replace('#include <alphamap_fragment>', '#include <alphamap_fragment>\ndiffuseColor.a *= smoothstep(0.3, 2.6, length(vShaftView));')
+  }
+  shaftMaterial.customProgramCacheKey = () => 'breach-shaft-near-fade'
   const moteMaterial = own(new THREE.PointsMaterial({ map: dot, color: '#e6dcc4', size: 0.018, sizeAttenuation: true, vertexColors: true, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }))
   const moteCount = options.quality === 'high' && !options.phone ? 60 : options.quality === 'low' ? 24 : 40
   const motes: Motes[] = []
   SHAFTS.forEach((shaft, index) => {
     const height = Math.max(shaft.at[1] * 2, roomOf(shaft.room).ceiling) + 0.3
-    const geometry = crossed(Math.max(shaft.size[0], shaft.size[1]) * 1.05, height, 3)
+    const geometry = crossed(Math.max(shaft.size[0], shaft.size[1]) * 1.05, height, 3, 8)
     const position = geometry.getAttribute('position')
     const colors = new Float32Array(position.count * 3)
     for (let vertex = 0; vertex < position.count; vertex++) {
       const t = Math.max(0, position.getY(vertex) / height), spread = 1 + 0.3 * (1 - t)
       position.setXYZ(vertex, position.getX(vertex) * spread, position.getY(vertex), position.getZ(vertex) * spread)
-      colors.fill(0.1 + 0.9 * Math.pow(t, 1.4), vertex * 3, vertex * 3 + 3)
+      colors.fill(smooth(0, 1.2, position.getY(vertex)) * (0.1 + 0.9 * Math.pow(t, 1.4)), vertex * 3, vertex * 3 + 3)
     }
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
     const volume = new THREE.Mesh(own(geometry), shaftMaterial)
@@ -956,10 +1032,42 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   })
 
   const tapePosition = tapeGeometry.getAttribute('position') as THREE.BufferAttribute
-  const update = (time: number, _dt: number, visibleRooms: ReadonlySet<RoomId>) => {
-    practicals.forEach((practical, index) => {
-      practical.light.intensity = visibleRooms.has(practical.room) ? practical.base * flicker(practical.kind, time, index * 3.7) : 0
-    })
+  const update = (time: number, dt: number, visibleRooms: ReadonlySet<RoomId>, listener = { x: 0, y: 1.63, z: 23 }) => {
+    for (const source of sources) {
+      const x = listener.x - source.position.x, y = listener.y - source.position.y, z = listener.z - source.position.z
+      source.score = visibleRooms.has(source.room) ? (x * x + y * y + z * z) * (source.selected ? 0.82 : 1) : Infinity
+      source.selected = false
+    }
+    ranked.sort((a, b) => a.score - b.score)
+    for (let index = 0; index < lightSlots.length; index++) if (ranked[index] && Number.isFinite(ranked[index]!.score)) ranked[index]!.selected = true
+    for (const slot of lightSlots) {
+      if (slot.target?.selected) continue
+      slot.target = null
+      for (const candidate of ranked) {
+        if (!candidate.selected || lightSlots.some(other => other !== slot && other.target === candidate)) continue
+        slot.target = candidate
+        break
+      }
+    }
+    const blend = 1 - Math.exp(-18 * Math.max(0, dt))
+    for (const slot of lightSlots) {
+      const changing = slot.source !== slot.target
+      slot.gain += ((changing || !slot.target ? 0 : 1) - slot.gain) * blend
+      if (changing && slot.gain < 0.015) {
+        slot.source = slot.target
+        slot.gain = 0
+        if (slot.source) {
+          slot.practical.room = slot.source.room
+          slot.practical.base = slot.source.base
+          slot.practical.kind = slot.source.kind
+          slot.practical.light.position.copy(slot.source.position)
+          slot.practical.light.updateMatrix()
+          slot.practical.light.color.copy(slot.source.color)
+          slot.practical.light.distance = slot.source.distance
+        }
+      }
+      slot.practical.light.intensity = slot.source ? slot.source.base * slot.gain * flicker(slot.source.kind, time, slot.source.seed) : 0
+    }
     for (const fixture of fixtures) fixture.object.visible = visibleRooms.has(fixture.room)
     for (const flame of flames) {
       flame.mesh.visible = visibleRooms.has(flame.room)

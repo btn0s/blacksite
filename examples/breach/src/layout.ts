@@ -22,7 +22,7 @@ export type Block = {
 }
 
 export type Decor = {
-  kind: 'box' | 'cylinder'
+  kind: 'box' | 'cylinder' | 'sandbag'
   size: Vec3
   at: Vec3
   rotate?: Vec3
@@ -30,6 +30,7 @@ export type Decor = {
   color?: string
   cast?: boolean
   segments?: number
+  wood?: boolean
 }
 
 export type Room = { id: RoomId; name: string; min: Vec2; max: Vec2; ceiling: number; floor: Footing; sees: RoomId[] }
@@ -142,13 +143,13 @@ function drum(x: number, z: number, color = '#4f5a44', tipped = false) {
 
 function crate(x: number, z: number, size: number, y = 0, color = '#5a5236', yaw = 0) {
   if (y === 0) box([x, size / 2, z], [size, size, size], { look: 'paint', color, hit: 'wood', render: false })
-  dress({ kind: 'box', size: [size, size, size], at: [x, y + size / 2, z], rotate: [0, yaw, 0], look: 'paint', color })
+  dress({ kind: 'box', size: [size, size, size], at: [x, y + size / 2, z], rotate: [0, yaw, 0], look: 'paint', color, wood: true })
   dress({ kind: 'box', size: [size + 0.02, 0.07, size + 0.02], at: [x, y + size * 0.72, z], rotate: [0, yaw, 0], look: 'metal', color: '#2c2b25', cast: false })
   dress({ kind: 'box', size: [size + 0.02, 0.07, size + 0.02], at: [x, y + size * 0.2, z], rotate: [0, yaw, 0], look: 'metal', color: '#2c2b25', cast: false })
   const c = Math.cos(yaw), s = Math.sin(yaw), h = size / 2
   const local = (lx: number, ly: number, lz: number): Vec3 => [x + lx * c + lz * s, y + ly, z - lx * s + lz * c]
-  for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) dress({ kind: 'box', size: [0.08, size + 0.012, 0.08], at: local(lx * (h - 0.03), size / 2, lz * (h - 0.03)), rotate: [0, yaw, 0], look: 'paint', color: '#3e3a2a', cast: false })
-  dress({ kind: 'box', size: [size + 0.01, 0.025, size * 0.18], at: local(0, size + 0.012, -size * 0.2), rotate: [0, yaw, 0], look: 'paint', color: '#6b5a44', cast: false })
+  for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) dress({ kind: 'box', size: [0.08, size + 0.012, 0.08], at: local(lx * (h - 0.03), size / 2, lz * (h - 0.03)), rotate: [0, yaw, 0], look: 'paint', color: '#3e3a2a', cast: false, wood: true })
+  dress({ kind: 'box', size: [size + 0.01, 0.025, size * 0.18], at: local(0, size + 0.012, -size * 0.2), rotate: [0, yaw, 0], look: 'paint', color: '#6b5a44', cast: false, wood: true })
   dress({ kind: 'box', size: [size * 0.42, size * 0.2, 0.012], at: local(0, size * 0.47, h + 0.008), rotate: [0, yaw, 0], look: 'stained', color: '#c9c0a4', cast: false })
 }
 
@@ -252,10 +253,10 @@ function pallet(x: number, z: number, layers = 1, along: 'x' | 'z' = 'x', y = 0,
   for (let layer = 0; layer < layers; layer++) {
     const base = y + layer * 0.14 + (layer % 2 ? 0.02 : 0)
     const shift = (layer % 3 - 1) * 0.04
-    for (const offset of [-0.34, 0, 0.34]) dress({ kind: 'box', size: along === 'x' ? [1.2, 0.09, 0.1] : [0.1, 0.09, 1.2], at: along === 'x' ? [x + shift, base + 0.045, z + offset] : [x + offset, base + 0.045, z + shift], look: 'paint', color: '#5e4e3a', cast: layer === layers - 1 })
+    for (const offset of [-0.34, 0, 0.34]) dress({ kind: 'box', size: along === 'x' ? [1.2, 0.09, 0.1] : [0.1, 0.09, 1.2], at: along === 'x' ? [x + shift, base + 0.045, z + offset] : [x + offset, base + 0.045, z + shift], look: 'paint', color: '#5e4e3a', cast: layer === layers - 1, wood: true })
     for (let slat = 0; slat < 5; slat++) {
       const offset = -0.5 + slat * 0.25
-      dress({ kind: 'box', size: along === 'x' ? [0.12, 0.025, 0.8] : [0.8, 0.025, 0.12], at: along === 'x' ? [x + shift + offset, base + 0.1, z] : [x + offset, base + 0.1, z + shift], look: 'paint', color: slat % 2 ? '#75634b' : '#6b5a44', cast: false })
+      dress({ kind: 'box', size: along === 'x' ? [0.12, 0.025, 0.8] : [0.8, 0.025, 0.12], at: along === 'x' ? [x + shift + offset, base + 0.1, z] : [x + offset, base + 0.1, z + shift], look: 'paint', color: slat % 2 ? '#75634b' : '#6b5a44', cast: false, wood: true })
     }
   }
 }
@@ -548,7 +549,7 @@ for (const [x, y, z, sx, sy, sz] of blastEdge) dress({ kind: 'box', size: [sx, s
 
 for (const [x, z, h] of [[-9.6, 19.4, 0.72], [-8.4, 19.7, 0.72], [-7.2, 19.9, 0.72], [-2.6, 13.0, 0.96], [-1.6, 13.2, 0.96], [2.4, 12.8, 0.72]] as const) {
   box([x, h / 2, z], [1.1, h, 0.6], { look: 'dirt', color: '#8b8266', render: false })
-  for (let row = 0; row < Math.round(h / 0.24); row++) dress({ kind: 'box', size: [0.58, 0.24, 0.56], at: [x - 0.28 + (row % 2) * 0.1, row * 0.24 + 0.12, z], rotate: [0, (row * 0.17) % 0.2 - 0.1, 0], look: 'dirt', color: row % 2 ? '#8d8468' : '#7c7559' })
+  for (let row = 0; row < Math.round(h / 0.24); row++) for (const side of [-1, 1]) dress({ kind: 'sandbag', size: [0.58, 0.24, 0.56], at: [x + side * 0.27 + (row % 2) * 0.06, row * 0.24 + 0.12, z], rotate: [0, (row * 0.17) % 0.2 - 0.1, 0], look: 'dirt', color: row % 2 ? '#8d8468' : '#7c7559' })
 }
 rubble(-11.0, 13.6, 1.4, 61)
 rubble(12.6, 14.8, 1.2, 71)
@@ -583,8 +584,22 @@ tyres(-5.4, 29.3, 2)
 bench(-10.2, 29.4, 'x')
 standing(5.6, 29.4, [0.18, 6.4, 0.18], { look: 'metal', color: '#3a3c30', render: false })
 cylinders(4.75, -0.65, ['#8a2f24', '#4a5a6a'])
+workbench(3.5, 1.35, 'x')
+tyres(1.95, -4.3, 2, false)
 workbench(-6.6, -9.1, 'z')
 standing(-2.8, -5.42, [1.2, 1.9, 0.5], { look: 'paint', color: '#55645a', hit: 'metal', render: false })
+
+pallet(14.4, -25.8, 2)
+crate(14.4, -25.8, 0.7, 0.28, '#5a5236', 0.08)
+crate(13.5, -26.1, 0.8, 0, '#5e5a3e', -0.12)
+drum(15.0, -24.4, '#4f5a44')
+drum(14.25, -24.65, '#5d4b36', true)
+tyres(15.1, -22.8, 3)
+spool(14.7, -20.6)
+footings(13.6, -18.1, 'x', 2)
+cylinders(15.55, -19.0, ['#8a2f24', '#4a5a6a'])
+bench(5.5, -26.4, 'x', true)
+for (const [x, z, yaw] of [[14.1, -23.8, 0.3], [13.8, -25.0, 1.5], [5.8, -25.8, 2.1]] as const) dress({ kind: 'box', size: [0.21, 0.004, 0.29], at: [x, 0.015, z], rotate: [0, yaw, 0], look: 'stained', color: '#cfc5a6', cast: false })
 
 export const LEVEL = { blocks, decor, voids }
 
@@ -668,7 +683,7 @@ export const BOOKMARKS = [
   { name: 'corridor', position: [0, 1.63, 1.4] as Vec3, target: [0, 1.5, -6] as Vec3, note: 'The tight corridor and the store-room opening' },
   { name: 'hall', position: [0, 1.63, -5.8] as Vec3, target: [-1, 1.5, -15] as Vec3, note: 'Lathes, shafts, the burning barrel and the fluorescent tube' },
   { name: 'hall-north', position: [4.4, 1.63, -16.4] as Vec3, target: [-4, 1.4, -7] as Vec3, note: 'The longest sightline, back across the hall' },
-  { name: 'office', position: [-1, 1.63, -18] as Vec3, target: [-5, 1.2, -23] as Vec3, note: 'Desks, cabinets, the red lamp' },
+  { name: 'office', position: [-1.4, 1.63, -21.0] as Vec3, target: [-6, 1.3, -21.8] as Vec3, note: 'Desks, cabinets, the red lamp' },
   { name: 'exfil', position: [-0.6, 1.63, -21.2] as Vec3, target: [9, 1.4, -22] as Vec3, note: 'The breach out to the APC' },
 ]
 

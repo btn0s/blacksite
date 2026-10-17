@@ -211,6 +211,9 @@ importers:
       '@blacksite/look':
         specifier: workspace:*
         version: link:../../packages/look
+      '@blacksite/soundscape':
+        specifier: workspace:*
+        version: link:../../packages/soundscape
       '@blacksite/subject-fpp':
         specifier: workspace:*
         version: link:../../packages/subject-fpp

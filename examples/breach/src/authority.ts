@@ -57,6 +57,29 @@ type Bot = {
 const eye = (stance: 'stand' | 'crouch') => stance === 'stand' ? 1.5 : 0.95
 const ticks = (seconds: number) => Math.round(seconds / DT)
 
+export class AttackBudget {
+  private tick = 0
+  private readonly holders = new Map<string, { since: number; wanted: number }>()
+  private readonly cooldown = new Map<string, number>()
+
+  begin(tick: number, alive: ReadonlySet<string>) {
+    this.tick = tick
+    for (const [id, lease] of this.holders) {
+      if (alive.has(id) && tick - lease.since < ticks(AI.tokenHoldSeconds) && tick - lease.wanted <= ticks(AI.tokenIdleSeconds)) continue
+      this.holders.delete(id)
+      this.cooldown.set(id, tick + (alive.has(id) ? ticks(AI.tokenCooldownSeconds) : 0))
+    }
+  }
+
+  allow(id: string) {
+    const lease = this.holders.get(id)
+    if (lease) { lease.wanted = this.tick; return true }
+    if (this.holders.size >= AI.attackTokens || this.tick < (this.cooldown.get(id) ?? 0)) return false
+    this.holders.set(id, { since: this.tick, wanted: this.tick })
+    return true
+  }
+}
+
 export class BreachAuthority implements TacticalAuthority {
   tick = 0
   status: 'running' | 'complete' = 'running'
@@ -70,7 +93,7 @@ export class BreachAuthority implements TacticalAuthority {
   private eventSequence = 0
   private lastCommands: AgentCommand[] = []
 
-  constructor(private readonly map: TacticalMap, seed: number, facing: Record<string, { yaw: number; crouch?: boolean }>, player: PlayerState) {
+  constructor(private readonly map: TacticalMap, seed: number, facing: Record<string, { yaw: number; crouch?: boolean }>, player: PlayerState, private readonly fireAllowed: (id: string) => boolean = () => true) {
     let state = seed >>> 0 || 1
     this.random = () => { state ^= state << 13; state ^= state >>> 17; state ^= state << 5; return (state >>> 0) / 4294967296 }
     this.observations = new ObservationGenerator({ map, seed, lineOfSight: (from, to) => clearLine(from, to) })
@@ -158,6 +181,7 @@ export class BreachAuthority implements TacticalAuthority {
       if (tick - bot.lastShotAt < Math.max(1, Math.round(1 / (AI.roundsPerSecond * DT)))) continue
       if (visible && tick - bot.seenSince < bot.reaction) continue
       if (bot.ammo <= 0) { if (bot.reserve > 0) this.reload(bot); continue }
+      if (!this.fireAllowed(bot.id)) continue
       this.fire(bot, from, target, visible, events)
     }
     return { checksum: this.checksum(), commands: structuredClone(this.lastCommands), events }
@@ -207,7 +231,7 @@ export class BreachAuthority implements TacticalAuthority {
     let hitPlayer = false
     if (visible && aligned && range < AI.sightRange + 8) {
       const chance = aiHitChance((tick - bot.seenSince) * DT, { moving: this.player.moving, sprinting: this.player.sprinting, crouched: this.player.crouch })
-      hitPlayer = !bot.firstBurst && this.random() < chance
+      hitPlayer = !(AI.firstBurstMisses && bot.firstBurst) && this.random() < chance
       if (hitPlayer) aim = { x: chest.x + (this.random() - 0.5) * 0.25, y: chest.y + (this.random() - 0.3) * 0.5, z: chest.z + (this.random() - 0.5) * 0.25 }
       else {
         const radius = AI.missRadius[0] + this.random() * (AI.missRadius[1] - AI.missRadius[0])
