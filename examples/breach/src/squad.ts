@@ -92,6 +92,11 @@ export class SquadClient {
 
   waiting(id: string) { return !this.admitted.has(id) }
 
+  admissible(id: string) {
+    const target = this.renderTime()
+    return this.history.some(frame => frame.t <= target && frame.soldiers.get(id)?.alive === true)
+  }
+
   admit(id: string) {
     this.admitted.add(id)
     const buffer = this.buffer(id)

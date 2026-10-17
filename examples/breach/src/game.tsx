@@ -533,8 +533,10 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
       if (entry) { entry.minInterval = 1; entry.maxInterval = 1 }
     }
     const admit = interleave ? scratch.parity ? 0 : Math.floor(scratch.budget) : Math.floor(scratch.budget)
-    while (scratch.arriving < admit && scratch.waiting.length) {
-      const id = scratch.waiting.shift()!
+    for (let index = 0; scratch.arriving < admit && index < scratch.waiting.length;) {
+      const id = scratch.waiting[index]!
+      if (!squad.admissible(id)) { index++; continue }
+      scratch.waiting.splice(index, 1)
       squad.admit(id)
       scratch.credit.set(id, 0)
       scratch.arriving++
