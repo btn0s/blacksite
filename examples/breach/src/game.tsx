@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type RefObject } from 'react'
 import * as THREE from 'three'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { CuboidCollider, Physics, RigidBody, useAfterPhysicsStep } from '@react-three/rapier'
+import { CuboidCollider, Physics, RigidBody, useAfterPhysicsStep, useRapier } from '@react-three/rapier'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import type { AlsRagdollHandle } from 'als-ue5-r3f/app/AlsRemoteActor'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
@@ -25,8 +25,9 @@ import { SOLIDS, castLevel, castTargets, clearLine, groundHit, zoneMultiplier, t
 import { Hud } from './hud'
 import { ENCOUNTERS, EXFIL, START, footingAt, roomAt } from './layout'
 import { breachTexturesReady, buildLevel, type BreachLevel } from './level'
-import { AI, DEG, FEEDBACK, MOVE, PLAYER, PRESENTATION, VIEW, WEAPONS, animationBudget, animationInterval, armoryDefinitions, scheduleAnimation, footInterval, type HitZone, type RoomId } from './model'
+import { AI, CORPSE_RAGDOLL, DEG, FEEDBACK, MOVE, PLAYER, PRESENTATION, VIEW, WEAPONS, animationBudget, animationInterval, armoryDefinitions, scheduleAnimation, footInterval, type HitZone, type RoomId } from './model'
 import { createBody, eyePosition, placeBody, stepBody } from './player'
+import { createCorpseRagdoll, warmCorpseRagdoll, type CorpseRagdoll } from './ragdoll'
 import { Soldiers, corpseOf, lod, releaseWeaponAim } from './soldiers'
 import { SquadClient, type TimedEvent } from './squad'
 import { hud, useHud } from './store'
@@ -59,6 +60,7 @@ function effectsFor(scene: THREE.Scene) {
 const ADMISSION = -2.25
 type Commands = { reload: boolean; swap: boolean; aim: boolean; crouch: boolean; jump: boolean; sprint: boolean }
 type TouchInput = ReturnType<typeof createStandaloneTouch>
+type RapierHandle = ReturnType<typeof useRapier>
 const atmosphere: Atmosphere = {
   ...ZONE,
   exposure: 1.18,
@@ -157,12 +159,14 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     seed: 1, firstFrame: false, sprinting: false, fireReadyAt: 0, sentAt: 0, room: 'yard' as RoomId, deathTilt: 0, drive: null as Driver | null,
     footsteps: new Map<string, number>(),
     drops: new Map<string, { pivot: THREE.Group; axis: THREE.Vector3; base: number; start: number }>(),
+    corpses: new Map<string, CorpseRagdoll>(),
   })
   const scratch = useMemo(() => ({
     eye: { x: 0, y: 0, z: 0 } as V3, right: new THREE.Vector3(), forward: new THREE.Vector3(), muzzle: new THREE.Vector3(), point: new THREE.Vector3(), normal: new THREE.Vector3(),
     from: new THREE.Vector3(), to: new THREE.Vector3(), sample: { x: 0, z: 0, crouch: false, alive: true, yaw: 0 }, targets: [] as Target[], zones: new Map<string, HitZone>(),
     frustum: new THREE.Frustum(), matrix: new THREE.Matrix4(), sphere: new THREE.Sphere(new THREE.Vector3(), 1.2), visible: new Set<RoomId>(), corpses: new THREE.Group(), lightEye: new THREE.Vector3(),
     animation: new Map<string, number>(), credit: new Map<string, number>(), due: new Set<string>(), budget: 0, parity: false, waiting: [] as string[], arriving: 0, falling: 0, stepped: false,
+    physics: null as RapierHandle | null,
   }), [])
 
   useEffect(() => { scene.add(scratch.corpses); return () => { scene.remove(scratch.corpses) } }, [scene, scratch])
@@ -200,6 +204,8 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     state.barkAt.clear(); state.rounds.clear(); state.down.clear(); state.downAt.clear(); state.laid.clear(); state.settled.clear(); state.dead.clear(); state.pushes.clear()
     state.footsteps.clear()
     state.drops.clear()
+    for (const ragdoll of state.corpses.values()) ragdoll.dispose()
+    state.corpses.clear()
     arms.weapon = 'rifle'
     arms.aimSeconds = WEAPONS.rifle.adsSeconds
     recovery.fraction = WEAPONS.rifle.recoveryFraction
@@ -326,6 +332,55 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     state.laid.add(id)
     freeze(id, true)
     return true
+  }
+
+  const settle = (id: string) => {
+    const state = game.current
+    state.corpses.get(id)?.dispose()
+    state.corpses.delete(id)
+    state.settled.delete(id)
+  }
+
+  const corpseSlot = () => {
+    const state = game.current
+    if (state.corpses.size < PRESENTATION.ragdolls.phone) return true
+    const time = performance.now() / 1000
+    let oldest: string | null = null
+    for (const id of state.corpses.keys()) if (!oldest || (state.downAt.get(id) ?? time) < (state.downAt.get(oldest) ?? time)) oldest = id
+    const ragdoll = oldest ? state.corpses.get(oldest) : null
+    if (!oldest || !ragdoll || time - (state.downAt.get(oldest) ?? time) < FEEDBACK.corpse.minimumSeconds || ragdoll.pelvis.position.y > FEEDBACK.corpse.groundedHeight) return false
+    settle(oldest)
+    return true
+  }
+
+  const fall = (id: string, velocity: { x: number; z: number }) => {
+    const state = game.current
+    const physics = scratch.physics
+    if (!physics || !corpseSlot()) { drop(id); return }
+    releaseWeaponAim(id)
+    const corpse = corpseOf(id)
+    if (!corpse) return
+    const push = state.pushes.get(id) ?? new THREE.Vector3(0, 0, -1)
+    const ragdoll = createCorpseRagdoll(physics.rapier, physics.world, corpse, push, velocity)
+    if (!ragdoll) { drop(id); return }
+    scratch.corpses.add(corpse)
+    state.corpses.set(id, ragdoll)
+    state.down.add(id)
+    state.downAt.set(id, performance.now() / 1000)
+    state.laid.add(id)
+    freeze(id, true)
+  }
+
+  const rest = () => {
+    const state = game.current
+    const time = performance.now() / 1000
+    for (const [id, ragdoll] of state.corpses) {
+      const age = time - (state.downAt.get(id) ?? time)
+      if (ragdoll.pelvis.velocity.lengthSq() < FEEDBACK.corpse.settledSpeed ** 2) state.settled.set(id, state.settled.get(id) ?? time)
+      else state.settled.delete(id)
+      const still = time - (state.settled.get(id) ?? time) > FEEDBACK.corpse.settledSeconds
+      if (age > CORPSE_RAGDOLL.maximumSeconds || age > FEEDBACK.corpse.minimumSeconds && (still || age > PRESENTATION.corpseSeconds.phone && ragdoll.pelvis.position.y < FEEDBACK.corpse.groundedHeight)) settle(id)
+    }
   }
 
   const drop = (id: string) => {
@@ -582,6 +637,7 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     level.update(state.clock, step, scratch.visible, pose.current ? scratch.lightEye.fromArray(pose.current.position) : camera.position)
     effects.update(step, position => audio.casing(position, footingAt(position.x, position.z)))
     topple()
+    rest()
     chips.update(step)
     state.flash = Math.max(0, state.flash - step)
     state.enemyFlash = Math.max(0, state.enemyFlash - step)
@@ -616,8 +672,12 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
       }
       if (sample.alive && !isDown && !waiting) targets.push({ id: soldier.id, x: sample.x, y: 0, z: sample.z, crouch: sample.crouch })
       if (!soldier.alive && !state.dead.has(soldier.id)) { state.dead.add(soldier.id); state.kills++; audio.hitMarker(true, false); const screen = hud.get(); hud.set({ marker: screen.marker + 1, markerKind: 'kill' }) }
-      if (!sample.alive && !isDown && PRESENTATION.ragdolls[phone ? 'phone' : 'desktop'] === 0) {
-        drop(soldier.id)
+      if (!sample.alive && !isDown && !state.pushes.has(soldier.id)) {
+        const push = new THREE.Vector3(sample.x - body.position.x, 0, sample.z - body.position.z)
+        state.pushes.set(soldier.id, push.lengthSq() < 1e-4 ? push.set(0, 0, -1) : push.normalize())
+      }
+      if (!sample.alive && !isDown && PRESENTATION.ragdoll[phone ? 'phone' : 'desktop'] === 'corpse') {
+        fall(soldier.id, { x: soldier.vx, z: soldier.vz })
       } else if (!sample.alive && handleRef && !isDown && ragdollSlot(soldier.id)) {
         const push = state.pushes.get(soldier.id) ?? new THREE.Vector3(0, 0, -1)
         releaseWeaponAim(soldier.id)
@@ -712,7 +772,10 @@ function Scene({ tier, audio, touchInput, commands, onArms, onFirstFrame }: { ti
     <primitive object={level.group} />
     <Physics gravity={[0, -9.81, 0]} timeStep={1 / (phone ? PRESENTATION.physicsHz.phone : PRESENTATION.physicsHz.desktop)} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <LevelColliders />
-      <StepProbe onStep={useCallback(() => { scratch.stepped = true }, [scratch])} />
+      <StepProbe onStep={useCallback(() => { scratch.stepped = true; for (const ragdoll of game.current.corpses.values()) ragdoll.update() }, [scratch])} onPhysics={useCallback((physics: RapierHandle) => {
+        scratch.physics = physics
+        if (PRESENTATION.ragdoll[phone ? 'phone' : 'desktop'] === 'corpse') warmCorpseRagdoll(physics.rapier, physics.world)
+      }, [scratch, phone])} />
       <Soldiers roster={roster} frozen={frozen} client={squad} handles={handles} phone={phone} />
     </Physics>
     <ArmsViewmodel state={arms} render="external" onPresentation={setPresentation} />
@@ -775,7 +838,9 @@ export function Game() {
   </Screen>
 }
 
-function StepProbe({ onStep }: { onStep: () => void }) {
+function StepProbe({ onStep, onPhysics }: { onStep: () => void; onPhysics: (physics: RapierHandle) => void }) {
+  const physics = useRapier()
+  useEffect(() => onPhysics(physics), [physics, onPhysics])
   useAfterPhysicsStep(onStep)
   return null
 }

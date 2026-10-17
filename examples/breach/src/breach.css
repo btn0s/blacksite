@@ -38,8 +38,10 @@
 .breach-ending span { font: 500 13px 'IBM Plex Mono', monospace; letter-spacing: 0.1em; color: #d8d4c1; }
 .breach-ending em { font: 500 12px 'IBM Plex Mono', monospace; letter-spacing: 0.16em; text-transform: uppercase; color: #a9b57e; font-style: normal; }
 @media (max-width: 640px) {
-  .breach-hud .hud-status { top: calc(40px + env(safe-area-inset-top)); bottom: auto; }
-  .breach-pips { top: calc(84px + env(safe-area-inset-top)); }
+  .breach-hud .hud-status { top: calc(92px + env(safe-area-inset-top)); bottom: auto; left: calc(12px + env(safe-area-inset-left)); right: calc(12px + env(safe-area-inset-right)); transform: none; }
+  .breach-hud .hud-status strong { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .breach-pips { top: calc(150px + env(safe-area-inset-top)); }
+  .breach-ammo--touch, .breach-health--touch { top: calc(140px + env(safe-area-inset-top)); }
   .breach-subtitles { bottom: calc(190px + env(safe-area-inset-bottom)); }
   .breach-subtitles p { font-size: 13px; }
 }

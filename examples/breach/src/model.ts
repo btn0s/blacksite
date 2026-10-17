@@ -216,8 +216,37 @@ export const PRESENTATION = {
   armsPoseInterleave: { desktop: false, phone: true },
   corpseSeconds: { desktop: 2, phone: 1.2 },
   topple: { seconds: 0.55, lift: 0.13, bounce: { seconds: 0.3, angle: 0.1 } },
-  ragdolls: { desktop: 3, phone: 0 },
+  ragdolls: { desktop: 3, phone: 2 },
+  ragdoll: { desktop: 'als', phone: 'corpse' } as const,
   physicsHz: { desktop: 60, phone: 30 },
+}
+
+export type CorpseShape = { from: string; to: string; radius: number; beyond?: number }
+export type CorpsePart = { bone: string; joint?: string; swing?: number; hinge?: { toward: string; flex: number; range: number }; shapes: CorpseShape[]; mass: number }
+
+const limb = (side: 'l' | 'r'): CorpsePart[] => [
+  { bone: `upperarm_${side}`, joint: 'spine_01', swing: 1.2, shapes: [{ from: `upperarm_${side}`, to: `lowerarm_${side}`, radius: 0.05 }], mass: 2.5 },
+  { bone: `lowerarm_${side}`, joint: `upperarm_${side}`, hinge: { toward: `hand_${side}`, flex: 1, range: 1.6 }, shapes: [{ from: `lowerarm_${side}`, to: `hand_${side}`, radius: 0.045, beyond: 0.1 }], mass: 2 },
+  { bone: `thigh_${side}`, joint: 'pelvis', swing: 1, shapes: [{ from: `thigh_${side}`, to: `calf_${side}`, radius: 0.075 }], mass: 8 },
+  { bone: `calf_${side}`, joint: `thigh_${side}`, hinge: { toward: `foot_${side}`, flex: -1, range: 1.3 }, shapes: [{ from: `calf_${side}`, to: `foot_${side}`, radius: 0.055 }, { from: `foot_${side}`, to: `ball_${side}`, radius: 0.035 }], mass: 4.5 },
+]
+
+export const CORPSE_RAGDOLL = {
+  parts: [
+    { bone: 'pelvis', shapes: [{ from: 'thigh_l', to: 'thigh_r', radius: 0.12 }], mass: 12 },
+    { bone: 'spine_01', joint: 'pelvis', swing: 0.6, shapes: [{ from: 'spine_01', to: 'neck_01', radius: 0.13 }, { from: 'upperarm_l', to: 'upperarm_r', radius: 0.07 }], mass: 26 },
+    { bone: 'neck_01', joint: 'spine_01', swing: 0.6, shapes: [{ from: 'neck_01', to: 'head', radius: 0.1, beyond: 0.1 }], mass: 6 },
+    ...limb('l'),
+    ...limb('r'),
+  ] as CorpsePart[],
+  impulse: { bone: 'spine_01', at: 'spine_03', shot: 38, lift: 6 },
+  group: 0x0008,
+  collidesWith: 0x0001,
+  linearDamping: 0.05,
+  angularDamping: 1,
+  friction: 0.9,
+  hyperextend: 0.05,
+  maximumSeconds: 4,
 }
 
 export function animationInterval(tier: 'desktop' | 'phone', distance: number, visible: boolean) {

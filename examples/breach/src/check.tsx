@@ -98,6 +98,42 @@ export function CheckProbe({ driver, audio, ready, overlay, onWarmed }: { driver
         }
         driver.drive(null)
       },
+      async death() {
+        audio.start()
+        driver.restart()
+        await wait(300)
+        driver.place(HALL_DOOR, 0)
+        const drive: Driver = { forward: 0, right: 0, sprint: false, jump: false, fire: false, aim: true }
+        driver.drive(drive)
+        const started = performance.now()
+        let aimed: Target | null = null
+        while (performance.now() - started < 10000) {
+          driver.heal()
+          const body = driver.body
+          const targets = driver.targets()
+          if (aimed && !targets.some(target => target.id === aimed!.id)) break
+          aimed = null
+          let distance = Infinity
+          for (const target of targets) {
+            if (!clearLine({ x: body.position.x, y: body.position.y + 1.5, z: body.position.z }, { x: target.x, y: target.crouch ? 0.85 : 1.25, z: target.z })) continue
+            const d = Math.hypot(target.x - body.position.x, target.z - body.position.z)
+            if (d < distance) { distance = d; aimed = { ...target } }
+          }
+          if (aimed) driver.face({ x: aimed.x, y: aimed.crouch ? 0.85 : 1.25, z: aimed.z })
+          drive.fire = !!aimed
+          await wait(30)
+        }
+        drive.fire = false
+        if (aimed) {
+          const body = driver.body
+          const away = Math.atan2(aimed.x - body.position.x, aimed.z - body.position.z)
+          const side = { x: Math.cos(away), z: -Math.sin(away) }
+          window.__blacksite?.camera({ position: [aimed.x + side.x * 2.9, 3.4, aimed.z + side.z * 2.9], target: [aimed.x, 0.3, aimed.z], fov: 70 })
+          await wait(3200)
+          window.__blacksite?.camera(null)
+        }
+        driver.drive(null)
+      },
     },
     input: { move: 'KeyW', sprint: 'ShiftLeft', jump: 'Space' },
     model: { feel: FEEL, budget: CHECK_BUDGET },
