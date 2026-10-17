@@ -16,4 +16,4 @@ Blacksite resets the pose, changes scale and orientation, renames part bones, gi
 
 ## Reproduction
 
-The retained converter is `packages/subject-fpp/scripts/build-weapons.py`. Run headless Blender with this script, then `-- rifle <akm54.blend> <output.glb>` or `-- pistol <Pistol.blend> <output.glb>`. Source downloads are external to the repository; only the redistributable converted assets and this provenance are committed.
+The retained converter is `packages/subject/scripts/build-weapons.py`. Run headless Blender with this script, then `-- rifle <akm54.blend> <output.glb>` or `-- pistol <Pistol.blend> <output.glb>`. Source downloads are external to the repository; only the redistributable converted assets and this provenance are committed.

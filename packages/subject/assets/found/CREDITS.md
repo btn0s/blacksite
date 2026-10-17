@@ -15,7 +15,7 @@ Based on **[animated pistol](https://sketchfab.com/3d-models/animated-pistol-bd8
 
 ## Changes
 
-Blacksite baked both downloads in Blender 5.1.2 with `packages/subject-fpp/scripts/bake-found-set.py`. That script keeps only the deforming arm joints and the animated weapon parts, resamples the single authored action, and reduces textures to 1024-pixel JPEGs. `packages/subject-fpp/scripts/dress-viewmodel.py` then removes emissive maps and retones the sleeve region of each arms texture to olive drab. Gloves, weapons and all keyframes are unchanged.
+Blacksite baked both downloads in Blender 5.1.2 with `packages/subject/scripts/bake-found-set.py`. That script keeps only the deforming arm joints and the animated weapon parts, resamples the single authored action, and reduces textures to 1024-pixel JPEGs. `packages/subject/scripts/dress-viewmodel.py` then removes emissive maps and retones the sleeve region of each arms texture to olive drab. Gloves, weapons and all keyframes are unchanged.
 
 The runtime plays sub-ranges of the authored timelines as separate clips. Sway, bob, recoil, landing, sprint, aiming and the rifle inspect are procedural layers that Blacksite adds on top.
 

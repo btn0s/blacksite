@@ -2,7 +2,7 @@
 
 | Profile | Use when | Game mode |
 | --- | --- | --- |
-| `fpp` | Single-player first person | Arms-only `@blacksite/subject-fpp` and Armory on the template walker, with Rapier ray hits |
+| `fpp` | Single-player first person | Arms from `@blacksite/subject/arms` and Armory on the template walker, with Rapier ray hits |
 | `tpp` | Single-player third person | ALS body and camera driven from `@blacksite/input` |
 | `mp` | Multiplayer first and third person | `MultiplayerScene` with local arms, remote ALS bodies, Colyseus and the offline loopback |
 | `blank` | A custom player | The template walker in the starter yard |

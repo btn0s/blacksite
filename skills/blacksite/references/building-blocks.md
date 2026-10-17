@@ -29,14 +29,14 @@ An animated player body that walks, runs, sprints, crouches, mantles, rolls, rag
 
 | Need | Use |
 |---|---|
-| Solo first person, arms only | `@blacksite/subject-fpp`: `StandaloneSubject` and `ArmsViewmodel` from `/arms`. The game owns movement and returns the camera position. |
+| A player character, any view | `@blacksite/subject`: `createCharacterController({ views })` and `<CharacterController>` inside `<Physics>`. `views` is an ordered list of `arms`, `head` and `shoulder`; one entry locks the view. A local session (`useLocalSession`) owns the clock and stops the world under the pause menu. Example: `examples/breach/`. |
 | Solo third person | The ALS `Character` and `AlsCamera`, driven from `@blacksite/input` through `inputSource` and `controlRotationSource` with `inputEnabled={false}`. Template: `templates/prototype-kits/als-tpp/mode.tsx`. |
 | Switchable view, or a body the game drives | `@blacksite/subject`: `createSubject()` plus `Character inputEnabled={false} inputSource={createSubjectInputSource(subject)}`. |
 | Remote players, or AI puppets | One `AlsSnapshotBuffer` per actor, drawn with `AlsRemoteActor`. Squad does this. |
 
 ALS ships its own agent guide; read it instead of guessing. It's at `vendor/als-web/docs/guide/` in Blacksite, or `vendor/blacksite/vendor/als-web/docs/guide/` in a generated game. Start with `overview.md` (who owns what, frame order, units, the input contract), then the recipe for the task in `recipes/` (local, camera, weapon, montage, actions, remote, fpp-arms, foot-ik, lifecycle, performance), with `api.md` for imports and `gotchas.md` for symptoms.
 
-Other guides: `docs/arms.md` (the first-person arms viewmodel and its `public/assets/arms.json` manifest), `docs/player-templates.md` (what each scaffold profile mounts), `packages/subject/AGENTS.md`, `packages/subject-fpp/AGENTS.md`. Working examples: `site/src/showcases/characters/` (Checkpoint, third person with the check contract), `multiplayer/` (Subject, both views), `squad/soldiers.tsx` (remote actors), and `examples/breach/` (first person).
+Other guides: `docs/arms.md` (the first-person arms viewmodel and its `public/assets/arms.json` manifest), `docs/player-templates.md` (what each scaffold profile mounts), `packages/subject/AGENTS.md`, `packages/subject/DESIGN.md`. Working examples: `site/src/showcases/characters/` (Checkpoint, third person with the check contract), `multiplayer/` (Subject, both views), `squad/soldiers.tsx` (remote actors), and `examples/breach/` (first person).
 
 - Wrap the scene in `<Physics gravity={[0, -9.8, 0]} timeStep={1/60} updatePriority={ALS_FRAME_PRIORITY.Physics}>`.
 - Preload the character with `preloadAlsCharacterGltf` behind the loading screen.
@@ -64,7 +64,7 @@ Armory (`@blacksite/armory`) is a deterministic weapon simulation: fire modes, c
 - Map events to presentation: `shot` to recoil, flash, tracer, sound and `arms.fireSequence++`; `reload-started` to `arms.reloadSequence++`; `switch-started` to `arms.weapon` and `arms.equipSequence++`; `trigger-blocked` (empty) to a dry fire; `impact` to decals and dust.
 - Draw the arms with `<ArmsViewmodel state={arms} render="external" onPresentation={…} />` and pass the presentation to `<Look overlay>`. The default `found` rig plays an authored, CC BY rifle and pistol set with procedural sway, bob, recoil, ADS and sprint on top; credit it in the game. `rig="blacksite"` is the CC0 procedural rig; `rig="als"` matches local arms to the remote body.
 - Set Armory durations from the animation: `{ ...weapon, ...foundTimings(FIELD_SET, weapon.id) }` gives `reloadSeconds`, `emptyReloadSeconds` and `equipSeconds`. Drive reload foley from the set's clip events. Set `arms.empty` from the magazine, increment `inspectSequence` for inspect, and send landing speed with `landSequence`.
-- Authoritative servers call `foundTimings({ weapons: FIELD_WEAPONS }, id)` from `@blacksite/subject-fpp/arms/model`; this entry point has no renderer, asset-loader or GLB imports.
+- Authoritative servers call `foundTimings({ weapons: FIELD_WEAPONS }, id)` from `@blacksite/subject/arms/model`; this entry point has no renderer, asset-loader or GLB imports.
 - A definition may add an authored recoil `pattern` and a `spread` block with bloom; pass the shooter's `stance` and read `spread` and `patternIndex` from the snapshot for a crosshair (`packages/armory/AGENTS.md`). The `ALS_WEAPONS` presets use neither.
 - For a new viewmodel, read `docs/arms.md` before replacing a mesh or authoring an action. Declare an authored set's frame ranges, eye basis and bone-local sight landmarks; ADS is solved from the landmarks.
 

@@ -6,7 +6,7 @@ Add `https://github.com/btn0s/blacksite.git` as one recursive Git submodule. Lis
 | --- | --- |
 | Warden | `@blacksite/warden`, `@blacksite/warden-react` |
 | Operator → Subject | `@blacksite/subject` |
-| Operator FPP → Subject FPP | `@blacksite/subject-fpp` |
+| Operator FPP → Subject FPP → Character Controller | `@blacksite/subject` |
 | Arsenal → Armory | `@blacksite/armory` |
 | Rupture → Cascade | `@blacksite/cascade` |
 | ALS Web | `als-ue5-r3f` from `vendor/als-web` |

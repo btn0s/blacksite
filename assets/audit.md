@@ -9,7 +9,7 @@ The inventory includes software archives for completeness. It adds text LUTs, SV
 ## Findings
 
 - Existing ambientCG materials and Poly Haven sky have explicit CC0 provenance. The 27 KTX2 derivatives retain those sources. Nothing requires removal.
-- `packages/subject-fpp/assets/materials/CREDITS.md` already exists; the earlier report claiming it was missing was incorrect. Authored arms animation data carries MIT and its own permission notice.
+- `packages/subject/assets/materials/CREDITS.md` already exists; the earlier report claiming it was missing was incorrect. Authored arms animation data carries MIT and its own permission notice.
 - The root licence is FSL-1.1-ALv2. Generated LUTs and site art have no separate permissive asset grant in this checkout. FSL limits competing uses and is outside this catalog’s allowlist; this does not imply the owner cannot keep using their own site images. Keep these files and ask the owner for an explicit CC0/MIT asset grant only if promoting them into the reusable library.
 - Font upstream licences allow bundling under OFL 1.1 with copyright and licence notices. The site credits now include the full upstream Barlow and IBM Plex notices, also retained in `assets/font-notices.md`. Font binary metadata was not inspected.
 - No tracked standalone model, audio or font binaries exist outside the excluded ALS submodule. New library sources/builds are local cached or ignored outputs, recorded in the catalog rather than this shipped-file snapshot.
@@ -47,17 +47,17 @@ The inventory includes software archives for completeness. It adds text LUTs, SV
 | `packages/look/assets/world/stained_n.ktx2` | 35184 | [Concrete046](https://ambientcg.com/a/Concrete046) | CC0-1.0 |
 | `packages/look/luts/haze.cube` | 862580 | packages/look/scripts/make-lut.mjs | FSL-1.1-ALv2 (repository notice; no asset-specific grant found) |
 | `packages/look/luts/zone.cube` | 862580 | packages/look/scripts/make-lut.mjs | FSL-1.1-ALv2 (repository notice; no asset-specific grant found) |
-| `packages/subject-fpp/assets/arms-actions.json` | 1842 | packages/subject-fpp/assets/arms-actions.json | MIT |
-| `packages/subject-fpp/assets/materials/glove_c.webp` | 38178 | [Leather032](https://ambientcg.com/a/Leather032) | CC0-1.0 |
-| `packages/subject-fpp/assets/materials/glove_n.webp` | 3752 | [Leather032](https://ambientcg.com/a/Leather032) | CC0-1.0 |
-| `packages/subject-fpp/assets/materials/gunmetal_c.webp` | 27684 | [Metal046B](https://ambientcg.com/a/Metal046B) | CC0-1.0 |
-| `packages/subject-fpp/assets/materials/gunmetal_n.webp` | 2940 | [Metal046B](https://ambientcg.com/a/Metal046B) | CC0-1.0 |
-| `packages/subject-fpp/assets/materials/paint_c.webp` | 19358 | [PaintedMetal005](https://ambientcg.com/a/PaintedMetal005) | CC0-1.0 |
-| `packages/subject-fpp/assets/materials/paint_n.webp` | 9270 | [PaintedMetal005](https://ambientcg.com/a/PaintedMetal005) | CC0-1.0 |
-| `packages/subject-fpp/assets/materials/polymer_c.webp` | 2628 | [Plastic012B](https://ambientcg.com/a/Plastic012B) | CC0-1.0 |
-| `packages/subject-fpp/assets/materials/polymer_n.webp` | 1974 | [Plastic012B](https://ambientcg.com/a/Plastic012B) | CC0-1.0 |
-| `packages/subject-fpp/assets/materials/sleeve_c.webp` | 70930 | [Fabric030](https://ambientcg.com/a/Fabric030) | CC0-1.0 |
-| `packages/subject-fpp/assets/materials/sleeve_n.webp` | 119596 | [Fabric030](https://ambientcg.com/a/Fabric030) | CC0-1.0 |
+| `packages/subject/assets/arms-actions.json` | 1842 | packages/subject/assets/arms-actions.json | MIT |
+| `packages/subject/assets/materials/glove_c.webp` | 38178 | [Leather032](https://ambientcg.com/a/Leather032) | CC0-1.0 |
+| `packages/subject/assets/materials/glove_n.webp` | 3752 | [Leather032](https://ambientcg.com/a/Leather032) | CC0-1.0 |
+| `packages/subject/assets/materials/gunmetal_c.webp` | 27684 | [Metal046B](https://ambientcg.com/a/Metal046B) | CC0-1.0 |
+| `packages/subject/assets/materials/gunmetal_n.webp` | 2940 | [Metal046B](https://ambientcg.com/a/Metal046B) | CC0-1.0 |
+| `packages/subject/assets/materials/paint_c.webp` | 19358 | [PaintedMetal005](https://ambientcg.com/a/PaintedMetal005) | CC0-1.0 |
+| `packages/subject/assets/materials/paint_n.webp` | 9270 | [PaintedMetal005](https://ambientcg.com/a/PaintedMetal005) | CC0-1.0 |
+| `packages/subject/assets/materials/polymer_c.webp` | 2628 | [Plastic012B](https://ambientcg.com/a/Plastic012B) | CC0-1.0 |
+| `packages/subject/assets/materials/polymer_n.webp` | 1974 | [Plastic012B](https://ambientcg.com/a/Plastic012B) | CC0-1.0 |
+| `packages/subject/assets/materials/sleeve_c.webp` | 70930 | [Fabric030](https://ambientcg.com/a/Fabric030) | CC0-1.0 |
+| `packages/subject/assets/materials/sleeve_n.webp` | 119596 | [Fabric030](https://ambientcg.com/a/Fabric030) | CC0-1.0 |
 | `site/public/apple-touch-icon.png` | 1157 | scripts/meta-images.ts | FSL-1.1-ALv2 (repository notice; no separate image grant found) |
 | `site/public/favicon-32.png` | 241 | scripts/meta-images.ts | FSL-1.1-ALv2 (repository notice; no separate image grant found) |
 | `site/public/favicon.svg` | 152 | scripts/meta-images.ts | FSL-1.1-ALv2 (repository notice; no separate image grant found) |

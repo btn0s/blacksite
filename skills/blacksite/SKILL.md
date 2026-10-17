@@ -106,7 +106,7 @@ Read [building-blocks.md](references/building-blocks.md) before wiring a block; 
 
 | Block | Package |
 |---|---|
-| Characters: an animated body, first and third person | `@blacksite/subject`, `@blacksite/subject-fpp`, ALS |
+| Characters: an animated body, first and third person | `@blacksite/subject`, ALS |
 | Weapons | Armory, `@blacksite/armory` |
 | AI: squads that perceive, plan and take cover | Warden, `@blacksite/warden` |
 | Destruction: buildings that break by structure | Cascade, `@blacksite/cascade` |

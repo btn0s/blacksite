@@ -56,7 +56,7 @@ From Breach and Traverse (`examples/*/src/model.ts`).
 
 ## Camera and weapon motion
 
-Every number below is in `@blacksite/subject-fpp/feel` (`CAMERA_FEEL`, `GUN_FEEL`, `RECOIL_TUNING`). Breach and the `fpp` template both use it: `createCameraFeel` for the eye, `createAimRecoil` for the view's recoil, and the arms runtimes for the viewmodel. Springs are exact (closed form, frame-rate independent), written as frequency in Hz and damping ratio.
+Every number below is in `@blacksite/subject/feel` (`CAMERA_FEEL`, `GUN_FEEL`, `RECOIL_TUNING`). Breach and the `fpp` template both use it: `createCameraFeel` for the eye, `createAimRecoil` for the view's recoil, and the arms runtimes for the viewmodel. Springs are exact (closed form, frame-rate independent), written as frequency in Hz and damping ratio.
 
 | Motion | Value |
 |---|---|

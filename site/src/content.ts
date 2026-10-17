@@ -35,7 +35,7 @@ export const tools: Tool[] = [
     name: 'Characters',
     tagline: 'A player character that walks, sprints, climbs over ledges, rolls and falls limp when hit, in first or third person.',
     pitch: 'A player character that walks, sprints, crouches, climbs over ledges, rolls, falls limp when hit and aims, in first or third person. It is ALS Web, a three.js port of the open-source ALS Refactored animation system.',
-    packages: ['@blacksite/subject', '@blacksite/subject-fpp'],
+    packages: ['@blacksite/subject'],
     demos: [],
     agent: {
       reads: [{ label: 'Movement and camera', path: 'skills/blacksite/references/feel.md' }, { label: 'Character wiring', path: 'skills/blacksite/references/building-blocks.md' }, { label: 'Character guide', path: 'vendor/als-web/docs/guide/overview.md' }],
@@ -84,7 +84,7 @@ export const tools: Tool[] = [
     name: 'Weapons',
     tagline: 'A rifle and a pistol that fire, reload, aim and recoil, held by rigged first-person arms.',
     pitch: 'Rigged first-person arms with a rifle and a pistol: fire, reload, aim and recoil. The weapon simulation decides every shot, and a server can run it again to check hits in multiplayer.',
-    packages: ['@blacksite/subject-fpp', '@blacksite/armory'],
+    packages: ['@blacksite/subject', '@blacksite/armory'],
     demos: [],
     agent: {
       reads: [{ label: 'Weapons reference', path: 'skills/blacksite/references/combat.md' }, { label: 'First-person arms', path: 'docs/arms.md' }, { label: 'Package rules', path: 'packages/armory/AGENTS.md' }],

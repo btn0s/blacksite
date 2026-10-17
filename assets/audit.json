@@ -506,22 +506,22 @@
       "recommendation": "Keep in repository; obtain explicit owner CC0/MIT grant before adding to the open asset catalog."
     },
     {
-      "path": "packages/subject-fpp/assets/arms-actions.json",
+      "path": "packages/subject/assets/arms-actions.json",
       "bytes": 1842,
       "sha256": "aec801fd20c1627dbaf5752e023e2d5b86a32cca4c1d396ee26aef4c40c83337",
       "category": "animation-data",
-      "source": "packages/subject-fpp/assets/arms-actions.json",
+      "source": "packages/subject/assets/arms-actions.json",
       "author": "Blacksite contributors",
       "licence": "MIT",
       "evidence": [
-        "packages/subject-fpp/assets/LICENSE",
-        "packages/subject-fpp/assets/arms-actions.json"
+        "packages/subject/assets/LICENSE",
+        "packages/subject/assets/arms-actions.json"
       ],
       "verdict": "redistributable",
       "recommendation": "Keep MIT copyright and permission notice when redistributed."
     },
     {
-      "path": "packages/subject-fpp/assets/materials/glove_c.webp",
+      "path": "packages/subject/assets/materials/glove_c.webp",
       "bytes": 38178,
       "sha256": "425760ba3ec9c258b15e77e5b0148073c4b8b58d63aa19e20d601ec7b3351c8e",
       "category": "material",
@@ -536,7 +536,7 @@
       "recommendation": "Keep; preserve source mapping with derivatives."
     },
     {
-      "path": "packages/subject-fpp/assets/materials/glove_n.webp",
+      "path": "packages/subject/assets/materials/glove_n.webp",
       "bytes": 3752,
       "sha256": "1cc955d3a85f9284edfd7b2c8ac893ea3a29cee19e1d74ca9acca79170072a7e",
       "category": "material",
@@ -551,7 +551,7 @@
       "recommendation": "Keep; preserve source mapping with derivatives."
     },
     {
-      "path": "packages/subject-fpp/assets/materials/gunmetal_c.webp",
+      "path": "packages/subject/assets/materials/gunmetal_c.webp",
       "bytes": 27684,
       "sha256": "6da2ba124f81156e167821ecbb3cbb57e018f919a11fff77067687e7d5022275",
       "category": "material",
@@ -566,7 +566,7 @@
       "recommendation": "Keep; preserve source mapping with derivatives."
     },
     {
-      "path": "packages/subject-fpp/assets/materials/gunmetal_n.webp",
+      "path": "packages/subject/assets/materials/gunmetal_n.webp",
       "bytes": 2940,
       "sha256": "72d7298e9f830d354a0752673ed632a41481c5eb88eef7e499450ba7fffacd87",
       "category": "material",
@@ -581,7 +581,7 @@
       "recommendation": "Keep; preserve source mapping with derivatives."
     },
     {
-      "path": "packages/subject-fpp/assets/materials/paint_c.webp",
+      "path": "packages/subject/assets/materials/paint_c.webp",
       "bytes": 19358,
       "sha256": "8401bb463a2b0b1015ff84565f27b3f6df77709fbde137eecaf89ad3c9d3065e",
       "category": "material",
@@ -596,7 +596,7 @@
       "recommendation": "Keep; preserve source mapping with derivatives."
     },
     {
-      "path": "packages/subject-fpp/assets/materials/paint_n.webp",
+      "path": "packages/subject/assets/materials/paint_n.webp",
       "bytes": 9270,
       "sha256": "18bd51b7e8baef195213056b3d6ca22ff8ac5f0fd0dc115c4d2c1ad2e4ee5635",
       "category": "material",
@@ -611,7 +611,7 @@
       "recommendation": "Keep; preserve source mapping with derivatives."
     },
     {
-      "path": "packages/subject-fpp/assets/materials/polymer_c.webp",
+      "path": "packages/subject/assets/materials/polymer_c.webp",
       "bytes": 2628,
       "sha256": "602d3f343e0e41e475f6a85a21af291f64efacc6c66656b99d5051e8df652b74",
       "category": "material",
@@ -626,7 +626,7 @@
       "recommendation": "Keep; preserve source mapping with derivatives."
     },
     {
-      "path": "packages/subject-fpp/assets/materials/polymer_n.webp",
+      "path": "packages/subject/assets/materials/polymer_n.webp",
       "bytes": 1974,
       "sha256": "fa4efc9c977dd27d2c543a9ee2c819ede64df275f0daae0eea6e739fe96027f7",
       "category": "material",
@@ -641,7 +641,7 @@
       "recommendation": "Keep; preserve source mapping with derivatives."
     },
     {
-      "path": "packages/subject-fpp/assets/materials/sleeve_c.webp",
+      "path": "packages/subject/assets/materials/sleeve_c.webp",
       "bytes": 70930,
       "sha256": "8e7bc5be08ebdcfd0528fd97b030a33146ca44ca117694cdf3507c38d6445639",
       "category": "material",
@@ -656,7 +656,7 @@
       "recommendation": "Keep; preserve source mapping with derivatives."
     },
     {
-      "path": "packages/subject-fpp/assets/materials/sleeve_n.webp",
+      "path": "packages/subject/assets/materials/sleeve_n.webp",
       "bytes": 119596,
       "sha256": "4454c4f2c94157caca006fe945216349e2f82929b8c45e8a3428c2ad9de3afbc",
       "category": "material",
