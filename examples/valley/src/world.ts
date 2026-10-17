@@ -173,6 +173,7 @@ export async function buildValley(tier: Tier, onProgress: (value: number) => voi
     const patches = fbm(x / 260, z / 260, 3, 503)
     let density = smoothstep(0.3, 0.46, patches * 0.6 + relief * 0.35 + 0.12)
     density *= 1 - meadow
+    density *= 1 - smoothstep(0.7, 0.78, fbm(x / 380, z / 380, 2, 517)) * (1 - local * 0.6)
     density *= 1 - smoothstep(site.treeline - 220, site.treeline, h)
     density *= 1 - smoothstep(40, 54, slopeAt(far, x, z))
     const grove = smoothstep(0.8, 0.88, valueNoise(x / 34, z / 34, 507)) * meadow * (1 - smoothstep(site.meadowRadius * 0.45, site.meadowRadius * 0.7, Math.hypot(x, z)) * 0)

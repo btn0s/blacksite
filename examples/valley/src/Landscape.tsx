@@ -90,6 +90,7 @@ export function Landscape({ world, tier, wind, sun, bark, handle }: { world: Val
       shadowDistance: settings.shadowDistance,
       frameSize: settings.frameSize,
       impostorBlur: settings.impostorBlur,
+      impostorFarTint: [1.2, 1.18, 0.98],
       alphaToCoverage: settings.a2c,
       singleFrame: settings.singleFrame,
       sun: sunState,
