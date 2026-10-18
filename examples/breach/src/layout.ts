@@ -145,7 +145,7 @@ function drum(x: number, z: number, color = '#4f5a44', tipped = false) {
   dress({ kind: 'cylinder', size: [0.3, 0.03, 0.3], at: [x, 0.62, z], look: 'metal', color: '#2f312b', segments: 14, cast: false })
 }
 
-function crate(x: number, z: number, size: number, y = 0, color = '#5a5236', yaw = 0) {
+function crate(x: number, z: number, size: number, y = 0, color = '#5c4a38', yaw = 0) {
   if (y === 0) box([x, size / 2, z], [size, size, size], { look: 'paint', color, hit: 'wood', render: false })
   dress({ kind: 'box', size: [size, size, size], at: [x, y + size / 2, z], rotate: [0, yaw, 0], look: 'paint', color, wood: true })
   dress({ kind: 'box', size: [size + 0.04, 0.07, size + 0.04], at: [x, y + size * 0.72, z], rotate: [0, yaw, 0], look: 'metal', color: '#2c2b25', cast: false })
@@ -154,7 +154,7 @@ function crate(x: number, z: number, size: number, y = 0, color = '#5a5236', yaw
   const local = (lx: number, ly: number, lz: number): Vec3 => [x + lx * c + lz * s, y + ly, z - lx * s + lz * c]
   for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) dress({ kind: 'box', size: [0.08, size + 0.012, 0.08], at: local(lx * (h - 0.03), size / 2, lz * (h - 0.03)), rotate: [0, yaw, 0], look: 'paint', color: '#3e3a2a', cast: false, wood: true })
   dress({ kind: 'box', size: [size + 0.01, 0.025, size * 0.18], at: local(0, size + 0.012, -size * 0.2), rotate: [0, yaw, 0], look: 'paint', color: '#6b5a44', cast: false, wood: true })
-  dress({ kind: 'box', size: [size * 0.42, size * 0.2, 0.012], at: local(0, size * 0.47, h + 0.008), rotate: [0, yaw, 0], look: 'stained', color: '#c9c0a4', cast: false })
+  dress({ kind: 'box', size: [size * 0.42, size * 0.2, 0.012], at: local(0, size * 0.47, h + 0.008), rotate: [0, yaw, 0], look: 'stained', color: '#c1c0bc', cast: false })
 }
 
 function lathe(x: number, z: number) {
@@ -194,8 +194,8 @@ function desk(x: number, z: number, yaw: 0 | 1 = 0, typewriter = true) {
     dress({ kind: 'box', size: yaw ? [0.02, 0.025, 0.12] : [0.12, 0.025, 0.02], at: yaw ? [x - 0.396, y + 0.04, z - 0.46] : [x - 0.46, y + 0.04, z + 0.396], look: 'metal', color: '#2b2d29', cast: false })
   }
   dress({ kind: 'box', size: yaw ? [0.02, 0.03, size[2] + 0.06] : [size[0] + 0.06, 0.03, 0.02], at: yaw ? [x - size[0] / 2 - 0.02, 0.758, z] : [x, 0.758, z + size[2] / 2 + 0.02], look: 'metal', color: '#2b2d29', cast: false })
-  dress({ kind: 'box', size: [0.3, 0.012, 0.22], at: [x - 0.3, 0.785, z + 0.1], rotate: [0, 0.4, 0], look: 'stained', color: '#d6cfb7', cast: false })
-  dress({ kind: 'box', size: [0.24, 0.012, 0.32], at: [x - 0.42, 0.79, z - 0.08], rotate: [0, -0.3, 0], look: 'stained', color: '#c9c0a4', cast: false })
+  dress({ kind: 'box', size: [0.3, 0.012, 0.22], at: [x - 0.3, 0.785, z + 0.1], rotate: [0, 0.4, 0], look: 'stained', color: '#d0cecc', cast: false })
+  dress({ kind: 'box', size: [0.24, 0.012, 0.32], at: [x - 0.42, 0.79, z - 0.08], rotate: [0, -0.3, 0], look: 'stained', color: '#c1c0bc', cast: false })
 }
 
 function cabinet(x: number, z: number, along: 'x' | 'z' = 'x') {
@@ -204,7 +204,7 @@ function cabinet(x: number, z: number, along: 'x' | 'z' = 'x') {
   dress({ kind: 'box', size, at: [x, 0.66, z], look: 'metal', color: '#6d7366' })
   dress({ kind: 'box', size: [size[0] + 0.02, 0.025, size[2] + 0.02], at: [x, 1.33, z], look: 'metal', color: '#4c5450', cast: false })
   dress({ kind: 'box', size: along === 'x' ? [0.48, 0.08, 0.02] : [0.02, 0.08, 0.48], at: along === 'x' ? [x, 0.05, z + 0.315] : [x + 0.315, 0.05, z], look: 'paint', color: '#2e332c', cast: false })
-  for (const y of [0.24, 0.56, 0.88, 1.16]) dress({ kind: 'box', size: along === 'x' ? [0.1, 0.05, 0.012] : [0.012, 0.05, 0.1], at: along === 'x' ? [x - 0.12, y + 0.08, z + 0.316] : [x + 0.316, y + 0.08, z - 0.12], look: 'stained', color: '#d8d0b4', cast: false })
+  for (const y of [0.24, 0.56, 0.88, 1.16]) dress({ kind: 'box', size: along === 'x' ? [0.1, 0.05, 0.012] : [0.012, 0.05, 0.1], at: along === 'x' ? [x - 0.12, y + 0.08, z + 0.316] : [x + 0.316, y + 0.08, z - 0.12], look: 'stained', color: '#d1cfcc', cast: false })
   for (const y of [0.3, 0.62, 0.94, 1.22]) dress({ kind: 'box', size: along === 'x' ? [0.12, 0.03, 0.02] : [0.02, 0.03, 0.12], at: along === 'x' ? [x, y, z + 0.32] : [x + 0.32, y, z], look: 'metal', color: '#2b2c28', cast: false })
 }
 
@@ -285,10 +285,10 @@ function tyres(x: number, z: number, count: number, solid = true) {
 }
 
 function bench(x: number, z: number, along: 'x' | 'z', broken = false) {
-  box([x, 0.22, z], along === 'x' ? [1.6, 0.45, 0.45] : [0.45, 0.45, 1.6], { look: 'cast', color: '#8f8b7c', render: false })
+  box([x, 0.22, z], along === 'x' ? [1.6, 0.45, 0.45] : [0.45, 0.45, 1.6], { look: 'cast', color: '#8b8b89', render: false })
   const place = (offset: number, y: number, across: number): Vec3 => along === 'x' ? [x + offset, y, z + across] : [x + across, y, z + offset]
   const size = (length: number, height: number, depth: number): Vec3 => along === 'x' ? [length, height, depth] : [depth, height, length]
-  for (const end of [-0.62, 0.62]) dress({ kind: 'box', size: size(0.16, 0.42, 0.42), at: place(end, 0.21, 0), look: 'cast', color: '#8f8b7c' })
+  for (const end of [-0.62, 0.62]) dress({ kind: 'box', size: size(0.16, 0.42, 0.42), at: place(end, 0.21, 0), look: 'cast', color: '#8b8b89' })
   for (const [index, across] of [-0.14, 0, 0.14].entries()) {
     if (broken && index === 2) continue
     dress({ kind: 'box', size: size(1.6, 0.04, 0.11), at: place(0, 0.44, across), rotate: broken && index === 1 ? (along === 'x' ? [0, 0, 0.12] : [0.12, 0, 0]) : undefined, look: 'paint', color: '#4f5a46', cast: false })
@@ -299,7 +299,7 @@ function bench(x: number, z: number, along: 'x' | 'z', broken = false) {
 function footings(x: number, z: number, along: 'x' | 'z', layers: number, columns = 2) {
   const size: Vec3 = along === 'x' ? [2.4, 0.6, 0.6] : [0.6, 0.6, 2.4]
   const width = columns * 0.62
-  box([x, layers * 0.3, z], along === 'x' ? [2.5, layers * 0.6, width] : [width, layers * 0.6, 2.5], { look: 'cast', color: '#9a9585', render: false })
+  box([x, layers * 0.3, z], along === 'x' ? [2.5, layers * 0.6, width] : [width, layers * 0.6, 2.5], { look: 'cast', color: '#959593', render: false })
   for (let layer = 0; layer < layers; layer++) for (let column = 0; column < columns; column++) {
     const across = (column - (columns - 1) / 2) * 0.62
     const shift = ((layer * 3 + column * 5) % 4 - 1.5) * 0.04
@@ -323,8 +323,8 @@ function spool(x: number, z: number) {
 }
 
 function booth(x: number, z: number) {
-  box([x, 1.2, z], [1.8, 2.4, 1.8], { look: 'stained', color: '#9aa18e', render: false })
-  dress({ kind: 'box', size: [1.8, 2.3, 1.8], at: [x, 1.15, z], look: 'stained', color: '#9aa18e' })
+  box([x, 1.2, z], [1.8, 2.4, 1.8], { look: 'stained', color: '#9c9d9c', render: false })
+  dress({ kind: 'box', size: [1.8, 2.3, 1.8], at: [x, 1.15, z], look: 'stained', color: '#9c9d9c' })
   dress({ kind: 'box', size: [2.2, 0.14, 2.2], at: [x, 2.37, z], look: 'rust', color: '#5a4a3a' })
   dress({ kind: 'box', size: [1.3, 0.6, 0.04], at: [x, 1.55, z + 0.91], look: 'metal', color: '#22231b' })
   dress({ kind: 'box', size: [0.04, 0.6, 1.1], at: [x + 0.91, 1.55, z], look: 'metal', color: '#16170f' })
@@ -380,37 +380,37 @@ export const PATCHES: Patch[] = [
 ]
 
 const lobbyFront: Opening[] = [{ from: -0.8, to: 0.8, bottom: 0, top: 2.4 }, { from: -4.2, to: -2.6, bottom: 0.95, top: 2.25 }, { from: 2.6, to: 4.2, bottom: 0.95, top: 2.25 }]
-wall('x', 10.2, -5.4, 5.4, 4, 0.4, 'panel', lobbyFront, '#a8a493', -1)
-wall('z', -5.2, 1.7, 10.4, 4, 0.4, 'panel', [], '#a8a493', 1)
-wall('z', 5.2, -5.15, 10.4, 4, 0.4, 'panel', [], '#a8a493', -1)
+wall('x', 10.2, -5.4, 5.4, 4, 0.4, 'panel', lobbyFront, '#a9a8a4', -1)
+wall('z', -5.2, 1.7, 10.4, 4, 0.4, 'panel', [], '#a9a8a4', 1)
+wall('z', 5.2, -5.15, 10.4, 4, 0.4, 'panel', [], '#a9a8a4', -1)
 wall('x', 1.85, -5, 5, 3.2, 0.3, 'stained', [{ from: -0.75, to: 0.75, bottom: 0, top: 2.3 }], undefined, 1)
 slab(-5.4, 5.4, 1.7, 10.4, 3.2, 3.45, [{ min: [2.2, 6.8], max: [3.8, 8.2] }])
-block([-5.4, 3.45, 10.0], [5.4, 4.0, 10.4], { look: 'panel', color: '#a8a493', solid: false, contact: false })
+block([-5.4, 3.45, 10.0], [5.4, 4.0, 10.4], { look: 'panel', color: '#a4a3a2', solid: false, contact: false })
 
 wall('z', -1.35, -4.85, 1.7, 3, 0.3, 'stained', [], undefined, 1)
 wall('z', 1.35, -4.85, 1.7, 3, 0.3, 'stained', [{ from: -2.2, to: -0.8, bottom: 0, top: 2.2 }], undefined, 0)
 slab(-1.5, 5.0, -4.85, 1.7, 3.0, 3.25, [])
 voids.push({ min: [-5.4, -4.85], max: [-1.5, 1.7] })
-block([-5.4, 0, -4.85], [-1.5, 3.25, 1.7], { look: 'stained', color: '#a8a493', contact: false })
+block([-5.4, 0, -4.85], [-1.5, 3.25, 1.7], { look: 'stained', color: '#a4a3a2', contact: false })
 
 const hallSouth: Opening[] = [{ from: -0.8, to: 0.8, bottom: 0, top: 2.4 }, { from: 3.6, to: 5.0, bottom: 0, top: 2.2 }]
-wall('x', -5, -7.3, 7.3, 5.0, 0.3, 'stained', hallSouth, '#b9b6a4', -1)
+wall('x', -5, -7.3, 7.3, 5.0, 0.3, 'stained', hallSouth, '#b8b7b3', -1)
 const clerestory = (from: number, to: number): Opening => ({ from, to, bottom: 3.3, top: 4.4 })
 wall('z', -7.15, -17.3, -4.85, 5.3, 0.3, 'brick', [clerestory(-9, -7), clerestory(-13, -11), clerestory(-16.2, -14.5)], undefined, 1)
 wall('z', 7.15, -17.3, -4.85, 5.3, 0.3, 'brick', [clerestory(-9, -7), clerestory(-13, -11), clerestory(-16.2, -14.5)], undefined, -1)
-wall('x', -17.15, -7.3, 7.3, 5.3, 0.3, 'stained', [{ from: -4.9, to: -3.5, bottom: 0, top: 2.3 }], '#b9b6a4', 1)
+wall('x', -17.15, -7.3, 7.3, 5.3, 0.3, 'stained', [{ from: -4.9, to: -3.5, bottom: 0, top: 2.3 }], '#b8b7b3', 1)
 slab(-7.3, 7.3, -17.3, -4.85, 5.0, 5.3, [{ min: [-4, -10], max: [-2, -8] }, { min: [2.5, -14], max: [4.5, -12] }], 'cast')
 
-wall('z', -7.15, -25.3, -17.3, 3.3, 0.3, 'panel', [{ from: -23.5, to: -21.5, bottom: 1.0, top: 2.1 }], '#a8a493', 1)
-wall('x', -25.15, -7.3, 3.3, 3.3, 0.3, 'panel', [{ from: -5, to: -3.4, bottom: 1.0, top: 2.1 }], '#a8a493', 1)
-wall('z', 3.15, -25.3, -17.3, 3.3, 0.3, 'panel', [{ from: -22.6, to: -20.4, bottom: 0, top: 2.4 }], '#a8a493', -1)
+wall('z', -7.15, -25.3, -17.3, 3.3, 0.3, 'panel', [{ from: -23.5, to: -21.5, bottom: 1.0, top: 2.1 }], '#a9a8a4', 1)
+wall('x', -25.15, -7.3, 3.3, 3.3, 0.3, 'panel', [{ from: -5, to: -3.4, bottom: 1.0, top: 2.1 }], '#a9a8a4', 1)
+wall('z', 3.15, -25.3, -17.3, 3.3, 0.3, 'panel', [{ from: -22.6, to: -20.4, bottom: 0, top: 2.4 }], '#a9a8a4', -1)
 slab(-7.3, 3.3, -25.3, -17.3, 3.0, 3.25, [])
 
 const fence = (axis: 'x' | 'z', line: number, from: number, to: number, gaps: Opening[] = []) => {
-  wall(axis, line, from, to, 2.4, 0.16, 'cast', gaps, '#a7a294')
+  wall(axis, line, from, to, 2.4, 0.16, 'cast', gaps, '#a6a5a1')
   for (let at = from; at <= to + 1e-6; at += 3) {
     if (gaps.some(gap => at > gap.from - 0.1 && at < gap.to + 0.1)) continue
-    dress({ kind: 'box', size: axis === 'x' ? [0.22, 2.6, 0.24] : [0.24, 2.6, 0.22], at: axis === 'x' ? [at, 1.3, line] : [line, 1.3, at], look: 'cast', color: '#8e8a7c' })
+    dress({ kind: 'box', size: axis === 'x' ? [0.22, 2.6, 0.24] : [0.24, 2.6, 0.22], at: axis === 'x' ? [at, 1.3, line] : [line, 1.3, at], look: 'cast', color: '#8a8a89' })
   }
 }
 fence('x', 30, -20, 20, [{ from: -3, to: 3, bottom: 0, top: 2.4 }])
@@ -447,7 +447,7 @@ dress({ kind: 'box', size: [0.06, 0.94, 0.58], at: [2.67, 0.475, 3.4], look: 'pa
 standing(-4.45, 4.2, [0.85, 0.85, 2.0], { look: 'paint', color: '#6d4d3d', hit: 'wood' })
 dress({ kind: 'box', size: [0.3, 0.5, 2.0], at: [-4.72, 1.1, 4.2], look: 'paint', color: '#5f4436' })
 standing(4.6, 2.6, [0.6, 1.8, 1.0], { look: 'metal', color: '#6d7366' })
-standing(-3.8, 8.6, [1.6, 0.9, 0.6], { look: 'cast', color: '#9a9585', hero: true, id: 'counter-lobby' })
+standing(-3.8, 8.6, [1.6, 0.9, 0.6], { look: 'cast', color: '#959593', hero: true, id: 'counter-lobby' })
 rubble(3.0, 7.5, 0.9, 11)
 dress({ kind: 'box', size: [1.5, 0.22, 1.2], at: [3.1, 0.42, 7.4], rotate: [0.42, 0.3, 0.12], look: 'slab' })
 dress({ kind: 'cylinder', size: [0.012, 1.2, 0.012], at: [3.4, 0.9, 7.9], rotate: [0.6, 0, 0.3], look: 'rust', color: '#5a4030', segments: 4, cast: false })
@@ -461,8 +461,8 @@ for (const [x, z, yaw] of [[-1.2, 4.6, 0.4], [-0.4, 3.0, 2.2], [3.9, 5.6, 1.4]] 
 }
 dress({ kind: 'box', size: [0.44, 0.04, 0.44], at: [-0.9, 0.22, 7.6], rotate: [Math.PI / 2, 0.8, 0.2], look: 'paint', color: '#4f5a46' })
 dress({ kind: 'box', size: [1.4, 0.9, 0.03], at: [-1.6, 1.7, 1.99], look: 'paint', color: '#4a4232', cast: false })
-dress({ kind: 'box', size: [0.3, 0.42, 0.01], at: [-1.95, 1.75, 2.01], rotate: [0, 0, 0.05], look: 'stained', color: '#d8d0b4', cast: false })
-dress({ kind: 'box', size: [0.24, 0.32, 0.01], at: [-1.4, 1.62, 2.01], rotate: [0, 0, -0.08], look: 'stained', color: '#cfc5a6', cast: false })
+dress({ kind: 'box', size: [0.3, 0.42, 0.01], at: [-1.95, 1.75, 2.01], rotate: [0, 0, 0.05], look: 'stained', color: '#d1cfcc', cast: false })
+dress({ kind: 'box', size: [0.24, 0.32, 0.01], at: [-1.4, 1.62, 2.01], rotate: [0, 0, -0.08], look: 'stained', color: '#c6c5c1', cast: false })
 pipe([-4.8, 2.9, 2.1], [4.8, 2.9, 2.1], 0.06)
 pipe([4.8, 0.2, 2.1], [4.8, 2.9, 2.1], 0.05)
 
@@ -473,7 +473,7 @@ pipe([-1.0, 2.55, 1.6], [-1.0, 2.55, -4.8], 0.04, '#454536')
 dress({ kind: 'box', size: [0.3, 0.06, 6.4], at: [0.9, 2.8, -1.6], look: 'metal', color: '#4a4a40', cast: false })
 rubble(0.4, -0.6, 0.4, 21, 'cast', false)
 
-crate(3.0, 0.6, 1.0, 0, '#5a5236')
+crate(3.0, 0.6, 1.0, 0, '#5c4a38')
 crate(4.3, 0.9, 1.0, 0, '#5e5a3e', 0.1)
 crate(4.3, 0.9, 0.8, 1.0, '#58503a', -0.2)
 crate(2.3, -3.8, 0.9, 0, '#5c5238', 0.2)
@@ -490,9 +490,9 @@ dress({ kind: 'cylinder', size: [0.015, 2.4, 0.015], at: [1.2, 3.0, -11], look: 
 dress({ kind: 'box', size: [0.12, 0.2, 0.06], at: [1.2, 1.75, -11], look: 'metal', color: '#3b3b34' })
 lathe(-4.6, -7.6)
 lathe(-4.6, -14.2)
-standing(1.6, -8.6, [1.8, 0.95, 0.6], { look: 'cast', color: '#a29e8f', hero: true, id: 'plinth-south' })
-standing(-0.8, -13.4, [1.8, 0.95, 0.6], { look: 'cast', color: '#a29e8f', hero: true, id: 'plinth-middle' })
-standing(3.4, -15.0, [0.6, 0.95, 1.8], { look: 'cast', color: '#a29e8f', hero: true, id: 'plinth-north' })
+standing(1.6, -8.6, [1.8, 0.95, 0.6], { look: 'cast', color: '#9e9e9c', hero: true, id: 'plinth-south' })
+standing(-0.8, -13.4, [1.8, 0.95, 0.6], { look: 'cast', color: '#9e9e9c', hero: true, id: 'plinth-middle' })
+standing(3.4, -15.0, [0.6, 0.95, 1.8], { look: 'cast', color: '#9e9e9c', hero: true, id: 'plinth-north' })
 standing(6.3, -8.0, [0.8, 0.9, 2.4], { look: 'metal', color: '#5b5f55' })
 dress({ kind: 'box', size: [0.4, 0.3, 0.3], at: [6.3, 1.05, -7.4], look: 'paint', color: '#4a5a4a' })
 dress({ kind: 'cylinder', size: [0.05, 0.4, 0.05], at: [6.2, 1.1, -8.6], look: 'metal', color: '#7d7f78', segments: 6 })
@@ -502,7 +502,7 @@ standing(5.4, -15.6, [0.6, 1.9, 0.6], { look: 'paint', color: '#55645a', hit: 'm
 dress({ kind: 'box', size: [0.5, 0.4, 0.8], at: [5.4, 1.75, -15.4], look: 'paint', color: '#4e5d53' })
 shelving(-6.45, -16.0, 2.0, 'z')
 shelving(-6.45, -11.2, 2.0, 'z')
-crate(0.6, -16.2, 1.2, 0, '#5a5236')
+crate(0.6, -16.2, 1.2, 0, '#5c4a38')
 crate(-0.8, -16.3, 1.0, 0, '#5e5a3e', 0.15)
 crate(0.6, -16.2, 0.9, 1.2, '#585038', -0.3)
 drum(5.9, -6.0)
@@ -549,7 +549,7 @@ radiator(-6.86, -22.5, 'z')
 pipe([-6.9, 2.7, -17.6], [-6.9, 2.7, -24.9], 0.05)
 
 const blastEdge = [[3.15, 2.6, -22.8, 0.5, 0.5, 0.6], [3.2, 2.45, -20.2, 0.6, 0.4, 0.5], [3.1, 0.3, -22.8, 0.5, 0.6, 0.4], [3.2, 0.25, -20.2, 0.4, 0.5, 0.5]] as const
-for (const [x, y, z, sx, sy, sz] of blastEdge) dress({ kind: 'box', size: [sx, sy, sz], at: [x, y, z], rotate: [0.4, 0.3, 0.5], look: 'panel', color: '#a8a493' })
+for (const [x, y, z, sx, sy, sz] of blastEdge) dress({ kind: 'box', size: [sx, sy, sz], at: [x, y, z], rotate: [0.4, 0.3, 0.5], look: 'panel', color: '#a4a3a2' })
 
 for (const [x, z, h] of [[-9.6, 19.4, 0.72], [-8.4, 19.7, 0.72], [-7.2, 19.9, 0.72], [-2.6, 13.0, 0.96], [-1.6, 13.2, 0.96], [2.4, 12.8, 0.72]] as const) {
   box([x, h / 2, z], [1.1, h, 0.6], { look: 'dirt', color: '#8b8266', render: false })
@@ -558,8 +558,8 @@ for (const [x, z, h] of [[-9.6, 19.4, 0.72], [-8.4, 19.7, 0.72], [-7.2, 19.9, 0.
 rubble(-11.0, 13.6, 1.4, 61)
 rubble(12.6, 14.8, 1.2, 71)
 rubble(8.0, -19.0, 0.9, 81)
-standing(-12.5, 25.0, [2.4, 0.6, 1.2], { look: 'cast', color: '#9a9585' })
-standing(13.0, 12.6, [1.2, 1.1, 2.6], { look: 'cast', color: '#8f8b7c' })
+standing(-12.5, 25.0, [2.4, 0.6, 1.2], { look: 'cast', color: '#959593' })
+standing(13.0, 12.6, [1.2, 1.1, 2.6], { look: 'cast', color: '#8b8b89' })
 
 dumpster(-7.2, 11.3)
 drum(-5.7, 10.95, '#5d4b36')
@@ -574,7 +574,7 @@ drum(7.8, 12.8, '#3f3a30')
 drum(9.6, 11.05, '#4f5a44')
 drum(9.75, 11.7, '#5d4b36')
 footings(-19.0, 15.5, 'z', 2)
-dress({ kind: 'box', size: [0.6, 0.6, 2.4], at: [-17.9, 0.42, 15.2], rotate: [0.3, 0.08, 0], look: 'cast', color: '#9a9585' })
+dress({ kind: 'box', size: [0.6, 0.6, 2.4], at: [-17.9, 0.42, 15.2], rotate: [0.3, 0.08, 0], look: 'cast', color: '#959593' })
 container(-18.6, 26.4, 'z', '#5d6552')
 tyres(-16.4, 24.0, 2)
 pallet(-16.2, 28.7, 2, 'z')
@@ -594,7 +594,7 @@ workbench(-6.6, -9.1, 'z')
 standing(-2.8, -5.42, [1.2, 1.9, 0.5], { look: 'paint', color: '#55645a', hit: 'metal', render: false })
 
 pallet(14.4, -25.8, 2)
-crate(14.4, -25.8, 0.7, 0.28, '#5a5236', 0.08)
+crate(14.4, -25.8, 0.7, 0.28, '#5c4a38', 0.08)
 crate(13.5, -26.1, 0.8, 0, '#5e5a3e', -0.12)
 drum(15.0, -24.4, '#4f5a44')
 drum(14.25, -24.65, '#5d4b36', true)
@@ -603,7 +603,7 @@ spool(14.7, -20.6)
 footings(13.6, -18.1, 'x', 2)
 cylinders(15.55, -19.0, ['#8a2f24', '#4a5a6a'])
 bench(5.5, -26.4, 'x', true)
-for (const [x, z, yaw] of [[14.1, -23.8, 0.3], [13.8, -25.0, 1.5], [5.8, -25.8, 2.1]] as const) dress({ kind: 'box', size: [0.21, 0.004, 0.29], at: [x, 0.015, z], rotate: [0, yaw, 0], look: 'stained', color: '#cfc5a6', cast: false })
+for (const [x, z, yaw] of [[14.1, -23.8, 0.3], [13.8, -25.0, 1.5], [5.8, -25.8, 2.1]] as const) dress({ kind: 'box', size: [0.21, 0.004, 0.29], at: [x, 0.015, z], rotate: [0, yaw, 0], look: 'stained', color: '#c6c5c1', cast: false })
 
 export const LEVEL = { blocks, decor, voids }
 

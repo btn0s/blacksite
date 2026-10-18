@@ -580,10 +580,10 @@ function weatherSteps(ctx: Ctx, base: { color: string; height: string; roughness
   const fine = fbm('fine', 0.025, 3, 0)
 
   if (age > 0) {
-    out.color = k('hsv', { hue: 0, saturation: 1 - 0.45 * age, value: 1 - 0.06 * age }, [out.color])
+    out.color = k('hsv', { hue: 0, saturation: 1 - 0.3 * age, value: 1 - 0.06 * age }, [out.color])
     const streaks = wall ? k('warp', { amount: 0.04, size: g.size, vector: 0 }, [fbm('streak', [0.04, 0.7], 5), grime]) : fbm('blotch', 0.6, 5)
     const stain = levels(blend(streaks, grime, 'multiply'), 0.36 - 0.12 * age, 0.6 - 0.12 * age)
-    out.color = blend(out.color, c('#5e5a4e'), 'multiply', 0.55 * age, stain)
+    out.color = blend(out.color, c('#5a5957'), 'multiply', 0.55 * age, stain)
     out.roughness = blend(out.roughness, c(0.06 * age), 'add')
   }
   if (rust > 0) {
@@ -609,7 +609,7 @@ function weatherSteps(ctx: Ctx, base: { color: string; height: string; roughness
     const low = levels(out.height, 0.2, 0.7, 1, 0)
     const field = blend(blend(crevice, grime, 'mix', 0.45), low, 'add', wall ? 0.1 : 0.3)
     const mask = levels(field, 0.72 - 0.45 * dirt, 0.92 - 0.45 * dirt)
-    const tone = ramp(fine, [[0, weather.dirtColor ?? '#3e382c'], [1, '#6a604c']])
+    const tone = ramp(fine, [[0, weather.dirtColor ?? '#3b3a38'], [1, '#67655f']])
     out.color = blend(out.color, tone, 'mix', 0.85, mask)
     out.roughness = blend(out.roughness, c(0.97), 'mix', 0.6, mask)
   }

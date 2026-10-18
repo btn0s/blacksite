@@ -53,12 +53,12 @@
     }
   },
   "weather": {
-    "age": 0.75,
-    "dirt": 0.5,
+    "age": 0.35,
+    "dirt": 0.35,
     "moisture": 0.15,
     "wear": {
       "amount": 0.25,
-      "color": "#958c7c"
+      "color": "#9a8a78"
     }
   }
 }

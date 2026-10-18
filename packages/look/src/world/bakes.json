@@ -3,84 +3,84 @@
     "graph": "cast-concrete-scan",
     "size": 2.5,
     "depth": 0.01,
-    "mean": "#595652"
+    "mean": "#5d5953"
   },
   "panel": {
     "graph": "panel-concrete-scan",
     "size": 3,
     "depth": 0.006,
-    "mean": "#575553"
+    "mean": "#5c5854"
   },
   "slab": {
     "graph": "slab-concrete-scan",
     "size": 3,
     "depth": 0.006,
-    "mean": "#595754"
+    "mean": "#5c5a56"
   },
   "stained": {
     "graph": "stained-concrete-scan",
     "size": 3,
     "depth": 0.006,
-    "mean": "#555350"
+    "mean": "#595652"
   },
   "paint": {
     "graph": "painted-plaster-scan",
     "size": 2.5,
     "depth": 0.004,
-    "mean": "#8d8d89"
+    "mean": "#93938d"
   },
   "brick": {
     "graph": "brick-scan",
     "size": 2.4,
     "depth": 0.02,
-    "mean": "#7a6859"
+    "mean": "#7e6753"
   },
   "rust": {
     "graph": "rust-scan",
     "size": 2,
     "depth": 0.004,
-    "mean": "#835539"
+    "mean": "#864e2c"
   },
   "metal": {
     "graph": "painted-metal-scan",
     "size": 2,
     "depth": 0.002,
-    "mean": "#6a6967"
+    "mean": "#6c6b68"
   },
   "corrugated": {
     "graph": "corrugated-rust-scan",
     "size": 2.2,
     "depth": 0.02,
-    "mean": "#7b7a74"
+    "mean": "#818280"
   },
   "asphalt": {
     "graph": "asphalt-scan",
     "size": 3,
     "depth": 0.008,
-    "mean": "#696a6b"
+    "mean": "#6b6c6c"
   },
   "dirt": {
     "graph": "soil-scan",
     "size": 2.5,
     "depth": 0.02,
-    "mean": "#716453"
+    "mean": "#74644e"
   },
   "grass": {
     "graph": "grass-scan",
     "size": 2.1,
     "depth": 0.02,
-    "mean": "#908b60"
+    "mean": "#948f55"
   },
   "gravel": {
     "graph": "gravel-soil-scan",
     "size": 2.1,
     "depth": 0.03,
-    "mean": "#5b544b"
+    "mean": "#5d554b"
   },
   "wood": {
     "graph": "wood-planks-scan",
     "size": 1,
     "depth": 0.01,
-    "mean": "#8e877b"
+    "mean": "#938a7b"
   }
 }

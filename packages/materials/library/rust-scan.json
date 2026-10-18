@@ -63,8 +63,8 @@
     }
   },
   "weather": {
-    "age": 0.5,
-    "dirt": 0.45,
+    "age": 0.3,
+    "dirt": 0.35,
     "moisture": 0.15
   }
 }

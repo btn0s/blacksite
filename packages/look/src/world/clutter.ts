@@ -5,12 +5,12 @@ export type ClutterRect = { min: [number, number]; max: [number, number] }
 export type ClutterOptions = { area: ClutterRect; blocked?: ClutterRect[]; clear?: ClutterRect[]; seed?: number; density?: number; floor?: number }
 
 const PALETTE = {
-  card: ['#4f4434', '#584b37', '#463d2f', '#5e5039'],
-  sack: ['#45443a', '#4d483a', '#3e3d33'],
-  paper: ['#7e7a6d', '#87826f', '#716d62', '#8e8774'],
-  rubble: ['#4f4d47', '#58554e', '#46443f', '#3e3c37'],
-  wood: ['#4d4030', '#57493a', '#433829'],
-  cable: ['#191917', '#22211d'],
+  card: ['#7a6248', '#86704f', '#6b573f', '#917a58'],
+  sack: ['#6c6a62', '#5b5f52', '#7a776c'],
+  paper: ['#b9b8b2', '#c9c7c0', '#a9a8a3', '#d4d2cb'],
+  rubble: ['#6a6a68', '#7a7977', '#5c5c5a', '#878684'],
+  wood: ['#6e5038', '#7c5c40', '#5d4430'],
+  cable: ['#121212', '#1b1b1b'],
 }
 
 const inside = (x: number, z: number, rect: ClutterRect, pad = 0) => x > rect.min[0] - pad && x < rect.max[0] + pad && z > rect.min[1] - pad && z < rect.max[1] + pad

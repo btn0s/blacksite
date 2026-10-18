@@ -96,14 +96,14 @@
     }
   },
   "weather": {
-    "age": 0.6,
-    "dirt": 0.45,
+    "age": 0.35,
+    "dirt": 0.35,
     "rust": 0.3,
     "moisture": 0.15,
     "wear": {
       "amount": 0.25,
-      "color": "#8f908a",
-      "roughness": 0.45,
+      "color": "#9a9b98",
+      "roughness": 0.35,
       "metalness": 1
     }
   }

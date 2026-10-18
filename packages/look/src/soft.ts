@@ -264,14 +264,16 @@ void main() {
   vec3 light = mix( vGround, vSky, dot( n, up ) * 0.5 + 0.5 ) + vDirect * wrapped * ( 1.0 + scatter * forward );
   vec3 lit = vTint * ( 0.85 + 0.3 * density ) * RECIPROCAL_PI * light;
   float fogFactor = 0.0;
+  vec3 fogged = lit;
   #ifdef USE_FOG
     #ifdef FOG_EXP2
       fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
     #else
       fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
     #endif
+    fogged = mix( lit, fogColor, fogFactor );
   #endif
-  gl_FragColor = vec4( mix( lit, fogColor, fogFactor ) * alpha + vTint * glow * ( 1.0 - fogFactor ), alpha );
+  gl_FragColor = vec4( fogged * alpha + vTint * glow * ( 1.0 - fogFactor ), alpha );
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;

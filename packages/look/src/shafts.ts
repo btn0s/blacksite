@@ -55,7 +55,7 @@ const MARCH = `
     }
     float cosine = dot(ray, shaftSunDirection);
     float phase = 0.3 + 0.7 * 0.75 / pow(1.25 - cosine, 1.5);
-    gl_FragColor = vec4((shaftColor * sun * phase + lamps * 0.025) * stride * shaftDensity, 1.0);
+    gl_FragColor = vec4((shaftColor * sun * phase + lamps * 0.012) * stride * shaftDensity, 1.0);
   }
 `;
 

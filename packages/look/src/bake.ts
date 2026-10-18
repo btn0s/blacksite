@@ -265,10 +265,14 @@ export const LIGHT_CHUNK = `
     return lamp.rgb * mix(1.0, lookFlicker, lamp.a / max(luma, 1e-5));
   }
 
-  vec3 lookLampAt(vec3 world, vec3 n) {
+  vec3 lookLampMean(vec3 world) {
     vec3 uvw = (world - lookSkyMin) / lookSkySize;
     vec4 toward = texture(lookLampDirection, clamp(uvw.xzy, 0.0, 1.0));
-    vec3 mean = toward.xyz / max(toward.w, 1e-5);
+    return toward.xyz / max(toward.w, 1e-5);
+  }
+
+  vec3 lookLampAt(vec3 world, vec3 n) {
+    vec3 mean = lookLampMean(world);
     return lookLampLight(world) * max(dot(n, mean) + 0.5 * (1.0 - length(mean)), 0.0);
   }
 
@@ -586,12 +590,21 @@ export function bakeLight(renderer: WebGLRenderer, sun: Rgb, options: BakeOption
           #if defined( RE_IndirectSpecular )
             radiance *= lookSpecular;
           #endif
+          #ifdef STANDARD
+            vec3 lookMean = lookLampMean(lookProbe);
+            float lookMeanLength = length(lookMean);
+            if (lookMeanLength > 1e-3) {
+              vec3 lookLampToward = normalize((viewMatrix * vec4(lookMean, 0.0)).xyz);
+              float lookLampCosine = saturate(dot(geometryNormal, lookLampToward));
+              reflectedLight.directSpecular += lookLampLight(lookProbe) * lookMeanLength * lookLampCosine * BRDF_GGX(lookLampToward, geometryViewDir, geometryNormal, material);
+            }
+          #endif
           #include <lights_fragment_end>`)
         .replace('#include <fog_fragment>', `
           #ifdef USE_FOG
-            vec3 lookFogColor = fogColor * mix(0.04, 1.0, clamp(max(lookSkyAt(cameraPosition).x, lookSkyHere.x) * 1.6, 0.0, 1.0));
+            float lookFogOpen = clamp(max(lookSkyAt(cameraPosition).x, lookSkyHere.x) * 1.6, 0.0, 1.0);
           #endif
-          ${ShaderChunk.fog_fragment.replace('fogColor, fogFactor', 'lookFogColor, fogFactor')}`);
+          ${ShaderChunk.fog_fragment.replace('fogColor, fogFactor', 'fogColor, fogFactor * lookFogOpen')}`);
     };
     material.customProgramCacheKey = () => `${key.call(material)}|look-light`;
     material.needsUpdate = true;

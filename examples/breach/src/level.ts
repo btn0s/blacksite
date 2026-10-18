@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { BakeLamp } from '@blacksite/look'
-import { LevelBuilder, decalBias, apartmentBlock, apc, clutter, deadTree, groundMaterial, lada, puddleMaterial, skylight, surface, waterTower, weatherSpaces, worldBoxGeometry, worldPlaneGeometry, type SurfaceName } from '@blacksite/look/world'
+import { LevelBuilder, decalBias, fitOut, apartmentBlock, apc, clutter, deadTree, groundMaterial, lada, puddleMaterial, skylight, surface, waterTower, weatherSpaces, worldBoxGeometry, worldPlaneGeometry, type SurfaceName } from '@blacksite/look/world'
 import { APC_AT, CLUTTER, EXFIL, INTERIOR, LEVEL, PATCHES, PRACTICALS, ROOMS, SHAFTS, WINDOWS, type Block, type Practical, type Room, type Vec3 } from './layout'
 import { BUDGET, type RoomId } from './model'
 
@@ -23,9 +23,9 @@ type Tape = { from: number; count: number; base: Float32Array; across: THREE.Vec
 type LightSource = { position: THREE.Vector3; color: THREE.Color; room: RoomId; base: number; kind: Practical['kind']; distance: number; seed: number; score: number; selected: boolean }
 
 const LIGHTS: Record<Practical['kind'], { color: string; intensity: number; distance: number }> = {
-  bulb: { color: '#ffc680', intensity: 14, distance: 8 },
+  bulb: { color: '#ffe8cc', intensity: 14, distance: 8 },
   tube: { color: '#e4ecf4', intensity: 3.5, distance: 8 },
-  fire: { color: '#ff8a3a', intensity: 6, distance: 6 },
+  fire: { color: '#ff8a3a', intensity: 4, distance: 4.5 },
   emergency: { color: '#ff3020', intensity: 3.5, distance: 5.5 },
 }
 const FIXTURE: Record<Practical['kind'], Fixture> = { bulb: 'pendant', tube: 'tube', fire: 'fire', emergency: 'emergency' }
@@ -36,7 +36,7 @@ const SPOTS: Spot[] = [
   { kind: 'bulb', fixture: 'cage', at: [0, 2.7, -4.1], room: 'corridor', intensity: 3, distance: 3 },
   { kind: 'bulb', fixture: 'cage', at: [3.3, 2.65, -1.7], room: 'side', intensity: 8, distance: 6 },
   { kind: 'tube', fixture: 'tube', at: [-3.6, 4.36, -14.4], room: 'hall', housing: true, intensity: 4, distance: 8 },
-  { kind: 'bulb', fixture: 'lamp', at: [-2.1, 0.79, -22.85], room: 'office', color: '#ffbf70', intensity: 6, distance: 4.5 },
+  { kind: 'bulb', fixture: 'lamp', at: [-2.1, 0.79, -22.85], room: 'office', color: '#ffe2c0', intensity: 6, distance: 4.5 },
   { kind: 'bulb', fixture: 'sodium', at: [4.3, 6.38, 29.25], room: 'yard', color: '#ffb35a', intensity: 24, distance: 16 },
   { kind: 'fire', fixture: 'fire', at: [7.8, 0.96, 12.8], room: 'yard' },
   { kind: 'emergency', fixture: 'emergency', at: [-7.4, 1.95, 29.8], room: 'yard', color: '#ffb35a', intensity: 2.5, distance: 3.5 },
@@ -86,7 +86,7 @@ function floorOf(room: Room): Paint | null {
   if (room.floor === 'dirt' || room.floor === 'water') return null
   if (room.floor === 'wood') return { name: 'paint', color: '#4f3f2f', ao: false }
   if (room.floor === 'metal') return { name: 'metal', color: '#5a5d54', ao: false }
-  return room.id === 'hall' ? { name: 'slab', color: '#8f8b7e', ao: false } : { name: 'cast', color: '#9a968a', ao: false }
+  return room.id === 'hall' ? { name: 'slab', color: '#8b8b8a', ao: false } : { name: 'cast', color: '#969695', ao: false }
 }
 
 function texture(width: number, height: number, texel: (u: number, v: number) => [number, number, number, number], options: { srgb?: boolean; mips?: boolean; repeat?: boolean } = {}) {
@@ -248,8 +248,8 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   }
   const wallDecal = (cell: Cell, face: Face, plane: number, along: number, y: number, width: number, height: number, flip = false) => decal(cell, face, onFace(face, plane, along, y), width, height, flip)
 
-  const panel: Paint = { name: 'panel', color: '#a8a493' }
-  const trim: Paint = { name: 'cast', color: '#8f8b7c', ao: false }
+  const panel: Paint = { name: 'panel', color: '#a4a3a2' }
+  const trim: Paint = { name: 'cast', color: '#8b8b89', ao: false }
   const dark: Paint = { name: 'metal', color: '#16170f', ao: false }
   const dull: Paint = { name: 'metal', color: '#22231b', ao: false }
   const frame: Paint = { name: 'metal', color: '#3a3c30', ao: false }
@@ -258,7 +258,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   const rebar: Paint = { name: 'rust', color: '#5a4030' }
   const drain: Paint = { name: 'rust', color: '#5c5a4c' }
   const plank: Paint = { name: 'paint', color: '#6b5a44' }
-  const paper: Paint = { name: 'stained', color: '#d8d0b4' }
+  const paper: Paint = { name: 'stained', color: '#d1cfcc' }
   const red: Paint = { name: 'paint', color: '#8a2f24' }
   const ink: Paint = { name: 'paint', color: '#2b2d29' }
   const PRINTS = ['#8a4a3a', '#4a5a6a', '#a08a5a', '#5a6a48']
@@ -283,7 +283,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     } else level.plane(width, depth, paint, { at })
   })
 
-  const asphalt: Paint = { name: 'asphalt', color: '#76766e', ao: false }
+  const asphalt: Paint = { name: 'asphalt', color: '#757575', ao: false }
   PATCHES.forEach((patch, index) => {
     const width = patch.max[0] - patch.min[0], depth = patch.max[1] - patch.min[1]
     const at: Vec3 = [(patch.min[0] + patch.max[0]) / 2, 0.013, (patch.min[1] + patch.max[1]) / 2]
@@ -521,10 +521,10 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   const poster = (face: Face, plane: number, along: number, y: number, kind: 'paper' | 'sign' | 'hazard' | 'board' | 'clock' | 'exit', seed: number) => {
     const tilt = (hash(seed) - 0.5) * 0.08
     if (kind === 'paper') {
-      mount(face, plane, along, y, [0.44, 0.62, 0.006], { name: 'stained', color: '#cfc6a8' }, 0.014, tilt)
+      mount(face, plane, along, y, [0.44, 0.62, 0.006], { name: 'stained', color: '#c7c5c2' }, 0.014, tilt)
       mount(face, plane, along, y + 0.1, [0.36, 0.3, 0.004], { name: 'paint', color: PRINTS[Math.floor(hash(seed + 1) * PRINTS.length)] }, 0.02, tilt)
       for (const offset of [-0.12, -0.17, -0.22]) mount(face, plane, along, y + offset, [0.3, 0.022, 0.004], ink, 0.02, tilt)
-      if (hash(seed + 2) > 0.5) mount(face, plane, along + 0.14, y - 0.24, [0.18, 0.16, 0.006], { name: 'stained', color: '#cfc6a8' }, 0.016, 0.6)
+      if (hash(seed + 2) > 0.5) mount(face, plane, along + 0.14, y - 0.24, [0.18, 0.16, 0.006], { name: 'stained', color: '#c7c5c2' }, 0.016, 0.6)
     } else if (kind === 'sign') {
       mount(face, plane, along, y, [0.36, 0.48, 0.01], red, 0.014)
       mount(face, plane, along, y + 0.08, [0.3, 0.24, 0.006], paper, 0.024)
@@ -538,7 +538,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     } else if (kind === 'board') {
       mount(face, plane, along, y, [0.92, 0.62, 0.02], iron, 0.014)
       mount(face, plane, along, y, [0.84, 0.54, 0.01], plank, 0.03)
-      for (const [index, [dx, dy, w]] of ([[-0.24, 0.08, 0.26], [0.1, 0.12, 0.2], [0.26, -0.1, 0.22], [-0.1, -0.12, 0.3]] as const).entries()) mount(face, plane, along + dx, y + dy, [w, w * 1.3, 0.004], { name: 'stained', color: '#cfc6a8' }, 0.042 + index * 0.003, (hash(seed + dx) - 0.5) * 0.2)
+      for (const [index, [dx, dy, w]] of ([[-0.24, 0.08, 0.26], [0.1, 0.12, 0.2], [0.26, -0.1, 0.22], [-0.1, -0.12, 0.3]] as const).entries()) mount(face, plane, along + dx, y + dy, [w, w * 1.3, 0.004], { name: 'stained', color: '#c7c5c2' }, 0.042 + index * 0.003, (hash(seed + dx) - 0.5) * 0.2)
     } else if (kind === 'clock') {
       disc(face, plane, along, y, 0.17, 0.04, ink, 0.014)
       disc(face, plane, along, y, 0.145, 0.01, paper, 0.054)
@@ -590,6 +590,16 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     }
     for (const shaft of holes) decal('soot', 'y-', [shaft.at[0], room.ceiling, shaft.at[2] + shaft.size[1] / 2 + 0.5], shaft.size[0] + 1, 1.2)
   }
+
+  const WALL = { 'x+': 'west', 'x-': 'east', 'z+': 'south', 'z-': 'north' } as const
+  const PIPES: Partial<Record<RoomId, number>> = { lobby: 1, corridor: 2, side: 1, hall: 2, office: 1 }
+  for (const [index, room] of indoor.entries()) fitOut(dressing, {
+    room: { min: room.min, max: room.max, ceiling: room.ceiling },
+    openings: (GAPS[room.id] ?? []).filter(gap => gap.face[0] !== 'y').map(gap => ({ wall: WALL[gap.face as keyof typeof WALL], from: gap.from, to: gap.to, bottom: gap.floor ? 0 : 0.95, top: gap.floor ? 2.3 : 2.25 })),
+    holes: SHAFTS.filter(shaft => shaft.room === room.id).map(shaft => ({ min: [shaft.at[0] - shaft.size[0] / 2, shaft.at[2] - shaft.size[1] / 2], max: [shaft.at[0] + shaft.size[0] / 2, shaft.at[2] + shaft.size[1] / 2] })),
+    seed: index + 11,
+    pipes: PIPES[room.id] ?? 0,
+  })
 
   poster('x-', 5.0, 5.6, 1.65, 'paper', 1)
   poster('x-', 5.0, 8.8, 1.6, 'sign', 2)
@@ -670,7 +680,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   mount('z-', -17.3, -1.2, 1.76, [1.7, 0.03, 0.3], plank, 0)
   for (const x of [-1.9, -0.5]) mount('z-', -17.3, x, 1.68, [0.03, 0.14, 0.26], iron, 0)
   mount('z-', -17.3, 1.4, 1.8, [0.5, 0.62, 0.03], plank, 0.014)
-  mount('z-', -17.3, 1.4, 1.8, [0.4, 0.52, 0.006], { name: 'stained', color: '#9a8f74' }, 0.044)
+  mount('z-', -17.3, 1.4, 1.8, [0.4, 0.52, 0.006], { name: 'stained', color: '#918f8c' }, 0.044)
   poster('x-', 3.0, -18.4, 2.3, 'clock', 28)
   poster('x-', 3.0, -24.0, 1.6, 'paper', 29)
   poster('z+', -25.0, -1.8, 1.6, 'paper', 30)
@@ -703,7 +713,7 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   rod([5.6, 6.25, 29.4], [4.5, 6.42, 29.27], 0.04, frame, 6, true)
   put([0.6, 0.14, 0.28], iron, [4.3, 6.4, 29.25], undefined, true)
   for (const [x, z] of [[4.8, 12.4], [6.9, 12.35]] as const) rod([x, 0, z], [x + 0.03, 1.0, z], 0.022, frame, 5, true)
-  for (const [x, z, yaw] of [[3.0, 11.6, 0.4], [3.9, 12.0, 2.1], [-8.3, 12.0, 1.0], [-6.6, 12.4, 2.6], [-16.8, 22.9, 0.3], [9.0, 12.2, 1.7], [-2.6, 28.9, 0.9]] as const) put([0.22, 0.004, 0.3], { name: 'stained', color: '#cfc6a8' }, [x, 0.012, z], [0.05, yaw, 0.03])
+  for (const [x, z, yaw] of [[3.0, 11.6, 0.4], [3.9, 12.0, 2.1], [-8.3, 12.0, 1.0], [-6.6, 12.4, 2.6], [-16.8, 22.9, 0.3], [9.0, 12.2, 1.7], [-2.6, 28.9, 0.9]] as const) put([0.22, 0.004, 0.3], { name: 'stained', color: '#c7c5c2' }, [x, 0.012, z], [0.05, yaw, 0.03])
 
   const dot = own(texture(16, 16, (u, v) => { const a = Math.pow(Math.max(0, 1 - Math.hypot(u - 0.5, v - 0.5) * 2), 1.8); return [a, a, a, a] }))
   const flameMap = own(texture(32, 64, (u, v) => {
@@ -757,13 +767,13 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     const room = roomOf(spot.room)
     let light: Vec3 = [x, y, z]
     if (spot.fixture === 'pendant') {
-      glow(new THREE.SphereGeometry(0.045, 10, 8), [x, y, z], '#ffe3b0', 3)
+      glow(new THREE.SphereGeometry(0.045, 10, 8), [x, y, z], '#fff1dc', 3)
       dressing.cylinder(0.018, 0.06, iron, { at: [x, y + 0.06, z], collide: false, cast: false, shadow: false }, 8)
       dressing.cylinder(0.15, 0.05, { name: 'metal', color: '#3a4a44', ao: false }, { at: [x, y + 0.1, z], collide: false, cast: false, shadow: false }, 14)
       const cord = room.ceiling - y - 0.12
       if (cord > 0) rod([x, y + 0.12, z], [x, room.ceiling, z], 0.005, wire, 4)
     } else if (spot.fixture === 'cage') {
-      glow(new THREE.SphereGeometry(0.04, 10, 8), [x, y, z], '#ffe3b0', 3)
+      glow(new THREE.SphereGeometry(0.04, 10, 8), [x, y, z], '#fff1dc', 3)
       for (let bar = 0; bar < 4; bar++) {
         const angle = bar * Math.PI / 2 + 0.4
         rod([x + Math.cos(angle) * 0.065, y - 0.07, z + Math.sin(angle) * 0.065], [x + Math.cos(angle) * 0.065, y + 0.07, z + Math.sin(angle) * 0.065], 0.004, iron, 3)

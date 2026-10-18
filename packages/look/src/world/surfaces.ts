@@ -180,7 +180,7 @@ for (int i = 0; i < ${MAX_OPENINGS}; i++) {
 float lookGrime = lookWeather.x * clamp(lookMask.g * 0.75 + (1.0 - smoothstep(0.0, 1.4, lookAbove)) * lookWall * 0.6 - lookMask.r * 0.3, 0.0, 1.0);
 float lookDamp = lookWeather.y * clamp((0.3 + 0.7 * lookMask.b) * max((1.0 - smoothstep(0.0, 0.8, lookAbove)) * lookWall, lookWet), 0.0, 1.0);
 float lookSoot = lookWeather.z * clamp(max((1.0 - smoothstep(0.0, 1.8, lookBelow)) * step(-0.05, lookBelow), lookSmoke) * (0.6 + 0.4 * lookMask.g), 0.0, 1.0);
-diffuseColor.rgb *= mix(vec3(1.0), vec3(0.55, 0.51, 0.45), lookGrime);
+diffuseColor.rgb *= mix(vec3(1.0), vec3(0.52, 0.51, 0.49), lookGrime);
 diffuseColor.rgb *= 1.0 - 0.4 * lookDamp;
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.2 + vec3(0.01), lookSoot * 0.85);`
 

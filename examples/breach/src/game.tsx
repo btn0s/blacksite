@@ -9,7 +9,6 @@ import { ALS_RAPIER_GRAVITY } from 'als-ue5-r3f/als/AlsCharacter.hooks'
 import type { CameraPose } from '@blacksite/check'
 import { Look } from '@blacksite/look/r3f'
 import { autoQuality, depthDefaults, normalize, type Atmosphere, type QualityTier } from '@blacksite/look'
-import { ZONE } from '@blacksite/look/presets'
 import type { QueryHit, WeaponEvent } from '@blacksite/armory'
 import { InputProvider } from '@blacksite/input'
 import { BODY_LAYER, CharacterController, CharacterOverlay, CharacterPause, createCharacterController, useCharacterStatus, useLocalSession, useTouchActive, type AimTarget, type AlsFootstepSoundRequest, type CharacterHandle as Player } from '@blacksite/subject'
@@ -61,13 +60,26 @@ function effectsFor(scene: THREE.Scene) {
 const ADMISSION = -2.25
 type RapierHandle = ReturnType<typeof useRapier>
 const atmosphere: Atmosphere = {
-  ...ZONE,
-  exposure: 1.18,
-  fog: { color: [0.55, 0.6, 0.64], near: 14, far: 140 },
-  sky: { zenith: [0.24, 0.37, 0.58], horizon: [0.6, 0.65, 0.68], ground: ZONE.sky.ground, overcast: 0.15 },
-  fill: { sky: [0.5, 0.55, 0.6], ground: ZONE.fill.ground, strength: 0.75 },
-  sun: { color: [1.0, 0.86, 0.66], strength: 2.4, direction: normalize([18, 32, 4]) },
-  grade: { ...ZONE.grade, split: 0.12, grain: 0.07, lift: 0.03, clarity: 0.4, sharpen: 0.5, adapt: { key: 0.07, strength: 0.6, min: 0.55, max: 0.95 } },
+  exposure: 1,
+  fog: { color: [0.6, 0.68, 0.78], near: 40, far: 320 },
+  sky: { zenith: [0.13, 0.29, 0.62], horizon: [0.6, 0.69, 0.8], ground: [0.1, 0.1, 0.1], overcast: 0.12 },
+  fill: { sky: [0.42, 0.53, 0.72], ground: [0.13, 0.12, 0.11], strength: 0.9 },
+  sun: { color: [1, 0.95, 0.88], strength: 3.4, direction: normalize([10, 22, 16]) },
+  grade: { lut: null, vignette: 0.3, split: 0, aberration: 0.08, grain: 0.055, lift: 0.02, clarity: 0.35, sharpen: 0.5, bloom: 0.6, adapt: { key: 0.1, strength: 0.75, min: 0.5, max: 2.2 } },
+  physical: {
+    rayleigh: 1,
+    mie: 6,
+    mieAnisotropy: 0.8,
+    ozone: 1,
+    illuminance: 5.5,
+    elevation: 200,
+    aerial: 1,
+    sky: 1.6,
+    clear: 400,
+    disk: 1,
+    heightFog: null,
+    clouds: { coverage: 0.42, altitude: 2, density: 1.1, scale: 1.2, wind: 0.6 },
+  },
 }
 const soldierIds = ENCOUNTERS.flatMap(encounter => encounter.soldiers.map(soldier => soldier.id))
 const encounterOf = new Map(ENCOUNTERS.flatMap((encounter, index) => encounter.soldiers.map(soldier => [soldier.id, index] as const)))
@@ -134,7 +146,7 @@ function Scene({ player, now, paused, tier, audio, restartRef, onArms, onFirstFr
   const handles = useMemo(() => new Map<string, RefObject<AlsRagdollHandle | null>>(), [])
   const { level, chips } = useMemo(() => worldFor(tier, phone), [tier, phone])
   const effects = useMemo(() => effectsFor(scene), [scene])
-  const bake = useMemo(() => ({ root: level.group, ...INTERIOR, ground: 0.03, lamps: level.lamps }), [level])
+  const bake = useMemo(() => ({ root: level.group, ...INTERIOR, ground: 0.03, haze: 0.025, lamps: level.lamps }), [level])
   const look = useRef<LookHandle>(null)
   const ready = useCallback((handle: LookHandle) => { look.current = handle; opaqueAo(handle) }, [])
   const arms = player.arms
