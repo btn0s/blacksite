@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { BakeLamp } from '@blacksite/look'
-import { LevelBuilder, decalBias, fitOut, apartmentBlock, apc, clutter, deadTree, groundMaterial, lada, puddleMaterial, skylight, surface, waterTower, weatherSpaces, worldBoxGeometry, worldPlaneGeometry, type SurfaceName } from '@blacksite/look/world'
-import { APC_AT, CLUTTER, EXFIL, INTERIOR, LEVEL, PATCHES, PRACTICALS, ROOMS, SHAFTS, WINDOWS, type Block, type Practical, type Room, type Vec3 } from './layout'
+import { LevelBuilder, PROPS, decalBias, fitOut, scatterProps, apartmentBlock, apc, clutter, deadTree, groundMaterial, lada, puddleMaterial, skylight, surface, waterTower, weatherSpaces, worldBoxGeometry, worldPlaneGeometry, type SurfaceName } from '@blacksite/look/world'
+import { APC_AT, CLUTTER, EXFIL, FURNISHING, INTERIOR, LEVEL, PATCHES, PRACTICALS, ROOMS, SHAFTS, WINDOWS, type Block, type Practical, type Room, type Vec3 } from './layout'
 import { BUDGET, type RoomId } from './model'
 
 export type BreachLevel = {
@@ -338,6 +338,11 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     const room = ROOMS.find(candidate => candidate.id === spec.room)!
     const area = { min: [room.min[0] + 0.2, room.min[1] + 0.2] as [number, number], max: [room.max[0] - 0.2, room.max[1] - 0.2] as [number, number] }
     add(clutter({ area, blocked: footprints, clear: spec.clear, seed: index + 7, density: spec.density }))
+  }
+  add(scatterProps(FURNISHING))
+  for (const item of FURNISHING) {
+    const { min, max } = PROPS[item.name]
+    if (item.height > 0.12) level.contact(max[0] - min[0], max[2] - min[2], [item.at[0], item.at[2]], item.yaw)
   }
 
   const customParts = new Map<THREE.MeshStandardMaterial, THREE.BufferGeometry[]>()

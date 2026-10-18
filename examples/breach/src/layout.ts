@@ -1,4 +1,5 @@
 import type { RoomId } from './model'
+import { arrangeProps, type ArrangedProp, type PropName, type PropPick } from '@blacksite/look/arrange'
 
 export type Vec2 = [number, number]
 export type Vec3 = [number, number, number]
@@ -709,3 +710,66 @@ export function footingAt(x: number, z: number): Footing {
   for (const patch of PATCHES) if (x >= patch.min[0] && x <= patch.max[0] && z >= patch.min[1] && z <= patch.max[1]) return patch.footing
   return roomAt(x, z).floor
 }
+
+const woody = new Set<PropName>(['crate', 'military-crate', 'dresser', 'cabinet', 'wooden-chair', 'step-ladder', 'school-desk', 'school-chair', 'cardboard-box', 'cement-bag'])
+const TOPS: PropName[] = ['cabinet', 'dresser', 'school-desk', 'office-desk', 'military-crate', 'crate', 'tote', 'generator']
+const near = (at: Vec2, radius: number) => ({ min: [at[0] - radius, at[1] - radius] as Vec2, max: [at[0] + radius, at[1] + radius] as Vec2 })
+const FURNISH: { room: RoomId; seed: number; area?: { min: Vec2; max: Vec2 }; clear?: { min: Vec2; max: Vec2 }[]; picks: PropPick[] }[] = [
+  { room: 'lobby', seed: 3, clear: [{ min: [-4.4, 9.1], max: [-2.4, 10] }, { min: [2.4, 9.1], max: [4.4, 10] }], picks: [
+    { name: 'shelving', count: 1 }, { name: 'cabinet', count: 1 }, { name: 'breaker-box', count: 1 }, { name: 'trash-cans', count: 1 }, { name: 'monobloc-chair', count: 2 }, { name: 'wooden-chair', count: 1 },
+    { name: 'tote', count: 2 }, { name: 'cement-bag', count: 3 }, { name: 'cardboard-box', count: 4 }, { name: 'plastic-crate', count: 3 }, { name: 'extinguisher', count: 1 }, { name: 'television', count: 1 }, { name: 'can', count: 5 },
+    { name: 'cardboard-box', count: 3, on: TOPS }, { name: 'can', count: 4, on: TOPS }, { name: 'television', count: 1, on: TOPS },
+  ] },
+  { room: 'corridor', seed: 5, picks: [{ name: 'fuse-box', count: 1 }, { name: 'extinguisher', count: 1 }, { name: 'cardboard-box', count: 2 }, { name: 'plastic-crate', count: 1 }, { name: 'can', count: 3 }] },
+  { room: 'side', seed: 7, picks: [
+    { name: 'shelving', count: 2 }, { name: 'rack', count: 2 }, { name: 'step-ladder', count: 1 }, { name: 'tote', count: 3 }, { name: 'cardboard-box', count: 5 }, { name: 'plastic-crate', count: 4 },
+    { name: 'jerrycan', count: 3 }, { name: 'gas-bottle', count: 2 }, { name: 'toolbox', count: 2 }, { name: 'can', count: 4 },
+    { name: 'cardboard-box', count: 3, on: TOPS }, { name: 'toolbox', count: 2, on: TOPS }, { name: 'can', count: 3, on: TOPS },
+  ] },
+  { room: 'hall', seed: 9, picks: [
+    { name: 'rack', count: 3 }, { name: 'shelving', count: 2 }, { name: 'military-crate', count: 2 }, { name: 'generator', count: 1 }, { name: 'breaker-box', count: 2 }, { name: 'step-ladder', count: 1 },
+    { name: 'oil-drum', count: 4 }, { name: 'fuel-drum', count: 3 }, { name: 'plastic-drum', count: 2 }, { name: 'crate', count: 3 }, { name: 'tyre', count: 3 }, { name: 'cement-bag', count: 4 },
+    { name: 'gas-bottle', count: 3 }, { name: 'jerrycan', count: 4 }, { name: 'toolbox', count: 2 }, { name: 'cardboard-box', count: 4 }, { name: 'can', count: 6 },
+    { name: 'toolbox', count: 2, on: TOPS }, { name: 'vise', count: 1, on: TOPS }, { name: 'jerrycan', count: 2, on: TOPS }, { name: 'can', count: 5, on: TOPS }, { name: 'cardboard-box', count: 3, on: TOPS },
+  ] },
+  { room: 'office', seed: 11, clear: [{ min: [-7, -23.7], max: [-6, -21.3] }, { min: [-5.2, -25], max: [-3.2, -24] }], picks: [
+    { name: 'cabinet', count: 2 }, { name: 'dresser', count: 2 }, { name: 'school-desk', count: 3 }, { name: 'school-chair', count: 3 }, { name: 'wooden-chair', count: 2 },
+    { name: 'television', count: 1 }, { name: 'fuse-box', count: 1 }, { name: 'extinguisher', count: 1 }, { name: 'cardboard-box', count: 5 }, { name: 'can', count: 3 },
+    { name: 'television', count: 1, on: TOPS }, { name: 'cardboard-box', count: 4, on: TOPS }, { name: 'can', count: 4, on: TOPS },
+  ] },
+  { room: 'yard', seed: 13, area: { min: [-17.2, 10.6], max: [17.2, 29.8] }, picks: [
+    { name: 'road-barrier', count: 3 }, { name: 'trash-cans', count: 2 }, { name: 'generator', count: 1 }, { name: 'oil-drum', count: 3 }, { name: 'plastic-drum', count: 2 },
+    { name: 'crate', count: 2 }, { name: 'tyre', count: 4 }, { name: 'cement-bag', count: 4 }, { name: 'jerrycan', count: 2 },
+    { name: 'jerrycan', count: 2, on: TOPS }, { name: 'can', count: 3, on: TOPS }, { name: 'cement-bag', count: 2, on: TOPS },
+  ] },
+  { room: 'exfil', seed: 17, area: { min: [3.5, -26.8], max: [16, -17.5] }, picks: [{ name: 'road-barrier', count: 2 }, { name: 'oil-drum', count: 2 }, { name: 'crate', count: 2 }, { name: 'tyre', count: 2 }, { name: 'jerrycan', count: 2 }] },
+]
+const keep = [
+  ...ENCOUNTERS.flatMap(encounter => [near(encounter.objective, 1.2), ...encounter.soldiers.map(soldier => near(soldier.at, 0.9))]),
+  ...ANCHORS.map(anchor => near([anchor.x, anchor.z], 0.9)),
+  ...REGIONS.map(region => near(region.center, 0.9)),
+  ...PRACTICALS.map(practical => near([practical.at[0], practical.at[2]], 0.8)),
+  near([START.position[0], START.position[2]], 2.2),
+  near(EXFIL.at, EXFIL.radius + 0.6),
+  ...CLUTTER.flatMap(spec => spec.clear),
+]
+const footprintsOf = () => [
+  ...blocks.filter(item => item.solid && item.min[1] < 0.6).map(item => ({ min: [item.min[0], item.min[2]] as Vec2, max: [item.max[0], item.max[2]] as Vec2 })),
+  ...decor.filter(item => item.at[1] - item.size[1] / 2 < 0.6).map(item => {
+    const yaw = item.rotate?.[1] ?? 0
+    const [cos, sin] = [Math.abs(Math.cos(yaw)), Math.abs(Math.sin(yaw))]
+    const halfX = (cos * item.size[0] + sin * item.size[2]) / 2
+    const halfZ = (sin * item.size[0] + cos * item.size[2]) / 2
+    return { min: [item.at[0] - halfX, item.at[2] - halfZ] as Vec2, max: [item.at[0] + halfX, item.at[2] + halfZ] as Vec2 }
+  }),
+]
+export const FURNISHING: ArrangedProp[] = FURNISH.flatMap(spec => {
+  const room = ROOMS.find(candidate => candidate.id === spec.room)!
+  const area = spec.area ?? { min: [room.min[0] + 0.05, room.min[1] + 0.05] as Vec2, max: [room.max[0] - 0.05, room.max[1] - 0.05] as Vec2 }
+  const placed = arrangeProps({ area, picks: spec.picks, blocked: footprintsOf(), clear: [...keep, ...(spec.clear ?? [])], seed: spec.seed })
+  for (const [index, item] of placed.entries()) {
+    if (item.height < 0.2 || item.on !== undefined) continue
+    block([item.footprint.min[0], 0, item.footprint.min[1]], [item.footprint.max[0], item.height, item.footprint.max[1]], { id: `prop-${spec.room}-${index}`, look: 'paint', hit: woody.has(item.name) ? 'wood' : 'metal', render: false, cast: false, contact: false })
+  }
+  return placed
+})

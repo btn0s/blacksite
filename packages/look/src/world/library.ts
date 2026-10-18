@@ -3,11 +3,11 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { ktx2Loader } from '@blacksite/materials/three'
 import { CATALOG } from './catalog'
+import type { PropName } from './arrange'
 import { worldRenderer } from './surfaces'
 
 type Vec3 = readonly [number, number, number]
 
-export type PropName = keyof typeof CATALOG
 export type PropInfo = { readonly title: string; readonly min: Vec3; readonly max: Vec3; readonly size: Vec3; readonly footprint: readonly [number, number]; readonly triangles: number }
 export type PropPlacement = { readonly at: Vec3; readonly yaw?: number; readonly scale?: number | Vec3; readonly tint?: THREE.ColorRepresentation }
 export type PropInstance = PropPlacement & { readonly name: PropName }

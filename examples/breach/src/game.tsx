@@ -15,7 +15,7 @@ import { BODY_LAYER, CharacterController, CharacterOverlay, CharacterPause, crea
 import type { ArmsPresentation } from '@blacksite/subject/arms'
 import type { Intent } from '@blacksite/warden'
 import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
-import { internalPixelRatio, setAnisotropy, texturesReady } from '@blacksite/look/world'
+import { internalPixelRatio, propsReady, setAnisotropy, texturesReady } from '@blacksite/look/world'
 import { Loading, Screen, TitleCard } from '@blacksite/ui/hud'
 import { createBreachAudio, type BreachAudio } from './audio'
 import { PLAYER_ID, type PlayerState } from './authority'
@@ -197,7 +197,6 @@ function Scene({ player, now, paused, tier, audio, restartRef, onArms, onFirstFr
   }, [chips, level])
   useEffect(() => { if (presentation) onArms() }, [presentation, onArms])
   useEffect(() => {
-    setAnisotropy(gl)
     gl.shadowMap.autoUpdate = false
     gl.shadowMap.needsUpdate = true
     chips.warm()
@@ -756,14 +755,14 @@ function Shell({ player }: { player: Player }) {
     let cancelled = false
     const url = new URL(`${import.meta.env.BASE_URL}assets/skm-als.glb`, location.href).href
     void preloadAlsCharacterGltf(url, { onProgress: value => { if (!cancelled && value !== undefined) setProgress(0.05 + value * 0.8) } })
-    void Promise.all([texturesReady(), audio.prepare()]).then(() => { if (!cancelled) setWorld(true) }).catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason)) })
+    void Promise.all([texturesReady(), propsReady(), audio.prepare()]).then(() => { if (!cancelled) setWorld(true) }).catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason)) })
     return () => { cancelled = true }
   }, [audio])
   const onArms = useCallback(() => { setProgress(1); setArmsReady(true) }, [])
   const onFirstFrame = useCallback(() => setPlaying(true), [])
   const live = ready && playing
   return <Screen>
-    <Canvas frameloop={session.frameloop} shadows={tier !== 'low'} dpr={internalPixelRatio()} camera={{ fov: VIEW.fov, ...depthDefaults(tier, { far: 260 }).camera, position: [START.position[0], MOVE.eye, START.position[2]] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={state => attachPerfProbe(state.gl)}>
+    <Canvas frameloop={session.frameloop} shadows={tier !== 'low'} dpr={internalPixelRatio()} camera={{ fov: VIEW.fov, ...depthDefaults(tier, { far: 260 }).camera, position: [START.position[0], MOVE.eye, START.position[2]] }} gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }} onCreated={state => { setAnisotropy(state.gl); attachPerfProbe(state.gl) }}>
       {world && <Scene player={player} now={session.now} paused={session.paused} tier={tier} audio={audio} restartRef={restartRef} onArms={onArms} onFirstFrame={onFirstFrame} />}
     </Canvas>
     <TitleCard title="Breach" />
