@@ -13,6 +13,8 @@ import {
   MAX_REPLAY_TICKS,
   TRANSFORM_STRIDE,
   validateCommand,
+  isChargeCommand,
+  DEMOLITION_CHARGE,
   validatePhysicsOperations,
   type PhysicsOperation,
   type DestructibleManifest,
@@ -908,16 +910,21 @@ export function parseReplay(text: string, expectedAssetHash?: string): ReplayLog
     const key = `${command.source}:${command.id}`;
     ensure(!seen.has(key), 'Duplicate replay command');
     seen.add(key);
-    commands.push({
-      direction: [...command.direction],
+    const base = {
+      direction: [...command.direction] as Vec3,
       id: command.id,
-      position: [...command.position],
-      radius: command.radius,
+      position: [...command.position] as Vec3,
       source: command.source,
-      strength: command.strength,
       tick: command.tick,
-      type: command.type,
       ...(command.fragmentId === undefined ? {} : { fragmentId: command.fragmentId }),
+    };
+    if (isChargeCommand(command)) commands.push({ ...base, charge: command.charge, type: command.type });
+    else if (command.type === 'detonate') commands.push({ ...base, type: command.type });
+    else commands.push({
+      ...base,
+      radius: command.radius,
+      strength: command.strength,
+      type: command.type,
       ...(command.impulse === undefined ? {} : { impulse: [...command.impulse] as Vec3 }),
       ...(command.damageProgram === undefined ? {} : { damageProgram: command.damageProgram }),
       ...(command.minRadius === undefined ? {} : { minRadius: command.minRadius }),
@@ -975,9 +982,9 @@ export function serializeReplay(log: ReplayLog): string {
 export const WEAPONS = Object.freeze({
   cannonball: { radius: 0.32, strength: 3 },
   cut: { radius: 1.4, strength: 2.2 },
-  detonate: { radius: 1, strength: 1 },
-  explosion: { radius: 3.2, strength: 2.8 },
-  placeExplosive: { radius: 3.2, strength: 2.8 },
+  detonate: {},
+  explosion: { charge: DEMOLITION_CHARGE },
+  placeExplosive: { charge: DEMOLITION_CHARGE },
   pointImpact: { radius: 0.8, strength: 0.9 },
 });
 export function commandFromIntent(
@@ -1015,7 +1022,7 @@ export function commandFromIntent(
   const norm = Math.hypot(...direction);
   ensure(norm > 0.001 && norm < 1.75, 'Invalid command direction');
   const policy = WEAPONS[raw.type];
-  const command: DestructionCommand = {
+  const command = {
     direction: direction.map((n) => n / norm) as Vec3,
     id: Number(raw.id),
     position: [...position] as Vec3,
@@ -1024,7 +1031,7 @@ export function commandFromIntent(
     type: raw.type,
     ...policy,
     ...(raw.fragmentId === undefined ? {} : { fragmentId: Number(raw.fragmentId) }),
-  };
+  } as DestructionCommand;
   ensure(
     raw.fragmentId === undefined ||
       (typeof raw.fragmentId === 'number' &&

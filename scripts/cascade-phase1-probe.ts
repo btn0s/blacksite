@@ -10,6 +10,7 @@ import {
   createDestructibleBoxes,
   DestructionSimulation,
   MAX_EXPLOSIVES,
+  DEMOLITION_CHARGE,
   type DestructionCommand,
   type Vec3,
 } from '../packages/cascade/src/index';
@@ -46,9 +47,10 @@ if (process.argv.includes('--noccd')) {
 let f = sim.frame();
 for (let i = 0; i < 90; i++) f = sim.step();
 let id = 1;
-const command = (type: DestructionCommand['type'], position: Vec3, radius: number, strength: number): DestructionCommand => ({
-  type, id: id++, tick: f.tick + 1, source: 1, position, direction: [0, 0, 1], radius, strength,
-});
+const command = (type: 'placeExplosive' | 'detonate', position: Vec3): DestructionCommand =>
+  type === 'detonate'
+    ? { type, id: id++, tick: f.tick + 1, source: 1, position, direction: [0, 0, 1] }
+    : { type, id: id++, tick: f.tick + 1, source: 1, position, direction: [0, 0, 1], charge: DEMOLITION_CHARGE };
 const x0 = (-frame.baysX * BAY) / 2, z0 = (-frame.baysZ * BAY) / 2;
 const charges: Vec3[] = [];
 for (let ix = 0; ix <= frame.baysX; ix++)
@@ -74,9 +76,9 @@ const step = () => {
 };
 // The demo waits 250 ms (real time) between placement and detonation; 8 ticks at 30 Hz.
 for (let offset = 0; offset < charges.length; offset += MAX_EXPLOSIVES) {
-  for (const p of charges.slice(offset, offset + MAX_EXPLOSIVES)) sim.enqueue(command('placeExplosive', p, 1.5, 2));
+  for (const p of charges.slice(offset, offset + MAX_EXPLOSIVES)) sim.enqueue(command('placeExplosive', p));
   for (let i = 0; i < 8; i++) step();
-  sim.enqueue(command('detonate', [0, 0, 0], 1, 1));
+  sim.enqueue(command('detonate', [0, 0, 0]));
   for (let i = 0; i < 8; i++) step();
 }
 const hz = 30;

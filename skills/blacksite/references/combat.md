@@ -70,7 +70,7 @@ From Breach (`examples/breach/src/hud.tsx`, `breach.css`) and the template's pho
 - **One action clock.** A reload sound timed independently of the magazine animation can click before the magazine seats. Use the clip event times for foley and the same duration for the weapon's reload.
 - **Step on elapsed time.** The server's weapon simulation advanced two ticks per received shot and drifted from the clients'. Step it from elapsed fixed-step time.
 - **Shots go where the crosshair is.** Third-person shots missed the crosshair until the fire direction came from the camera's aim point. Arena's hits went through cover until the server's rays tested obstacles.
-- **Round-trip authored values.** A requested 4 m charge core was stored as radius ÷ 3. Assert that authored values reach the moment they act unchanged.
+- **Round-trip authored values.** A requested 4 m charge core was stored as radius ÷ 3, because the core was a separate knob from the radius. Describe a blast by one physical quantity, its charge mass, and derive the rest; then assert the authored value reaches the moment it acts unchanged.
 - **Physics never runs slower than the wall clock.** At 2 m cells on a 30 Hz worker a building's collapse played in slow motion. When a step costs more than the time it simulates, drop fidelity (sleep, bake, defer, cap debris), never rate.
 - **Debris lands near where it broke.** Contacts that applied an impulse as well as damage sprayed 460 pieces at 12–30 m/s, up to 64 m out. With damage only, spread fell to 2–3 m at p90.
 - **Rubble settles.** A 1,600-body pile never slept, because one awake body keeps its neighbours awake. Bodies below 0.35 m/s for 0.4 s become fixed and remember their supports.

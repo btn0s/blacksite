@@ -6,7 +6,7 @@ import { applyCameraPose, type CameraPose } from '@blacksite/check'
 import { applyCameraImpulse, createCameraImpulse, type ImpulsePoint } from '@blacksite/subject/feel'
 import { createAtmosphere, internalPixelRatio, isTouchDevice, meterSurface, preloadSurfaces } from '@blacksite/look/world'
 import { BLOCK, BLOCK_HEIGHT, BLOCK_LENGTH, createBlock } from './block'
-import { MUNITIONS, StrikeEffects, type Munition } from './fx'
+import { MUNITIONS, StrikeEffects, fireball, type Munition } from './fx'
 import { buildYard } from './yard'
 import { exposeAirStrikeCheck } from './check'
 
@@ -266,8 +266,8 @@ export class AirStrikeScene {
     this.reticle.visible = this.beam.visible = true
     const heading = target.clone().sub(this.camera.position).setY(0).applyAxisAngle(up, 0.35)
     this.fx.launch(target, heading, MUNITIONS[this.state.munition], (at: THREE.Vector3, direction: THREE.Vector3, munition: Munition) => {
-      this.session?.impact('explosion', [at.x, at.y, at.z], [direction.x, direction.y, direction.z], munition.radius, munition.strength, undefined, munition.minRadius)
-      this.rig.blast(at, munition.radius / 10)
+      this.session?.impact({ type: 'explosion', position: [at.x, at.y, at.z], direction: [direction.x, direction.y, direction.z], charge: munition.charge })
+      this.rig.blast(at, fireball(munition) * 0.9)
       this.set({ inbound: this.fx.inbound })
     })
     this.set({ inbound: this.fx.inbound, struck: true })

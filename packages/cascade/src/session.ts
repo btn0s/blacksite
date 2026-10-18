@@ -16,9 +16,11 @@ import type {
   PhysicsActionResult,
   WorkerRequest,
   PlayerInput,
+  PlayerLoad,
   PlayerTool,
   DestructibleManifest,
   DestructionCommand,
+  DestructionIntent,
   SimulationFrame,
   WorkerResponse,
   ReplayLog,
@@ -47,7 +49,7 @@ export interface RuntimeHooks {
   allowAction?: (
     tool: PlayerTool,
     direction: Vec3,
-  ) => boolean | { radius: number; reach?: number; strength: number };
+  ) => boolean | { load: PlayerLoad; reach?: number };
   commandAccepted?: (command: DestructionCommand) => void;
   frame?: (frame: SimulationFrame, previous: SimulationFrame | null) => void;
   ready?: () => void;
@@ -280,30 +282,17 @@ export class DestructionSession {
     return () => this.listeners.delete(fn);
   };
   getSnapshot = () => this.view;
-  impact(
-    type: DestructionCommand['type'],
-    position: Vec3,
-    direction: Vec3,
-    radius: number,
-    strength: number,
-    fragmentId?: number,
-    minRadius?: number,
-  ) {
+  impact(intent: DestructionIntent) {
     if (this.view.status !== 'running') {
       return false;
     }
-    const command: DestructionCommand = {
-      direction,
+    const command = {
+      ...intent,
       id: this.sequence++,
-      position: position.map((v) => Math.round(v * 100) / 100) as Vec3,
-      radius,
+      position: intent.position.map((v) => Math.round(v * 100) / 100) as Vec3,
       source: 1,
-      strength,
       tick: (this.frame?.tick ?? 0) + 1,
-      type,
-      ...(fragmentId === undefined ? {} : { fragmentId }),
-      ...(minRadius === undefined ? {} : { minRadius }),
-    };
+    } as DestructionCommand;
     this.worker?.postMessage({ command, type: 'command' });
     return true;
   }
@@ -368,30 +357,22 @@ export class DestructionSession {
   respawnPlayer() {
     this.worker?.postMessage({ type: 'playerRespawn' });
   }
-  playerAction(
-    action: PlayerTool,
-    direction: Vec3,
-    radius: number,
-    strength: number,
-    reach?: number,
-  ) {
+  playerAction(load: PlayerLoad, direction: Vec3, reach?: number) {
     if (this.view.status !== 'running' || !this.playerEnabled) {
       return;
     }
-    const allowed = this.hooks.allowAction?.(action, direction) ?? true;
+    const allowed = this.hooks.allowAction?.(load.action, direction) ?? true;
     if (!allowed) {
       return;
     }
     if (typeof allowed === 'object') {
-      ({ radius, strength } = allowed);
+      load = allowed.load;
       reach = allowed.reach ?? reach;
     }
     this.worker?.postMessage({
-      action,
+      ...(load.action === 'cannonball' ? { ...load, radius: 0.32 } : load),
       direction,
       id: this.sequence++,
-      radius: action === 'cannonball' ? 0.32 : radius,
-      strength,
       type: 'playerAction',
       ...(reach === undefined ? {} : { reach }),
     });

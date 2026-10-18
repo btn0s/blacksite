@@ -16,6 +16,8 @@ import {
   MAX_SECONDARY_FRAGMENTS,
   MAX_SECONDARY_ID_SPAN,
   SIMULATION_VERSION,
+  MAX_CHARGE,
+  DEMOLITION_CHARGE,
 } from "../../packages/destruction-domain/src/index";
 import {
   commandFromIntent,
@@ -925,8 +927,7 @@ describe("replay and input authority", () => {
     source: 1,
     position: [0, 1, 0] as [number, number, number],
     direction: [0, 1, 0] as [number, number, number],
-    radius: 3,
-    strength: 2,
+    charge: 200,
   };
   const replay: ReplayLog = {
     version: 1,
@@ -944,7 +945,9 @@ describe("replay and input authority", () => {
     for (const invalid of [
       { ...replay, commands: [command, command] },
       { ...replay, commands: [{ ...command, position: [1e40, 0, 0] }] },
-      { ...replay, commands: [{ ...command, radius: -1 }] },
+      { ...replay, commands: [{ ...command, charge: -1 }] },
+      { ...replay, commands: [{ ...command, charge: MAX_CHARGE * 2 }] },
+      { ...replay, commands: [{ type: "explosion", id: 1, tick: 20, source: 1, position: [0, 1, 0], direction: [0, 1, 0], radius: 3, strength: 2 }] },
       { ...replay, endTick: 10 },
       { ...replay, endTick: LIMITS.endTick + 1 },
       { ...replay, scenario: "missing" },
@@ -996,8 +999,14 @@ describe("replay and input authority", () => {
     const impact: ReplayLog = {
       ...replay,
       commands: [{
-        ...command,
         type: "pointImpact",
+        id: 1,
+        tick: 20,
+        source: 1,
+        position: [0, 1, 0],
+        direction: [0, 1, 0],
+        radius: 3,
+        strength: 2,
         fragmentId: 22,
         impulse: [1.25, -0.5, 2.75],
       }],
@@ -1006,12 +1015,11 @@ describe("replay and input authority", () => {
   });
   it("overrides client damage, identity and tick and rejects stale IDs/nonfinite vectors", () => {
     const accepted = commandFromIntent(
-      { ...command, strength: 99999, radius: 99999, source: 99, tick: 0 },
+      { ...command, charge: 99999, source: 99, tick: 0 },
       { tick: 51, source: 7, lastId: 0 },
     );
     expect(accepted).toMatchObject({
-      radius: 3.2,
-      strength: 2.8,
+      charge: DEMOLITION_CHARGE,
       tick: 51,
       source: 7,
     });
@@ -1104,16 +1112,14 @@ describe("optional authoritative WebSocket service", () => {
           type: "explosion",
           id: 1,
           position: [-4, 2, 0],
-          strength: 999,
-          radius: 999,
+          charge: 999,
         },
       });
       const ack = (await first.json("ack")).payload as {
-        command: { strength: number; radius: number; tick: number };
+        command: { charge: number; tick: number };
       };
       expect(ack.command).toMatchObject({
-        strength: 2.8,
-        radius: 3.2,
+        charge: DEMOLITION_CHARGE,
         tick: 1,
       });
       for (let i = 0; i < 4; i++) server.step();

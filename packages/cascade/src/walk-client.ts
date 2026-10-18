@@ -1,19 +1,18 @@
-import type { PlayerInput, PlayerTool, Vec3 } from '../../destruction-domain/src/index';
+import { DEMOLITION_CHARGE, type PlayerInput, type PlayerLoad, type PlayerTool, type Vec3 } from '../../destruction-domain/src/index';
 
 export interface WalkTool {
   id: PlayerTool;
   label: string;
-  radius: number;
-  strength: number;
+  load: PlayerLoad;
   repeatMs?: number;
   strike?: { contactMs: number; totalMs: number };
 }
 
 export const WALK_TOOLS: readonly WalkTool[] = [
-  { id: 'explosive', label: 'Explosive', radius: 1.5, strength: 2 },
-  { id: 'cannonball', label: 'Cannonball', radius: 0.32, strength: 2 },
-  { id: 'hammer', label: 'Sledge', radius: 1, strength: 1, strike: { contactMs: 300, totalMs: 680 } },
-  { id: 'cutter', label: 'Cutter', radius: 0.38, strength: 1, repeatMs: 125 },
+  { id: 'explosive', label: 'Explosive', load: { action: 'explosive', charge: DEMOLITION_CHARGE } },
+  { id: 'cannonball', label: 'Cannonball', load: { action: 'cannonball', radius: 0.32, strength: 2 } },
+  { id: 'hammer', label: 'Sledge', load: { action: 'hammer', radius: 1, strength: 1 }, strike: { contactMs: 300, totalMs: 680 } },
+  { id: 'cutter', label: 'Cutter', load: { action: 'cutter', radius: 0.38, strength: 1 }, repeatMs: 125 },
 ];
 
 export function walkInput(keys: ReadonlySet<string>, yaw: number, pitch: number, tool: PlayerTool, move = { forward: 0, right: 0 }, sprint = false): PlayerInput {
@@ -64,7 +63,7 @@ export class StrikeClock {
 export interface WalkSession {
   setPlayerEnabled(enabled: boolean): void;
   playerInput(input: PlayerInput): void;
-  playerAction(tool: PlayerTool, direction: Vec3, radius: number, strength: number): void;
+  playerAction(load: PlayerLoad, direction: Vec3): void;
   respawnPlayer(): void;
 }
 
@@ -157,7 +156,7 @@ export class CascadeWalkClient {
   }
   private fire(): void {
     const { aim } = walkInput(this.keys, this.yaw, this.pitch, this.tool.id, this.move, this.sprint);
-    this.session.playerAction(this.tool.id, aim!, this.tool.radius, this.tool.strength);
+    this.session.playerAction(this.tool.load, aim!);
     this.canvas.dispatchEvent(new CustomEvent('cascade-walk-fire', { detail: this.tool.id }));
   }
   private capture(): void {
