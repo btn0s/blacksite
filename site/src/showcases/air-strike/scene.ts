@@ -6,11 +6,13 @@ import { applyCameraPose, type CameraPose } from '@blacksite/check'
 import { applyCameraImpulse, createCameraImpulse, type ImpulsePoint } from '@blacksite/subject/feel'
 import { createAtmosphere, internalPixelRatio, isTouchDevice, meterSurface, preloadSurfaces } from '@blacksite/look/world'
 import { BLOCK, BLOCK_HEIGHT, BLOCK_LENGTH, createBlock } from './block'
-import { MUNITIONS, StrikeEffects, type Munition } from './fx'
+import { MUNITIONS, StrikeEffects, fireball, type Munition } from './fx'
 import { buildYard } from './yard'
 import { exposeAirStrikeCheck } from './check'
 
 const up = new THREE.Vector3(0, 1, 0)
+const PHONE_FRAME_MS = 1000 / 60
+const COLLAPSE_FRAME_MS = 13.3
 
 export type Phase = 'loading' | 'ready'
 export type MunitionId = keyof typeof MUNITIONS
@@ -168,7 +170,7 @@ export class AirStrikeScene {
       frame: frame => this.fx.ingest(frame),
       ready: () => { this.warm(); this.set({ phase: 'ready', progress: 1 }); this.check.ready() },
     }, { timestep: FIXED_DT_30HZ, rest: { forceAfterSeconds: 2.5, forceSpeed: 0.5, forceSpin: 0.9 } })
-    this.view = new DestructionRenderer(manifest, { materialFor: this.materialFor, effects: false, secondaryAddsPerUpdate: 12, edgeFacesPerUpdate: 64 })
+    this.view = new DestructionRenderer(manifest, { materialFor: this.materialFor, effects: false, buildMs: PHONE_FRAME_MS - COLLAPSE_FRAME_MS })
     this.scene.add(this.view.group)
     this.session.subscribe(() => { const error = this.session?.getSnapshot().error; if (error && error !== this.state.error) this.set({ error }) })
   }
@@ -264,8 +266,8 @@ export class AirStrikeScene {
     this.reticle.visible = this.beam.visible = true
     const heading = target.clone().sub(this.camera.position).setY(0).applyAxisAngle(up, 0.35)
     this.fx.launch(target, heading, MUNITIONS[this.state.munition], (at: THREE.Vector3, direction: THREE.Vector3, munition: Munition) => {
-      this.session?.impact('explosion', [at.x, at.y, at.z], [direction.x, direction.y, direction.z], munition.radius, munition.strength, undefined, munition.minRadius)
-      this.rig.blast(at, munition.radius / 10)
+      this.session?.impact({ type: 'explosion', position: [at.x, at.y, at.z], direction: [direction.x, direction.y, direction.z], charge: munition.charge })
+      this.rig.blast(at, fireball(munition) * 0.9)
       this.set({ inbound: this.fx.inbound })
     })
     this.set({ inbound: this.fx.inbound, struck: true })

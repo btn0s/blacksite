@@ -23,7 +23,7 @@ const log: ReplayLog = argument === '--airstrike' ? {
   version: 1, assetHash: manifest.assetHash, scenario: 'building', endTick: Math.round(1 / dt) + Number(process.env.TICKS ?? 480),
   commands: [{ type: 'explosion', id: 1, source: 1, tick: Math.round(1 / dt) + 1,
     position: vector(process.env.POS ?? '0.5,9.5,-8.9'), direction: vector(process.env.DIR ?? '0.3,-0.9,0.3'),
-    radius: 9, minRadius: 4, strength: 10 }],
+    charge: Number(process.env.CHARGE ?? 200) }],
 } : JSON.parse(readFileSync(argument, 'utf8'));
 if (log.assetHash !== manifest.assetHash) throw new Error(`Replay asset mismatch: ${log.assetHash} / ${manifest.assetHash}`);
 if (log.physicsOperations?.length) throw new Error('This command-only acceptance runner does not accept external physics operations');

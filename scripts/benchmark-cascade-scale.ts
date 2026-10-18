@@ -14,6 +14,9 @@ import {
   DestructionSimulation,
   FragmentState,
   MAX_EXPLOSIVES,
+  MAX_CHARGE,
+  DEMOLITION_CHARGE,
+  blastReach,
   type DestructibleBox,
   type DestructionCommand,
   type FragmentDef,
@@ -407,20 +410,13 @@ async function run(frame: Frame) {
     const x0 = (-frame.baysX * BAY) / 2,
       z0 = (-frame.baysZ * BAY) / 2;
     const command = (
-      type: DestructionCommand['type'],
+      type: 'placeExplosive' | 'detonate',
       position: Vec3,
-      radius: number,
-      strength: number,
-    ): DestructionCommand => ({
-      type,
-      id: id++,
-      tick: f.tick + 1,
-      source: 1,
-      position,
-      direction: [0, 0, 1],
-      radius,
-      strength,
-    });
+      charge = DEMOLITION_CHARGE,
+    ): DestructionCommand =>
+      type === 'detonate'
+        ? { type, id: id++, tick: f.tick + 1, source: 1, position, direction: [0, 0, 1] }
+        : { type, id: id++, tick: f.tick + 1, source: 1, position, direction: [0, 0, 1], charge };
     // 'knee' (the original protocol) notches each ground-floor column at 1 m; 'column' also
     // charges the upper half of the ground storey so every ground-floor column is taken out.
     const chargeHeights = chargeProtocol === 'column' ? [1, 2.4] : [1];
@@ -456,7 +452,7 @@ async function run(frame: Frame) {
       charges.splice(0, charges.length, [x + maximumTarget.size[0] / 2 + 0.01, 1, z]);
       // Placement offsets 6.5 cm along its supplied incoming direction.
       const position: Vec3 = [charges[0]![0] - 0.065, 1, z];
-      chargeAudit = auditMaximumCharge(sim, { type: 'radial', damage: 10, minRadius: 4, maxRadius: 9,
+      chargeAudit = auditMaximumCharge(sim, { type: 'blast', charge: MAX_CHARGE, maxRadius: blastReach(MAX_CHARGE, manifest.materials),
         position, normal: [-1, 0, 0] });
     }
     const waveSteps: {
@@ -483,8 +479,8 @@ async function run(frame: Frame) {
       const ids: number[] = [];
       for (const position of charges.slice(offset, offset + MAX_EXPLOSIVES)) {
         const queued = maximumTarget
-          ? { ...command('placeExplosive', position, 9, 10), minRadius: 4, direction: [-1, 0, 0] as Vec3, fragmentId: maximumTarget.id }
-          : command('placeExplosive', position, 1.5, 2);
+          ? { ...command('placeExplosive', position, MAX_CHARGE), direction: [-1, 0, 0] as Vec3, fragmentId: maximumTarget.id }
+          : command('placeExplosive', position);
         if (!sim.enqueue(queued)) {
           throw new Error(`${frame.name} rejected charge ${queued.id}`);
         }
@@ -496,7 +492,7 @@ async function run(frame: Frame) {
         throw new Error(`${frame.name} wave ${wave} failed to place all ${ids.length} charges`);
       }
       placed += actual.length;
-      if (!sim.enqueue(command('detonate', [0, 0, 0], 1, 1))) {
+      if (!sim.enqueue(command('detonate', [0, 0, 0]))) {
         throw new Error(`${frame.name} rejected detonation for wave ${wave}`);
       }
       stepWave('detonation', wave);

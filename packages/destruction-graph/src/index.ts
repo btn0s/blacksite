@@ -1,8 +1,8 @@
 import { DirectStructuralSolver, type DirectSolveResult } from './direct';
 export { DirectStructuralSolver, type DirectSolveResult } from './direct';
-import { chunkDamageFalloff, generateDamageProgram } from './shaders';
+import { chunkDamageFalloff, generateDamageProgram, materialOf } from './shaders';
 import { inheritChildBonds } from './hierarchy';
-export { radialGraphShader, capsuleGraphShader, shearGraphShader, impactSpreadGraphShader, generateDamageProgram, damageFalloff, type GraphShaderContext } from './shaders';
+export { radialGraphShader, capsuleGraphShader, shearGraphShader, impactSpreadGraphShader, blastGraphShader, generateDamageProgram, damageFalloff, type GraphShaderContext } from './shaders';
 import { EquilibriumSolver, getBondSection, type BondSection } from './equilibrium';
 import type { CutBondEquilibrium } from './cut-loads';
 import { buildStructuralLoads, type StructuralLoads, type StructuralLoadSnapshot } from './loads';
@@ -19,6 +19,7 @@ import {
   FIXED_DT,
   TRANSFORM_STRIDE,
   validateCommand,
+  blastReach,
   type DestructibleManifest,
   type DestructionCommand,
   type DamageProgramDescriptor,
@@ -829,7 +830,7 @@ export class StructuralGraph {
     const programs: Array<DamageProgramDescriptor> = [];
     const seen = new Set<string>();
     for (const entry of entries) {
-      if ('radius' in entry) {
+      if ('tick' in entry) {
         const command = entry as DestructionCommand;
         if (!validateCommand(command) || !['pointImpact', 'explosion', 'cut'].includes(command.type)) continue;
         const commandKey = `${command.source}:${command.id}`;
@@ -846,17 +847,19 @@ export class StructuralGraph {
           hitPosition = [origin[0] + x + qw * tx + qy * tz - qz * ty, origin[1] + y + qw * ty + qz * tx - qx * tz, origin[2] + z + qw * tz + qx * ty - qy * tx];
         }
         const chunk = hit === undefined ? -1 : this.resolveSupportChunk(hit, hitPosition);
-        programs.push({
-          type: command.damageProgram ?? (command.end ? 'capsule' : command.type === 'explosion' ? 'radial' : command.type === 'cut' ? 'shear' : 'impactSpread'),
-          damage: command.strength,
-          position: [...command.position],
-          minRadius: command.minRadius ?? (command.type === 'explosion' ? command.radius / 3 : 0),
-          maxRadius: command.radius,
-          normal: [...command.direction],
-          ...(command.end ? { end: [...command.end] } : {}),
-          ...(chunk >= 0 ? { chunk } : {}),
-          commandKey,
-        });
+        const shared = { position: [...command.position] as Vec3, normal: [...command.direction] as Vec3, ...(chunk >= 0 ? { chunk } : {}), commandKey };
+        if (command.type === 'explosion') {
+          programs.push({ type: 'blast', charge: command.charge, maxRadius: blastReach(command.charge, this.manifest.materials), ...shared });
+        } else if (command.type === 'pointImpact' || command.type === 'cut') {
+          programs.push({
+            type: command.damageProgram ?? (command.end ? 'capsule' : command.type === 'cut' ? 'shear' : 'impactSpread'),
+            damage: command.strength,
+            minRadius: command.minRadius ?? 0,
+            maxRadius: command.radius,
+            ...(command.end ? { end: [...command.end] as Vec3 } : {}),
+            ...shared,
+          });
+        }
       } else {
         const descriptor = entry as DamageProgramDescriptor;
         if (descriptor.commandKey && (seen.has(descriptor.commandKey) || this.seenCommands.has(descriptor.commandKey))) continue;
@@ -933,7 +936,7 @@ export class StructuralGraph {
       const o = source * TRANSFORM_STRIDE;
       const rotation: Quat | undefined = fracturePositions ? [fracturePositions[o + 3]!, fracturePositions[o + 4]!, fracturePositions[o + 5]!, fracturePositions[o + 6]!] : undefined;
       for (const child of children) {
-        const falloff = descriptor ? chunkDamageFalloff(descriptor, this.manifest.fragments[child]!, worldPosition(child, source), rotation) : 1;
+        const falloff = descriptor ? chunkDamageFalloff(descriptor, this.manifest.fragments[child]!, materialOf(this.manifest, child), worldPosition(child, source), rotation) : 1;
         // Health passed beyond the failed chunk keeps the event's spatial footprint. A
         // child outside the original event receives no damage, even when its parent died.
         applyChunk(child, excess * falloff, descriptor, source, program);

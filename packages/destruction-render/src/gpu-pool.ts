@@ -33,26 +33,32 @@ export class GPUTransformPool {
   /** Release keys that are gone, then claim slots for new keys. Kept keys never move. */
   synchronize(keys: ReadonlySet<string>): boolean {
     let changed = false;
-    for (const [key, slot] of this.slots) {
-      if (keys.has(key)) continue;
-      this.slots.delete(key);
-      (this.matrices.image.data as Float32Array).fill(0, slot * 16, slot * 16 + 16);
-      this.generationBySlot[slot]++;
-      this.matrixDirty.add(slot);
-      this.free.push(slot);
-      changed = true;
-    }
-    for (const key of keys) {
-      if (this.slots.has(key)) continue;
-      const slot = this.free.pop();
-      if (slot === undefined) throw new Error('GPU transform pool capacity exceeded');
-      this.slots.set(key, slot);
-      (this.colors.image.data as Float32Array).fill(1, slot * 4, slot * 4 + 4);
-      this.colorDirty.add(slot);
-      changed = true;
-    }
-    if (changed) this.revision++;
+    for (const key of this.slots.keys()) if (!keys.has(key)) changed = this.release(key) || changed;
+    for (const key of keys) changed = this.claim(key) || changed;
     return changed;
+  }
+
+  claim(key: string): boolean {
+    if (this.slots.has(key)) return false;
+    const slot = this.free.pop();
+    if (slot === undefined) throw new Error('GPU transform pool capacity exceeded');
+    this.slots.set(key, slot);
+    (this.colors.image.data as Float32Array).fill(1, slot * 4, slot * 4 + 4);
+    this.colorDirty.add(slot);
+    this.revision++;
+    return true;
+  }
+
+  release(key: string): boolean {
+    const slot = this.slots.get(key);
+    if (slot === undefined) return false;
+    this.slots.delete(key);
+    (this.matrices.image.data as Float32Array).fill(0, slot * 16, slot * 16 + 16);
+    this.generationBySlot[slot]++;
+    this.matrixDirty.add(slot);
+    this.free.push(slot);
+    this.revision++;
+    return true;
   }
 
   write(slot: number, matrix: Matrix4): void {

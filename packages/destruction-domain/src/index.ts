@@ -121,6 +121,9 @@ export interface LevelDef {
   spawn: { position: Vec3; yaw: number };
 }
 export type PlayerTool = 'explosive' | 'cannonball' | 'hammer' | 'cutter';
+export type PlayerLoad =
+  | { action: 'explosive'; charge: number }
+  | { action: Exclude<PlayerTool, 'explosive'>; radius: number; strength: number };
 export interface AimPreview {
   distance?: number;
   fragmentId?: number;
@@ -201,19 +204,26 @@ export const MAX_IMPACT_FRACTURES_PER_TICK = 4;
 export const MAX_FRACTURE_GENERATION = 8;
 export const MAX_SECONDARY_ID_SPAN = 16_777_216;
 export const MAX_SECONDARY_LINEAGE = 4096;
-/** Geometry plus raw damage in material health units; shaders emit normalized health deltas. */
-export interface DamageProgramDescriptor {
-  type: 'radial' | 'capsule' | 'shear' | 'impactSpread';
-  damage: number;
+interface ProgramBase {
   position: Vec3;
-  minRadius: number;
   maxRadius: number;
-  end?: Vec3;
   normal?: Vec3;
   /** Manifest index of the support chunk physically struck, when known. */
   chunk?: number;
   commandKey?: string;
 }
+/** Geometry plus raw damage in material health units; shaders emit normalized health deltas. */
+export interface ProfileProgram extends ProgramBase {
+  type: 'radial' | 'capsule' | 'shear' | 'impactSpread';
+  damage: number;
+  minRadius: number;
+  end?: Vec3;
+}
+export interface BlastProgram extends ProgramBase {
+  type: 'blast';
+  charge: number;
+}
+export type DamageProgramDescriptor = ProfileProgram | BlastProgram;
 export interface BondFractureCommand {
   bond: number;
   health: number;
@@ -239,20 +249,90 @@ export interface FractureApplyResult {
   cracked: Array<number>;
   demoted: Array<ChunkDemotion>;
 }
-export interface DestructionCommand {
-  damageProgram?: DamageProgramDescriptor['type'];
-  minRadius?: number;
-  end?: Vec3;
+interface CommandBase {
   direction: Vec3;
   fragmentId?: number;
   id: number;
-  impulse?: Vec3;
   position: Vec3;
-  radius: number;
   source: number;
-  strength: number;
   tick: number;
-  type: 'pointImpact' | 'explosion' | 'cut' | 'placeExplosive' | 'detonate' | 'cannonball';
+}
+export interface ChargeCommand extends CommandBase {
+  charge: number;
+  type: 'explosion' | 'placeExplosive';
+}
+export interface DetonateCommand extends CommandBase {
+  type: 'detonate';
+}
+export interface StrikeCommand extends CommandBase {
+  damageProgram?: ProfileProgram['type'];
+  minRadius?: number;
+  end?: Vec3;
+  impulse?: Vec3;
+  radius: number;
+  strength: number;
+  type: 'pointImpact' | 'cut' | 'cannonball';
+}
+export type DestructionCommand = ChargeCommand | DetonateCommand | StrikeCommand;
+export const isChargeCommand = (command: DestructionCommand): command is ChargeCommand =>
+  command.type === 'explosion' || command.type === 'placeExplosive';
+export type DestructionIntent = DestructionCommand extends infer C ? C extends DestructionCommand ? Omit<C, 'id' | 'source' | 'tick'> : never : never;
+export interface Strengths {
+  bending: number;
+  compression: number;
+  shear: number;
+  tension: number;
+}
+export function materialStrengths(material: MaterialDef): Strengths {
+  return {
+    bending: material.bendingStrength ?? 4e6,
+    compression: material.compressionStrength ?? 25e6,
+    shear: material.shearStrength ?? 2e6,
+    tension: material.tensionStrength ?? 2.4e6,
+  };
+}
+export const MIN_CHARGE = 0.01;
+export const MAX_CHARGE = 1000;
+export const DEMOLITION_CHARGE = 0.76;
+const ATMOSPHERE = 101_325;
+const TNT_DENSITY = 1600;
+export const CHARGE_SURFACE = Math.cbrt(3 / (4 * Math.PI * TNT_DENSITY));
+const MAX_SCALED_DISTANCE = 100;
+export function blastOverpressure(scaled: number): number {
+  const z = Math.max(scaled, CHARGE_SURFACE);
+  return ATMOSPHERE * 808 * (1 + (z / 4.5) ** 2) /
+    Math.sqrt((1 + (z / 0.048) ** 2) * (1 + (z / 0.32) ** 2) * (1 + (z / 1.35) ** 2));
+}
+export function blastImpulse(charge: number, scaled: number): number {
+  const z = Math.max(scaled, CHARGE_SURFACE);
+  return 6.7 * Math.cbrt(charge) * Math.sqrt(1 + (z / 0.23) ** 4) / (z * z * Math.cbrt(1 + (z / 1.55) ** 3));
+}
+export function blastReflection(overpressure: number): number {
+  return 2 * (7 * ATMOSPHERE + 4 * overpressure) / (7 * ATMOSPHERE + overpressure);
+}
+export interface BlastLoad {
+  pressure: number;
+  impulse: number;
+}
+export function blastLoad(charge: number, distance: number): BlastLoad {
+  const scaled = distance / Math.cbrt(charge);
+  const overpressure = blastOverpressure(scaled), reflection = blastReflection(overpressure);
+  return { pressure: overpressure * reflection, impulse: blastImpulse(charge, scaled) * reflection };
+}
+export function blastRange(charge: number, pressure: number): number {
+  const reflected = (z: number) => { const p = blastOverpressure(z); return p * blastReflection(p); };
+  let near = CHARGE_SURFACE, far = MAX_SCALED_DISTANCE;
+  if (reflected(near) <= pressure) return near * Math.cbrt(charge);
+  if (reflected(far) >= pressure) return far * Math.cbrt(charge);
+  for (let i = 0; i < 48; i++) {
+    const mid = Math.sqrt(near * far);
+    if (reflected(mid) > pressure) near = mid; else far = mid;
+  }
+  return Math.sqrt(near * far) * Math.cbrt(charge);
+}
+export function blastReach(charge: number, materials: ReadonlyArray<MaterialDef>): number {
+  const weakest = Math.min(...materials.map((material) => (material.minDamageThreshold ?? 0) * materialStrengths(material).tension));
+  return blastRange(charge, weakest);
 }
 export interface OrdnanceState {
   id: number;
@@ -282,8 +362,8 @@ export interface DestructionEvent {
     | 'explosiveDetonated'
     | 'cannonballImpact';
 }
-export const SIMULATION_VERSION = 'cascade-hierarchy-39';
-export const PHYSICS_OPERATIONS_VERSION = 'cascade-hierarchy-39-physics-operations-1';
+export const SIMULATION_VERSION = 'cascade-hierarchy-40';
+export const PHYSICS_OPERATIONS_VERSION = 'cascade-hierarchy-40-physics-operations-1';
 export const cannonballSpeed = (strength: number): number => 18 + strength * 8;
 export const MAX_EXPLOSIVES = 32;
 export const MAX_CANNONBALLS = 24;
@@ -414,7 +494,7 @@ export const MAX_PHYSICS_OPERATIONS = 10_000;
 export type PhysicsOperation = { tick: number } & (
   | { object: CollisionObject; type: 'setCollisionObject' }
   | { id: string; type: 'removeCollisionObject' }
-  | { command: DestructionCommand; type: 'launchFromEmitter' }
+  | { command: StrikeCommand; type: 'launchFromEmitter' }
 );
 const boundedPoint = (value: unknown): value is Vec3 =>
   Array.isArray(value) &&
@@ -548,15 +628,7 @@ export type WorkerRequest =
   | { enabled: boolean; type: 'player' }
   | { input: PlayerInput; type: 'playerInput' }
   | { type: 'playerRespawn' }
-  | {
-      action: PlayerTool;
-      direction: Vec3;
-      id: number;
-      radius: number;
-      reach?: number;
-      strength: number;
-      type: 'playerAction';
-    }
+  | (PlayerLoad & { direction: Vec3; id: number; reach?: number; type: 'playerAction' })
   | { paused: boolean; type: 'pause' }
   | { speed: number; type: 'speed' }
   | { type: 'reset' }
@@ -588,10 +660,7 @@ export const physicsOperationsVersionFor = (dt: number): string =>
 export const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 export function validateCommand(command: DestructionCommand): boolean {
-  return (
-    ['pointImpact', 'explosion', 'cut', 'placeExplosive', 'detonate', 'cannonball'].includes(
-      command.type,
-    ) &&
+  const base =
     Number.isSafeInteger(command.id) &&
     command.id >= 0 &&
     Number.isSafeInteger(command.tick) &&
@@ -604,6 +673,17 @@ export function validateCommand(command: DestructionCommand): boolean {
     Array.isArray(command.direction) &&
     command.direction.length === 3 &&
     command.direction.every((n) => Number.isFinite(n) && Math.abs(n) <= 1.01) &&
+    (command.fragmentId === undefined ||
+      ((command.type === 'placeExplosive' || command.type === 'pointImpact') &&
+        Number.isSafeInteger(command.fragmentId) &&
+        command.fragmentId >= 0));
+  if (!base) return false;
+  if (isChargeCommand(command)) {
+    return Number.isFinite(command.charge) && command.charge >= MIN_CHARGE && command.charge <= MAX_CHARGE;
+  }
+  if (command.type === 'detonate') return true;
+  return (
+    ['pointImpact', 'cut', 'cannonball'].includes(command.type) &&
     (command.damageProgram === undefined || ['radial', 'capsule', 'shear', 'impactSpread'].includes(command.damageProgram)) &&
     (command.minRadius === undefined || (Number.isFinite(command.minRadius) && command.minRadius >= 0 && command.minRadius <= command.radius)) &&
     (command.end === undefined || boundedPoint(command.end)) &&
@@ -613,10 +693,6 @@ export function validateCommand(command: DestructionCommand): boolean {
     Number.isFinite(command.strength) &&
     command.strength > 0 &&
     command.strength <= 10 &&
-    (command.fragmentId === undefined ||
-      ((command.type === 'placeExplosive' || command.type === 'pointImpact') &&
-        Number.isSafeInteger(command.fragmentId) &&
-        command.fragmentId >= 0)) &&
     (command.impulse === undefined ||
       (command.type === 'pointImpact' &&
         command.fragmentId !== undefined &&

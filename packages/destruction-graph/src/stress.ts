@@ -1,12 +1,7 @@
-import type { MaterialDef, Vec3 } from '../../destruction-domain/src/index';
+import { materialStrengths, type Strengths, type Vec3 } from '../../destruction-domain/src/index';
+export { materialStrengths, type Strengths };
 import type { BondSection } from './equilibrium';
 
-export interface Strengths {
-  bending: number;
-  compression: number;
-  shear: number;
-  tension: number;
-}
 export interface BondUtilization {
   bending: number;
   combined: number;
@@ -14,14 +9,6 @@ export interface BondUtilization {
   shear: number;
   tension: number;
   torsion: number;
-}
-export function materialStrengths(material: MaterialDef): Strengths {
-  return {
-    bending: material.bendingStrength ?? 4e6,
-    compression: material.compressionStrength ?? 25e6,
-    shear: material.shearStrength ?? 2e6,
-    tension: material.tensionStrength ?? 2.4e6,
-  };
 }
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 export function bondUtilization(

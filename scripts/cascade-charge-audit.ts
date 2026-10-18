@@ -1,21 +1,25 @@
-import { BondState, type DamageProgramDescriptor } from '../packages/destruction-domain/src/index';
+import { BondState, blastLoad, materialStrengths, type BlastProgram } from '../packages/destruction-domain/src/index';
 import type { DestructionSimulation } from '../packages/destruction-physics/src/index';
-import { chunkDamageFalloff } from '../packages/destruction-graph/src/shaders';
+import { chunkDamageFalloff, materialOf } from '../packages/destruction-graph/src/shaders';
 
 /** Capture A6 before B2 or Rapier changes the result of the single-charge audit. */
-export function auditMaximumCharge(sim: DestructionSimulation, expected: DamageProgramDescriptor) {
+export function auditMaximumCharge(sim: DestructionSimulation, expected: BlastProgram) {
   const graph = sim.graph;
+  const breaks = (node: number, distance: number) => {
+    const material = materialOf(graph.manifest, node);
+    return !!material && blastLoad(expected.charge, distance).pressure >= materialStrengths(material).tension;
+  };
   const apply = graph.applyFracture.bind(graph);
   let report: object | undefined;
   graph.applyFracture = (commands, positions) => {
-    if (!commands.programs.some((program) => program.damage === expected.damage)) return apply(commands, positions);
+    if (!commands.programs.some((program) => program.type === 'blast' && program.charge === expected.charge)) return apply(commands, positions);
     const initialActive = graph.activeChunks.slice();
     const initialHealth = graph.chunkHealth.slice();
     const initialBonds = graph.manifest.bonds.length;
     const result = apply(commands, positions);
     const chunks = graph.manifest.fragments.map((fragment, index) => ({
       index, id: fragment.id, parent: fragment.parent, depth: fragment.depth, element: fragment.element,
-      core: chunkDamageFalloff(expected, fragment, fragment.position) === 1,
+      core: chunkDamageFalloff(expected, fragment, materialOf(graph.manifest, index), fragment.position) === 1,
       activeBefore: !!initialActive[index], activeAfter: !!graph.activeChunks[index],
       healthBefore: initialHealth[index], healthAfter: graph.chunkHealth[index],
     }));
@@ -25,7 +29,7 @@ export function auditMaximumCharge(sim: DestructionSimulation, expected: DamageP
     const coreBonds = graph.manifest.bonds.map((bond, index) => {
       const point = bond.centroid ?? bond.section?.point;
       return { index, id: bond.id, a: bond.a, b: bond.b, inherited: bond.parentBond,
-        core: !!point && Math.hypot(...point.map((value, axis) => value - expected.position[axis]!)) <= expected.minRadius,
+        core: !!point && breaks(bond.a, Math.hypot(...point.map((value, axis) => value - expected.position[axis]!))),
         created: index >= initialBonds, state: graph.states[index], damage: graph.damage[index] };
     }).filter((bond) => bond.core);
     const outside = new Set(children.filter((chunk) => !chunk.core).map((chunk) => chunk.id));

@@ -31,12 +31,16 @@ const orange = { r: 1, g: 0.38, b: 0.09 }
 const soot = new THREE.Color('#4a463f')
 const haze = new THREE.Color('#7a7569')
 
-export type Munition = { readonly name: string; readonly speed: number; readonly flight: number; readonly dive: number; readonly penetration: number; readonly fuse: number; readonly radius: number; readonly minRadius: number; readonly strength: number }
+export type Munition = { readonly name: string; readonly speed: number; readonly flight: number; readonly dive: number; readonly charge: number; readonly depth: number }
 
 export const MUNITIONS = {
-  missile: { name: 'Cruise missile', speed: 250, flight: 1.1, dive: 0.1, penetration: 0.4, fuse: 0, radius: 10, minRadius: 5, strength: 10 },
-  bomb: { name: 'Penetrating bomb', speed: 300, flight: 1, dive: 1.25, penetration: 3, fuse: 0.04, radius: 7, minRadius: 3.5, strength: 10 },
+  missile: { name: 'Cruise missile', speed: 250, flight: 1.1, dive: 0.1, charge: 200, depth: 0 },
+  bomb: { name: 'Penetrating bomb', speed: 300, flight: 1, dive: 1.25, charge: 250, depth: 3 },
 } satisfies Record<string, Munition>
+
+const UNIT_FIREBALL_CHARGE = 150
+
+export const fireball = (munition: Munition) => Math.cbrt(munition.charge / UNIT_FIREBALL_CHARGE)
 
 const FIRE_LIFE = 12
 
@@ -100,11 +104,11 @@ export class StrikeEffects {
     streak.frustumCulled = false
     streak.visible = false
     this.group.add(streak)
-    this.missiles.push({ from: to.clone().addScaledVector(direction, -length), to: to.clone(), direction, length, travelled: 0, fuse: munition.fuse, munition, streak, onImpact })
+    this.missiles.push({ from: to.clone().addScaledVector(direction, -length), to: to.clone(), direction, length, travelled: 0, fuse: munition.depth / munition.speed, munition, streak, onImpact })
   }
 
   detonate(at: THREE.Vector3, direction: THREE.Vector3, munition: Munition) {
-    const scale = munition.radius / 9
+    const scale = fireball(munition)
     this.light.position.copy(at).addScaledVector(direction, -3)
     this.flashLevel = Math.min(1, this.flashLevel + scale)
     const random = () => this.random()
@@ -175,7 +179,7 @@ export class StrikeEffects {
       if (missile.fuse > 0) continue
       this.group.remove(missile.streak)
       this.missiles.splice(i, 1)
-      const at = missile.to.clone().addScaledVector(missile.direction, missile.munition.penetration)
+      const at = missile.to.clone().addScaledVector(missile.direction, missile.munition.depth)
       at.y = Math.max(0.6, at.y)
       this.detonate(at, missile.direction, missile.munition)
       missile.onImpact(at, missile.direction, missile.munition)

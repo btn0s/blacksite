@@ -1,13 +1,18 @@
 import {
   BondState,
   TRANSFORM_STRIDE,
+  blastLoad,
+  type BlastProgram,
   type DamageProgramDescriptor,
   type DestructibleManifest,
+  type MaterialDef,
+  type ProfileProgram,
   type FractureCommandBuffer,
   type FragmentDef,
   type Quat,
   type Vec3,
 } from '../../destruction-domain/src/index';
+import { materialStrengths } from './stress';
 
 /** Read-only view supplied to a Blast-style graph damage program. */
 export interface GraphShaderContext {
@@ -25,10 +30,18 @@ export interface GraphShaderContext {
 const distance = (a: Vec3, b: Vec3): number => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const dot = (a: Vec3, b: Vec3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const subtract = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-function falloff(desc: DamageProgramDescriptor, d: number): number {
+function profileFalloff(desc: ProfileProgram, d: number): number {
   if (d <= desc.minRadius) return 1;
   if (d >= desc.maxRadius) return 0;
   return 1 - (d - desc.minRadius) / (desc.maxRadius - desc.minRadius);
+}
+function blastDose(desc: BlastProgram, d: number, material: MaterialDef | undefined): number {
+  if (d >= desc.maxRadius) return 0;
+  const strength = material ? materialStrengths(material).tension : Infinity;
+  return blastLoad(desc.charge, d).pressure / strength;
+}
+function falloff(desc: DamageProgramDescriptor, d: number, material: MaterialDef | undefined): number {
+  return desc.type === 'blast' ? Math.min(1, blastDose(desc, d, material)) : profileFalloff(desc, d);
 }
 function damageDistance(desc: DamageProgramDescriptor, point: Vec3): number {
   if (desc.type !== 'capsule' || !desc.end) return distance(point, desc.position);
@@ -37,11 +50,17 @@ function damageDistance(desc: DamageProgramDescriptor, point: Vec3): number {
   return distance(point, desc.position.map((x, i) => x + t * v[i]!) as Vec3);
 }
 /** Reference radial/capsule linear profile sampled at a bond centroid. */
-export function damageFalloff(desc: DamageProgramDescriptor, point: Vec3): number {
-  return falloff(desc, damageDistance(desc, point));
+export function damageFalloff(desc: ProfileProgram, point: Vec3): number {
+  return profileFalloff(desc, damageDistance(desc, point));
+}
+export function materialOf(manifest: DestructibleManifest, node: number): MaterialDef | undefined {
+  return manifest.materials.find((m) => m.id === manifest.fragments[node]!.material);
 }
 /** Chunk health samples the nearest point of its local AABB in its current pose. */
-export function chunkDamageFalloff(desc: DamageProgramDescriptor, chunk: FragmentDef, center: Vec3, rotation?: Quat): number {
+export function chunkDamageFalloff(desc: DamageProgramDescriptor, chunk: FragmentDef, material: MaterialDef | undefined, center: Vec3, rotation?: Quat): number {
+  return falloff(desc, chunkDistance(desc, chunk, center, rotation), material);
+}
+function chunkDistance(desc: DamageProgramDescriptor, chunk: FragmentDef, center: Vec3, rotation?: Quat): number {
   const local = (point: Vec3): Vec3 => {
     const [x, y, z] = subtract(point, center);
     if (!rotation) return [x, y, z];
@@ -93,7 +112,7 @@ export function chunkDamageFalloff(desc: DamageProgramDescriptor, chunk: Fragmen
       squared = Math.min(squared, distanceSquared(t));
     }
   }
-  return falloff(desc, Math.sqrt(squared));
+  return Math.sqrt(squared);
 }
 function position(ctx: GraphShaderContext, node: number): Vec3 {
   if (!ctx.positions) return ctx.manifest.fragments[node]!.position;
@@ -117,31 +136,35 @@ function bondPosition(ctx: GraphShaderContext, index: number): Vec3 {
   const pa = position(ctx, a), pb = position(ctx, b);
   return pa.map((x, axis) => (x + pb[axis]!) / 2) as Vec3;
 }
-function normalized(ctx: GraphShaderContext, node: number, damage: number): number {
-  const material = ctx.manifest.materials.find((m) => m.id === ctx.manifest.fragments[node]!.material);
-  const health = material?.health ?? 1;
-  const amount = health > 0 ? damage / health : 1;
+function filtered(material: MaterialDef | undefined, amount: number): number {
   return amount > (material?.minDamageThreshold ?? 0) ? Math.min(amount, material?.maxDamageThreshold ?? 1) : 0;
+}
+function normalized(ctx: GraphShaderContext, node: number, damage: number): number {
+  const material = materialOf(ctx.manifest, node);
+  const health = material?.health ?? 1;
+  return filtered(material, health > 0 ? damage / health : 1);
 }
 function liveBond(ctx: GraphShaderContext, bond: number): boolean {
   return ctx.states[bond] !== BondState.Broken && ctx.damage[bond]! < 1 && !!ctx.activeChunks[ctx.endpointsA[bond]!] && (ctx.manifest.bonds[bond]!.b === -1 || !!ctx.activeChunks[ctx.endpointsB[bond]!]);
 }
 function empty(desc: DamageProgramDescriptor): FractureCommandBuffer {
-  return { bonds: [], chunks: [], programs: [{ ...desc, position: [...desc.position], ...(desc.end ? { end: [...desc.end] } : {}), ...(desc.normal ? { normal: [...desc.normal] } : {}) }] };
+  return { bonds: [], chunks: [], programs: [{ ...desc, position: [...desc.position], ...(desc.type !== 'blast' && desc.end ? { end: [...desc.end] } : {}), ...(desc.normal ? { normal: [...desc.normal] } : {}) }] };
 }
-function damageBond(ctx: GraphShaderContext, desc: DamageProgramDescriptor, result: FractureCommandBuffer, bond: number, weight: number): void {
+function damageBond(ctx: GraphShaderContext, desc: ProfileProgram, result: FractureCommandBuffer, bond: number, weight: number): void {
   if (!(weight > 0) || !liveBond(ctx, bond)) return;
   const a = ctx.endpointsA[bond]!, b = ctx.endpointsB[bond]!;
   const health = Math.min(normalized(ctx, a, desc.damage), normalized(ctx, b, desc.damage)) * weight;
   if (health > 0) result.bonds.push({ bond, health, program: 0 });
 }
-function damageChunk(ctx: GraphShaderContext, desc: DamageProgramDescriptor, result: FractureCommandBuffer, chunk: number): void {
+function chunkRotation(ctx: GraphShaderContext, chunk: number): Quat | undefined {
+  const o = chunk * TRANSFORM_STRIDE;
+  return ctx.positions ? [ctx.positions[o + 3]!, ctx.positions[o + 4]!, ctx.positions[o + 5]!, ctx.positions[o + 6]!] : undefined;
+}
+function damageChunk(ctx: GraphShaderContext, desc: ProfileProgram, result: FractureCommandBuffer, chunk: number): void {
   if (!ctx.activeChunks[chunk] || !(ctx.chunkHealth[chunk]! > 0)) return;
   // Graph shaders fracture bonds throughout the falloff. In-place support demotion
   // is restricted to the full-damage core, with the material's threshold and cap.
-  const o = chunk * TRANSFORM_STRIDE;
-  const rotation: Quat | undefined = ctx.positions ? [ctx.positions[o + 3]!, ctx.positions[o + 4]!, ctx.positions[o + 5]!, ctx.positions[o + 6]!] : undefined;
-  if (chunkDamageFalloff(desc, ctx.manifest.fragments[chunk]!, position(ctx, chunk), rotation) < 1) return;
+  if (chunkDamageFalloff(desc, ctx.manifest.fragments[chunk]!, undefined, position(ctx, chunk), chunkRotation(ctx, chunk)) < 1) return;
   const health = normalized(ctx, chunk, desc.damage);
   if (health > 0) result.chunks.push({ chunk, health, program: 0 });
 }
@@ -155,7 +178,7 @@ function closest(ctx: GraphShaderContext, desc: DamageProgramDescriptor): number
   }
   return nearest;
 }
-function radialProfile(ctx: GraphShaderContext, desc: DamageProgramDescriptor): FractureCommandBuffer {
+function radialProfile(ctx: GraphShaderContext, desc: ProfileProgram): FractureCommandBuffer {
   const result = empty(desc);
   for (let bond = 0; bond < ctx.manifest.bonds.length; bond++) {
     if (liveBond(ctx, bond)) damageBond(ctx, desc, result, bond, damageFalloff(desc, bondPosition(ctx, bond)));
@@ -166,15 +189,36 @@ function radialProfile(ctx: GraphShaderContext, desc: DamageProgramDescriptor): 
   }
   return result;
 }
-export function radialGraphShader(ctx: GraphShaderContext, desc: DamageProgramDescriptor): FractureCommandBuffer {
+export function blastGraphShader(ctx: GraphShaderContext, desc: BlastProgram): FractureCommandBuffer {
+  const result = empty(desc);
+  for (let bond = 0; bond < ctx.manifest.bonds.length; bond++) {
+    if (!liveBond(ctx, bond)) continue;
+    const d = distance(bondPosition(ctx, bond), desc.position);
+    if (d >= desc.maxRadius) continue;
+    const a = ctx.endpointsA[bond]!, b = ctx.endpointsB[bond]!;
+    const dose = (node: number) => { const material = materialOf(ctx.manifest, node); return filtered(material, blastDose(desc, d, material)); };
+    const health = Math.min(dose(a), dose(b));
+    if (health > 0) result.bonds.push({ bond, health, program: 0 });
+  }
+  for (let chunk = 0; chunk < ctx.activeChunks.length; chunk++) {
+    if (!ctx.activeChunks[chunk] || !(ctx.chunkHealth[chunk]! > 0)) continue;
+    const material = materialOf(ctx.manifest, chunk);
+    const dose = blastDose(desc, chunkDistance(desc, ctx.manifest.fragments[chunk]!, position(ctx, chunk), chunkRotation(ctx, chunk)), material);
+    if (dose < 1) continue;
+    const health = filtered(material, dose);
+    if (health > 0) result.chunks.push({ chunk, health, program: 0 });
+  }
+  return result;
+}
+export function radialGraphShader(ctx: GraphShaderContext, desc: ProfileProgram): FractureCommandBuffer {
   return radialProfile(ctx, { ...desc, type: 'radial' });
 }
-export function capsuleGraphShader(ctx: GraphShaderContext, desc: DamageProgramDescriptor): FractureCommandBuffer {
+export function capsuleGraphShader(ctx: GraphShaderContext, desc: ProfileProgram): FractureCommandBuffer {
   if (!desc.end) throw new Error('Capsule damage requires both endpoints');
   return radialProfile(ctx, { ...desc, type: 'capsule' });
 }
 /** Blast's directional walk and 1 - abs(dot(direction, interfaceNormal)) shear weight. */
-export function shearGraphShader(ctx: GraphShaderContext, desc: DamageProgramDescriptor): FractureCommandBuffer {
+export function shearGraphShader(ctx: GraphShaderContext, desc: ProfileProgram): FractureCommandBuffer {
   const result = empty(desc), first = closest(ctx, desc);
   if (first < 0) return result;
   if (!desc.normal || !(Math.hypot(...desc.normal) > 0)) throw new Error('Shear damage requires a direction');
@@ -206,7 +250,7 @@ export function shearGraphShader(ctx: GraphShaderContext, desc: DamageProgramDes
   return result;
 }
 /** Breadth-first bond traversal with distance accumulated along graph edges, including world bonds. */
-export function impactSpreadGraphShader(ctx: GraphShaderContext, desc: DamageProgramDescriptor): FractureCommandBuffer {
+export function impactSpreadGraphShader(ctx: GraphShaderContext, desc: ProfileProgram): FractureCommandBuffer {
   const result = empty(desc), first = closest(ctx, desc);
   if (first < 0) return result;
   const queue: Array<{ node: number; distance: number }> = [{ node: first, distance: 0 }];
@@ -224,7 +268,7 @@ export function impactSpreadGraphShader(ctx: GraphShaderContext, desc: DamagePro
       const other = ctx.endpointsA[bond] === current.node ? ctx.endpointsB[bond]! : ctx.endpointsA[bond]!;
       const world = ctx.manifest.bonds[bond]!.b === -1;
       const total = current.distance + distance(p, world ? bondPosition(ctx, bond) : position(ctx, other)) * (world ? 2 : 1);
-      const weight = falloff(desc, total);
+      const weight = profileFalloff(desc, total);
       damageBond(ctx, desc, result, bond, weight);
       if (weight > 0 && !world) queue.push({ node: other, distance: total });
     }
@@ -232,6 +276,10 @@ export function impactSpreadGraphShader(ctx: GraphShaderContext, desc: DamagePro
   return result;
 }
 export function generateDamageProgram(ctx: GraphShaderContext, desc: DamageProgramDescriptor): FractureCommandBuffer {
+  if (desc.type === 'blast') {
+    if (![desc.charge, desc.maxRadius, ...desc.position].every(Number.isFinite) || !(desc.charge > 0) || !(desc.maxRadius > 0)) throw new Error('Invalid damage program descriptor');
+    return blastGraphShader(ctx, desc);
+  }
   if (![desc.damage, desc.minRadius, desc.maxRadius, ...desc.position, ...(desc.end ?? []), ...(desc.normal ?? [])].every(Number.isFinite) || desc.damage < 0 || desc.minRadius < 0 || desc.maxRadius < desc.minRadius || !(desc.maxRadius > 0)) throw new Error('Invalid damage program descriptor');
   switch (desc.type) {
     case 'radial': return radialGraphShader(ctx, desc);

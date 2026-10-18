@@ -106,7 +106,6 @@ export class SecondaryFragmentRenderer {
     ) => Material,
     pool?: GPUTransformPool,
     private readonly profile = false,
-    private readonly addsPerUpdate = Number.POSITIVE_INFINITY,
     private readonly edgeSegmentLength = 0.1,
   ) {
     this.ownsPool = !pool;
@@ -119,7 +118,7 @@ export class SecondaryFragmentRenderer {
     previous: SecondaryFractureFrame | undefined,
     blend: number,
     diagnostic?: Material,
-    _tick = -1,
+    until = Number.POSITIVE_INFINITY,
   ): void {
     this.resetUpdateStats();
     if (!frame) {
@@ -144,7 +143,7 @@ export class SecondaryFragmentRenderer {
       throw new Error('Secondary destruction frame is incomplete');
     }
     if (frame.revision !== this.revision || fragments.length !== this.count) {
-      this.synchronize(frame);
+      this.synchronize(frame, until);
     }
     const old =
       previous &&
@@ -221,7 +220,7 @@ export class SecondaryFragmentRenderer {
     if (this.ownsPool) this.pool.flush();
   }
 
-  private synchronize(frame: SecondaryFractureFrame): void {
+  private synchronize(frame: SecondaryFractureFrame, until: number): void {
     this.shadowRevision++;
     if (frame.revision < this.revision) {
       this.rebuild(frame);
@@ -237,54 +236,19 @@ export class SecondaryFragmentRenderer {
         this.remove(id, entry);
       }
     }
-    const added: Array<{ fragment: SecondaryFragmentDef; surfaces: Array<PendingSurface> }> = [];
-    const demand = new Map<string, { instances: number; vertices: number }>();
-    let backlog = false;
+    let built = 0;
     for (const fragment of current.values()) {
       if (this.entries.has(fragment.id)) {
         continue;
       }
-      if (added.length >= this.addsPerUpdate) {
-        backlog = true;
-        break;
+      if (built > 0 && performance.now() >= until) {
+        this.poseFrame = undefined;
+        return;
       }
-      const surfaces = this.surfaces(fragment);
-      for (const surface of surfaces) {
-        const need = demand.get(surface.key) ?? { instances: 0, vertices: 0 };
-        need.instances++;
-        need.vertices += surface.vertices;
-        demand.set(surface.key, need);
-      }
-      added.push({ fragment, surfaces });
+      this.insert(fragment, this.surfaces(fragment));
+      built++;
     }
-    for (const [key, need] of demand) {
-      const batch = this.batches.get(key);
-      if (!batch) {
-        continue;
-      }
-      const instances = batch.liveInstances + need.instances;
-      const vertices = batch.liveVertices + need.vertices;
-      if (instances > batch.mesh.maxInstanceCount || vertices > batch.vertexCapacity) {
-        const started = this.profile ? performance.now() : 0;
-        if (instances > batch.mesh.maxInstanceCount) batch.mesh.setInstanceCount(Math.ceil(instances * CAPACITY_HEADROOM));
-        if (vertices > batch.vertexCapacity) {
-          batch.vertexCapacity = Math.ceil(vertices * CAPACITY_HEADROOM);
-          batch.mesh.setGeometrySize(batch.vertexCapacity, 0);
-        }
-        this.stats.secondaryBatchGrowths++; this.stats.secondaryGrowthsThisUpdate++;
-        if (this.profile) this.timings.growthMs += performance.now() - started;
-      }
-      if (need.vertices > batch.mesh.unusedVertexCount) {
-        const started = this.profile ? performance.now() : 0;
-        batch.mesh.optimize();
-        if (this.profile) this.timings.compactionMs += performance.now() - started;
-      }
-    }
-    for (const { fragment, surfaces } of added) {
-      this.insert(fragment, surfaces, demand);
-    }
-    if (added.length) this.poseFrame = undefined;
-    if (backlog) return;
+    if (built) this.poseFrame = undefined;
     this.revision = frame.revision;
     this.count = frame.fragments.length;
   }
@@ -316,16 +280,10 @@ export class SecondaryFragmentRenderer {
     return result;
   }
 
-  private insert(
-    fragment: SecondaryFragmentDef,
-    surfaces: Array<PendingSurface>,
-    demand: Map<string, { instances: number; vertices: number }>,
-  ): void {
+  private insert(fragment: SecondaryFragmentDef, surfaces: Array<PendingSurface>): void {
     const parts: Array<SecondaryPart> = [];
     for (const surface of surfaces) {
-      const batch =
-        this.batches.get(surface.key) ??
-        this.createBatch(surface.key, surface.material, demand.get(surface.key)!);
+      const batch = this.reserve(surface);
       const geometry = batch.mesh.addGeometry(surface.geometry);
       const instance = batch.mesh.addInstance(geometry);
       batch.mesh.bind(instance, this.pool.slots.get(`secondary:${fragment.id}`) ?? 0);
@@ -349,6 +307,29 @@ export class SecondaryFragmentRenderer {
     });
   }
 
+  private reserve(surface: PendingSurface): SecondaryBatch {
+    const batch = this.batches.get(surface.key);
+    if (!batch) return this.createBatch(surface.key, surface.material, surface.vertices);
+    const instances = batch.liveInstances + 1;
+    const vertices = batch.liveVertices + surface.vertices;
+    if (instances > batch.mesh.maxInstanceCount || vertices > batch.vertexCapacity) {
+      const started = this.profile ? performance.now() : 0;
+      if (instances > batch.mesh.maxInstanceCount) batch.mesh.setInstanceCount(Math.ceil(instances * CAPACITY_HEADROOM));
+      if (vertices > batch.vertexCapacity) {
+        batch.vertexCapacity = Math.ceil(vertices * CAPACITY_HEADROOM);
+        batch.mesh.setGeometrySize(batch.vertexCapacity, 0);
+      }
+      this.stats.secondaryBatchGrowths++; this.stats.secondaryGrowthsThisUpdate++;
+      if (this.profile) this.timings.growthMs += performance.now() - started;
+    }
+    if (surface.vertices > batch.mesh.unusedVertexCount) {
+      const started = this.profile ? performance.now() : 0;
+      batch.mesh.optimize();
+      if (this.profile) this.timings.compactionMs += performance.now() - started;
+    }
+    return batch;
+  }
+
   private remove(id: number, entry: SecondaryEntry): void {
     for (const part of entry.parts) {
       const { batch } = part;
@@ -361,18 +342,11 @@ export class SecondaryFragmentRenderer {
     this.entries.delete(id);
   }
 
-  private createBatch(
-    key: string,
-    material: Material,
-    need: { instances: number; vertices: number },
-  ): SecondaryBatch {
-    const vertexCapacity = Math.max(
-      MIN_VERTEX_CAPACITY,
-      Math.ceil(need.vertices * CAPACITY_HEADROOM),
-    );
+  private createBatch(key: string, material: Material, vertices: number): SecondaryBatch {
+    const vertexCapacity = Math.max(MIN_VERTEX_CAPACITY, Math.ceil(vertices * CAPACITY_HEADROOM));
     const mesh = new PooledBatchedMesh(
       this.pool,
-      Math.max(MIN_INSTANCE_CAPACITY, Math.ceil(need.instances * CAPACITY_HEADROOM)),
+      MIN_INSTANCE_CAPACITY,
       vertexCapacity,
       material,
     );
@@ -404,21 +378,8 @@ export class SecondaryFragmentRenderer {
     for (const fragment of frame.fragments) {
       unique.set(fragment.id, fragment);
     }
-    const pending = [...unique.values()].map((fragment) => ({
-      fragment,
-      surfaces: this.surfaces(fragment),
-    }));
-    const demand = new Map<string, { instances: number; vertices: number }>();
-    for (const { surfaces } of pending) {
-      for (const surface of surfaces) {
-        const need = demand.get(surface.key) ?? { instances: 0, vertices: 0 };
-        need.instances++;
-        need.vertices += surface.vertices;
-        demand.set(surface.key, need);
-      }
-    }
-    for (const { fragment, surfaces } of pending) {
-      this.insert(fragment, surfaces, demand);
+    for (const fragment of unique.values()) {
+      this.insert(fragment, this.surfaces(fragment));
     }
     this.revision = frame.revision;
     this.count = frame.fragments.length;

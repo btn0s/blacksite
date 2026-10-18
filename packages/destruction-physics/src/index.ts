@@ -58,6 +58,14 @@ import {
   type SecondaryFragmentDef,
   type SecondaryFractureFrame,
   type DestructionCommand,
+  type ChargeCommand,
+  type StrikeCommand,
+  blastLoad,
+  blastRange,
+  blastReach,
+  materialStrengths,
+  MAX_CHARGE,
+  MIN_CHARGE,
   type FractureCommandBuffer,
   type DestructionEvent,
   type OrdnanceState,
@@ -201,7 +209,8 @@ interface PressureSource {
   group?: { nodes: number[]; affected: boolean; split?: boolean };
 }
 interface PressureBurst {
-  command: DestructionCommand;
+  command: ChargeCommand;
+  reach: number;
   sources: Map<number, PressureSource>;
   detached: Set<number>;
 }
@@ -232,16 +241,14 @@ interface PressureLaunch extends Motion {
   speed: number;
 }
 interface Explosive {
+  charge: number;
   createdTick: number;
-  minRadius?: number;
   fragment?: number;
   id: number;
   localPosition: V;
   localRotation: Q;
-  radius: number;
   secondaryId?: number;
   source: number;
-  strength: number;
 }
 interface Cannonball {
   body: RAPIER.RigidBody;
@@ -258,8 +265,6 @@ export interface DestructionSimulationOptions {
   experimentalBearingReanchor?: boolean;
   /** Fixed step in seconds: 1/60 (default) or 1/30. */
   timestep?: number;
-  /** Blast pressure impulse, N·s/m² per unit command strength. */
-  pressureImpulse?: number;
   rest?: Partial<RestPolicy>;
 }
 
@@ -311,10 +316,8 @@ const CANNONBALL_IMPACT_COOLDOWN = 0.3;
 const CASCADE_COOLDOWN = 40 / 60;
 const CRUSH_CONTACT_FACTOR = 0.1;
 const MAX_CRUSHED_PER_TICK = 16;
-const BRISANCE_FRACTION = 0.5;
+const EXPLOSIVE_RADIUS = 0.16;
 const RETAIN_MIN_MEMBERS = 8;
-/** Pressure integrated over a blast pulse, per unit command strength. */
-export const BLAST_PRESSURE_IMPULSE = 1000;
 /** Kilograms: heavier pressure receivers get proportionally less added speed. */
 const BLAST_LAUNCH_REFERENCE_MASS = 300;
 const RUBBLE_MEMBERS = 4;
@@ -742,7 +745,6 @@ export class DestructionSimulation {
   private readonly physicsOperations: Array<PhysicsOperation> = [];
   private readonly collisionObjects = new Map<string, Array<RAPIER.Collider>>();
   readonly contactWrenches: Float64Array;
-  readonly pressureImpulse: number;
   private readonly landingImpulses: Array<StructuralImpulse> = [];
   private readonly pressureGeometry = new WeakMap<FragmentDef, Array<PressureFace>>();
   /**
@@ -768,7 +770,6 @@ export class DestructionSimulation {
   private readonly crushCapacity: Float64Array;
   private crushQueue: Array<number> = [];
   private crushBudget: number;
-  private detonated: Array<DestructionCommand> = [];
   private crushedFragments = 0;
   private crushedMass = 0;
   tick = 0;
@@ -992,10 +993,6 @@ export class DestructionSimulation {
     options: DestructionSimulationOptions = {},
   ) {
     this.experimentalBearingReanchor = options.experimentalBearingReanchor ?? true;
-    this.pressureImpulse = options.pressureImpulse ?? BLAST_PRESSURE_IMPULSE;
-    if (!Number.isFinite(this.pressureImpulse) || this.pressureImpulse < 0) {
-      throw new Error("Blast pressure impulse must be finite and nonnegative.");
-    }
     this.dt = dt;
     this.tickScale = Math.max(1, Math.round(dt / FIXED_DT));
     this.rest = { speed: SETTLE_SPEED, spin: SETTLE_SPIN, seconds: SETTLE_SECONDS, ...options.rest };
@@ -1224,8 +1221,8 @@ export class DestructionSimulation {
       direction: [...command.direction] as Vec3,
       position: [...command.position] as Vec3,
       tick: Math.max(this.tick + 1, command.tick),
-      ...(command.impulse ? { impulse: [...command.impulse] as Vec3 } : {}),
-    };
+      ...('impulse' in command && command.impulse ? { impulse: [...command.impulse] as Vec3 } : {}),
+    } as DestructionCommand;
     this.seen.add(key);
     this.queue.push(accepted);
     this.queue.sort(commandOrder);
@@ -1346,7 +1343,7 @@ export class DestructionSimulation {
     const direction = launch.direction.map(
       (n) => n / Math.hypot(...launch.direction),
     ) as Vec3;
-    const command: DestructionCommand = {
+    const command: StrikeCommand = {
       direction,
       id,
       position: launch.muzzle.map((n, i) => n + direction[i]! * offset) as Vec3,
@@ -1657,8 +1654,9 @@ export class DestructionSimulation {
       !Number.isFinite(Math.hypot(...request.direction)) ||
       Math.hypot(...request.direction) < 0.001 ||
       !isId(request.id) ||
-      !isPositive(request.radius) ||
-      !isPositive(request.strength) ||
+      (request.action === "explosive"
+        ? !isPositive(request.charge)
+        : !isPositive(request.radius) || !isPositive(request.strength)) ||
       (request.reach !== undefined && !isPositive(request.reach))
     ) {
       return { message: "Invalid player action." };
@@ -1668,7 +1666,7 @@ export class DestructionSimulation {
     const radius =
       request.action === "cannonball"
         ? clamp(request.radius, 0.08, 0.75)
-        : request.radius;
+        : undefined;
     const target = this.inspectPlayerAim(
       request.action,
       direction,
@@ -1680,12 +1678,12 @@ export class DestructionSimulation {
     }
     let command: DestructionCommand;
     if (request.action === "cannonball") {
-      const distance = 0.62 + radius;
+      const distance = 0.62 + radius!;
       command = {
         direction,
         id: request.id,
         position: state.eye.map((n, i) => n + direction[i]! * distance) as Vec3,
-        radius,
+        radius: radius!,
         source: 1,
         strength: clamp(request.strength, 0.4, 5),
         tick: this.tick + 1,
@@ -1693,12 +1691,11 @@ export class DestructionSimulation {
       };
     } else if (request.action === "explosive") {
       command = {
+        charge: clamp(request.charge, MIN_CHARGE, MAX_CHARGE),
         direction: target.normal!,
         id: request.id,
         position: target.position!,
-        radius: clamp(radius, 0.1, 10),
         source: 1,
-        strength: clamp(request.strength, 0.1, 10),
         tick: this.tick + 1,
         type: "placeExplosive",
         ...(target.fragmentId === undefined
@@ -1935,7 +1932,7 @@ export class DestructionSimulation {
     this.cullOutOfBounds();
     this.crushFragments();
     const damageCommands = this.resolveOrdnance(commands);
-    this.pulverise();
+    this.pulverise(damageCommands);
     const pressure = this.collectBlastPressure(damageCommands);
     const structuralCommands = this.fractureImpacts(damageCommands);
     this.graph.breakBudget = Math.max(
@@ -2268,7 +2265,7 @@ export class DestructionSimulation {
           ...c,
           direction: [...c.direction],
           position: [...c.position],
-          ...(c.impulse ? { impulse: [...c.impulse] as Vec3 } : {}),
+          ...('impulse' in c && c.impulse ? { impulse: [...c.impulse] as Vec3 } : {}),
         })),
       scenario: this.manifest.scenario,
       simulationVersion: this.physicsOperations.length
@@ -2364,7 +2361,6 @@ export class DestructionSimulation {
     this.pressureDescendants.clear();
     this.attachedVolumes.clear();
     this.crushQueue = [];
-    this.detonated = [];
     this.crushLoad.fill(0);
     this.fractureSplits = 0;
     this.impactFractures = 0;
@@ -3419,7 +3415,7 @@ export class DestructionSimulation {
 
   private releaseAttached(
     child: SecondaryBody | undefined,
-    command: DestructionCommand,
+    command: StrikeCommand,
     seed: number,
   ): void {
     if (
@@ -3599,7 +3595,7 @@ export class DestructionSimulation {
   private applyImpactSubgraphFracture(
     fracture: ImpactSubgraphFractureCommand,
     context: {
-      command: DestructionCommand;
+      command: StrikeCommand;
       rootIndex: number;
       primary?: number;
       child?: SecondaryBody;
@@ -3918,9 +3914,8 @@ export class DestructionSimulation {
           hit.point.y - command.position[1],
           hit.point.z - command.position[2],
         );
-        const dose =
-          command.strength * Math.max(0, 1 - distance / command.radius);
-        if (dose < Math.max(0.7, material.strength * 0.65)) {
+        const dose = blastLoad(command.charge, distance).pressure / materialStrengths(material).tension;
+        if (dose < 1) {
           continue;
         }
         const previous = candidates.get(index);
@@ -4300,7 +4295,7 @@ export class DestructionSimulation {
       result.push({
         id: charge.id,
         position: tuple(position),
-        radius: 0.16,
+        radius: EXPLOSIVE_RADIUS,
         rotation: [rotation.x, rotation.y, rotation.z, rotation.w],
         source: charge.source,
         type: "explosive",
@@ -4365,7 +4360,7 @@ export class DestructionSimulation {
         const target =
           command.fragmentId === undefined
             ? undefined
-            : this.liveTarget(command.fragmentId, position, command.radius);
+            : this.liveTarget(command.fragmentId, position, EXPLOSIVE_RADIUS);
         const fragment = target?.primary,
           secondary = target?.child;
         const parent =
@@ -4377,6 +4372,7 @@ export class DestructionSimulation {
             ? undefined
             : inverse(this.rotation(fragment));
         this.explosives.push({
+          charge: command.charge,
           createdTick: this.tick,
           fragment,
           id: command.id,
@@ -4391,28 +4387,21 @@ export class DestructionSimulation {
           localRotation: inverseRotation
             ? multiply(inverseRotation, rotation)
             : rotation,
-          radius: command.radius,
-          minRadius: command.minRadius,
           secondaryId: secondary?.fragment.id,
           source: command.source,
-          strength: command.strength,
         });
       } else if (command.type === "detonate") {
         for (const charge of this.explosives) {
           const { position, rotation } = this.explosiveTransform(charge);
-          const blast: DestructionCommand = {
+          effects.push({
+            charge: charge.charge,
             direction: tuple(rotate(rotation, { x: 0, y: 0, z: 1 })),
             id: this.cascadeId++,
             position: tuple(position),
-            radius: charge.radius,
-            minRadius: charge.minRadius,
             source: ORDNANCE_SOURCE,
-            strength: charge.strength,
             tick: this.tick,
             type: "explosion",
-          };
-          effects.push(blast);
-          this.detonated.push(blast);
+          });
         }
         this.explosives.length = 0;
       } else if (command.type === "cannonball") {
@@ -4432,7 +4421,7 @@ export class DestructionSimulation {
     return effects;
   }
 
-  private createCannonball(command: DestructionCommand): void {
+  private createCannonball(command: StrikeCommand): void {
     const speed = cannonballSpeed(command.strength);
     const norm = Math.hypot(...command.direction);
     const velocity = {
@@ -5061,11 +5050,11 @@ export class DestructionSimulation {
       this.graph.activeChunks[index] ? this.graph.fragmentMass[index]! : fragment.mass);
   }
 
-  private pulverise(): void {
+  private pulverise(commands: ReadonlyArray<DestructionCommand>): void {
     const crushed = new Set(this.crushQueue);
-    for (const command of this.detonated) {
-      const core =
-        command.radius * BRISANCE_FRACTION * Math.sqrt(command.strength / 2);
+    for (const command of commands) {
+      if (command.type !== "explosion") continue;
+      const cores = new Map<number, number>();
       for (let index = 0; index < this.states.length; index++) {
         if (
           !this.graph.activeChunks[index] ||
@@ -5074,6 +5063,13 @@ export class DestructionSimulation {
           this.retired.has(index)
         ) {
           continue;
+        }
+        const material = this.manifest.fragments[index]!.material;
+        let core = cores.get(material);
+        if (core === undefined) {
+          const definition = this.manifest.materials.find((entry) => entry.id === material);
+          core = definition ? blastRange(command.charge, materialStrengths(definition).compression) : 0;
+          cores.set(material, core);
         }
         const p = this.position(index);
         if (
@@ -5087,7 +5083,6 @@ export class DestructionSimulation {
         }
       }
     }
-    this.detonated = [];
     this.crushQueue = [...crushed].sort(
       (a, b) => this.manifest.fragments[a]!.id - this.manifest.fragments[b]!.id,
     );
@@ -5473,7 +5468,7 @@ export class DestructionSimulation {
       )
         continue;
       const fragmentId = this.manifest.fragments[charge.fragment]!.id;
-      const target = this.liveTarget(fragmentId, position, charge.radius);
+      const target = this.liveTarget(fragmentId, position, EXPLOSIVE_RADIUS);
       const collider =
         target?.child?.collider ??
         (target?.primary === undefined
@@ -6077,7 +6072,7 @@ export class DestructionSimulation {
     island.transformState = undefined;
   }
 
-  private applyTargetedImpulse(command: DestructionCommand): void {
+  private applyTargetedImpulse(command: StrikeCommand): void {
     const impulse = vec(command.impulse!);
     if (!(Math.sqrt(squared(impulse)) > 0)) {
       return;
@@ -6228,16 +6223,15 @@ export class DestructionSimulation {
     for (const command of commands) {
       if (command.type !== "explosion") continue;
       const key = `${command.source}:${command.id}`;
-      const burst: PressureBurst = { command, sources: new Map(), detached: new Set() };
+      const reach = blastReach(command.charge, this.manifest.materials);
+      const burst: PressureBurst = { command, reach, sources: new Map(), detached: new Set() };
       this.pressureBursts.set(key, burst);
       const groups = new Map<Island, NonNullable<PressureSource['group']>>();
       const origin = vec(command.position);
       const affected = new Map<number, number>();
       let magnitude = 0;
-      const minRadius = command.minRadius ?? command.radius * BRISANCE_FRACTION;
-      const edgePressure = (minRadius / command.radius) ** 2;
       const sample = (fragment: FragmentDef, chunk: number, center: V, rotation: Q, child?: SecondaryBody) => {
-        if (Math.hypot(center.x - origin.x, center.y - origin.y, center.z - origin.z) > command.radius + Math.hypot(...fragment.size) / 2) return;
+        if (Math.hypot(center.x - origin.x, center.y - origin.y, center.z - origin.z) > reach + Math.hypot(...fragment.size) / 2) return;
         // Attached refined geometry still belongs to its support node even when
         // that node's original collider has been replaced by retained pieces.
         if (chunk >= 0 && !burst.sources.has(chunk)) {
@@ -6259,16 +6253,11 @@ export class DestructionSimulation {
             const point = { x: center.x + offset.x, y: center.y + offset.y, z: center.z + offset.z };
             const direction = { x: point.x - origin.x, y: point.y - origin.y, z: point.z - origin.z };
             const distance = Math.sqrt(squared(direction));
-            if (!(distance > 1e-6) || distance >= command.radius) continue;
+            if (!(distance > 1e-6) || distance >= reach) continue;
             direction.x /= distance; direction.y /= distance; direction.z /= distance;
             const incidence = -(normal.x * direction.x + normal.y * direction.y + normal.z * direction.z);
             if (!(incidence > 0)) continue;
-            // Subtract and normalize the inverse-square value at the outer edge:
-            // full pressure in the core, continuous decay to zero at the radius.
-            const falloff = distance <= minRadius ? 1
-              : ((minRadius / distance) ** 2 - edgePressure) / (1 - edgePressure);
-            const pressure = this.pressureImpulse * command.strength * falloff;
-            const impulse = pressure * sample.area * exposed * incidence;
+            const impulse = blastLoad(command.charge, distance).impulse * sample.area * exposed * incidence;
             if (!(impulse > 0)) continue;
             const blocker = this.world.castRay(new this.rapier.Ray(origin, direction), Math.max(0, distance - 0.02), true,
               undefined, undefined, undefined, undefined, (collider) => {
@@ -6300,7 +6289,7 @@ export class DestructionSimulation {
       }
       const mass = [...affected.values()].reduce((sum, value) => sum + value, 0);
       this.events.push({ count: affected.size, energy: mass > 0 ? magnitude * magnitude / (2 * mass) : 0,
-        mass, impulse: magnitude, normal: command.direction, radius: command.radius,
+        mass, impulse: magnitude, normal: command.direction, radius: reach,
         position: command.position, tick: this.tick, type: "explosiveDetonated" });
     }
     return result;
@@ -6371,15 +6360,12 @@ export class DestructionSimulation {
     }
   }
 
-  private radialPressure(command: DestructionCommand, fragment: FragmentDef, center: V): V | undefined {
+  private radialPressure(burst: PressureBurst, fragment: FragmentDef, center: V): V | undefined {
+    const { command, reach } = burst;
     const direction = { x: center.x - command.position[0], y: center.y - command.position[1], z: center.z - command.position[2] };
     const distance = Math.sqrt(squared(direction));
-    if (!(distance > 1e-6) || distance >= command.radius) return;
-    const minRadius = command.minRadius ?? command.radius * BRISANCE_FRACTION;
-    const edgePressure = (minRadius / command.radius) ** 2;
-    const falloff = distance <= minRadius ? 1
-      : ((minRadius / distance) ** 2 - edgePressure) / (1 - edgePressure);
-    const magnitude = this.pressureImpulse * command.strength * falloff * volumeOf(fragment) ** (2 / 3);
+    if (!(distance > 1e-6) || distance >= reach) return;
+    const magnitude = blastLoad(command.charge, distance).impulse * volumeOf(fragment) ** (2 / 3);
     if (!(magnitude > 0)) return;
     return { x: direction.x * magnitude / distance, y: direction.y * magnitude / distance, z: direction.z * magnitude / distance };
   }
@@ -6427,7 +6413,7 @@ export class DestructionSimulation {
       const launch = (body: RAPIER.RigidBody, fragment: FragmentDef, point: V) => {
         const receiver = targets.get(body);
         if (receiver) receiver.detached = true;
-        const impulse = this.radialPressure(burst.command, fragment, point);
+        const impulse = this.radialPressure(burst, fragment, point);
         if (impulse) target(body, 0, { command: key, impulse, point, radial: true });
       };
       for (const chunk of burst.detached) {
@@ -6467,7 +6453,7 @@ export class DestructionSimulation {
 
   private applyImpulses(commands: Array<DestructionCommand>): void {
     for (const command of commands) {
-      if (command.type === "cut" || command.type === "explosion") {
+      if (command.type !== "pointImpact") {
         continue;
       }
       if (command.impulse && command.fragmentId !== undefined) {
