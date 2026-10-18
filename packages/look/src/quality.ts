@@ -7,13 +7,15 @@ export interface QualitySettings {
   readonly aberration: boolean;
   readonly grain: boolean;
   readonly maxPixelRatio: number;
+  readonly bake: { readonly directions: number; readonly sky: number; readonly sun: number };
+  readonly shafts: number;
   readonly atmosphere: { readonly view: readonly [number, number]; readonly steps: number; readonly octaves: number; readonly shadow: number; readonly edges: boolean };
 }
 
 export const QUALITY: Record<QualityTier, QualitySettings> = {
-  high: { multisampling: 4, ao: { halfRes: true, samples: 8, denoise: 1 }, bloom: { levels: 8 }, aberration: true, grain: true, maxPixelRatio: 2, atmosphere: { view: [192, 108], steps: 32, octaves: 6, shadow: 3, edges: true } },
-  medium: { multisampling: 2, ao: { halfRes: true, samples: 4, denoise: 1 }, bloom: { levels: 5 }, aberration: true, grain: true, maxPixelRatio: 1.5, atmosphere: { view: [160, 90], steps: 24, octaves: 5, shadow: 2, edges: true } },
-  low: { multisampling: 0, ao: false, bloom: false, aberration: false, grain: true, maxPixelRatio: 1.25, atmosphere: { view: [128, 72], steps: 20, octaves: 4, shadow: 1, edges: false } },
+  high: { multisampling: 4, ao: { halfRes: true, samples: 8, denoise: 1 }, bloom: { levels: 8 }, aberration: true, grain: true, maxPixelRatio: 2, bake: { directions: 48, sky: 512, sun: 2048 }, shafts: 24, atmosphere: { view: [192, 108], steps: 32, octaves: 6, shadow: 3, edges: true } },
+  medium: { multisampling: 2, ao: { halfRes: true, samples: 4, denoise: 1 }, bloom: { levels: 5 }, aberration: true, grain: true, maxPixelRatio: 1.5, bake: { directions: 40, sky: 512, sun: 2048 }, shafts: 16, atmosphere: { view: [160, 90], steps: 24, octaves: 5, shadow: 2, edges: true } },
+  low: { multisampling: 0, ao: false, bloom: false, aberration: false, grain: true, maxPixelRatio: 1.25, bake: { directions: 32, sky: 384, sun: 1024 }, shafts: 12, atmosphere: { view: [128, 72], steps: 20, octaves: 4, shadow: 1, edges: false } },
 };
 
 export function autoQuality(): QualityTier {

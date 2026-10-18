@@ -669,7 +669,10 @@ export const SHAFTS: Shaft[] = [
   { at: [3.5, 2.5, -13.0], size: [2.0, 2.0], room: 'hall' },
 ]
 
-export const BOUNCES: Vec3[] = [[3.0, 1.2, 7.4], [-1.0, 2.2, -11.2]]
+export const CLUTTER: { room: RoomId; density: number; clear: { min: Vec2; max: Vec2 }[] }[] = [
+  { room: 'hall', density: 1, clear: [{ min: [-1, -7.2], max: [1, -5] }, { min: [3.4, -7], max: [5.2, -5] }, { min: [-5.1, -17.2], max: [-3.3, -15.4] }] },
+]
+export const INTERIOR = { min: [-7.6, -0.25, -25.6] as Vec3, max: [7.6, 5.75, 10.6] as Vec3 }
 
 export const START = { position: [0, 0, 23] as Vec3, yaw: 0 }
 

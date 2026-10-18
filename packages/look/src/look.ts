@@ -16,6 +16,9 @@ import type { PhysicalSky } from './physical';
 import { bakeSkyEnvironment, createSky } from './sky';
 import type { Sky } from './sky';
 import { SoftPass } from './soft';
+import { bakeLight } from './bake';
+import type { BakeOptions, BakedLight } from './bake';
+import { ShaftEffect } from './shafts';
 
 export const POST_TUNING = {
   ao: { intensity: 1.8, radius: 0.35 },
@@ -30,6 +33,7 @@ export interface LookOptions {
   readonly fog?: boolean;
   readonly sun?: DirectionalLight | null;
   readonly fill?: HemisphereLight | null;
+  readonly bake?: BakeOptions | null;
 }
 
 export interface Look {
@@ -38,6 +42,7 @@ export interface Look {
   readonly sky: Sky | null;
   readonly atmosphere: Atmosphere;
   readonly quality: QualityTier;
+  readonly baked: BakedLight | null;
   render(dt?: number): void;
   setSize(width: number, height: number, updateStyle?: boolean): void;
   setAtmosphere(next: Atmosphere | PresetName): void;
@@ -69,6 +74,12 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
   ao.configuration.aoRadius = POST_TUNING.ao.radius;
   ao.configuration.intensity = POST_TUNING.ao.intensity;
   composer.addPass(ao);
+
+  const baked = options.bake ? bakeLight(renderer, atmosphere.sun.direction, options.bake, QUALITY[quality].bake) : null;
+  let bakedSun = atmosphere.sun.direction;
+  const shafts = baked ? new ShaftEffect(camera, baked, QUALITY[quality].shafts) : null;
+  if (shafts) composer.addPass(new EffectPass(camera, shafts));
+  const overlays = new Set<Scene>();
 
   const physical: PhysicalSky | null = atmosphere.physical && options.sky !== false ? createPhysicalSky(renderer, atmosphere, QUALITY[quality].atmosphere) : null;
   const aerial = physical ? new AerialEffect(camera, physical.luts) : null;
@@ -102,6 +113,7 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
     bloomPass.enabled = settings.bloom !== false;
     if (settings.bloom) bloom.mipmapBlurPass.levels = settings.bloom.levels;
     grade.setFeatures({ aberration: settings.aberration, grain: settings.grain });
+    shafts?.setSteps(settings.shafts);
     physical?.configure(settings.atmosphere);
     aerial?.setEdges(settings.atmosphere.edges);
   };
@@ -156,6 +168,12 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
       options.fill.groundColor.setRGB(...fill.ground);
       options.fill.intensity = fill.strength;
     }
+    if (baked && sun.direction.some((value, axis) => value !== bakedSun[axis])) {
+      baked.bake(sun.direction);
+      bakedSun = sun.direction;
+    }
+    baked?.setSun(sun.color, sun.strength);
+    shafts?.setSun(sun.direction, sun.color, sun.strength);
     aerial?.setAtmosphere(atmosphere);
     bloom.intensity = atmosphere.grade.bloom ?? POST_TUNING.bloom.intensity;
     grade.exposure = atmosphere.exposure;
@@ -177,7 +195,14 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
     get quality() {
       return quality;
     },
+    get baked() {
+      return baked;
+    },
     render(dt) {
+      if (baked) {
+        baked.track(scene);
+        for (const overlay of overlays) baked.track(overlay);
+      }
       if (physical) {
         if (options.sun) physical.luts.track(options.sun);
         physical.tick(dt ?? 0);
@@ -208,7 +233,9 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
       pass.clearPass.depth = true;
       pass.ignoreBackground = true;
       composer.addPass(pass, composer.passes.indexOf(bloomPass));
+      overlays.add(overlayScene);
       return () => {
+        overlays.delete(overlayScene);
         if (disposed || !composer.passes.includes(pass)) return;
         composer.removePass(pass);
         pass.dispose();
@@ -218,6 +245,7 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
       disposed = true;
       sky?.dispose();
       environment?.dispose();
+      baked?.dispose();
       composer.dispose();
       renderer.toneMapping = previous.toneMapping;
       scene.background = previous.background;

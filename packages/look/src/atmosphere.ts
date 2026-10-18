@@ -35,6 +35,15 @@ export interface GradeSpec {
   readonly saturation?: number;
   readonly bloom?: number;
   readonly tint?: Rgb;
+  readonly adapt?: AdaptSpec;
+}
+
+export interface AdaptSpec {
+  readonly key: number;
+  readonly strength: number;
+  readonly min: number;
+  readonly max: number;
+  readonly rate?: number;
 }
 
 export interface HeightFogSpec {

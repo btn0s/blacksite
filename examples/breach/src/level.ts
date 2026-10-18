@@ -1,8 +1,7 @@
 import * as THREE from 'three'
-import { LevelBuilder, decalBias, apartmentBlock, apc, deadTree, groundMaterial, lada, puddleMaterial, surface, waterTower, worldBoxGeometry, worldPlaneGeometry, type SurfaceName, type SurfaceSource } from '@blacksite/look/world'
-import { APC_AT, EXFIL, LEVEL, PATCHES, PRACTICALS, ROOMS, SHAFTS, type Block, type Practical, type Room, type Vec3 } from './layout'
+import { LevelBuilder, decalBias, apartmentBlock, apc, clutter, deadTree, groundMaterial, lada, puddleMaterial, skylight, surface, waterTower, worldBoxGeometry, worldPlaneGeometry, type SurfaceName, type SurfaceSource } from '@blacksite/look/world'
+import { APC_AT, CLUTTER, EXFIL, LEVEL, PATCHES, PRACTICALS, ROOMS, SHAFTS, type Block, type Practical, type Room, type Vec3 } from './layout'
 import { BUDGET, type RoomId } from './model'
-import { SoftParticles } from '@blacksite/look/soft'
 import woodColor from './assets/wood-planks-old/c.webp?url'
 import woodNormal from './assets/wood-planks-old/n.webp?url'
 import woodOrm from './assets/wood-planks-old/orm.webp?url'
@@ -25,7 +24,7 @@ type LightSource = { position: THREE.Vector3; color: THREE.Color; room: RoomId; 
 
 const LIGHTS: Record<Practical['kind'], { color: string; intensity: number; distance: number }> = {
   bulb: { color: '#ffc680', intensity: 9, distance: 7.5 },
-  tube: { color: '#d8e6ff', intensity: 16, distance: 10 },
+  tube: { color: '#e4ecf4', intensity: 3.5, distance: 8 },
   fire: { color: '#ff8a3a', intensity: 6, distance: 6 },
   emergency: { color: '#ff3020', intensity: 3.5, distance: 5.5 },
 }
@@ -36,7 +35,7 @@ const SPOTS: Spot[] = [
   { kind: 'bulb', fixture: 'cage', at: [0, 2.7, -1.5], room: 'corridor', intensity: 7, distance: 6 },
   { kind: 'bulb', fixture: 'cage', at: [0, 2.7, -4.1], room: 'corridor', intensity: 3, distance: 3 },
   { kind: 'bulb', fixture: 'cage', at: [3.3, 2.65, -1.7], room: 'side', intensity: 5, distance: 5.5 },
-  { kind: 'tube', fixture: 'tube', at: [-3.6, 4.36, -14.4], room: 'hall', housing: true, intensity: 10, distance: 8 },
+  { kind: 'tube', fixture: 'tube', at: [-3.6, 4.36, -14.4], room: 'hall', housing: true, intensity: 4, distance: 8 },
   { kind: 'bulb', fixture: 'lamp', at: [-2.1, 0.79, -22.85], room: 'office', color: '#ffbf70', intensity: 4, distance: 4 },
   { kind: 'bulb', fixture: 'sodium', at: [4.3, 6.38, 29.25], room: 'yard', color: '#ffb35a', intensity: 24, distance: 16 },
   { kind: 'fire', fixture: 'fire', at: [7.8, 0.96, 12.8], room: 'yard' },
@@ -75,17 +74,6 @@ const GAPS: Partial<Record<RoomId, Array<{ face: Face; from: number; to: number;
   hall: [{ face: 'z-', from: -0.8, to: 0.8, floor: true }, { face: 'z-', from: 3.6, to: 5.0, floor: true }, { face: 'z+', from: -4.9, to: -3.5, floor: true }],
   office: [{ face: 'z-', from: -4.9, to: -3.5, floor: true }, { face: 'x-', from: -22.6, to: -20.4, floor: true }, { face: 'x+', from: -23.5, to: -21.5, floor: false }, { face: 'z+', from: -5, to: -3.4, floor: false }],
 }
-
-const INDOOR = 0.3
-const SKY: Array<[number, number, number, number, number]> = [
-  [0, 1.2, 10.1, 2.4, 1], [-3.4, 1.6, 10.1, 2.2, 0.9], [3.4, 1.6, 10.1, 2.2, 0.9],
-  [-7, 3.9, -8, 3.2, 0.8], [-7, 3.9, -12, 3.2, 0.8], [-7, 3.9, -15.35, 3.2, 0.8], [7, 3.9, -8, 3.2, 0.8], [7, 3.9, -12, 3.2, 0.8], [7, 3.9, -15.35, 3.2, 0.8],
-  [-7, 1.55, -22.5, 2.2, 0.9], [-4.2, 1.55, -25, 2.2, 0.9], [3.1, 1.2, -21.5, 2.8, 1], [0, 1.2, 1.85, 1.3, 0.35],
-  ...SHAFTS.flatMap(shaft => {
-    const ceiling = ROOMS.find(room => room.id === shaft.room)!.ceiling
-    return [[shaft.at[0], ceiling, shaft.at[2], 1.7, 1], [shaft.at[0], 0.4, shaft.at[2], 1.9, 0.8]] as Array<[number, number, number, number, number]>
-  }),
-]
 
 const AXES: Record<Face, [Vec3, Vec3, Vec3]> = {
   'x+': [[0, 0, -1], [0, 1, 0], [1, 0, 0]],
@@ -215,34 +203,6 @@ function still<T extends THREE.Object3D>(object: T) {
   object.updateMatrix()
   object.matrixAutoUpdate = false
   return object
-}
-
-const glsl = (n: number) => n.toFixed(3)
-const insideChunk = `
-float breachInside = 0.0;
-${indoor.map(room => `if (vBreachWorld.x > ${glsl(room.min[0] - 0.2)} && vBreachWorld.x < ${glsl(room.max[0] + 0.2)} && vBreachWorld.z > ${glsl(room.min[1] - 0.2)} && vBreachWorld.z < ${glsl(room.max[1] + 0.2)} && vBreachWorld.y < ${glsl(room.ceiling + 0.03)}) breachInside = 1.0;`).join('\n')}
-if (breachInside > 0.5) {
-  float breachSky = 0.0;
-  vec3 breachDelta;
-${SKY.map(([x, y, z, radius, strength]) => `  breachDelta = vBreachWorld - vec3(${glsl(x)}, ${glsl(y)}, ${glsl(z)}); breachSky += ${glsl(strength)} * exp(-dot(breachDelta, breachDelta) * ${glsl(1 / (radius * radius))});`).join('\n')}
-  float breachOpen = mix(${glsl(INDOOR)}, 1.0, clamp(breachSky, 0.0, 1.0));
-  reflectedLight.indirectDiffuse *= breachOpen;
-  reflectedLight.indirectSpecular *= breachOpen;
-}`
-
-function shaded(base: THREE.MeshStandardMaterial) {
-  const material = base.clone()
-  material.onBeforeCompile = (shader, renderer) => {
-    base.onBeforeCompile.call(material, shader, renderer)
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vBreachWorld;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvBreachWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;')
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vBreachWorld;')
-      .replace('#include <aomap_fragment>', `#include <aomap_fragment>\n${insideChunk}`)
-  }
-  material.customProgramCacheKey = () => `${base.customProgramCacheKey()}|breach-inside`
-  return material
 }
 
 export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone: boolean }): BreachLevel {
@@ -382,6 +342,19 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
       continue
     }
     level.box(size, paint, { at, collide: false, cast: block.cast, shadow: block.contact })
+  }
+
+  const footprints = [
+    ...LEVEL.blocks.filter(block => block.min[1] < 0.6 && block.solid).map(block => ({ min: [block.min[0], block.min[2]] as [number, number], max: [block.max[0], block.max[2]] as [number, number] })),
+    ...LEVEL.decor.filter(item => item.at[1] - item.size[1] / 2 < 0.6).map(item => {
+      const reach = Math.hypot(item.size[0], item.size[2]) / 2
+      return { min: [item.at[0] - reach, item.at[2] - reach] as [number, number], max: [item.at[0] + reach, item.at[2] + reach] as [number, number] }
+    }),
+  ]
+  for (const [index, spec] of CLUTTER.entries()) {
+    const room = ROOMS.find(candidate => candidate.id === spec.room)!
+    const area = { min: [room.min[0] + 0.2, room.min[1] + 0.2] as [number, number], max: [room.max[0] - 0.2, room.max[1] - 0.2] as [number, number] }
+    add(clutter({ area, blocked: footprints, clear: spec.clear, seed: index + 7, density: spec.density }))
   }
 
   const customParts = new Map<THREE.MeshStandardMaterial, THREE.BufferGeometry[]>()
@@ -540,6 +513,8 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     wallDecal('streak', x > 0 ? 'x+' : 'x-', x > 0 ? 7.3 : -7.3, z + (z > -10 ? -0.4 : 0.4), 3.0, 0.7, 2.8)
   }
   for (const [x, z] of [[7.3, -11], [-7.3, -11], [7.3, -14.6], [-7.3, -7.6]] as const) wallDecal(hash(z) > 0.5 ? 'streak' : 'blotch', x > 0 ? 'x+' : 'x-', x, z, 1.8, 1.2, 1.6)
+
+  for (const [index, shaft] of SHAFTS.entries()) if (shaft.room === 'hall') skylight(level, { at: [shaft.at[0], 5.12, shaft.at[2]], size: shaft.size, seed: index + 3 })
 
   apartmentBlock(level, { at: [-14, 0, -64], floors: 9, bays: 10, seed: 3, facing: Math.PI / 2 })
   apartmentBlock(level, { at: [42, 0, -38], floors: 6, bays: 8, seed: 9, facing: Math.PI / 4 })
@@ -787,7 +762,6 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     }
     return [0.3, 0.3, 0.2, 0]
   }, { srgb: true, mips: true }))
-  const beamMap = own(texture(32, 4, u => { const a = Math.pow(Math.sin(Math.PI * u), 2); return [a, a, a, 1] }))
   const tapeMap = own(texture(32, 4, u => (Math.floor(u * 8) % 2 ? [0.86, 0.84, 0.78, 1] : [0.66, 0.16, 0.12, 1]), { srgb: true, repeat: true }))
 
   const practicals: BreachLevel['practicals'] = []
@@ -936,64 +910,6 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
   tapeMesh.name = 'tape'
   add(tapeMesh)
 
-  const shaftMaterial = own(new THREE.MeshBasicMaterial({ map: beamMap, color: '#efe6d2', vertexColors: true, transparent: true, opacity: 0.11, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }))
-  shaftMaterial.onBeforeCompile = shader => {
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vShaftView;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvShaftView = mvPosition.xyz;')
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vShaftView;')
-      .replace('#include <alphamap_fragment>', '#include <alphamap_fragment>\ndiffuseColor.a *= smoothstep(0.3, 2.6, length(vShaftView));')
-  }
-  shaftMaterial.customProgramCacheKey = () => 'breach-shaft-near-fade'
-  const moteTint = new THREE.Color('#e6dcc4')
-  const moteCount = options.quality === 'high' && !options.phone ? 60 : options.quality === 'low' ? 24 : 40
-  const motes: Array<{ field: SoftParticles; beam: THREE.SpotLight; power: number; room: RoomId }> = []
-  SHAFTS.forEach((shaft, index) => {
-    const height = Math.max(shaft.at[1] * 2, roomOf(shaft.room).ceiling) + 0.3
-    const geometry = crossed(Math.max(shaft.size[0], shaft.size[1]) * 1.05, height, 3, 8)
-    const position = geometry.getAttribute('position')
-    const colors = new Float32Array(position.count * 3)
-    for (let vertex = 0; vertex < position.count; vertex++) {
-      const t = Math.max(0, position.getY(vertex) / height), spread = 1 + 0.3 * (1 - t)
-      position.setXYZ(vertex, position.getX(vertex) * spread, position.getY(vertex), position.getZ(vertex) * spread)
-      colors.fill(smooth(0, 1.2, position.getY(vertex)) * (0.1 + 0.9 * Math.pow(t, 1.4)), vertex * 3, vertex * 3 + 3)
-    }
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-    const volume = new THREE.Mesh(own(geometry), shaftMaterial)
-    volume.position.set(shaft.at[0], 0, shaft.at[2])
-    volume.renderOrder = 3
-    volume.name = `shaft-${index}`
-    fixtures.push({ object: add(volume), room: shaft.room })
-
-    const bottom = 0.15, range = height - 0.6
-    const field = own(new SoftParticles({ capacity: moteCount }))
-    for (let mote = 0; mote < moteCount; mote++) {
-      const key = index * 101 + mote
-      field.emit({
-        position: { x: (hash(key + 0.1) - 0.5) * shaft.size[0] * 0.9, y: bottom + hash(key + 0.2) * range, z: (hash(key + 0.3) - 0.5) * shaft.size[1] * 0.9 },
-        velocity: { x: 0, y: -(0.015 + hash(key + 0.5) * 0.025), z: 0 },
-        life: 0,
-        size: 0.012 + hash(key + 0.6) * 0.01,
-        opacity: 0.6 + hash(key + 0.7) * 0.4,
-        tint: moteTint,
-        flutter: 0.07,
-        seed: hash(key + 0.4),
-      })
-    }
-    field.wrap({ x: 0, y: bottom + range / 2, z: 0 }, { x: shaft.size[0] * 0.9, y: range, z: shaft.size[1] * 0.9 })
-    field.position.set(shaft.at[0], 0, shaft.at[2])
-    field.name = `motes-${index}`
-    const ceiling = roomOf(shaft.room).ceiling
-    const source = 3 * height
-    const beam = new THREE.SpotLight('#efe6d2', 0, 0, Math.atan((0.5 * Math.max(shaft.size[0], shaft.size[1])) / (source - ceiling)), 0.35, 2)
-    beam.position.set(shaft.at[0], source, shaft.at[2])
-    beam.target.position.set(shaft.at[0], 0, shaft.at[2])
-    beam.name = `shaft-light-${index}`
-    add(beam.target)
-    motes.push({ field: add(field), beam: add(beam), power: 1.6 * source * source, room: shaft.room })
-  })
-
   const marker = new THREE.Group()
   marker.name = 'exfil-marker'
   marker.position.set(EXFIL.at[0], 0, EXFIL.at[1])
@@ -1085,16 +1001,6 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     add(mesh)
   }
 
-  const variants = new Map<THREE.Material, THREE.MeshStandardMaterial>()
-  group.traverse(object => {
-    if (!(object instanceof THREE.Mesh) || !(object.material instanceof THREE.MeshStandardMaterial)) return
-    const material = object.material
-    if (material.name !== 'breach-decal' && (!material.name.startsWith('look-') || material.name === 'look-ground' || material.name === 'look-puddle')) return
-    let variant = variants.get(material)
-    if (!variant) { variant = own(shaded(material)); variants.set(material, variant) }
-    object.material = variant
-  })
-
   const tapePosition = tapeGeometry.getAttribute('position') as THREE.BufferAttribute
   const update = (time: number, dt: number, visibleRooms: ReadonlySet<RoomId>, listener = { x: 0, y: 1.63, z: 23 }) => {
     for (const source of sources) {
@@ -1154,11 +1060,6 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
         }
       }
       tapePosition.needsUpdate = true
-    }
-    for (const cloud of motes) {
-      cloud.field.visible = visibleRooms.has(cloud.room)
-      cloud.beam.intensity = cloud.field.visible ? cloud.power : 0
-      cloud.field.advance(dt)
     }
   }
   update(0, 0, new Set(ROOMS.map(room => room.id)))

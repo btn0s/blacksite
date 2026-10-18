@@ -1,6 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Camera, DirectionalLight, HemisphereLight, Scene } from 'three';
+import type { BakeOptions } from './bake';
 import type { Atmosphere } from './atmosphere';
 import { createLook } from './look';
 import type { Look as LookHandle } from './look';
@@ -16,12 +17,13 @@ export interface LookProps {
   readonly fog?: boolean;
   readonly sun?: DirectionalLight | null;
   readonly fill?: HemisphereLight | null;
+  readonly bake?: BakeOptions | null;
   readonly aberration?: number;
   readonly overlay?: { readonly scene: Scene; readonly camera: Camera } | null;
   readonly onReady?: (look: LookHandle | null) => void;
 }
 
-export function Look({ atmosphere = 'zone', quality, sky = true, environment = false, fog = true, sun = null, fill = null, aberration = 0, overlay = null, onReady }: LookProps) {
+export function Look({ atmosphere = 'zone', quality, sky = true, environment = false, fog = true, sun = null, fill = null, bake = null, aberration = 0, overlay = null, onReady }: LookProps) {
   const gl = useThree(state => state.gl);
   const scene = useThree(state => state.scene);
   const camera = useThree(state => state.camera);
@@ -35,13 +37,13 @@ export function Look({ atmosphere = 'zone', quality, sky = true, environment = f
   const [look, setLook] = useState<LookHandle | null>(null);
 
   useLayoutEffect(() => {
-    const created = createLook(gl, scene, camera, { atmosphere: latest.current.atmosphere, quality: latest.current.tier, sky, environment, fog, sun, fill });
+    const created = createLook(gl, scene, camera, { atmosphere: latest.current.atmosphere, quality: latest.current.tier, sky, environment, fog, sun, fill, bake });
     setLook(created);
     return () => {
       setLook(null);
       created.dispose();
     };
-  }, [gl, scene, camera, sky, environment, fog, sun, fill]);
+  }, [gl, scene, camera, sky, environment, fog, sun, fill, bake]);
 
   useLayoutEffect(() => {
     look?.setSize(width, height);

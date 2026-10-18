@@ -8,7 +8,7 @@ import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { ALS_RAPIER_GRAVITY } from 'als-ue5-r3f/als/AlsCharacter.hooks'
 import type { CameraPose } from '@blacksite/check'
 import { Look } from '@blacksite/look/r3f'
-import { autoQuality, depthDefaults, type Atmosphere, type QualityTier } from '@blacksite/look'
+import { autoQuality, depthDefaults, normalize, type Atmosphere, type QualityTier } from '@blacksite/look'
 import { ZONE } from '@blacksite/look/presets'
 import type { QueryHit, WeaponEvent } from '@blacksite/armory'
 import { InputProvider } from '@blacksite/input'
@@ -25,7 +25,7 @@ import { createChips, type Chips } from './chips'
 import { createEffects, type Effects } from './effects'
 import { SOLIDS, castLevel, castTargets, clearLine, groundHit, zoneMultiplier, type Target, type V3 } from './geometry'
 import { Hud } from './hud'
-import { ENCOUNTERS, EXFIL, START, footingAt, roomAt } from './layout'
+import { ENCOUNTERS, EXFIL, INTERIOR, START, footingAt, roomAt } from './layout'
 import { breachTexturesReady, buildLevel, type BreachLevel } from './level'
 import { AI, CORPSE_RAGDOLL, DEG, FEEDBACK, MOVE, PAD, PLAYER, PRESENTATION, VIEW, WEAPONS, animationBudget, animationInterval, armoryDefinitions, scheduleAnimation, footInterval, type HitZone, type RoomId } from './model'
 import { createCorpseRagdoll, warmCorpseRagdoll, type CorpseRagdoll } from './ragdoll'
@@ -64,8 +64,9 @@ const atmosphere: Atmosphere = {
   ...ZONE,
   exposure: 1.18,
   fog: { color: [0.33, 0.355, 0.34], near: 9, far: 95 },
-  fill: { ...ZONE.fill, strength: 0.62 },
-  sun: { ...ZONE.sun, strength: 1.35 },
+  fill: { sky: [0.4, 0.46, 0.5], ground: ZONE.fill.ground, strength: 0.4 },
+  sun: { color: [1.0, 0.86, 0.66], strength: 1.45, direction: normalize([18, 32, 4]) },
+  grade: { ...ZONE.grade, split: 0.3, adapt: { key: 0.09, strength: 0.5, min: 0.8, max: 1.25 } },
 }
 const soldierIds = ENCOUNTERS.flatMap(encounter => encounter.soldiers.map(soldier => soldier.id))
 const encounterOf = new Map(ENCOUNTERS.flatMap((encounter, index) => encounter.soldiers.map(soldier => [soldier.id, index] as const)))
@@ -132,6 +133,7 @@ function Scene({ player, now, paused, tier, audio, restartRef, onArms, onFirstFr
   const handles = useMemo(() => new Map<string, RefObject<AlsRagdollHandle | null>>(), [])
   const { level, chips } = useMemo(() => worldFor(tier, phone), [tier, phone])
   const effects = useMemo(() => effectsFor(scene), [scene])
+  const bake = useMemo(() => ({ root: level.group, ...INTERIOR, ground: 0.03 }), [level])
   const arms = player.arms
   const [presentation, setPresentation] = useState<ArmsPresentation | null>(null)
   const [roster, setRoster] = useState<string[]>([])
@@ -695,7 +697,7 @@ function Scene({ player, now, paused, tier, audio, restartRef, onArms, onFirstFr
   }), [camera, player, restart, scratch])
 
   return <>
-    <Look atmosphere={atmosphere} quality={tier} environment sun={lights.sun} fill={lights.fill} overlay={posed ? null : presentation} onReady={opaqueAo} />
+    <Look atmosphere={atmosphere} quality={tier} environment sun={lights.sun} fill={lights.fill} bake={bake} overlay={posed ? null : presentation} onReady={opaqueAo} />
     <primitive object={lights.sun} />
     <primitive object={lights.sun.target} />
     <primitive object={lights.fill} />

@@ -1,5 +1,7 @@
 import { BlendFunction, Effect, EffectAttribute } from 'postprocessing';
-import { Data3DTexture, Uniform, Vector3 } from 'three';
+import { Data3DTexture, Uniform, Vector2, Vector3 } from 'three';
+import type { WebGLRenderer, WebGLRenderTarget } from 'three';
+import { EyeAdaptation } from './adapt';
 import type { GradeSpec } from './atmosphere';
 
 const GRADE_FRAGMENT = `
@@ -12,6 +14,10 @@ const GRADE_FRAGMENT = `
   uniform vec3 tint;
   uniform float lutSize;
   uniform mediump sampler3D lut;
+  uniform highp sampler2D adapted;
+  uniform float adaptKey;
+  uniform float adaptStrength;
+  uniform vec2 adaptRange;
 
   vec3 shoulder(vec3 x) {
     vec3 over = max(x - 0.72, 0.0);
@@ -35,6 +41,12 @@ const GRADE_FRAGMENT = `
 
   void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
     vec2 centred = uv - 0.5;
+    #ifdef LOOK_ADAPT
+      float average = exp(texture2D(adapted, vec2(0.5)).r);
+      float exposed = exposure * clamp(pow(adaptKey / max(average, 1e-4), adaptStrength), adaptRange.x, adaptRange.y);
+    #else
+      float exposed = exposure;
+    #endif
     #ifdef LOOK_ABERRATION
       vec2 fringe = centred * aberration * 0.018;
       vec3 source = vec3(
@@ -46,9 +58,9 @@ const GRADE_FRAGMENT = `
       vec3 source = inputColor.rgb;
     #endif
     #ifdef LOOK_FILMIC
-      vec3 colour = pow(clamp(filmic(max(source, 0.0) * exposure), 0.0, 1.0), vec3(1.0 / 2.2));
+      vec3 colour = pow(clamp(filmic(max(source, 0.0) * exposed), 0.0, 1.0), vec3(1.0 / 2.2));
     #else
-      vec3 colour = pow(shoulder(max(source, 0.0) * exposure), vec3(1.0 / 2.2));
+      vec3 colour = pow(shoulder(max(source, 0.0) * exposed), vec3(1.0 / 2.2));
     #endif
     vec3 base = colour;
     #ifdef LOOK_LUT
@@ -77,6 +89,7 @@ const GRADE_FRAGMENT = `
 
 export class GradeEffect extends Effect {
   private readonly empty = new Data3DTexture();
+  private readonly adaptation = new EyeAdaptation();
 
   constructor() {
     super('GradeEffect', GRADE_FRAGMENT, {
@@ -92,9 +105,14 @@ export class GradeEffect extends Effect {
         ['tint', new Uniform(new Vector3(1, 1, 1))],
         ['lutSize', new Uniform(1)],
         ['lut', new Uniform(null)],
+        ['adapted', new Uniform(null)],
+        ['adaptKey', new Uniform(1)],
+        ['adaptStrength', new Uniform(0)],
+        ['adaptRange', new Uniform(new Vector2(1, 1))],
       ]),
     });
     this.uniforms.get('lut')!.value = this.empty;
+    this.uniforms.get('adapted')!.value = this.adaptation.texture;
   }
 
   private toggle(name: string, on: boolean): void {
@@ -130,6 +148,19 @@ export class GradeEffect extends Effect {
     this.toggle('LOOK_TINT', grade.tint !== undefined);
     this.toggle('LOOK_FILMIC', grade.curve === 'filmic');
     this.toggle('LOOK_SATURATION', grade.saturation !== undefined && grade.saturation !== 1);
+    if (grade.adapt && !this.defines.has('LOOK_ADAPT')) this.adaptation.reset();
+    this.toggle('LOOK_ADAPT', grade.adapt !== undefined);
+    if (!grade.adapt) return;
+    this.uniforms.get('adaptKey')!.value = grade.adapt.key;
+    this.uniforms.get('adaptStrength')!.value = grade.adapt.strength;
+    (this.uniforms.get('adaptRange')!.value as Vector2).set(grade.adapt.min, grade.adapt.max);
+    this.adaptation.rate = grade.adapt.rate ?? 1.5;
+  }
+
+  override update(renderer: WebGLRenderer, inputBuffer: WebGLRenderTarget, deltaTime?: number): void {
+    if (!this.defines.has('LOOK_ADAPT')) return;
+    this.adaptation.update(renderer, inputBuffer.texture, deltaTime ?? 0);
+    this.uniforms.get('adapted')!.value = this.adaptation.texture;
   }
 
   setLut(texture: Data3DTexture | null, size = texture?.image.width ?? 1): void {
@@ -145,6 +176,7 @@ export class GradeEffect extends Effect {
 
   override dispose(): void {
     this.empty.dispose();
+    this.adaptation.dispose();
     super.dispose();
   }
 }

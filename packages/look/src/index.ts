@@ -1,5 +1,5 @@
 export { isExpFog, normalize } from './atmosphere';
-export type { Atmosphere, CloudSpec, ExpFogSpec, FillSpec, FogSpec, GradeSpec, HeightFogSpec, LinearFogSpec, PhysicalSkySpec, Rgb, SkySpec, SunSpec, ToneCurve } from './atmosphere';
+export type { AdaptSpec, Atmosphere, CloudSpec, ExpFogSpec, FillSpec, FogSpec, GradeSpec, HeightFogSpec, LinearFogSpec, PhysicalSkySpec, Rgb, SkySpec, SunSpec, ToneCurve } from './atmosphere';
 export { AerialEffect } from './aerial';
 export { GradeEffect } from './grade';
 export { POST_TUNING, createLook } from './look';
@@ -18,3 +18,6 @@ export { applyStochasticTiling } from './stochastic';
 export type { StochasticTilingOptions } from './stochastic';
 export { SoftParticles, SoftPass } from './soft';
 export type { SoftParticle, SoftParticlesOptions } from './soft';
+export { bakeLight } from './bake';
+export type { BakeOptions, BakeQuality, BakedLight, BakedUniforms } from './bake';
+export { ShaftEffect } from './shafts';

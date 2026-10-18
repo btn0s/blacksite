@@ -4,7 +4,7 @@ A post-processing and atmosphere stack for three.js: HDR composer, ambient occlu
 
 ## Pipeline
 
-`EffectComposer` (HalfFloat buffers, MSAA by tier) runs `RenderPass`, `N8AOPostPass` (half resolution, depth-aware upsampling, radius 0.35, intensity 1.8, one denoise iteration), `BloomEffect` (intensity 0.8, threshold 1.35, smoothing 0.2, radius 0.45, mipmap blur), then `GradeEffect`. The grade applies exposure, a shoulder tonemap (linear to 0.72, exponential roll-off above), an optional 3D LUT in display space, night split toning, vignette, chromatic aberration and film grain. The grade is the only tonemapper and `atmosphere.exposure` the only exposure: `createLook` sets `renderer.toneMapping = NoToneMapping` and restores the previous value on `dispose()`, and nothing else in the package touches tone mapping. To change exposure, pass an atmosphere with your own value, such as `{ ...ZONE, exposure: 1.22 }`. `renderer.toneMappingExposure` has no effect while the composer runs, because the scene renders into the composer's buffers.
+`EffectComposer` (HalfFloat buffers, MSAA by tier) runs `RenderPass`, `N8AOPostPass` (half resolution, depth-aware upsampling, radius 0.35, intensity 1.8, one denoise iteration), `BloomEffect` (intensity 0.8, threshold 1.35, smoothing 0.2, radius 0.45, mipmap blur), then, with a bake, `ShaftEffect`, and finally `GradeEffect`. The grade applies exposure (optionally scaled by eye adaptation), a shoulder tonemap (linear to 0.72, exponential roll-off above), an optional 3D LUT in display space, night split toning, vignette, chromatic aberration and film grain. The grade is the only tonemapper and `atmosphere.exposure` the only exposure: `createLook` sets `renderer.toneMapping = NoToneMapping` and restores the previous value on `dispose()`, and nothing else in the package touches tone mapping. To change exposure, pass an atmosphere with your own value, such as `{ ...ZONE, exposure: 1.22 }`. `renderer.toneMappingExposure` has no effect while the composer runs, because the scene renders into the composer's buffers.
 
 ## Vanilla three
 
@@ -23,7 +23,24 @@ look.setQuality('low')
 look.dispose()
 ```
 
-`createLook` returns `{ composer, grade, sky, atmosphere, quality, render(dt), setSize(w, h, updateStyle?), setAtmosphere(atmosphere | name), setQuality(tier), setAberration(extra), addOverlay(scene, camera), dispose() }`. Options: `atmosphere` (default `'zone'`), `quality` (default `autoQuality()`), `sky` (default true; adds the dome to the scene), `environment` (default false; PMREM-bakes the sky into `scene.environment`), `fog` (default true), `sun` (a `DirectionalLight` to drive) and `fill` (a `HemisphereLight` to drive).
+`createLook` returns `{ composer, grade, sky, atmosphere, quality, render(dt), setSize(w, h, updateStyle?), setAtmosphere(atmosphere | name), setQuality(tier), setAberration(extra), addOverlay(scene, camera), dispose() }`. Options: `atmosphere` (default `'zone'`), `quality` (default `autoQuality()`), `sky` (default true; adds the dome to the scene), `environment` (default false; PMREM-bakes the sky into `scene.environment`), `fog` (default true), `sun` (a `DirectionalLight` to drive), `fill` (a `HemisphereLight` to drive) and `bake` (static light for an interior; see below). `look.baked` is the `BakedLight` or `null`.
+
+## Baked light
+
+`bake: { root, min, max, cell?, haze?, ground?, albedo?, reach? }` bakes the light that never moves inside the box `min`–`max`, at load, on the GPU. `root` is the static level; meshes that are transparent or don't write depth don't occlude.
+
+- Sky openness: orthographic depth from Fibonacci directions over the upper hemisphere (48 high, 40 medium, 32 low) is splatted into a half-float 3D texture of `cell` metres (default 0.25). Each probe stores its visible fraction and the mean visible direction, so a surface's fill and environment light scale by how much sky its normal can see. `ground` (default 0.06) is the least light a downward face gets.
+- Sun: one static depth map of the sun (2048 high and medium, 1024 low) masks every directional light, so interiors are sunlit only through openings on every tier, with or without realtime shadows.
+- Bounce: each probe in a coarser volume (2 × `cell`) gathers 192 samples of the sun map within `reach` metres (default 4) and adds the light those sunlit, enclosed surfaces reflect at `albedo` (default 0.35), scaled by the current sun colour.
+- Fog: inside the box, fog colour is scaled by the openness at the eye and at the surface, so interior air is dark unless lit.
+
+Every lit material in the scene and its overlays (standard, physical, Lambert, Phong) is patched once through chained `onBeforeCompile` and cache-key hooks. Changing the atmosphere's sun direction rebakes into the same textures. `bakeLight(renderer, sunDirection, options, quality)` and `LIGHT_CHUNK` are exported for custom shaders.
+
+`ShaftEffect` marches the static sun map through the enclosed part of the box at half resolution (24, 16 or 12 steps by tier), weights it by a forward-scattering phase, blurs it with a separable 9-tap Gaussian and adds it to the frame. `haze` (default 0.05) is the density. Nothing in it moves, so a still view stays still.
+
+## Eye adaptation
+
+Set `grade.adapt: { key, strength, min, max, rate? }` on an atmosphere to scale exposure by `clamp((key / L)^strength, min, max)`, where `L` is the log-average luminance of the frame, measured at 64 × 64, reduced through mipmaps and eased at `rate` per second (default 1.5). It stays on the GPU; nothing is read back. Without `adapt`, the grade compiles it out.
 
 ## Broad textured surfaces
 
@@ -112,14 +129,15 @@ await texturesReady()
 - `worldBoxGeometry`, `worldPlaneGeometry` and `worldCylinderGeometry` make primitives whose UVs tile at the surface's real size; `contactShadow` is a soft blob for anything resting on the ground.
 - `groundMaterial()` blends dirt, grass and gravel by world-space noise; `puddleMaterial()` is a dark mirror for decals on it.
 - `LevelBuilder` merges every box, cylinder and plane by material into one mesh each, adds contact shadows, and collects box and cylinder colliders for your physics.
-- Props: `apartmentBlock`, `lada`, `shed`, `waterTower`, `apc`, `deadTree`.
+- Props: `apartmentBlock`, `lada`, `shed`, `waterTower`, `apc`, `deadTree`, and `skylight(level, { at, size })`, a rusted frame with purlins and hanging broken panes for a roof opening.
+- `clutter({ area, blocked, clear, seed, density })` scatters boxes, sacks, planks, paper, grit and cables over a floor rectangle as one vertex-coloured mesh with darkened contact edges. Debris collects within a metre of walls and `blocked` footprints; boxes and sacks stand only against walls; `clear` rectangles stay empty.
 - `createAtmosphere(scene, renderer)` is the world kit's photographic overcast sky dome, sun with a texel-snapped shadow that `follow(target)` moves, hemisphere fill and exponential fog. It leaves tone mapping and exposure to the look: pair it with `createLook(…, { sky: false, fog: false })` or `<Look sky={false} fog={false} />`. `internalPixelRatio()`, `isTouchDevice()`, `setAnisotropy()`, `preloadSurfaces()` and `texturesReady()` cover loading and resolution.
 
 Credits for the textures are in `assets/world/CREDITS.md`.
 
 ## Atmospheres
 
-An `Atmosphere` is plain data: `exposure`; `fog` as `{ color, near, far }` (`Fog`) or `{ color, density }` (`FogExp2`); `sky` as `{ zenith, horizon, ground, overcast }`; `sun` as `{ color, direction, strength }`; `fill` as `{ sky, ground, strength }`; and `grade` as `{ lut, vignette, split, aberration, grain }`, with optional `curve`, `saturation`, `bloom` and `tint` (a linear RGB multiplier applied before saturation). Colours are linear RGB triples. Set `grade.lut` to a `.cube` URL or `null`.
+An `Atmosphere` is plain data: `exposure`; `fog` as `{ color, near, far }` (`Fog`) or `{ color, density }` (`FogExp2`); `sky` as `{ zenith, horizon, ground, overcast }`; `sun` as `{ color, direction, strength }`; `fill` as `{ sky, ground, strength }`; and `grade` as `{ lut, vignette, split, aberration, grain }`, with optional `curve`, `saturation`, `bloom`, `tint` (a linear RGB multiplier applied before saturation) and `adapt` (eye adaptation). Colours are linear RGB triples. Set `grade.lut` to a `.cube` URL or `null`.
 
 | Preset | Feel | Exposure | Fog | Sky overcast | Sun | Grade |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -133,11 +151,11 @@ Set `atmosphere.physical` and the look draws a physically based sky instead: tra
 
 ## Quality tiers
 
-| Tier | MSAA | AO | Bloom | Aberration | Grain | Max pixel ratio |
-| --- | --- | --- | --- | --- | --- | --- |
-| `high` | 4 | half res, 8 samples | 8 mip levels | on | on | 2 |
-| `medium` | 2 | half res, 4 samples | 5 mip levels | on | on | 1.5 |
-| `low` | 0 | off | off | off | on | 1.25 |
+| Tier | MSAA | AO | Bloom | Aberration | Grain | Max pixel ratio | Bake directions, sky, sun | Shaft steps |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `high` | 4 | half res, 8 samples | 8 mip levels | on | on | 2 | 48, 512, 2048 | 24 |
+| `medium` | 2 | half res, 4 samples | 5 mip levels | on | on | 1.5 | 40, 512, 2048 | 16 |
+| `low` | 0 | off | off | off | on | 1.25 | 32, 384, 1024 | 12 |
 
 `autoQuality()` returns `low` for a coarse pointer or a screen smaller than 600 px, `medium` for four or fewer cores, and `high` otherwise. The targets are 120 fps on desktop and 60 fps on phones. The look does not change the renderer pixel ratio; cap it with `QUALITY[tier].maxPixelRatio`.
 

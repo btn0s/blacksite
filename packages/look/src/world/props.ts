@@ -99,3 +99,26 @@ export function deadTree(level: LevelBuilder, at: Vec3, height: number, yaw: num
     level.cylinder(0.06 + rand() * 0.04, length, bark, { at: [at[0] + dx * length / 2, baseY + dy * length / 2, at[2] + dz * length / 2], rotate: [0, turn, tilt], collide: false, shadow: false }, 5)
   }
 }
+
+export function skylight(level: LevelBuilder, { at, size, seed = 1, bars = 3 }: { at: Vec3; size: [number, number]; seed?: number; bars?: number }) {
+  const rand = random(seed)
+  const steel = { name: 'rust', color: '#3a332b', ao: false } as const
+  const [width, depth] = size
+  const [x, y, z] = at
+  for (const side of [-1, 1]) {
+    level.box([width + 0.16, 0.14, 0.08], steel, { at: [x, y, z + side * (depth / 2 + 0.04)], collide: false })
+    level.box([0.08, 0.14, depth + 0.16], steel, { at: [x + side * (width / 2 + 0.04), y, z], collide: false })
+  }
+  for (let index = 1; index < bars; index++) {
+    const along = -depth / 2 + (depth * index) / bars
+    level.box([width, 0.1, 0.05], steel, { at: [x, y + 0.02, z + along], collide: false })
+  }
+  level.box([0.05, 0.08, depth], steel, { at: [x + (rand() - 0.5) * 0.2, y + 0.04, z], collide: false })
+  const glass = { name: 'metal', color: '#6d7468', ao: false } as const
+  for (let index = 0; index < 3; index++) {
+    const along = -depth / 2 + depth * (index + 0.5) / 3
+    if (rand() > 0.55) continue
+    const hang = 0.2 + rand() * 0.35
+    level.box([0.3 + rand() * 0.3, hang, 0.008], glass, { at: [x + (rand() - 0.5) * width * 0.7, y - hang / 2, z + along], rotate: [0.15 + rand() * 0.3, rand() * 0.6, 0], collide: false, shadow: false })
+  }
+}
