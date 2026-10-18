@@ -1,34 +1,56 @@
 import * as THREE from 'three'
+import { autoResolution, streamBaked, type BakedMaterial, type StreamedTextures } from '@blacksite/materials/three'
+import { BAKE_INFO, BAKE_MAPS } from './bakes'
 import { TEXTURES } from './textures'
 
-export type SurfaceName = 'cast' | 'panel' | 'slab' | 'stained' | 'paint' | 'brick' | 'rust' | 'metal' | 'corrugated' | 'asphalt' | 'dirt' | 'grass' | 'gravel'
+export type SurfaceName = 'cast' | 'panel' | 'slab' | 'stained' | 'paint' | 'brick' | 'rust' | 'metal' | 'corrugated' | 'asphalt' | 'dirt' | 'grass' | 'gravel' | 'wood'
 
-type SurfaceSpec = { tile: number; color?: string; roughness: number; metalness?: number; normal?: number }
+export type SurfaceWeather = { readonly grime?: number; readonly damp?: number; readonly soot?: number }
+
+type SurfaceSpec = { readonly color?: string; readonly weather: Required<SurfaceWeather> }
+
+const weather = (grime: number, damp: number, soot: number) => ({ grime, damp, soot })
 
 export const SURFACES: Record<SurfaceName, SurfaceSpec> = {
-  cast: { tile: 3, color: '#b8b3a5', roughness: 0.96, normal: 1 },
-  panel: { tile: 3, color: '#c4bfae', roughness: 0.94, normal: 0.8 },
-  slab: { tile: 4, color: '#aaa596', roughness: 0.95, normal: 0.8 },
-  stained: { tile: 3.5, color: '#b4b3a0', roughness: 0.95, normal: 0.6 },
-  paint: { tile: 2.5, color: '#93a68f', roughness: 0.9, normal: 0.8 },
-  brick: { tile: 2.2, color: '#a9978a', roughness: 0.93, normal: 1 },
-  rust: { tile: 2, color: '#a08070', roughness: 0.85, metalness: 0.25, normal: 1 },
-  metal: { tile: 2, color: '#9a9d92', roughness: 0.72, metalness: 0.35, normal: 1 },
-  corrugated: { tile: 1.6, color: '#8f8a76', roughness: 0.7, metalness: 0.4, normal: 1.2 },
-  asphalt: { tile: 4, color: '#7b7b74', roughness: 0.62, normal: 0.7 },
-  dirt: { tile: 4, color: '#7c7a68', roughness: 1, normal: 1 },
-  grass: { tile: 5, color: '#82835f', roughness: 1, normal: 1 },
-  gravel: { tile: 2.5, color: '#9c968a', roughness: 0.95, normal: 1 },
+  cast: { color: '#d2cdbd', weather: weather(0.6, 0.5, 0.55) },
+  panel: { color: '#d6d1bf', weather: weather(0.55, 0.45, 0.5) },
+  slab: { color: '#c4bfae', weather: weather(0.6, 0.6, 0.3) },
+  stained: { color: '#cfcbb4', weather: weather(0.7, 0.55, 0.6) },
+  paint: { color: '#93a68f', weather: weather(0.5, 0.45, 0.55) },
+  brick: { color: '#a9978a', weather: weather(0.55, 0.5, 0.6) },
+  rust: { color: '#a08070', weather: weather(0.4, 0.4, 0.3) },
+  metal: { color: '#9a9d92', weather: weather(0.45, 0.35, 0.35) },
+  corrugated: { color: '#8f8a76', weather: weather(0.45, 0.45, 0.4) },
+  asphalt: { color: '#7b7b74', weather: weather(0.4, 0.6, 0.2) },
+  dirt: { color: '#7c7a68', weather: weather(0.2, 0.5, 0.1) },
+  grass: { color: '#82835f', weather: weather(0.2, 0.4, 0.1) },
+  gravel: { color: '#9c968a', weather: weather(0.3, 0.5, 0.15) },
+  wood: { color: '#8f8775', weather: weather(0.45, 0.4, 0.4) },
 }
 
 const loader = new THREE.TextureLoader()
 const textures = new Map<string, THREE.Texture>()
+const streams = new Map<SurfaceName, StreamedTextures>()
 let anisotropy = 4
 const pending: Promise<unknown>[] = []
+let renderer: THREE.WebGLRenderer | undefined
+let rendererFound: (renderer: THREE.WebGLRenderer) => void = () => {}
+const rendererReady = new Promise<THREE.WebGLRenderer>(resolve => { rendererFound = resolve })
 
-export function setAnisotropy(renderer: THREE.WebGLRenderer) {
-  anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy())
-  for (const texture of textures.values()) { texture.anisotropy = anisotropy; if (texture.image) texture.needsUpdate = true }
+function useRenderer(found: THREE.WebGLRenderer) {
+  if (renderer) return
+  renderer = found
+  rendererFound(found)
+}
+
+function streamTextures(stream: StreamedTextures) {
+  return [stream.color, stream.normal, stream.orm, stream.masks]
+}
+
+export function setAnisotropy(found: THREE.WebGLRenderer) {
+  useRenderer(found)
+  anisotropy = Math.min(8, found.capabilities.getMaxAnisotropy())
+  for (const texture of [...textures.values(), ...[...streams.values()].flatMap(streamTextures)]) { texture.anisotropy = anisotropy; if (texture.version > 0) texture.needsUpdate = true }
 }
 
 function texture(file: string, color: boolean) {
@@ -36,7 +58,7 @@ function texture(file: string, color: boolean) {
   if (cached) return cached
   let done: (value: unknown) => void = () => {}
   pending.push(new Promise(resolve => { done = resolve }))
-  const loaded = loader.load(TEXTURES[file]!, texture => { if (color) textureMean(texture); done(texture) }, undefined, done)
+  const loaded = loader.load(TEXTURES[file]!, done, undefined, done)
   loaded.wrapS = loaded.wrapT = THREE.RepeatWrapping
   loaded.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace
   loaded.anisotropy = anisotropy
@@ -44,111 +66,241 @@ function texture(file: string, color: boolean) {
   return loaded
 }
 
+function bake(name: SurfaceName) {
+  const cached = streams.get(name)
+  if (cached) return cached
+  const info = BAKE_INFO[name]
+  const baked: BakedMaterial = { name: info.graph, size: info.size, depth: info.depth, format: 'ktx2', maps: BAKE_MAPS[name] }
+  const stream = streamBaked(baked, { renderer: rendererReady, resolution: autoResolution(), anisotropy })
+  streams.set(name, stream)
+  pending.push(stream.ready)
+  return stream
+}
+
 export const texturesReady = () => Promise.all(pending)
 
 export function preloadSurfaces() {
-  for (const name of Object.keys(SURFACES)) { texture(`${name}_c.webp`, true); texture(`${name}_n.webp`, false) }
+  for (const name of Object.keys(SURFACES) as SurfaceName[]) bake(name)
   return texturesReady()
 }
 
 export type GroundAO = { height: number; strength: number }
+export type WeatherRoom = { readonly min: readonly [number, number]; readonly max: readonly [number, number]; readonly floor?: number; readonly ceiling: number }
+export type WeatherOpening = { readonly at: readonly [number, number, number]; readonly radius: number }
+export type WeatherSpaces = { readonly rooms?: readonly WeatherRoom[]; readonly openings?: readonly WeatherOpening[] }
 
-export function patchGroundAO(material: THREE.MeshStandardMaterial, ao: GroundAO = { height: 1.1, strength: 0.5 }) {
+const MAX_ROOMS = 8
+const MAX_OPENINGS = 16
+const spaces = {
+  lookRooms: { value: Array.from({ length: MAX_ROOMS }, () => new THREE.Vector4()) },
+  lookRoomHeights: { value: Array.from({ length: MAX_ROOMS }, () => new THREE.Vector2()) },
+  lookRoomCount: { value: 0 },
+  lookOpenings: { value: Array.from({ length: MAX_OPENINGS }, () => new THREE.Vector4()) },
+  lookOpeningCount: { value: 0 },
+}
+
+export function weatherSpaces({ rooms = [], openings = [] }: WeatherSpaces = {}) {
+  if (rooms.length > MAX_ROOMS) throw new Error(`weatherSpaces takes at most ${MAX_ROOMS} rooms`)
+  if (openings.length > MAX_OPENINGS) throw new Error(`weatherSpaces takes at most ${MAX_OPENINGS} openings`)
+  rooms.forEach((room, index) => {
+    spaces.lookRooms.value[index]!.set(Math.min(room.min[0], room.max[0]), Math.min(room.min[1], room.max[1]), Math.max(room.min[0], room.max[0]), Math.max(room.min[1], room.max[1]))
+    spaces.lookRoomHeights.value[index]!.set(room.floor ?? 0, room.ceiling)
+  })
+  openings.forEach((opening, index) => spaces.lookOpenings.value[index]!.set(opening.at[0], opening.at[1], opening.at[2], opening.radius))
+  spaces.lookRoomCount.value = rooms.length
+  spaces.lookOpeningCount.value = openings.length
+}
+
+const surfaceVertex = `
+vec4 lookPosition = vec4(transformed, 1.0);
+vec3 lookNormal = objectNormal;
+#ifdef USE_INSTANCING
+lookPosition = instanceMatrix * lookPosition;
+lookNormal = mat3(instanceMatrix) * lookNormal;
+#endif
+vLookWorld = (modelMatrix * lookPosition).xyz;
+vLookUp = normalize(mat3(modelMatrix) * lookNormal).y;`
+
+const surfaceUv = `
+#ifdef USE_MAP
+vMapUv *= lookTile;
+#endif
+#ifdef USE_NORMALMAP
+vNormalMapUv *= lookTile;
+#endif
+#ifdef USE_ROUGHNESSMAP
+vRoughnessMapUv *= lookTile;
+#endif
+#ifdef USE_METALNESSMAP
+vMetalnessMapUv *= lookTile;
+#endif
+#ifdef USE_AOMAP
+vAoMapUv *= lookTile;
+#endif`
+
+const surfaceCommon = `
+varying vec3 vLookWorld;
+varying float vLookUp;
+uniform sampler2D lookMasks;
+uniform vec3 lookWeather;
+uniform vec2 lookGroundAO;
+uniform vec4 lookRooms[${MAX_ROOMS}];
+uniform vec2 lookRoomHeights[${MAX_ROOMS}];
+uniform int lookRoomCount;
+uniform vec4 lookOpenings[${MAX_OPENINGS}];
+uniform int lookOpeningCount;`
+
+const surfaceWeather = `
+#ifdef USE_MAP
+vec4 lookMask = texture2D(lookMasks, vMapUv);
+#else
+vec4 lookMask = vec4(0.0);
+#endif
+float lookFloor = 0.0;
+float lookCeiling = 1e4;
+for (int i = 0; i < ${MAX_ROOMS}; i++) {
+  if (i >= lookRoomCount) break;
+  vec4 lookRoom = lookRooms[i];
+  if (vLookWorld.x >= lookRoom.x && vLookWorld.z >= lookRoom.y && vLookWorld.x <= lookRoom.z && vLookWorld.z <= lookRoom.w) { lookFloor = lookRoomHeights[i].x; lookCeiling = lookRoomHeights[i].y; }
+}
+float lookAbove = vLookWorld.y - lookFloor;
+float lookBelow = lookCeiling - vLookWorld.y;
+float lookWall = 1.0 - abs(vLookUp);
+float lookWet = 0.0;
+float lookSmoke = 0.0;
+for (int i = 0; i < ${MAX_OPENINGS}; i++) {
+  if (i >= lookOpeningCount) break;
+  vec4 lookOpening = lookOpenings[i];
+  vec3 lookDelta = vLookWorld - lookOpening.xyz;
+  float lookDrop = max(-lookDelta.y, 0.0) * 0.3 * lookWall;
+  lookWet = max(lookWet, 1.0 - smoothstep(lookOpening.w, lookOpening.w * 2.0, length(vec2(length(lookDelta.xz), lookDrop))));
+  lookSmoke = max(lookSmoke, (1.0 - smoothstep(lookOpening.w * 0.5, lookOpening.w * 1.8, length(lookDelta))) * step(0.0, lookDelta.y));
+}
+float lookGrime = lookWeather.x * clamp(lookMask.g * 0.75 + (1.0 - smoothstep(0.0, 1.4, lookAbove)) * lookWall * 0.6 - lookMask.r * 0.3, 0.0, 1.0);
+float lookDamp = lookWeather.y * clamp((0.3 + 0.7 * lookMask.b) * max((1.0 - smoothstep(0.0, 0.8, lookAbove)) * lookWall, lookWet), 0.0, 1.0);
+float lookSoot = lookWeather.z * clamp(max((1.0 - smoothstep(0.0, 1.8, lookBelow)) * step(-0.05, lookBelow), lookSmoke) * (0.6 + 0.4 * lookMask.g), 0.0, 1.0);
+diffuseColor.rgb *= mix(vec3(1.0), vec3(0.55, 0.51, 0.45), lookGrime);
+diffuseColor.rgb *= 1.0 - 0.4 * lookDamp;
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.2 + vec3(0.01), lookSoot * 0.85);`
+
+const surfaceRoughness = `
+roughnessFactor = clamp(roughnessFactor + 0.1 * lookGrime + 0.12 * lookSoot - 0.5 * lookDamp, 0.05, 1.0);`
+
+const surfaceOcclusion = `
+float lookAO = mix(1.0 - lookGroundAO.y, 1.0, smoothstep(0.0, lookGroundAO.x, lookAbove));
+reflectedLight.indirectDiffuse *= lookAO;
+reflectedLight.directDiffuse *= mix(1.0, lookAO, 0.6);`
+
+const NO_MASKS = new THREE.DataTexture(new Uint8Array(4), 1, 1)
+NO_MASKS.needsUpdate = true
+
+type SurfaceUniforms = { lookMasks: { value: THREE.Texture }; lookWeather: { value: THREE.Vector3 }; lookGroundAO: { value: THREE.Vector2 }; lookTile: { value: number } }
+
+function weathered(material: THREE.MeshStandardMaterial, uniforms: SurfaceUniforms) {
   const previous = material.onBeforeCompile
-  material.onBeforeCompile = (shader, renderer) => {
-    previous?.call(material, shader, renderer)
-    shader.uniforms.aoHeight = { value: ao.height }
-    shader.uniforms.aoStrength = { value: ao.strength }
+  const key = material.customProgramCacheKey
+  const inherited = key === THREE.Material.prototype.customProgramCacheKey ? '' : key.call(material)
+  material.onBeforeCompile = (shader, found) => {
+    previous.call(material, shader, found)
+    useRenderer(found)
+    Object.assign(shader.uniforms, uniforms, spaces)
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vLookWorldY;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvLookWorldY = (modelMatrix * vec4(transformed, 1.0)).y;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vLookWorld;\nvarying float vLookUp;\nuniform float lookTile;')
+      .replace('#include <uv_vertex>', `#include <uv_vertex>\n${surfaceUv}`)
+      .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>\n${surfaceVertex}`)
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vLookWorldY;\nuniform float aoHeight;\nuniform float aoStrength;')
-      .replace('#include <aomap_fragment>', '#include <aomap_fragment>\nfloat lookAO = mix(1.0 - aoStrength, 1.0, smoothstep(0.0, aoHeight, vLookWorldY));\nreflectedLight.indirectDiffuse *= lookAO;\nreflectedLight.directDiffuse *= mix(1.0, lookAO, 0.6);')
+      .replace('#include <common>', `#include <common>\n${surfaceCommon}`)
+      .replace('#include <map_fragment>', `#include <map_fragment>\n${surfaceWeather}`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n${surfaceRoughness}`)
+      .replace('#include <aomap_fragment>', `#include <aomap_fragment>\n${surfaceOcclusion}`)
   }
-  material.customProgramCacheKey = () => `look-ao-${ao.height}-${ao.strength}`
+  material.customProgramCacheKey = () => `${inherited}|look-surface`
+  material.userData.weather = uniforms
   return material
 }
 
 export type SurfaceMaps = { readonly map: THREE.Texture; readonly normalMap: THREE.Texture; readonly roughnessMap?: THREE.Texture; readonly metalnessMap?: THREE.Texture; readonly aoMap?: THREE.Texture }
-export type SurfaceSource = { readonly name: string; readonly tile: number; readonly maps: SurfaceMaps; readonly normalScale?: number; readonly roughness?: number; readonly metalness?: number }
-export type SurfaceOptions = { color?: string; scale?: number; ao?: GroundAO | false; side?: THREE.Side; decal?: number }
+export type SurfaceSource = { readonly name: string; readonly tile: number; readonly maps: SurfaceMaps; readonly masks?: THREE.Texture; readonly normalScale?: number; readonly roughness?: number; readonly metalness?: number }
+export type SurfaceOptions = { color?: string; scale?: number; ao?: GroundAO | false; side?: THREE.Side; decal?: number; weather?: SurfaceWeather | false }
 
-const materials = new Map<string, THREE.MeshStandardMaterial>()
-const sourced = new WeakMap<SurfaceSource, Map<string, THREE.MeshStandardMaterial>>()
+const DEFAULT_AO: GroundAO = { height: 1.1, strength: 0.5 }
+const NO_WEATHER: Required<SurfaceWeather> = { grime: 0, damp: 0, soot: 0 }
 
-function sourceSurface(source: SurfaceSource, key: string, options: SurfaceOptions) {
-  const cache = sourced.get(source) ?? new Map<string, THREE.MeshStandardMaterial>()
-  sourced.set(source, cache)
-  const cached = cache.get(key)
-  if (cached) return cached
-  const normal = source.normalScale ?? 1
+function variant(options: SurfaceOptions) {
+  const ao = options.ao === false ? '|noao' : options.ao ? `|ao${options.ao.height},${options.ao.strength}` : ''
+  const weather = options.weather === false ? '|dry' : options.weather ? `|w${options.weather.grime ?? ''},${options.weather.damp ?? ''},${options.weather.soot ?? ''}` : ''
+  return `${ao}${weather}`
+}
+
+type Built = { label: string; maps: SurfaceMaps; masks: THREE.Texture; tile: number; color: string; normalScale: number; roughness: number; metalness: number; weather: Required<SurfaceWeather>; albedo?: string }
+
+function build(base: Built, options: SurfaceOptions & { roughness?: number }, meter: boolean) {
+  const ao = options.ao === false ? { height: 1, strength: 0 } : options.ao ?? DEFAULT_AO
+  const amounts = options.weather === false ? NO_WEATHER : { ...base.weather, ...options.weather }
+  const tile = base.tile * (options.scale ?? 1)
   const material = new THREE.MeshStandardMaterial({
-    name: `look-${source.name}`,
-    ...source.maps,
-    normalScale: new THREE.Vector2(normal, normal),
-    color: options.color ?? '#ffffff',
-    roughness: source.roughness ?? 1,
-    metalness: source.metalness ?? (source.maps.metalnessMap ? 1 : 0),
+    name: `look-${base.label}${variant(options)}`,
+    ...base.maps,
+    normalScale: new THREE.Vector2(base.normalScale, base.normalScale),
+    color: options.color ?? base.color,
+    roughness: options.roughness ?? base.roughness,
+    metalness: base.metalness,
     side: options.side ?? THREE.FrontSide,
     envMapIntensity: 0.55,
   })
-  material.userData.tile = source.tile * (options.scale ?? 1)
-  if (options.ao !== false) patchGroundAO(material, options.ao || undefined)
-  cache.set(key, material)
-  material.addEventListener('dispose', () => cache.delete(key))
+  material.userData.tile = tile
+  if (base.albedo) material.userData.albedo = base.albedo
+  weathered(material, {
+    lookMasks: { value: base.masks },
+    lookWeather: { value: new THREE.Vector3(amounts.grime, amounts.damp, amounts.soot) },
+    lookGroundAO: { value: new THREE.Vector2(ao.height, ao.strength) },
+    lookTile: { value: meter ? 1 / tile : 1 },
+  })
+  if (options.decal) decalBias(material, DECAL_BIAS * options.decal)
   return material
 }
 
+function named(name: SurfaceName): Built {
+  const stream = bake(name)
+  const spec = SURFACES[name]
+  return { label: name, maps: { map: stream.color, normalMap: stream.normal, roughnessMap: stream.orm, metalnessMap: stream.orm, aoMap: stream.orm }, masks: stream.masks, tile: stream.size, color: spec.color ?? '#ffffff', normalScale: 1, roughness: 1, metalness: 1, weather: spec.weather, albedo: BAKE_INFO[name].mean }
+}
+
+function sourced(source: SurfaceSource): Built {
+  return { label: source.name, maps: source.maps, masks: source.masks ?? NO_MASKS, tile: source.tile, color: '#ffffff', normalScale: source.normalScale ?? 1, roughness: source.roughness ?? 1, metalness: source.metalness ?? (source.maps.metalnessMap ? 1 : 0), weather: NO_WEATHER }
+}
+
+const materials = new Map<string, THREE.MeshStandardMaterial>()
+const sourcedMaterials = new WeakMap<SurfaceSource, Map<string, THREE.MeshStandardMaterial>>()
+
 export function releaseSurface(source: SurfaceSource) {
-  const cache = sourced.get(source)
+  const cache = sourcedMaterials.get(source)
   if (!cache) return
   for (const material of cache.values()) material.dispose()
-  sourced.delete(source)
+  sourcedMaterials.delete(source)
 }
 
 export function surface(name: SurfaceName | SurfaceSource, options: SurfaceOptions = {}) {
-  const key = `${typeof name === 'string' ? name : 'source'}|${options.color ?? ''}|${options.scale ?? 1}|${options.ao === false ? 'noao' : JSON.stringify(options.ao ?? '')}|${options.side ?? 0}|${options.decal ?? ''}`
-  if (typeof name !== 'string') return sourceSurface(name, key, options)
-  const cached = materials.get(key)
+  const key = `${options.color ?? ''}|${options.scale ?? 1}|${variant(options)}|${options.side ?? 0}|${options.decal ?? ''}`
+  if (typeof name !== 'string') {
+    const cache = sourcedMaterials.get(name) ?? new Map<string, THREE.MeshStandardMaterial>()
+    sourcedMaterials.set(name, cache)
+    const cached = cache.get(key)
+    if (cached) return cached
+    const material = build(sourced(name), options, false)
+    cache.set(key, material)
+    material.addEventListener('dispose', () => cache.delete(key))
+    return material
+  }
+  const cached = materials.get(`${name}|${key}`)
   if (cached) return cached
-  const spec = SURFACES[name]
-  const material = new THREE.MeshStandardMaterial({
-    name: `look-${name}`,
-    map: texture(`${name}_c.webp`, true),
-    normalMap: texture(`${name}_n.webp`, false),
-    normalScale: new THREE.Vector2(spec.normal ?? 1, spec.normal ?? 1),
-    color: options.color ?? spec.color ?? '#ffffff',
-    roughness: spec.roughness,
-    metalness: spec.metalness ?? 0,
-    side: options.side ?? THREE.FrontSide,
-    envMapIntensity: 0.55,
-  })
-  material.userData.tile = spec.tile * (options.scale ?? 1)
-  if (options.ao !== false) patchGroundAO(material, options.ao || undefined)
-  if (options.decal) decalBias(material, DECAL_BIAS * options.decal)
-  materials.set(key, material)
+  const material = build(named(name), options, false)
+  materials.set(`${name}|${key}`, material)
   return material
 }
 
-export function meterSurface(name: SurfaceName | SurfaceSource, options: { color?: string; scale?: number; ao?: GroundAO | false; roughness?: number } = {}) {
-  const base = surface(name, options)
-  const material = base.clone()
-  material.onBeforeCompile = base.onBeforeCompile
-  material.customProgramCacheKey = base.customProgramCacheKey
-  if (options.roughness !== undefined) material.roughness = options.roughness
-  const repeat = 1 / (base.userData.tile as number)
-  const clones = new Map<THREE.Texture, THREE.Texture>()
-  for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap'] as const) {
-    const map = base[key]
-    if (!map) continue
-    const scaled = clones.get(map) ?? map.clone()
-    clones.set(map, scaled)
-    scaled.repeat.set(repeat, repeat)
-    scaled.needsUpdate = true
-    material[key] = scaled
-  }
-  return material
+export function meterSurface(name: SurfaceName | SurfaceSource, options: SurfaceOptions & { roughness?: number } = {}) {
+  return build(typeof name === 'string' ? named(name) : sourced(name), options, true)
 }
 
 export function worldBoxGeometry(width: number, height: number, depth: number, tile: number) {
@@ -340,26 +492,32 @@ float lookNoise(vec2 p) {
   return mix(mix(lookHash(i), lookHash(i + vec2(1.0, 0.0)), u.x), mix(lookHash(i + vec2(0.0, 1.0)), lookHash(i + vec2(1.0, 1.0)), u.x), u.y);
 }`
 
+const GROUND_TILE = 4
+
 let ground: THREE.MeshStandardMaterial | null = null
 export function groundMaterial() {
   if (ground) return ground
-  const dirt = SURFACES.dirt
-  const material = new THREE.MeshStandardMaterial({ name: 'look-ground', map: texture('dirt_c.webp', true), normalMap: texture('dirt_n.webp', false), color: dirt.color, roughness: 1, envMapIntensity: 0.4 })
-  material.userData.tile = dirt.tile
-  const grass = texture('grass_c.webp', true)
-  const gravel = texture('gravel_c.webp', true)
-  material.onBeforeCompile = shader => {
-    shader.uniforms.grassMap = { value: grass }
-    shader.uniforms.gravelMap = { value: gravel }
+  const dirt = bake('dirt')
+  const grass = bake('grass')
+  const gravel = bake('gravel')
+  const material = new THREE.MeshStandardMaterial({ name: 'look-ground', map: dirt.color, normalMap: dirt.normal, roughnessMap: dirt.orm, aoMap: dirt.orm, color: SURFACES.dirt.color, roughness: 1, envMapIntensity: 0.4 })
+  material.userData.tile = GROUND_TILE
+  material.userData.albedo = BAKE_INFO.dirt.mean
+  const glsl = (value: number) => value.toFixed(5)
+  material.onBeforeCompile = (shader, found) => {
+    useRenderer(found)
+    shader.uniforms.grassMap = { value: grass.color }
+    shader.uniforms.gravelMap = { value: gravel.color }
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;')
+      .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;\nvarying vec2 vGroundUv;')
+      .replace('#include <uv_vertex>', `#include <uv_vertex>\nvGroundUv = vMapUv * ${glsl(GROUND_TILE)};\nvMapUv *= ${glsl(GROUND_TILE / dirt.size)};\nvNormalMapUv *= ${glsl(GROUND_TILE / dirt.size)};\nvRoughnessMapUv *= ${glsl(GROUND_TILE / dirt.size)};\nvAoMapUv *= ${glsl(GROUND_TILE / dirt.size)};`)
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvGroundXZ = (modelMatrix * vec4(transformed, 1.0)).xz;')
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec2 vGroundXZ;\nuniform sampler2D grassMap;\nuniform sampler2D gravelMap;\n${noise}`)
+      .replace('#include <common>', `#include <common>\nvarying vec2 vGroundXZ;\nvarying vec2 vGroundUv;\nuniform sampler2D grassMap;\nuniform sampler2D gravelMap;\n${noise}`)
       .replace('#include <map_fragment>', `
         vec3 groundDirt = texture2D(map, vMapUv).rgb;
-        vec3 groundGrass = texture2D(grassMap, vMapUv * 0.83 + 0.37).rgb * vec3(0.93, 0.95, 0.82);
-        vec3 groundGravel = texture2D(gravelMap, vMapUv * 1.6).rgb * 0.92;
+        vec3 groundGrass = texture2D(grassMap, vGroundUv * ${glsl(1 / grass.size)} + 0.37).rgb * vec3(0.93, 0.95, 0.82);
+        vec3 groundGravel = texture2D(gravelMap, vGroundUv * ${glsl(1 / gravel.size)}).rgb * 0.92;
         float grassMask = smoothstep(0.38, 0.6, lookNoise(vGroundXZ * 0.045) * 0.7 + lookNoise(vGroundXZ * 0.19) * 0.3);
         float gravelMask = smoothstep(0.62, 0.74, lookNoise(vGroundXZ * 0.07 + 13.1) * 0.75 + lookNoise(vGroundXZ * 0.4) * 0.25);
         vec3 groundColor = mix(mix(groundDirt, groundGrass, grassMask), groundGravel, gravelMask * (1.0 - grassMask));
@@ -382,7 +540,7 @@ function textureMean(texture: THREE.Texture) {
   const cached = textureMeans.get(texture)
   if (cached) return cached
   const image = texture.image as (CanvasImageSource & { width: number; height: number }) | undefined
-  if (!image?.width || typeof document === 'undefined') return null
+  if (!image?.width || (texture as THREE.CompressedTexture).isCompressedTexture || typeof document === 'undefined') return null
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = 32
   const context = canvas.getContext('2d', { willReadFrequently: true })
@@ -403,7 +561,8 @@ export function surfaceAlbedo(hit: THREE.Intersection, target = new THREE.Color(
   const material = (Array.isArray(mesh.material) ? mesh.material[hit.face?.materialIndex ?? 0] : mesh.material) as THREE.MeshStandardMaterial | undefined
   if (!material?.color || !material.visible || material.colorWrite === false) return null
   target.copy(material.color)
-  const mean = material.map ? textureMean(material.map) : null
+  const albedo = material.userData.albedo as string | undefined
+  const mean = albedo ? new THREE.Color(albedo) : material.map ? textureMean(material.map) : null
   if (mean) target.multiply(mean)
   const instanced = mesh as THREE.InstancedMesh
   if (hit.instanceId !== undefined && instanced.instanceColor) target.multiply(new THREE.Color().fromBufferAttribute(instanced.instanceColor, hit.instanceId))

@@ -217,9 +217,10 @@ vec4 box(ivec2 q, ivec2 level, int n) {
 }
 vec4 run(vec2 uv, ivec2 xy) {
   ivec2 level = src;
+  ivec2 repeat = ivec2(ip(REPEAT_U), ip(REPEAT_V));
   int n = 1;
-  for (int k = 0; k < 16; k++) { if (level.x < size.x * 2 || level.y < size.y * 2) break; level >>= 1; n *= 2; }
-  vec2 f = uv * vec2(level) - 0.5;
+  for (int k = 0; k < 16; k++) { if (level.x * repeat.x < size.x * 2 || level.y * repeat.y < size.y * 2) break; level >>= 1; n *= 2; }
+  vec2 f = uv * vec2(repeat) * vec2(level) - 0.5;
   vec2 i = floor(f);
   vec2 d = f - i;
   ivec2 q = ivec2(i);
@@ -297,6 +298,12 @@ vec4 run(vec2 uv, ivec2 xy) {
   normal: `vec4 run(vec2 uv, ivec2 xy) {
   float dx = (fetchW(t0, xy + ivec2(1, 0)).r - fetchW(t0, xy - ivec2(1, 0)).r) * SCALE;
   float dy = (fetchW(t0, xy + ivec2(0, 1)).r - fetchW(t0, xy - ivec2(0, 1)).r) * SCALE;
+  if (BASED > 0.0) {
+    vec3 b = fetchW(t1, xy).rgb * 2.0 - 1.0;
+    float bz = max(b.z, 0.05);
+    dx -= b.x / bz;
+    dy -= b.y / bz;
+  }
   float len = length(vec3(dx, dy, 1.0));
   return vec4(0.5 - 0.5 * dx / len, 0.5 - 0.5 * dy / len, 0.5 + 0.5 / len, 1.0);
 }`,

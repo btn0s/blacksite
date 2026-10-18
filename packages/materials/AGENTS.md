@@ -6,7 +6,7 @@ Read this guide before authoring a graph, adding a node, baking a material or ch
 
 ## Work in this order
 
-1. Choose a real material, its viewing distance and its physical repeat size. Open the matching `library/<id>.json` and the reference metadata in `scans/scans.json`. For image input, also read `images/<id>.json`.
+1. Choose a real material, its viewing distance and its physical repeat size. Open the matching `library/<id>.json` or `library/<id>-scan.json` and the reference metadata in `scans/scans.json`.
 2. Build the structure in height first: joints, boards, grains and cavities. Derive colour and roughness from related fields, with independent fine variation. Keep base metalness zero for paint, rust, concrete, wood and soil; expose metal only where the actual metal is visible.
 3. Add weather as a consequence of structure: dirt in cavities, wear on convex edges, moisture in low areas. Check the clean material first; weather must not conceal broken scale or tiling.
 4. Compare graph, image-derived and reference materials in `/frames/materials.html`, with the same mesh, camera, light and metres per repeat. Inspect the wall corner, cube and sphere at normal viewing distance and close up. Check at least two repeats in each direction. Record which source wins; keep the reference as the default until a replacement earns it.
@@ -95,7 +95,7 @@ Masks are aggregate fields, not independent outputs for every damage type. Keep 
 
 **Wet tiles.** Start with `library/wet-tile.json`, `orientation: "floor"`. Grout stays lower than ceramic. Moisture darkens and lowers roughness; puddles flatten the local height. Review the roughness map directly: a dark base colour alone does not make a surface wet.
 
-**An image turned into a material.** Start with `library/<id>-image.json`. The chain is `image → seamless → delight` for colour and `channel(luma) → highpass → blur → levels` for height. Derive restrained roughness and then refine with structural masks; keep metalness explicit. Preserve model, prompt, date, provider and source size in `images/<id>.json`, plus a source/terms URL in credits. A prompt that requests a two-metre area is an intended scale, not a measured one.
+**A scan turned into a material.** Start with `library/<id>-scan.json`. Each `image` node reads one map of a CC0 scan in `scans/<id>/` with an integer `repeat` that fits the scan's physical size into the graph tile. The colour chain is `image → delight`; ambientCG scans already tile, so `seamless` would only ghost features and misalign colour from the scan's height, normal and roughness. The scan's normal goes to `outputs.normal`; the bake adds weathering relief on top of it. Weathering is structural: the masks map is edge (R, convex wear), cavity (G, dirt in crevices), low/wet (B, damp in low areas) and damage (A), all derived from the scan's height before any weather is applied. Record the scan's source, licence and physical size in `scans/scans.json` and the site credits.
 
 One colour image cannot determine height, roughness, metalness or hidden geometry. A dark painted mark may be mistaken for a recess; a highlight may become a bump. These are authored approximations, even when the base colour looks photographic. Use structure nodes to correct joints and boards, inspect normals under grazing light, and retain the reference if relief looks inflated or seams smear.
 
@@ -105,7 +105,7 @@ Run from the repository root:
 
 ```sh
 corepack pnpm --filter @blacksite/materials bake library/poured-concrete.json --out baked --sizes 512,1024 --formats ktx2,webp
-corepack pnpm --filter @blacksite/materials bake library/poured-concrete-image.json --out baked --sizes 512,1024 --formats ktx2,webp
+corepack pnpm --filter @blacksite/materials bake library/poured-concrete-scan.json --out baked --sizes 512,1024 --formats ktx2,webp
 ```
 
 `pnpm --filter` runs in the package directory. To author inside a game, run the same CLI with absolute graph/output paths, or call `bake(graph, graphFile, outDir, options)` from `@blacksite/materials/bake` in a build script. `--weather none` bakes a clean material; `--weather '<JSON>'` replaces weather. `--budget /absolute/path/budget.config.json` checks each baked file against `maxAssetBytes`.
@@ -126,7 +126,7 @@ const material = surface(source)
 const geometry = worldBoxGeometry(3, 2.4, 0.2, material.userData.tile)
 ```
 
-The switch at the world-kit call site is `surface('cast')` to `surface(source)`. Existing named surfaces keep their defaults. `meterSurface(source)` is for geometry whose UVs already express metres. Do not also divide those UVs by the tile size. `loadBakedSurface` includes the mask texture on the source for custom decal/response shaders; `surface()` uses the standard PBR maps. KTX2 loading requires the renderer to select a supported GPU format. WebP loading does not.
+Every world-kit `SurfaceName` is already a scan-graph bake: `surface('cast')` streams the committed KTX2 bake from `packages/look/assets/surfaces/`, and `node packages/look/scripts/bake-surfaces.mjs [names]` rebakes them. Use `surface(source)` only for a material outside that set. `meterSurface(source)` is for geometry whose UVs already express metres. Do not also divide those UVs by the tile size. `loadBakedSurface` includes the mask texture on the source; `surface()` feeds it to the world kit's weathering shader. `streamBaked(baked, { renderer })` returns the four textures at once and fills them in place when the load finishes; `renderer` may be a promise. KTX2 loading requires the renderer to select a supported GPU format. WebP loading does not.
 
 For irregular gravel, soil or patchy wall materials, `applyStochasticTiling` from `@blacksite/look` breaks up repetition while keeping colour, tangent normal and ORM samples aligned:
 
@@ -139,7 +139,7 @@ const restoreSampling = applyStochasticTiling(wall)
 
 It modifies the material and returns a cleanup function, not another material. Apply it once to a cached material, then call `restoreSampling()` when removing the effect. Every map must use repeat wrapping and the same UV transform. Keep structured brick, tile, plank, panel and corrugation patterns on direct sampling so joints remain aligned. `liveMaterial()` uses the native colour-decoding path and preserves standard shader chunks, so floating-point authoring previews support the same helper without decoding colour twice. When cloning a live material, copy its `defines`, `onBeforeCompile` and `customProgramCacheKey` before installing the helper; Three’s material clone does not preserve those custom shader settings. The helper samples colour/normal/ORM; custom shaders using the separate damage masks must deliberately match its sampling.
 
-Import only `@blacksite/materials/three` at runtime. Authoring imports from the package root include evaluators; `/bake` and `/node` are Node-only. Load during scene warmup and account for the textures in the scene budget. `surface()` caches by source identity, so load once and reuse the same source object. On unload, `releaseSurface(source)` from the world kit disposes its cached material variants; then `disposeSurfaceSource(source)` from `/three` disposes the four source textures once each. A `meterSurface()` result owns cloned maps: dispose that material and its distinct cloned maps separately.
+Import only `@blacksite/materials/three` at runtime. Authoring imports from the package root include evaluators; `/bake` and `/node` are Node-only. Load during scene warmup and account for the textures in the scene budget. `surface()` caches by source identity, so load once and reuse the same source object. On unload, `releaseSurface(source)` from the world kit disposes its cached material variants; then `disposeSurfaceSource(source)` from `/three` disposes the four source textures once each. A `meterSurface()` result shares the source maps and scales UVs in its shader; dispose only the material.
 
 For a KTX2 release build, include only the selected descriptors and their textures. If a release also delivers WebP, list those intentional fallback files in the game's existing budget policy and count their bytes; do not hide an unbounded library in a public directory. Run `blacksite budget` on the actual game build with its warmup and fixed-step contract.
 

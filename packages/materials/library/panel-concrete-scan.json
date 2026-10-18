@@ -1,0 +1,71 @@
+{
+  "name": "panel-concrete-scan",
+  "title": "Concrete panel",
+  "description": "Concrete042A CC0 scan (https://ambientcg.com/view?id=Concrete042A), delit, with weather that follows the scan's height: dirt in cavities, wear on edges, damp in low areas.",
+  "size": 3,
+  "depth": 0.006,
+  "seed": 1,
+  "orientation": "wall",
+  "nodes": {
+    "photo": {
+      "op": "image",
+      "src": "../scans/panel-concrete/color.webp"
+    },
+    "albedo": {
+      "op": "delight",
+      "input": "photo",
+      "radius": 0.9,
+      "strength": 0.5
+    },
+    "heightmap": {
+      "op": "image",
+      "src": "../scans/panel-concrete/height.webp"
+    },
+    "height": {
+      "op": "channel",
+      "input": "heightmap",
+      "channel": "r"
+    },
+    "normalmap": {
+      "op": "image",
+      "src": "../scans/panel-concrete/normal.webp"
+    },
+    "roughnessmap": {
+      "op": "image",
+      "src": "../scans/panel-concrete/roughness.webp"
+    },
+    "roughness": {
+      "op": "channel",
+      "input": "roughnessmap",
+      "channel": "r"
+    },
+    "aomap": {
+      "op": "image",
+      "src": "../scans/panel-concrete/ao.webp"
+    },
+    "ao": {
+      "op": "channel",
+      "input": "aomap",
+      "channel": "r"
+    }
+  },
+  "outputs": {
+    "color": "albedo",
+    "height": "height",
+    "normal": "normalmap",
+    "roughness": "roughness",
+    "metalness": 0,
+    "ao": "ao"
+  },
+  "finish": {
+    "ao": {
+      "strength": 0
+    }
+  },
+  "weather": {
+    "age": 0.75,
+    "dirt": 0.45,
+    "moisture": 0.2,
+    "wear": 0.2
+  }
+}

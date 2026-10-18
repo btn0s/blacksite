@@ -4,7 +4,7 @@ import { compile, parseGraph, type MaterialGraph, type NodeSpec } from '../src/g
 import { parity, type Diff } from '../src/parity'
 
 const library = import.meta.glob('../library/*.json', { eager: true, import: 'default' })
-const imageUrls = import.meta.glob('../images/*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>
+const imageUrls = import.meta.glob('../scans/*/*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>
 
 export type MaterialParityCase = {
   readonly name: string
@@ -58,7 +58,7 @@ const additionalGraphs: MaterialGraph[] = [
   ] satisfies NodeSpec[]).map((node, index): MaterialGraph => ({ name: `node-contract-${index}`, size: 1, depth: 0.01, seed: 8388619, nodes: { noise: { op: 'fbm', cell: 0.2 }, value: node }, outputs: { color: 'value', height: 'value' } })),
 ]
 
-export async function runMaterialParity(renderer: THREE.WebGLRenderer, resolutions: readonly number[] = [64, 128], bakeResolutionCases: readonly string[] = ['poured-concrete', 'poured-concrete-image', 'painted-metal', 'wet-tile']): Promise<MaterialParityResult> {
+export async function runMaterialParity(renderer: THREE.WebGLRenderer, resolutions: readonly number[] = [64, 128], bakeResolutionCases: readonly string[] = ['poured-concrete', 'poured-concrete-scan', 'painted-metal', 'wet-tile']): Promise<MaterialParityResult> {
   const start = performance.now()
   const threshold = 0.02
   const cases: MaterialParityCase[] = []

@@ -126,34 +126,6 @@
           "size": 414824
         }
       ]
-    },
-    {
-      "id": "wood-planks-old",
-      "title": "Old Planks 02",
-      "category": "material",
-      "author": "Rob Tuytel (Poly Haven)",
-      "licence": "CC0-1.0",
-      "source": {
-        "url": "https://polyhaven.com/a/old_planks_02"
-      },
-      "attribution": "\"Old Planks 02\" by Rob Tuytel (Poly Haven) (https://polyhaven.com/a/old_planks_02), CC0 1.0",
-      "files": [
-        {
-          "name": "old_planks_02_diff_2k.jpg",
-          "sha256": "04191d71093db79b378b6b16d0f7c51560294cfd8b7c15d20456d154eb5811d7",
-          "size": 1430659
-        },
-        {
-          "name": "old_planks_02_nor_gl_2k.jpg",
-          "sha256": "4a18fab38628fa7a800f3d3f6aa29bdaea4c01711738718ec6286fb392a1aa1f",
-          "size": 2347468
-        },
-        {
-          "name": "old_planks_02_arm_2k.jpg",
-          "sha256": "5317488c3aad25c3439ceb5a39c9626e33116fe6648bad53db11d871b7499efc",
-          "size": 501912
-        }
-      ]
     }
   ]
 }

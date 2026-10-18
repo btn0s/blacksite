@@ -269,12 +269,13 @@ export const KERNELS: Record<Step['kernel'], Kernel> = {
     })
   },
 
-  image(out, _p, _inputs, step, extra) {
+  image(out, p, _inputs, step, extra) {
+    const [ru, rv] = p as unknown as [number, number]
     let src = extra.images.get(step.image!)
     if (!src) throw new Error(`image "${step.image}" was not provided`)
-    while (src.w >= out.w * 2 && src.h >= out.h * 2) src = downsample(src)
+    while (src.w * ru >= out.w * 2 && src.h * rv >= out.h * 2) src = downsample(src)
     const s = src
-    perPixel(out, (u, v) => [sampleUV(s, u, v, 0), sampleUV(s, u, v, 1), sampleUV(s, u, v, 2), 1])
+    perPixel(out, (u, v) => [sampleUV(s, u * ru, v * rv, 0), sampleUV(s, u * ru, v * rv, 1), sampleUV(s, u * ru, v * rv, 2), 1])
   },
 
   warp(out, p, [input, by, byY]) {
@@ -358,11 +359,16 @@ export const KERNELS: Record<Step['kernel'], Kernel> = {
     })
   },
 
-  normal(out, p, [input]) {
-    const scale = p[0]!
+  normal(out, p, [input, base]) {
+    const [scale, based] = p as unknown as [number, number]
     perPixel(out, (_u, _v, x, y) => {
-      const dx = (fetch(input!, x + 1, y, 0) - fetch(input!, x - 1, y, 0)) * scale
-      const dy = (fetch(input!, x, y + 1, 0) - fetch(input!, x, y - 1, 0)) * scale
+      let dx = (fetch(input!, x + 1, y, 0) - fetch(input!, x - 1, y, 0)) * scale
+      let dy = (fetch(input!, x, y + 1, 0) - fetch(input!, x, y - 1, 0)) * scale
+      if (based > 0) {
+        const bz = Math.max(2 * fetch(base!, x, y, 2) - 1, 0.05)
+        dx -= (2 * fetch(base!, x, y, 0) - 1) / bz
+        dy -= (2 * fetch(base!, x, y, 1) - 1) / bz
+      }
       const len = Math.hypot(dx, dy, 1)
       return [0.5 - 0.5 * dx / len, 0.5 - 0.5 * dy / len, 0.5 + 0.5 / len, 1]
     })

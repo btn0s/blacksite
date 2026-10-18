@@ -1,0 +1,70 @@
+{
+  "name": "grass-scan",
+  "title": "Grass and soil",
+  "description": "Ground037 CC0 scan (https://ambientcg.com/view?id=Ground037), delit, with weather that follows the scan's height: dirt in cavities, wear on edges, damp in low areas.",
+  "size": 2.1,
+  "depth": 0.02,
+  "seed": 1,
+  "orientation": "floor",
+  "nodes": {
+    "photo": {
+      "op": "image",
+      "src": "../scans/grass/color.webp"
+    },
+    "albedo": {
+      "op": "delight",
+      "input": "photo",
+      "radius": 0.63,
+      "strength": 0.5
+    },
+    "heightmap": {
+      "op": "image",
+      "src": "../scans/grass/height.webp"
+    },
+    "height": {
+      "op": "channel",
+      "input": "heightmap",
+      "channel": "r"
+    },
+    "normalmap": {
+      "op": "image",
+      "src": "../scans/grass/normal.webp"
+    },
+    "roughnessmap": {
+      "op": "image",
+      "src": "../scans/grass/roughness.webp"
+    },
+    "roughness": {
+      "op": "channel",
+      "input": "roughnessmap",
+      "channel": "r"
+    },
+    "aomap": {
+      "op": "image",
+      "src": "../scans/grass/ao.webp"
+    },
+    "ao": {
+      "op": "channel",
+      "input": "aomap",
+      "channel": "r"
+    }
+  },
+  "outputs": {
+    "color": "albedo",
+    "height": "height",
+    "normal": "normalmap",
+    "roughness": "roughness",
+    "metalness": 0,
+    "ao": "ao"
+  },
+  "finish": {
+    "ao": {
+      "strength": 0
+    }
+  },
+  "weather": {
+    "age": 0.55,
+    "dirt": 0.3,
+    "moisture": 0.15
+  }
+}

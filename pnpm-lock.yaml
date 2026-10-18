@@ -752,6 +752,9 @@ importers:
 
   packages/look:
     dependencies:
+      '@blacksite/materials':
+        specifier: workspace:*
+        version: link:../materials
       n8ao:
         specifier: ^2.0.1
         version: 2.0.1(postprocessing@6.39.5(three@0.186.1))(three@0.186.1)

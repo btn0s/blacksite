@@ -47,11 +47,15 @@ function pickResolution(baked: BakedMaterial, wanted: number) {
   return sizes.reduce((best, size) => Math.abs(size - wanted) < Math.abs(best - wanted) ? size : best, sizes[0]!)
 }
 
-function prepare(texture: THREE.Texture, color: boolean, anisotropy: number) {
+function settings(texture: THREE.Texture, color: boolean, anisotropy: number) {
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping
   texture.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace
   texture.anisotropy = anisotropy
-  texture.needsUpdate = true
+  return texture
+}
+
+function prepare(texture: THREE.Texture, color: boolean, anisotropy: number) {
+  settings(texture, color, anisotropy).needsUpdate = true
   return texture
 }
 
@@ -76,6 +80,31 @@ export async function loadBaked(baked: BakedMaterial, options: LoadOptions = {})
   }
   const [color, normal, orm, masks] = loaded.map(result => (result as PromiseFulfilledResult<THREE.Texture>).value)
   return { name: baked.name, size: baked.size, color: prepare(color!, true, anisotropy), normal: prepare(normal!, false, anisotropy), orm: prepare(orm!, false, anisotropy), masks: prepare(masks!, false, anisotropy) }
+}
+
+const FILLED = ['mipmaps', 'format', 'type', 'internalFormat', 'generateMipmaps', 'minFilter', 'magFilter', 'flipY', 'premultiplyAlpha', 'unpackAlignment'] as const
+
+export function fillTexture(target: THREE.Texture, loaded: THREE.Texture) {
+  const from = loaded as unknown as Record<string, unknown>
+  const to = target as unknown as Record<string, unknown>
+  for (const key of FILLED) to[key] = from[key]
+  target.image = loaded.image
+  target.needsUpdate = true
+  return target
+}
+
+export type StreamOptions = Omit<LoadOptions, 'renderer'> & { readonly renderer?: THREE.WebGLRenderer | PromiseLike<THREE.WebGLRenderer> }
+export type StreamedTextures = MaterialTextures & { readonly ready: Promise<MaterialTextures> }
+
+export function streamBaked(baked: BakedMaterial, options: StreamOptions = {}): StreamedTextures {
+  const anisotropy = Math.min(8, options.anisotropy ?? 4)
+  const empty = () => baked.format === 'ktx2' ? new THREE.CompressedTexture([], 0, 0) : new THREE.Texture()
+  const textures = { name: baked.name, size: baked.size, color: settings(empty(), true, anisotropy), normal: settings(empty(), false, anisotropy), orm: settings(empty(), false, anisotropy), masks: settings(empty(), false, anisotropy) }
+  const ready = Promise.resolve(options.renderer).then(renderer => loadBaked(baked, { ...options, renderer })).then(loaded => {
+    for (const key of ['color', 'normal', 'orm', 'masks'] as const) fillTexture(textures[key], loaded[key])
+    return textures
+  })
+  return { ...textures, ready }
 }
 
 export function surfaceSource(textures: MaterialTextures): SurfaceSource {

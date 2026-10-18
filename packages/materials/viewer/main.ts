@@ -10,21 +10,21 @@ type Scan = { id: string; assetId: string; url: string; author: string; licence:
 type SideKey = 'a' | 'b'
 
 const graphs = import.meta.glob<MaterialGraph>('../library/*.json', { eager: true, import: 'default' })
-const imageUrls = import.meta.glob<string>('../images/*.webp', { eager: true, query: '?url', import: 'default' })
 const scanUrls = import.meta.glob<string>('../scans/*/*.webp', { eager: true, query: '?url', import: 'default' })
 const bakedModules = import.meta.glob<BakedMaterial>('../baked/*/index.ts', { import: 'default' })
 
-const ORDER = ['poured-concrete', 'precast-panel', 'plaster-paint', 'brick', 'corrugated-rust', 'painted-metal', 'wet-tile', 'asphalt', 'gravel-soil', 'bark', 'wood-planks']
+const ORDER = ['poured-concrete', 'stained-concrete', 'cast-concrete', 'panel-concrete', 'slab-concrete', 'precast-panel', 'plaster-paint', 'painted-plaster', 'brick', 'corrugated-rust', 'painted-metal', 'rust', 'wet-tile', 'asphalt', 'gravel-soil', 'soil', 'grass', 'bark', 'wood-planks']
 const ROTATED_SCANS = new Set(['corrugated-rust', 'wood-planks'])
 const STOCHASTIC_MATERIALS = new Set(['plaster-paint', 'asphalt', 'gravel-soil', 'bark'])
 const WEATHER_KEYS = ['age', 'dirt', 'moisture', 'puddles', 'rust', 'wear', 'chips', 'bullets', 'scorch'] as const
 type WeatherKey = (typeof WEATHER_KEYS)[number]
 
-const graphOf = (id: string, kind: 'graph' | 'image') => graphs[`../library/${kind === 'image' ? `${id}-image` : id}.json`]
+const graphOf = (id: string, kind: 'graph' | 'image') => graphs[`../library/${kind === 'image' ? `${id}-scan` : id}.json`]
 const scans = scanManifest as Scan[]
 const scanOf = (id: string) => scans.find(scan => scan.id === id)
-const bakedOf = (id: string, kind: 'graph' | 'image') => bakedModules[`../baked/${kind === 'image' ? `${id}-image` : id}/index.ts`]
-const ids = ORDER.filter(id => graphOf(id, 'graph'))
+const bakedOf = (id: string, kind: 'graph' | 'image') => bakedModules[`../baked/${kind === 'image' ? `${id}-scan` : id}/index.ts`]
+const anyGraph = (id: string) => graphOf(id, 'graph') ?? graphOf(id, 'image')
+const ids = ORDER.filter(id => anyGraph(id))
 
 const params = new URLSearchParams(location.search)
 const portrait = innerHeight > innerWidth
@@ -293,8 +293,8 @@ async function updateSide(side: Side) {
   const program = compile(graph, state.res, { weather: weatherFor(graph) })
   const images = new Map<string, THREE.Texture>()
   for (const src of program.images) {
-    const url = imageUrls[`../images/${src.split('/').pop()}`]
-    if (!url) throw new Error(`${graph.name}: image ${src} is not in packages/materials/images`)
+    const url = scanUrls[`../scans/${src.split('/').slice(-2).join('/')}`]
+    if (!url) throw new Error(`${graph.name}: image ${src} is not in packages/materials/scans`)
     images.set(src, await loadImageTexture(url))
   }
   if (version !== side.version) return
@@ -307,8 +307,7 @@ async function updateSide(side: Side) {
   const material = liveMaterial(result, side.key)
   side.use(material, () => disposeMaterial(material, false))
   ready.ms[side.key] = ms
-  const detail = kind === 'image' && graph.source ? `${graph.source.model} · ${graph.size} m tile · ${state.res}px · ${ms.toFixed(0)} ms` : `${program.steps.length} steps · ${graph.size} m tile · ${state.res}px · ${ms.toFixed(0)} ms`
-  side.setLabel(`${kind === 'image' ? 'image graph' : 'graph'} · ${graph.title ?? graph.name}`, detail)
+  side.setLabel(`${kind === 'image' ? 'scan graph' : 'graph'} · ${graph.title ?? graph.name}`, `${program.steps.length} steps · ${graph.size} m tile · ${state.res}px · ${ms.toFixed(0)} ms`)
 }
 
 function layout() {
@@ -374,7 +373,7 @@ function select(label: string, options: Array<[string, string]>, value: string, 
   return input
 }
 
-const SOURCE_OPTIONS: Array<[string, string]> = [['graph', 'procedural graph'], ['image', 'image graph'], ['scan', 'CC0 reference'], ['baked', 'baked graph (KTX2)'], ['baked-image', 'baked image (KTX2)']]
+const SOURCE_OPTIONS: Array<[string, string]> = [['graph', 'procedural graph'], ['image', 'scan graph'], ['scan', 'CC0 reference'], ['baked', 'baked graph (KTX2)'], ['baked-image', 'baked scan graph (KTX2)']]
 const sliders = new Map<WeatherKey, HTMLInputElement>()
 let pending = false
 let revision = 0
@@ -404,7 +403,7 @@ function refresh(which: SideKey[] = ['a', 'b']) {
 }
 
 function syncSliders() {
-  const graph = graphOf(state.id, 'graph')
+  const graph = anyGraph(state.id)
   for (const [key, input] of sliders) input.value = String(weatherValue(graph, key))
 }
 
@@ -426,15 +425,16 @@ function syncUrl() {
 const sourceInputs = new Map<SideKey, HTMLSelectElement>()
 function syncSources() {
   for (const key of ['a', 'b'] as const) {
-    const available = SOURCE_OPTIONS.filter(([kind]) => kind === 'graph' || kind === 'scan' ? true : kind === 'image' ? !!graphOf(state.id, 'image') : !!bakedOf(state.id, kind === 'baked' ? 'graph' : 'image'))
-    if (!available.some(([kind]) => kind === state.sources[key])) state.sources[key] = key === 'a' ? 'scan' : 'graph'
+    const available = SOURCE_OPTIONS.filter(([kind]) => kind === 'graph' ? !!graphOf(state.id, 'graph') : kind === 'scan' ? !!scanOf(state.id) : kind === 'image' ? !!graphOf(state.id, 'image') : !!bakedOf(state.id, kind === 'baked' ? 'graph' : 'image'))
+    const preferred = (key === 'a' ? ['scan', 'image', 'graph'] : ['graph', 'image', 'scan']).find(kind => available.some(([option]) => option === kind))
+    if (!available.some(([kind]) => kind === state.sources[key])) state.sources[key] = (preferred ?? available[0]![0]) as SourceKind
     const input = sourceInputs.get(key)
     if (input) input.replaceChildren(...available.map(([value, title]) => new Option(title, value, false, value === state.sources[key])))
   }
 }
 syncSources()
 
-select('material', ids.map(id => [id, graphOf(id, 'graph')!.title ?? id]), state.id, value => { state.id = value; state.overrides = {}; syncSources(); syncSliders(); syncUrl(); refresh() })
+select('material', ids.map(id => [id, anyGraph(id)!.title ?? id]), state.id, value => { state.id = value; state.overrides = {}; syncSources(); syncSliders(); syncUrl(); refresh() })
 sourceInputs.set('a', select('A', [], state.sources.a, value => { state.sources.a = value as SourceKind; syncUrl(); refresh(['a']) }))
 sourceInputs.set('b', select('B', [], state.sources.b, value => { state.sources.b = value as SourceKind; syncUrl(); refresh(['b']) }))
 syncSources()
