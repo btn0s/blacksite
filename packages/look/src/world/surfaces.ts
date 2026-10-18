@@ -50,7 +50,7 @@ function streamTextures(stream: StreamedTextures) {
 
 export function setAnisotropy(found: THREE.WebGLRenderer) {
   useRenderer(found)
-  anisotropy = Math.min(8, found.capabilities.getMaxAnisotropy())
+  anisotropy = Math.min(16, found.capabilities.getMaxAnisotropy())
   for (const texture of [...textures.values(), ...[...streams.values()].flatMap(streamTextures)]) { texture.anisotropy = anisotropy; if (texture.version > 0) texture.needsUpdate = true }
 }
 
