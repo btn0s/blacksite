@@ -1,0 +1,110 @@
+{
+  "name": "corrugated-rust-scan",
+  "title": "Corrugated steel",
+  "description": "CorrugatedSteel009 CC0 scan (https://ambientcg.com/view?id=CorrugatedSteel009), delit, with weather that follows the scan's height: dirt in cavities, wear on edges, damp in low areas.",
+  "size": 2.2,
+  "depth": 0.02,
+  "seed": 1,
+  "orientation": "wall",
+  "nodes": {
+    "photo": {
+      "op": "image",
+      "src": "../scans/corrugated-rust/color.webp",
+      "repeat": [
+        1,
+        2
+      ]
+    },
+    "albedo": {
+      "op": "delight",
+      "input": "photo",
+      "radius": 0.66,
+      "strength": 0.5
+    },
+    "heightmap": {
+      "op": "image",
+      "src": "../scans/corrugated-rust/height.webp",
+      "repeat": [
+        1,
+        2
+      ]
+    },
+    "height": {
+      "op": "channel",
+      "input": "heightmap",
+      "channel": "r"
+    },
+    "normalmap": {
+      "op": "image",
+      "src": "../scans/corrugated-rust/normal.webp",
+      "repeat": [
+        1,
+        2
+      ]
+    },
+    "roughnessmap": {
+      "op": "image",
+      "src": "../scans/corrugated-rust/roughness.webp",
+      "repeat": [
+        1,
+        2
+      ]
+    },
+    "roughness": {
+      "op": "channel",
+      "input": "roughnessmap",
+      "channel": "r"
+    },
+    "aomap": {
+      "op": "image",
+      "src": "../scans/corrugated-rust/ao.webp",
+      "repeat": [
+        1,
+        2
+      ]
+    },
+    "ao": {
+      "op": "channel",
+      "input": "aomap",
+      "channel": "r"
+    },
+    "metalmap": {
+      "op": "image",
+      "src": "../scans/corrugated-rust/metalness.webp",
+      "repeat": [
+        1,
+        2
+      ]
+    },
+    "metalness": {
+      "op": "channel",
+      "input": "metalmap",
+      "channel": "r"
+    }
+  },
+  "outputs": {
+    "color": "albedo",
+    "height": "height",
+    "normal": "normalmap",
+    "roughness": "roughness",
+    "metalness": "metalness",
+    "ao": "ao"
+  },
+  "finish": {
+    "ao": {
+      "strength": 0
+    }
+  },
+  "weather": {
+    "age": 0.6,
+    "dirt": 0.45,
+    "rust": 0.3,
+    "moisture": 0.15,
+    "wear": {
+      "amount": 0.25,
+      "color": "#8f908a",
+      "roughness": 0.45,
+      "metalness": 1
+    }
+  }
+}

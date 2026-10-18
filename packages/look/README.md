@@ -125,7 +125,7 @@ scene.add(level.build())
 await texturesReady()
 ```
 
-- `surface(name, options)` returns a cached `MeshStandardMaterial` with colour and normal maps and ground-height AO; `meterSurface()` is the same with UVs in metres for geometry you made yourself.
+- `surface(name, options)` returns a cached `MeshStandardMaterial` at once; its maps are the KTX2 bake of the name's material graph and fill in when they load. `SurfaceName` is `cast`, `panel`, `slab`, `stained`, `paint`, `brick`, `rust`, `metal`, `corrugated`, `asphalt`, `dirt`, `grass`, `gravel` or `wood`. One shader weathers every surface from the bake's masks and world position: grime in cavities and along the floor, damp in low areas and below openings, soot under the ceiling and above openings, plus ground-height occlusion. `options.weather` (`{ grime, damp, soot }` or `false`) overrides the surface's defaults and `options.ao` the occlusion; `weatherSpaces({ rooms, openings })` sets the floors, ceilings and openings for the level. `meterSurface()` is the same with UVs in metres for geometry you made yourself.
 - `worldBoxGeometry`, `worldPlaneGeometry` and `worldCylinderGeometry` make primitives whose UVs tile at the surface's real size; `contactShadow` is a soft blob for anything resting on the ground.
 - `groundMaterial()` blends dirt, grass and gravel by world-space noise; `puddleMaterial()` is a dark mirror for decals on it.
 - `LevelBuilder` merges every box, cylinder and plane by material into one mesh each, adds contact shadows, and collects box and cylinder colliders for your physics.
@@ -133,7 +133,7 @@ await texturesReady()
 - `clutter({ area, blocked, clear, seed, density })` scatters boxes, sacks, planks, paper, grit and cables over a floor rectangle as one vertex-coloured mesh with darkened contact edges. Debris collects within a metre of walls and `blocked` footprints; boxes and sacks stand only against walls; `clear` rectangles stay empty.
 - `createAtmosphere(scene, renderer)` is the world kit's photographic overcast sky dome, sun with a texel-snapped shadow that `follow(target)` moves, hemisphere fill and exponential fog. It leaves tone mapping and exposure to the look: pair it with `createLook(…, { sky: false, fog: false })` or `<Look sky={false} fog={false} />`. `internalPixelRatio()`, `isTouchDevice()`, `setAnisotropy()`, `preloadSurfaces()` and `texturesReady()` cover loading and resolution.
 
-Credits for the textures are in `assets/world/CREDITS.md`.
+Credits for the surfaces are in `assets/surfaces/CREDITS.md` and for the sky in `assets/world/CREDITS.md`. Rebake the surfaces with `node scripts/bake-surfaces.mjs [names] [--sizes 512]`.
 
 ## Atmospheres
 

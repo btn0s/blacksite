@@ -40,7 +40,7 @@
       "ao.webp",
       "height.webp"
     ],
-    "processing": "Complete 1024 × 512 source tile preserved; WebP conversion only, no crop or aspect change.",
+    "processing": "Complete 1024 \u00d7 512 source tile preserved; WebP conversion only, no crop or aspect change.",
     "referenceNote": "Precast concrete masonry units; a related concrete reference rather than large sealed wall panels."
   },
   {
@@ -84,7 +84,7 @@
       "ao.webp",
       "height.webp"
     ],
-    "processing": "Complete 1024 × 512 source tile preserved; WebP conversion only, no crop or aspect change."
+    "processing": "Complete 1024 \u00d7 512 source tile preserved; WebP conversion only, no crop or aspect change."
   },
   {
     "id": "corrugated-rust",
@@ -107,7 +107,7 @@
       "metalness.webp",
       "height.webp"
     ],
-    "processing": "Complete 1024 × 512 source tile preserved; WebP conversion only, no crop or aspect change.",
+    "processing": "Complete 1024 \u00d7 512 source tile preserved; WebP conversion only, no crop or aspect change.",
     "referenceNote": "Weathered galvanised corrugated sheet with light rust; a material-family reference, not a heavily rusted match."
   },
   {
@@ -231,5 +231,157 @@
       "roughness.webp",
       "height.webp"
     ]
+  },
+  {
+    "id": "cast-concrete",
+    "assetId": "Concrete044D",
+    "url": "https://ambientcg.com/view?id=Concrete044D",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRProcedural",
+    "size": [
+      2.5,
+      2.5
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; estimated from pore and blemish size of cast concrete",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ],
+    "processing": "ambientCG 1K-JPG set (height-field photogrammetry); Color, NormalGL, Roughness, AmbientOcclusion and Displacement converted to WebP without crop or resize."
+  },
+  {
+    "id": "panel-concrete",
+    "assetId": "Concrete042A",
+    "url": "https://ambientcg.com/view?id=Concrete042A",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRProcedural",
+    "size": [
+      3,
+      3
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; estimated for a smooth precast wall panel",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ],
+    "processing": "ambientCG 1K-JPG set (height-field photogrammetry); Color, NormalGL, Roughness, AmbientOcclusion and Displacement converted to WebP without crop or resize."
+  },
+  {
+    "id": "slab-concrete",
+    "assetId": "Concrete031",
+    "url": "https://ambientcg.com/view?id=Concrete031",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRProcedural",
+    "size": [
+      3,
+      3
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; estimated from the slab joints of a poured floor",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ],
+    "processing": "ambientCG 1K-JPG set (height-field photogrammetry); Color, NormalGL, Roughness, AmbientOcclusion and Displacement converted to WebP without crop or resize."
+  },
+  {
+    "id": "painted-plaster",
+    "assetId": "PaintedPlaster015",
+    "url": "https://ambientcg.com/view?id=PaintedPlaster015",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRProcedural",
+    "size": [
+      2.5,
+      2.5
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; estimated from the size of the paint chips",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ],
+    "processing": "ambientCG 1K-JPG set (height-field photogrammetry); Color, NormalGL, Roughness, AmbientOcclusion and Displacement converted to WebP without crop or resize."
+  },
+  {
+    "id": "rust",
+    "assetId": "Rust009",
+    "url": "https://ambientcg.com/view?id=Rust009",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRProcedural",
+    "size": [
+      2,
+      2
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; estimated for a corroded steel sheet",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ],
+    "processing": "ambientCG 1K-JPG set (height-field photogrammetry); Color, NormalGL, Roughness, AmbientOcclusion and Displacement converted to WebP without crop or resize."
+  },
+  {
+    "id": "soil",
+    "assetId": "Ground103",
+    "url": "https://ambientcg.com/view?id=Ground103",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRPhotogrammetry",
+    "size": [
+      2.5,
+      2.5
+    ],
+    "sizeEstimated": true,
+    "sizeNote": "ambientCG lists no dimensions; estimated from clod and pebble size",
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ],
+    "processing": "ambientCG 1K-JPG set (height-field photogrammetry); Color, NormalGL, Roughness, AmbientOcclusion and Displacement converted to WebP without crop or resize."
+  },
+  {
+    "id": "grass",
+    "assetId": "Ground037",
+    "url": "https://ambientcg.com/view?id=Ground037",
+    "author": "ambientCG (Lennart Demes)",
+    "licence": "CC0 1.0",
+    "creationMethod": "PBRPhotogrammetry",
+    "size": [
+      2.1,
+      2.1
+    ],
+    "maps": [
+      "color.webp",
+      "normal.webp",
+      "roughness.webp",
+      "ao.webp",
+      "height.webp"
+    ],
+    "processing": "ambientCG 1K-JPG set (height-field photogrammetry); Color, NormalGL, Roughness, AmbientOcclusion and Displacement converted to WebP without crop or resize."
   }
 ]

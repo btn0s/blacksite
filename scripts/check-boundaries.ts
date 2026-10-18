@@ -3,7 +3,7 @@ import { resolve, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const games = new Set<string>();
-const platforms = new Set(['ai-schema', 'sim-core', 'client-r3f', 'input', 'ui', 'look']);
+const platforms = new Set(['ai-schema', 'sim-core', 'client-r3f', 'input', 'ui', 'look', 'materials']);
 const cognition = new Set(['ai-belief', 'ai-tactics', 'ai-nav', 'ai-planning', 'ai-squad', 'ai-execution', 'ai-motor', 'ai-policy']);
 async function files(path: string): Promise<string[]> {
   const entries = await readdir(path, { withFileTypes: true });

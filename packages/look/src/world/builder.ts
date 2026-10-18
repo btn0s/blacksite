@@ -1,13 +1,13 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { describeCoplanar, resolveCoplanar, type CoplanarMode, type CoplanarResolution, type FaceSource } from './coplanar'
-import { contactShadow, surface, worldBoxGeometry, worldCylinderGeometry, worldPlaneGeometry, type GroundAO, type SurfaceName } from './surfaces'
+import { contactShadow, surface, worldBoxGeometry, worldCylinderGeometry, worldPlaneGeometry, type GroundAO, type SurfaceName, type SurfaceWeather } from './surfaces'
 
 export type BoxCollider = { kind: 'box'; half: [number, number, number]; position: [number, number, number]; rotation: [number, number, number] }
 export type CylinderCollider = { kind: 'cylinder'; halfHeight: number; radius: number; position: [number, number, number]; rotation: [number, number, number] }
 export type Collider = BoxCollider | CylinderCollider
 
-type Material = { name: SurfaceName; color?: string; scale?: number; ao?: GroundAO | false; decal?: number }
+type Material = { name: SurfaceName; color?: string; scale?: number; ao?: GroundAO | false; decal?: number; weather?: SurfaceWeather | false }
 type Place = { at: [number, number, number]; rotate?: number | [number, number, number]; collide?: boolean; shadow?: boolean | number; cast?: boolean; name?: string }
 
 export type LevelBuilderOptions = { coplanar?: CoplanarMode; separation?: number }
@@ -30,7 +30,7 @@ function raycastParts(this: THREE.Mesh, raycaster: THREE.Raycaster, intersects: 
   this.geometry.setDrawRange(start, count)
 }
 
-const keyOf = (material: Material) => `${material.name}|${material.color ?? ''}|${material.scale ?? 1}|${material.ao === false ? 'noao' : JSON.stringify(material.ao ?? '')}|${material.decal ?? ''}`
+const keyOf = (material: Material) => `${material.name}|${material.color ?? ''}|${material.scale ?? 1}|${material.ao === false ? 'noao' : JSON.stringify(material.ao ?? '')}|${material.decal ?? ''}|${material.weather === false ? 'dry' : JSON.stringify(material.weather ?? '')}`
 
 const extent = (plane: { width: number; depth: number; quaternion: THREE.Quaternion }) => {
   const size = new THREE.Vector3(plane.width, 0, plane.depth).applyQuaternion(plane.quaternion)

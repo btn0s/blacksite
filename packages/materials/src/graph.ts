@@ -15,7 +15,7 @@ export type NodeSpec =
   | ({ readonly op: 'tiles' | 'bricks' | 'panels' | 'planks' } & TileOptions)
   | { readonly op: 'rivets'; readonly spacing?: Metres; readonly radius?: number; readonly offset?: Metres; readonly output?: ShapeOutput }
   | { readonly op: 'scatter'; readonly cell?: Metres; readonly radius?: number; readonly sizeJitter?: number; readonly density?: number; readonly shape?: (typeof SCATTER_SHAPES)[number]; readonly rotate?: boolean; readonly seed?: number; readonly output?: ShapeOutput; readonly stretch?: number }
-  | { readonly op: 'image'; readonly src: string }
+  | { readonly op: 'image'; readonly src: string; readonly repeat?: Metres }
   | ({ readonly op: 'seamless'; readonly width?: number } & FilterInput)
   | ({ readonly op: 'blur' | 'highpass'; readonly radius?: number } & FilterInput)
   | ({ readonly op: 'delight' | 'curvature' | 'ao'; readonly radius?: number; readonly strength?: number } & FilterInput)
@@ -61,11 +61,11 @@ export type MaterialGraph = {
     readonly roughness?: Input
     readonly metalness?: Input
     readonly ao?: Input
+    readonly normal?: Input
   }
   readonly finish?: { readonly normal?: number; readonly ao?: { readonly radius?: number; readonly strength?: number } }
   readonly weather?: Weather
   readonly porosity?: number
-  readonly source?: { readonly image: string; readonly model: string; readonly prompt: string }
   readonly wear?: Omit<Wear, 'amount'>
 }
 
@@ -100,13 +100,13 @@ export const PARAMS: Record<KernelName, readonly string[]> = {
   tiles: ['cols', 'rows', 'gap', 'bevel', 'offset', 'offsetJitter', 'lengthJitter', 'jitter', 'seed', 'output', 'size', 'pixel'],
   rivets: ['cols', 'rows', 'radius', 'offsetU', 'offsetV', 'size', 'pixel', 'output'],
   scatter: ['cols', 'rows', 'radius', 'sizeJitter', 'density', 'shape', 'rotate', 'seed', 'output', 'size', 'pixel', 'stretch', 'reachX', 'reachY'],
-  image: ['lod'],
+  image: ['repeatU', 'repeatV'],
   warp: ['amount', 'size', 'vector'],
   blurPass: ['axis', 'sigma', 'taps'],
   slopeBlur: ['step', 'samples', 'mode'],
   levels: ['inLow', 'inHigh', 'gamma', 'outLow', 'outHigh'],
   curvature: ['radius', 'scale'],
-  normal: ['scale'],
+  normal: ['scale', 'based'],
   ao: ['radius', 'depth', 'strength'],
   blend: ['mode', 'opacity', 'masked'],
   ramp: ['count'],
@@ -208,7 +208,7 @@ const nodeChecks: Record<NodeSpec['op'], Readonly<Record<string, Check>>> = {
   tiles: tileChecks, bricks: tileChecks, panels: tileChecks, planks: tileChecks,
   rivets: { spacing: pairCheck(positive), radius: positive, offset: pairCheck(finite), output: enumCheck(OUTPUTS) },
   scatter: { cell: pairCheck(positive), radius: positive, sizeJitter: range(0, 0.999999), density: unit, shape: enumCheck(SCATTER_SHAPES), rotate: boolCheck, seed: seedCheck, output: enumCheck(OUTPUTS), stretch: positive },
-  image: { src: textCheck },
+  image: { src: textCheck, repeat: pairCheck(integer(1, 64)) },
   seamless: { ...filterChecks, width: range(0, 0.5, true) },
   blur: radiusChecks, highpass: radiusChecks, delight: { ...radiusChecks, strength: unit }, curvature: strengthChecks, ao: strengthChecks,
   normal: { ...filterChecks, strength: nonnegative },
@@ -232,10 +232,9 @@ export function parseGraph(value: unknown): MaterialGraph {
   objectCheck({
     name: (name, at) => { textCheck(name, at); if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(name as string)) throw new GraphError(`${at} must contain only letters, numbers, underscores and hyphens`) },
     title: textCheck, description: textCheck, size: positive, depth: nonnegative, seed: seedCheck, orientation: enumCheck(['wall', 'floor', 'object']), porosity: unit,
-    source: objectCheck({ image: textCheck, model: textCheck, prompt: textCheck }, ['image', 'model', 'prompt']),
     wear: objectCheck(wearChecks), weather: weatherCheck,
     finish: objectCheck({ normal: nonnegative, ao: objectCheck({ radius: nonnegative, strength: nonnegative }) }),
-    outputs: objectCheck({ color: inputCheck, height: inputCheck, roughness: inputCheck, metalness: inputCheck, ao: inputCheck }, ['color']),
+    outputs: objectCheck({ color: inputCheck, height: inputCheck, roughness: inputCheck, metalness: inputCheck, ao: inputCheck, normal: inputCheck }, ['color']),
     nodes: (nodes, at) => {
       const entries = Object.entries(record(nodes, at))
       if (entries.length > 1024) throw new GraphError(`${at} may contain at most 1024 nodes`)
@@ -418,7 +417,8 @@ function build(ctx: Ctx, id: string, raw: RawNode): string {
     case 'image': {
       if (typeof raw.src !== 'string') throw new GraphError(`${id}.src must be a path`)
       ctx.images.add(raw.src)
-      return push(ctx, id, 'image', { lod: 0 }, [], { image: raw.src })
+      const [repeatU, repeatV] = pair(raw.repeat, 1)
+      return push(ctx, id, 'image', { repeatU, repeatV }, [], { image: raw.src })
     }
     case 'seamless': {
       const width = num(raw, 'width', 0.25)
@@ -455,7 +455,7 @@ function build(ctx: Ctx, id: string, raw: RawNode): string {
       const radius = Math.max(pixel, num(raw, 'radius', 0.005))
       return push(ctx, id, 'curvature', { radius: radius / pixel, scale: depth / radius * num(raw, 'strength', 4) }, [at('input')])
     }
-    case 'normal': return push(ctx, id, 'normal', { scale: depth / (2 * pixel) * num(raw, 'strength', 1) }, [at('input')])
+    case 'normal': return push(ctx, id, 'normal', { scale: depth / (2 * pixel) * num(raw, 'strength', 1), based: 0 }, [at('input')])
     case 'ao': {
       const radius = Math.max(2 * pixel, num(raw, 'radius', 0.05))
       return push(ctx, id, 'ao', { radius: radius / pixel, depth: depth / pixel, strength: num(raw, 'strength', 1) }, [at('input')])
@@ -509,7 +509,10 @@ export function compile(graph: MaterialGraph, res: number, options: CompileOptio
   const weather = options.weather === null ? undefined : options.weather ?? graph.weather
   const weathered = weatherSteps(ctx, base, weather)
   const finishAo = graph.finish?.ao ?? {}
-  const normalId = push(ctx, 'out:normalrgb', 'normal', { scale: graph.depth / (2 * ctx.pixel) * (graph.finish?.normal ?? 1) }, [weathered.height])
+  const normalScale = graph.depth / (2 * ctx.pixel) * (graph.finish?.normal ?? 1)
+  const normalId = graph.outputs.normal === undefined
+    ? push(ctx, 'out:normalrgb', 'normal', { scale: normalScale, based: 0 }, [weathered.height])
+    : push(ctx, 'out:normalrgb', 'normal', { scale: normalScale, based: 1 }, [push(ctx, 'out:relief', 'blend', { mode: BLEND_MODES.indexOf('highpass'), opacity: 1, masked: 0 }, [weathered.height, base.height]), input(ctx, graph.outputs.normal, 'outputs', 'normal')])
   const aoRadius = Math.max(2 * ctx.pixel, finishAo.radius ?? 0.04)
   let ao = push(ctx, 'out:ao', 'ao', { radius: aoRadius / ctx.pixel, depth: graph.depth / ctx.pixel, strength: finishAo.strength ?? 0.8 }, [weathered.height])
   if (graph.outputs.ao !== undefined) ao = push(ctx, 'out:aomul', 'blend', { mode: BLEND_MODES.indexOf('multiply'), opacity: 1, masked: 0 }, [ao, input(ctx, graph.outputs.ao, 'outputs', 'ao')])
@@ -534,10 +537,7 @@ type Channels = { color: string; height: string; roughness: string; metalness: s
 
 function weatherSteps(ctx: Ctx, base: { color: string; height: string; roughness: string; metalness: string }, weather: Weather | undefined): Channels {
   const zero = constant(ctx, 0)
-  const out: Channels = { ...base, wear: zero, dirt: zero, wet: zero, damage: zero }
-  if (!weather) return out
   const g = ctx.graph
-  const seed = weather.seed ?? 0
   const pixel = ctx.pixel
   let n = 0
   const id = (name: string) => `w:${name}:${n++}`
@@ -545,6 +545,15 @@ function weatherSteps(ctx: Ctx, base: { color: string; height: string; roughness
   const c = (value: Input) => constant(ctx, value)
   const blend = (a: string, b: string, mode: (typeof BLEND_MODES)[number], opacity = 1, mask?: string) => k('blend', { mode: BLEND_MODES.indexOf(mode), opacity, masked: mask ? 1 : 0 }, mask ? [a, b, mask] : [a, b])
   const levels = (source: string, lo: number, hi: number, outLow = 0, outHigh = 1, gamma = 1) => k('levels', { inLow: lo, inHigh: hi, gamma, outLow, outHigh }, [source])
+  const cavity = k('ao', { radius: Math.max(2, 0.05 / pixel), depth: g.depth / pixel, strength: 1 }, [base.height])
+  const crevice = levels(cavity, 0.6, 0.97, 1, 0)
+  const sharp = k('curvature', { radius: Math.max(1, 0.004 / pixel), scale: g.depth / Math.max(pixel, 0.004) * 4 }, [base.height])
+  const broad = k('curvature', { radius: Math.max(1, 0.015 / pixel), scale: g.depth / Math.max(pixel, 0.015) * 4 }, [base.height])
+  const edge = blend(levels(sharp, 0.53, 0.7), levels(broad, 0.53, 0.68), 'max')
+  const low = blend(levels(base.height, 0.2, 0.7, 1, 0), crevice, 'max')
+  const out: Channels = { ...base, wear: edge, dirt: crevice, wet: low, damage: zero }
+  if (!weather) return out
+  const seed = weather.seed ?? 0
   const fbm = (name: string, cell: Metres, octaves: number, basis = 1, extra: Record<string, number> = {}) => {
     const [px, py] = periods(g.size, pair(cell, 0.1))
     return k('noise', { basis, px, py, seed: hashString(`${name}:${seed}:${g.seed ?? 0}`), octaves: octaveCap(ctx.res, px, py, octaves), gain: 0.5, ridged: 0, sharpness: 2, mode: 0, jitter: 0.9, ...extra }, [])
@@ -567,12 +576,6 @@ function weatherSteps(ctx: Ctx, base: { color: string; height: string; roughness
   const wearSpec: Wear = typeof weather.wear === 'number' ? { amount: weather.wear, ...g.wear } : weather.wear ? { ...g.wear, ...weather.wear } : { amount: 0 }
   const wear = clamp01(wearSpec.amount)
   const wall = g.orientation !== 'floor'
-
-  const cavity = k('ao', { radius: Math.max(2, 0.05 / pixel), depth: g.depth / pixel, strength: 1 }, [out.height])
-  const crevice = levels(cavity, 0.45, 0.97, 1, 0)
-  const sharp = k('curvature', { radius: Math.max(1, 0.004 / pixel), scale: g.depth / Math.max(pixel, 0.004) * 4 }, [out.height])
-  const broad = k('curvature', { radius: Math.max(1, 0.015 / pixel), scale: g.depth / Math.max(pixel, 0.015) * 4 }, [out.height])
-  const edge = blend(levels(sharp, 0.53, 0.7), levels(broad, 0.53, 0.68), 'max')
   const grime = fbm('grime', 0.4, 6)
   const fine = fbm('fine', 0.025, 3, 0)
 
@@ -592,7 +595,6 @@ function weatherSteps(ctx: Ctx, base: { color: string; height: string; roughness
     out.roughness = blend(out.roughness, c(0.86), 'mix', 1, mask)
     out.metalness = blend(out.metalness, c(0), 'mix', 1, mask)
     out.height = blend(out.height, fine, 'add', 0.06, mask)
-    out.wear = mask
   }
   if (wear > 0) {
     const breakup = fbm('wear', 0.06, 5)
@@ -602,7 +604,6 @@ function weatherSteps(ctx: Ctx, base: { color: string; height: string; roughness
     out.roughness = blend(out.roughness, c(wearSpec.roughness ?? 0.6), 'mix', 1, mask)
     out.metalness = blend(out.metalness, c(wearSpec.metalness ?? 0), 'mix', 1, mask)
     out.height = blend(out.height, c(0.04), 'subtract', 1, mask)
-    out.wear = blend(out.wear, mask, 'max')
   }
   if (dirt > 0) {
     const low = levels(out.height, 0.2, 0.7, 1, 0)
@@ -611,7 +612,6 @@ function weatherSteps(ctx: Ctx, base: { color: string; height: string; roughness
     const tone = ramp(fine, [[0, weather.dirtColor ?? '#3e382c'], [1, '#6a604c']])
     out.color = blend(out.color, tone, 'mix', 0.85, mask)
     out.roughness = blend(out.roughness, c(0.97), 'mix', 0.6, mask)
-    out.dirt = mask
   }
   const damage = weather.damage
   if (damage && (damage.chips || damage.bullets || damage.scorch)) {
@@ -646,10 +646,9 @@ function weatherSteps(ctx: Ctx, base: { color: string; height: string; roughness
   if (moisture > 0 || puddles > 0) {
     const porosity = g.porosity ?? 0.8
     const darker = blend(out.color, out.color, 'multiply')
-    const wetness = blend(c(moisture), crevice, 'add', 0.25 * moisture)
+    const wetness = levels(low, 0, 1, 0.35 * moisture, moisture)
     out.color = blend(out.color, darker, 'mix', porosity * 0.85, wetness)
     out.roughness = blend(out.roughness, blend(out.roughness, c(0.22), 'min'), 'mix', 0.75, wetness)
-    out.wet = wetness
     if (puddles > 0) {
       const smooth = blurSteps(ctx, id('puddleblur'), out.height, 0.04)
       const field = blend(levels(smooth, 0.3, 0.7, 1, 0), fbm('puddle', 0.9, 4), 'mix', 0.55)
@@ -659,7 +658,6 @@ function weatherSteps(ctx: Ctx, base: { color: string; height: string; roughness
       out.roughness = blend(out.roughness, blend(out.roughness, c(0.03), 'min'), 'mix', 1, mask)
       out.metalness = blend(out.metalness, c(0), 'mix', 1, mask)
       out.height = blend(out.height, blurSteps(ctx, id('puddleflat'), out.height, 0.25), 'mix', 1, mask)
-      out.wet = blend(out.wet, mask, 'max')
     }
   }
   return out

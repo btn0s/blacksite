@@ -26,7 +26,7 @@ The target is a grounded, photographic military look that still runs on a phone.
 
 ## Materials
 
-- **Never flat colour.** Every surface has colour, roughness and normal maps, from textures of at least 512 px mapped at real-world scale (`size` in metres per repeat, `depth` in metres of relief). Use 512 px for distant surfaces and phones; keep 1024 px for surfaces that earn it.
+- **Never flat colour.** Every surface has colour, roughness and normal maps from a material graph bake, at least 512 px and mapped at real-world scale (`size` in metres per repeat, `depth` in metres of relief). Use 512 px for distant surfaces and phones; keep 1024 px for surfaces that earn it.
 - **Break up repetition.** Blend ground materials by world-space noise, vary roughness with grime, and add decals: stains, cracks, puddles, graffiti, tyre marks.
 - **Weather follows structure.** Dirt belongs in cavities, exposed metal belongs under paint, and wetness changes colour and roughness together. Baked damage repeats; use a decal for a unique hit.
 - **Ground every prop.** Anything resting on the ground gets a contact shadow. A prop without one floats.

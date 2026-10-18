@@ -1,0 +1,95 @@
+{
+  "name": "painted-metal-scan",
+  "title": "Aged steel",
+  "description": "Metal063 CC0 scan (https://ambientcg.com/view?id=Metal063), delit, with weather that follows the scan's height: dirt in cavities, wear on edges, damp in low areas.",
+  "size": 2,
+  "depth": 0.002,
+  "seed": 1,
+  "orientation": "object",
+  "nodes": {
+    "photo": {
+      "op": "image",
+      "src": "../scans/painted-metal/color.webp",
+      "repeat": [
+        2,
+        2
+      ]
+    },
+    "albedo": {
+      "op": "delight",
+      "input": "photo",
+      "radius": 0.3,
+      "strength": 0.5
+    },
+    "heightmap": {
+      "op": "image",
+      "src": "../scans/painted-metal/height.webp",
+      "repeat": [
+        2,
+        2
+      ]
+    },
+    "height": {
+      "op": "channel",
+      "input": "heightmap",
+      "channel": "r"
+    },
+    "normalmap": {
+      "op": "image",
+      "src": "../scans/painted-metal/normal.webp",
+      "repeat": [
+        2,
+        2
+      ]
+    },
+    "roughnessmap": {
+      "op": "image",
+      "src": "../scans/painted-metal/roughness.webp",
+      "repeat": [
+        2,
+        2
+      ]
+    },
+    "roughness": {
+      "op": "channel",
+      "input": "roughnessmap",
+      "channel": "r"
+    },
+    "metalmap": {
+      "op": "image",
+      "src": "../scans/painted-metal/metalness.webp",
+      "repeat": [
+        2,
+        2
+      ]
+    },
+    "metalness": {
+      "op": "channel",
+      "input": "metalmap",
+      "channel": "r"
+    }
+  },
+  "outputs": {
+    "color": "albedo",
+    "height": "height",
+    "normal": "normalmap",
+    "roughness": "roughness",
+    "metalness": "metalness"
+  },
+  "finish": {
+    "ao": {
+      "strength": 0
+    }
+  },
+  "weather": {
+    "age": 0.6,
+    "dirt": 0.45,
+    "rust": 0.2,
+    "wear": {
+      "amount": 0.35,
+      "color": "#85867f",
+      "roughness": 0.5,
+      "metalness": 1
+    }
+  }
+}

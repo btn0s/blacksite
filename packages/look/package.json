@@ -28,6 +28,7 @@
     "react": { "optional": true }
   },
   "dependencies": {
+    "@blacksite/materials": "workspace:*",
     "n8ao": "^2.0.1",
     "postprocessing": "^6.39.5"
   },

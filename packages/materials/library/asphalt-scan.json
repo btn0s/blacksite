@@ -1,0 +1,76 @@
+{
+  "name": "asphalt-scan",
+  "title": "Asphalt",
+  "description": "Asphalt015 CC0 scan (https://ambientcg.com/view?id=Asphalt015), delit, with weather that follows the scan's height: dirt in cavities, wear on edges, damp in low areas.",
+  "size": 3.0,
+  "depth": 0.008,
+  "seed": 1,
+  "orientation": "floor",
+  "nodes": {
+    "photo": {
+      "op": "image",
+      "src": "../scans/asphalt/color.webp",
+      "repeat": [
+        2,
+        2
+      ]
+    },
+    "albedo": {
+      "op": "delight",
+      "input": "photo",
+      "radius": 0.45,
+      "strength": 0.5
+    },
+    "heightmap": {
+      "op": "image",
+      "src": "../scans/asphalt/height.webp",
+      "repeat": [
+        2,
+        2
+      ]
+    },
+    "height": {
+      "op": "channel",
+      "input": "heightmap",
+      "channel": "r"
+    },
+    "normalmap": {
+      "op": "image",
+      "src": "../scans/asphalt/normal.webp",
+      "repeat": [
+        2,
+        2
+      ]
+    },
+    "roughnessmap": {
+      "op": "image",
+      "src": "../scans/asphalt/roughness.webp",
+      "repeat": [
+        2,
+        2
+      ]
+    },
+    "roughness": {
+      "op": "channel",
+      "input": "roughnessmap",
+      "channel": "r"
+    }
+  },
+  "outputs": {
+    "color": "albedo",
+    "height": "height",
+    "normal": "normalmap",
+    "roughness": "roughness",
+    "metalness": 0
+  },
+  "finish": {
+    "ao": {
+      "strength": 0
+    }
+  },
+  "weather": {
+    "age": 0.5,
+    "dirt": 0.45,
+    "moisture": 0.2
+  }
+}

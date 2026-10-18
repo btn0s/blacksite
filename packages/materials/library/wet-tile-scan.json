@@ -1,0 +1,70 @@
+{
+  "name": "wet-tile-scan",
+  "title": "Ceramic tile",
+  "description": "Tiles039 CC0 scan (https://ambientcg.com/view?id=Tiles039), delit, with weather that follows the scan's height: dirt in cavities, wear on edges, damp in low areas.",
+  "size": 1.6,
+  "depth": 0.006,
+  "seed": 1,
+  "orientation": "floor",
+  "nodes": {
+    "photo": {
+      "op": "image",
+      "src": "../scans/wet-tile/color.webp"
+    },
+    "albedo": {
+      "op": "delight",
+      "input": "photo",
+      "radius": 0.48,
+      "strength": 0.5
+    },
+    "heightmap": {
+      "op": "image",
+      "src": "../scans/wet-tile/height.webp"
+    },
+    "height": {
+      "op": "channel",
+      "input": "heightmap",
+      "channel": "r"
+    },
+    "normalmap": {
+      "op": "image",
+      "src": "../scans/wet-tile/normal.webp"
+    },
+    "roughnessmap": {
+      "op": "image",
+      "src": "../scans/wet-tile/roughness.webp"
+    },
+    "roughness": {
+      "op": "channel",
+      "input": "roughnessmap",
+      "channel": "r"
+    },
+    "aomap": {
+      "op": "image",
+      "src": "../scans/wet-tile/ao.webp"
+    },
+    "ao": {
+      "op": "channel",
+      "input": "aomap",
+      "channel": "r"
+    }
+  },
+  "outputs": {
+    "color": "albedo",
+    "height": "height",
+    "normal": "normalmap",
+    "roughness": "roughness",
+    "metalness": 0,
+    "ao": "ao"
+  },
+  "finish": {
+    "ao": {
+      "strength": 0
+    }
+  },
+  "weather": {
+    "age": 0.5,
+    "dirt": 0.45,
+    "moisture": 0.5
+  }
+}

@@ -26,7 +26,7 @@ import { createEffects, type Effects } from './effects'
 import { SOLIDS, castLevel, castTargets, clearLine, groundHit, zoneMultiplier, type Target, type V3 } from './geometry'
 import { Hud } from './hud'
 import { ENCOUNTERS, EXFIL, INTERIOR, START, footingAt, roomAt } from './layout'
-import { breachTexturesReady, buildLevel, type BreachLevel } from './level'
+import { buildLevel, type BreachLevel } from './level'
 import { AI, CORPSE_RAGDOLL, DEG, FEEDBACK, MOVE, PAD, PLAYER, PRESENTATION, VIEW, WEAPONS, animationBudget, animationInterval, armoryDefinitions, scheduleAnimation, footInterval, type HitZone, type RoomId } from './model'
 import { createCorpseRagdoll, warmCorpseRagdoll, type CorpseRagdoll } from './ragdoll'
 import { Soldiers, corpseOf, lod, releaseWeaponAim } from './soldiers'
@@ -740,7 +740,7 @@ function Shell({ player }: { player: Player }) {
     let cancelled = false
     const url = new URL(`${import.meta.env.BASE_URL}assets/skm-als.glb`, location.href).href
     void preloadAlsCharacterGltf(url, { onProgress: value => { if (!cancelled && value !== undefined) setProgress(0.05 + value * 0.8) } })
-    void Promise.all([texturesReady(), breachTexturesReady(), audio.prepare()]).then(() => { if (!cancelled) setWorld(true) }).catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason)) })
+    void Promise.all([texturesReady(), audio.prepare()]).then(() => { if (!cancelled) setWorld(true) }).catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason)) })
     return () => { cancelled = true }
   }, [audio])
   const onArms = useCallback(() => { setProgress(1); setArmsReady(true) }, [])

@@ -84,8 +84,11 @@ function standing(x: number, z: number, size: Vec3, options: BlockOptions) {
 
 function dress(item: Decor) { decor.push(item) }
 
+export const WINDOWS: Array<{ at: Vec3; radius: number }> = []
+
 function wall(axis: 'x' | 'z', line: number, from: number, to: number, height: number, thickness: number, look: Look, openings: Opening[] = [], color?: string, dado: -1 | 0 | 1 = 0) {
   const sorted = [...openings].sort((a, b) => a.from - b.from)
+  for (const opening of sorted) if (opening.bottom > 0.5) WINDOWS.push({ at: axis === 'x' ? [(opening.from + opening.to) / 2, (opening.bottom + opening.top) / 2, line] : [line, (opening.bottom + opening.top) / 2, (opening.from + opening.to) / 2], radius: Math.max(opening.to - opening.from, opening.top - opening.bottom) / 2 })
   const segment = (a: number, b: number, y0: number, y1: number) => {
     if (b - a < 0.01 || y1 - y0 < 0.01) return
     const min: Vec3 = axis === 'x' ? [a, y0, line - thickness / 2] : [line - thickness / 2, y0, a]

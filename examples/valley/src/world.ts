@@ -2,7 +2,7 @@ import { createHeightfield, decodeGrey16Png, fbm, heightAt, slopeAt, loadLayerIm
 import { site, type Tier } from './model'
 
 const library = import.meta.glob<string>('../assets/library/*/**/*.{png,webp,json,ogg,m4a}', { eager: true, query: '?url&no-inline', import: 'default' })
-const shared = import.meta.glob<string>('../../../packages/look/assets/world/{grass,dirt,gravel}_{c,n}.webp', { eager: true, query: '?url&no-inline', import: 'default' })
+const scans = import.meta.glob<string>('../../../packages/materials/scans/{grass,soil,gravel-soil}/{color,normal}.webp', { eager: true, query: '?url&no-inline', import: 'default' })
 
 export const asset = (path: string) => {
   const url = library[`../assets/library/${path}`]
@@ -10,9 +10,9 @@ export const asset = (path: string) => {
   return url
 }
 
-const kit = (name: string) => {
-  const url = shared[`../../../packages/look/assets/world/${name}.webp`]
-  if (!url) throw new Error(`Missing world kit surface ${name}`)
+const scanMap = (name: string, map: 'color' | 'normal') => {
+  const url = scans[`../../../packages/materials/scans/${name}/${map}.webp`]
+  if (!url) throw new Error(`Missing material scan ${name}/${map}`)
   return url
 }
 
@@ -193,10 +193,10 @@ export async function buildValley(tier: Tier, onProgress: (value: number) => voi
   Object.assign(sources, { nearSurface, farSurface })
 
   const layers = await loadLayerImages([
-    { color: kit('grass_c'), normal: kit('grass_n') },
+    { color: scanMap('grass', 'color'), normal: scanMap('grass', 'normal') },
     { color: asset('soil-mud-scanned/1k/c.webp'), normal: asset('soil-mud-scanned/1k/n.webp') },
-    { color: kit('dirt_c'), normal: kit('dirt_n') },
-    { color: kit('gravel_c'), normal: kit('gravel_n') },
+    { color: scanMap('soil', 'color'), normal: scanMap('soil', 'normal') },
+    { color: scanMap('gravel-soil', 'color'), normal: scanMap('gravel-soil', 'normal') },
   ], site.layerSize)
   lap('layers')
   onProgress(0.95)

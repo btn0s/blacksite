@@ -31,7 +31,7 @@ The first-person arms are the Blacksite found field set from Sketchfab. The rifl
 
 ## Breach surface and processing notes
 
-Old Planks 02 by Rob Tuytel (Poly Haven): https://polyhaven.com/a/old_planks_02 — [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Resized to 1K colour/normal maps and packed occlusion, roughness and metalness.
+The office floor and wooden dressing use the world kit's `wood` surface, a material graph bake of [Planks002](https://ambientcg.com/view?id=Planks002) (ambientCG, CC0).
 
 The recordings above are selected takes, trimmed, normalized and encoded to Opus with AAC alternatives. Breach uses four rifle takes, three pistol takes and four takes for each recorded footstep surface. Room tails, impacts, handling, radio cues and ambience are synthesized in the project.
 

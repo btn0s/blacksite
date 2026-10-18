@@ -1,10 +1,7 @@
 import * as THREE from 'three'
-import { LevelBuilder, decalBias, apartmentBlock, apc, clutter, deadTree, groundMaterial, lada, puddleMaterial, skylight, surface, waterTower, worldBoxGeometry, worldPlaneGeometry, type SurfaceName, type SurfaceSource } from '@blacksite/look/world'
-import { APC_AT, CLUTTER, EXFIL, LEVEL, PATCHES, PRACTICALS, ROOMS, SHAFTS, type Block, type Practical, type Room, type Vec3 } from './layout'
+import { LevelBuilder, decalBias, apartmentBlock, apc, clutter, deadTree, groundMaterial, lada, puddleMaterial, skylight, surface, waterTower, weatherSpaces, worldBoxGeometry, worldPlaneGeometry, type SurfaceName } from '@blacksite/look/world'
+import { APC_AT, CLUTTER, EXFIL, LEVEL, PATCHES, PRACTICALS, ROOMS, SHAFTS, WINDOWS, type Block, type Practical, type Room, type Vec3 } from './layout'
 import { BUDGET, type RoomId } from './model'
-import woodColor from './assets/wood-planks-old/c.webp?url'
-import woodNormal from './assets/wood-planks-old/n.webp?url'
-import woodOrm from './assets/wood-planks-old/orm.webp?url'
 
 export type BreachLevel = {
   group: THREE.Group
@@ -44,28 +41,6 @@ const SPOTS: Spot[] = [
   { kind: 'emergency', fixture: 'emergency', at: [13.8, 2.15, -26.8], room: 'exfil', color: '#ffb35a', intensity: 3, distance: 4 },
 ]
 
-let woodSource: SurfaceSource | undefined
-let woodReady: Promise<void> | undefined
-
-export function breachTexturesReady() {
-  if (woodReady) return woodReady
-  const loader = new THREE.TextureLoader()
-  const pending: Promise<void>[] = []
-  const load = (url: string, color: boolean) => {
-    let texture: THREE.Texture
-    pending.push(new Promise<void>((resolve, reject) => {
-      texture = loader.load(url, () => resolve(), undefined, reject)
-    }))
-    texture!.wrapS = texture!.wrapT = THREE.RepeatWrapping
-    texture!.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace
-    texture!.anisotropy = 4
-    return texture!
-  }
-  const map = load(woodColor, true), normalMap = load(woodNormal, false), orm = load(woodOrm, false)
-  woodSource = { name: 'breach-old-planks', tile: 2, maps: { map, normalMap, roughnessMap: orm, metalnessMap: orm, aoMap: orm }, roughness: 1 }
-  woodReady = Promise.all(pending).then(() => undefined)
-  return woodReady
-}
 
 const GAPS: Partial<Record<RoomId, Array<{ face: Face; from: number; to: number; floor: boolean }>>> = {
   lobby: [{ face: 'z-', from: -0.8, to: 0.8, floor: true }, { face: 'z-', from: -4.2, to: -2.6, floor: false }, { face: 'z-', from: 2.6, to: 4.2, floor: false }, { face: 'z+', from: -0.75, to: 0.75, floor: true }],
@@ -206,6 +181,11 @@ function still<T extends THREE.Object3D>(object: T) {
 }
 
 export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone: boolean }): BreachLevel {
+  const ceilingOf = (id: RoomId) => ROOMS.find(room => room.id === id)!.ceiling
+  weatherSpaces({
+    rooms: ROOMS.filter(room => room.ceiling < 50).map(room => ({ min: room.min, max: room.max, ceiling: room.ceiling })),
+    openings: [...SHAFTS.map(shaft => ({ at: [shaft.at[0], ceilingOf(shaft.room), shaft.at[2]] as const, radius: Math.max(...shaft.size) / 2 })), ...WINDOWS],
+  })
   const level = new LevelBuilder()
   const dressing = new LevelBuilder({ coplanar: 'ignore' })
   const group = new THREE.Group()
@@ -291,8 +271,8 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     const width = room.max[0] - room.min[0] + 0.5, depth = room.max[1] - room.min[1] + 0.5
     const at: Vec3 = [(room.min[0] + room.max[0]) / 2, 0.006 + index * 0.0012, (room.min[1] + room.max[1]) / 2]
     if (room.floor === 'wood') {
-      void breachTexturesReady()
-      const floor = new THREE.Mesh(worldPlaneGeometry(width, depth, woodSource!.tile), surface(woodSource!, { color: '#b6afa0', ao: false }))
+      const wood = surface('wood', { ao: false })
+      const floor = new THREE.Mesh(worldPlaneGeometry(width, depth, wood.userData.tile as number), wood)
       floor.position.set(...at)
       floor.receiveShadow = true
       floor.name = 'office-plank-floor'
@@ -362,9 +342,8 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     const paint = tint(item.look, item.color)
     const place = { at: item.at, rotate: item.rotate, collide: false, cast: item.cast ?? true, shadow: false }
     if (item.wood || item.kind === 'sandbag') {
-      void breachTexturesReady()
-      const material = item.wood ? surface(woodSource!, { color: '#b6afa0' }) : surface(paint.name, { color: paint.color })
-      const geometry = item.wood ? worldBoxGeometry(...item.size, woodSource!.tile) : new THREE.CapsuleGeometry(0.5, 1, 2, 8).rotateZ(Math.PI / 2).scale(item.size[0] / 2, item.size[1], item.size[2])
+      const material = item.wood ? surface('wood') : surface(paint.name, { color: paint.color })
+      const geometry = item.wood ? worldBoxGeometry(...item.size, material.userData.tile as number) : new THREE.CapsuleGeometry(0.5, 1, 2, 8).rotateZ(Math.PI / 2).scale(item.size[0] / 2, item.size[1], item.size[2])
       if (item.kind === 'sandbag') {
         const uv = geometry.getAttribute('uv')
         for (let vertex = 0; vertex < uv.count; vertex++) uv.setXY(vertex, uv.getX(vertex) * 0.3, uv.getY(vertex) * 0.3)

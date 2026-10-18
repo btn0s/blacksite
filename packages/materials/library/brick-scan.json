@@ -1,0 +1,95 @@
+{
+  "name": "brick-scan",
+  "title": "Brick",
+  "description": "Bricks097 CC0 scan (https://ambientcg.com/view?id=Bricks097), delit, with weather that follows the scan's height: dirt in cavities, wear on edges, damp in low areas.",
+  "size": 2.4,
+  "depth": 0.02,
+  "seed": 1,
+  "orientation": "wall",
+  "nodes": {
+    "photo": {
+      "op": "image",
+      "src": "../scans/brick/color.webp",
+      "repeat": [
+        1,
+        2
+      ]
+    },
+    "albedo": {
+      "op": "delight",
+      "input": "photo",
+      "radius": 0.72,
+      "strength": 0.5
+    },
+    "heightmap": {
+      "op": "image",
+      "src": "../scans/brick/height.webp",
+      "repeat": [
+        1,
+        2
+      ]
+    },
+    "height": {
+      "op": "channel",
+      "input": "heightmap",
+      "channel": "r"
+    },
+    "normalmap": {
+      "op": "image",
+      "src": "../scans/brick/normal.webp",
+      "repeat": [
+        1,
+        2
+      ]
+    },
+    "roughnessmap": {
+      "op": "image",
+      "src": "../scans/brick/roughness.webp",
+      "repeat": [
+        1,
+        2
+      ]
+    },
+    "roughness": {
+      "op": "channel",
+      "input": "roughnessmap",
+      "channel": "r"
+    },
+    "aomap": {
+      "op": "image",
+      "src": "../scans/brick/ao.webp",
+      "repeat": [
+        1,
+        2
+      ]
+    },
+    "ao": {
+      "op": "channel",
+      "input": "aomap",
+      "channel": "r"
+    }
+  },
+  "outputs": {
+    "color": "albedo",
+    "height": "height",
+    "normal": "normalmap",
+    "roughness": "roughness",
+    "metalness": 0,
+    "ao": "ao"
+  },
+  "finish": {
+    "ao": {
+      "strength": 0
+    }
+  },
+  "weather": {
+    "age": 0.65,
+    "dirt": 0.5,
+    "moisture": 0.25,
+    "wear": {
+      "amount": 0.3,
+      "color": "#8a7c6c",
+      "roughness": 0.95
+    }
+  }
+}

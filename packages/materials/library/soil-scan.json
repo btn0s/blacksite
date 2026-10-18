@@ -1,0 +1,70 @@
+{
+  "name": "soil-scan",
+  "title": "Soil",
+  "description": "Ground103 CC0 scan (https://ambientcg.com/view?id=Ground103), delit, with weather that follows the scan's height: dirt in cavities, wear on edges, damp in low areas.",
+  "size": 2.5,
+  "depth": 0.02,
+  "seed": 1,
+  "orientation": "floor",
+  "nodes": {
+    "photo": {
+      "op": "image",
+      "src": "../scans/soil/color.webp"
+    },
+    "albedo": {
+      "op": "delight",
+      "input": "photo",
+      "radius": 0.75,
+      "strength": 0.5
+    },
+    "heightmap": {
+      "op": "image",
+      "src": "../scans/soil/height.webp"
+    },
+    "height": {
+      "op": "channel",
+      "input": "heightmap",
+      "channel": "r"
+    },
+    "normalmap": {
+      "op": "image",
+      "src": "../scans/soil/normal.webp"
+    },
+    "roughnessmap": {
+      "op": "image",
+      "src": "../scans/soil/roughness.webp"
+    },
+    "roughness": {
+      "op": "channel",
+      "input": "roughnessmap",
+      "channel": "r"
+    },
+    "aomap": {
+      "op": "image",
+      "src": "../scans/soil/ao.webp"
+    },
+    "ao": {
+      "op": "channel",
+      "input": "aomap",
+      "channel": "r"
+    }
+  },
+  "outputs": {
+    "color": "albedo",
+    "height": "height",
+    "normal": "normalmap",
+    "roughness": "roughness",
+    "metalness": 0,
+    "ao": "ao"
+  },
+  "finish": {
+    "ao": {
+      "strength": 0
+    }
+  },
+  "weather": {
+    "age": 0.5,
+    "dirt": 0.3,
+    "moisture": 0.2
+  }
+}

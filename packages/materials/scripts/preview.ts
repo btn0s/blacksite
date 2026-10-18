@@ -47,7 +47,7 @@ for (const file of args) {
   const images = await loadGraphImages(graph, file, program.images)
   const result = evaluate(program, images)
   const ms = performance.now() - start
-  const id = graph.name.replace(/-image$/, '')
+  const id = graph.name.replace(/-scan$/, '')
   const scan = scans.find(entry => entry.id === id)
   const tiles: Buffer[] = [
     await render(result.color, result.normal, result.orm, graph.size, window, true, 'lit'),
