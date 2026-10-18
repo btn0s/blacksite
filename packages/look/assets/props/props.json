@@ -1,0 +1,741 @@
+{
+  "crate": {
+    "id": "wooden_crate_02",
+    "min": [
+      -0.265,
+      0,
+      -0.583
+    ],
+    "max": [
+      0.265,
+      0.464,
+      0.583
+    ],
+    "triangles": 4999,
+    "source": 5176,
+    "bytes": 520968,
+    "materials": 1,
+    "title": "Wooden Crate 02",
+    "authors": [
+      "James Ray Cock",
+      "Jurita Burger"
+    ],
+    "url": "https://polyhaven.com/a/wooden_crate_02",
+    "license": "CC0-1.0"
+  },
+  "military-crate": {
+    "id": "old_military_crate",
+    "min": [
+      -0.908,
+      0,
+      -0.488
+    ],
+    "max": [
+      0.908,
+      0.301,
+      0.488
+    ],
+    "triangles": 9000,
+    "source": 20952,
+    "bytes": 603616,
+    "materials": 1,
+    "title": "Old Military Crate",
+    "authors": [
+      "Jack Mava"
+    ],
+    "url": "https://polyhaven.com/a/old_military_crate",
+    "license": "CC0-1.0"
+  },
+  "cardboard-box": {
+    "id": "cardboard_box_01",
+    "min": [
+      -0.193,
+      0,
+      -0.258
+    ],
+    "max": [
+      0.193,
+      0.342,
+      0.258
+    ],
+    "triangles": 3000,
+    "source": 16952,
+    "bytes": 372224,
+    "materials": 1,
+    "title": "Cardboard Box 01",
+    "authors": [
+      "Rahul Chaudhary"
+    ],
+    "url": "https://polyhaven.com/a/cardboard_box_01",
+    "license": "CC0-1.0"
+  },
+  "oil-drum": {
+    "id": "Barrel_01",
+    "min": [
+      -0.282,
+      0,
+      -0.282
+    ],
+    "max": [
+      0.282,
+      0.88,
+      0.282
+    ],
+    "triangles": 2682,
+    "source": 2682,
+    "bytes": 531128,
+    "materials": 1,
+    "title": "Barrel_01",
+    "authors": [
+      "Jorge Camacho"
+    ],
+    "url": "https://polyhaven.com/a/Barrel_01",
+    "license": "CC0-1.0"
+  },
+  "plastic-drum": {
+    "id": "Barrel_02",
+    "min": [
+      -0.244,
+      0,
+      -0.242
+    ],
+    "max": [
+      0.244,
+      0.88,
+      0.242
+    ],
+    "triangles": 2688,
+    "source": 2688,
+    "bytes": 360924,
+    "materials": 1,
+    "title": "Barrel 02",
+    "authors": [
+      "Jorge Camacho"
+    ],
+    "url": "https://polyhaven.com/a/Barrel_02",
+    "license": "CC0-1.0"
+  },
+  "fuel-drum": {
+    "id": "barrel_03",
+    "min": [
+      -0.317,
+      0,
+      -0.319
+    ],
+    "max": [
+      0.317,
+      0.93,
+      0.319
+    ],
+    "triangles": 1473,
+    "source": 1473,
+    "bytes": 457644,
+    "materials": 1,
+    "title": "Barrel 03",
+    "authors": [
+      "Serhii Khromov"
+    ],
+    "url": "https://polyhaven.com/a/barrel_03",
+    "license": "CC0-1.0"
+  },
+  "plastic-crate": {
+    "id": "plastic_crate_02",
+    "min": [
+      -0.253,
+      0,
+      -0.203
+    ],
+    "max": [
+      0.253,
+      0.254,
+      0.203
+    ],
+    "triangles": 3000,
+    "source": 5840,
+    "bytes": 281484,
+    "materials": 1,
+    "title": "Plastic Crate 02",
+    "authors": [
+      "Fabi_G"
+    ],
+    "url": "https://polyhaven.com/a/plastic_crate_02",
+    "license": "CC0-1.0"
+  },
+  "tote": {
+    "id": "industrial_pastic_container",
+    "min": [
+      -0.229,
+      0,
+      -0.316
+    ],
+    "max": [
+      0.229,
+      0.419,
+      0.316
+    ],
+    "triangles": 4088,
+    "source": 7118,
+    "bytes": 172704,
+    "materials": 1,
+    "title": "Industrial Plastic Container",
+    "authors": [
+      "Galo Benivegna"
+    ],
+    "url": "https://polyhaven.com/a/industrial_pastic_container",
+    "license": "CC0-1.0"
+  },
+  "jerrycan": {
+    "id": "metal_jerrycan_green",
+    "min": [
+      -0.18,
+      0,
+      -0.085
+    ],
+    "max": [
+      0.18,
+      0.5,
+      0.085
+    ],
+    "triangles": 2999,
+    "source": 9636,
+    "bytes": 377592,
+    "materials": 1,
+    "title": "Metal Jerrycan Green",
+    "authors": [
+      "Ulan Cabanilla"
+    ],
+    "url": "https://polyhaven.com/a/metal_jerrycan_green",
+    "license": "CC0-1.0"
+  },
+  "gas-bottle": {
+    "id": "propane_tank",
+    "min": [
+      -0.169,
+      0,
+      -0.169
+    ],
+    "max": [
+      0.169,
+      0.554,
+      0.169
+    ],
+    "triangles": 2999,
+    "source": 5238,
+    "bytes": 322092,
+    "materials": 1,
+    "title": "Propane Tank",
+    "authors": [
+      "Slinc"
+    ],
+    "url": "https://polyhaven.com/a/propane_tank",
+    "license": "CC0-1.0"
+  },
+  "cement-bag": {
+    "id": "cement_bag",
+    "min": [
+      -0.231,
+      0,
+      -0.35
+    ],
+    "max": [
+      0.231,
+      0.18,
+      0.35
+    ],
+    "triangles": 844,
+    "source": 844,
+    "bytes": 255648,
+    "materials": 1,
+    "title": "Cement Bag",
+    "authors": [
+      "PierreB3D"
+    ],
+    "url": "https://polyhaven.com/a/cement_bag",
+    "license": "CC0-1.0"
+  },
+  "trash-cans": {
+    "id": "metal_trash_can",
+    "min": [
+      -0.889,
+      0,
+      -0.277
+    ],
+    "max": [
+      0.889,
+      0.906,
+      0.277
+    ],
+    "triangles": 8999,
+    "source": 13960,
+    "bytes": 1232088,
+    "materials": 2,
+    "title": "Metal Trash Can",
+    "authors": [
+      "GurJas Studios"
+    ],
+    "url": "https://polyhaven.com/a/metal_trash_can",
+    "license": "CC0-1.0"
+  },
+  "rack": {
+    "id": "worn_metal_rack",
+    "min": [
+      -0.458,
+      0,
+      -0.3
+    ],
+    "max": [
+      0.458,
+      1.9,
+      0.3
+    ],
+    "triangles": 6372,
+    "source": 6372,
+    "bytes": 489124,
+    "materials": 1,
+    "title": "Worn Metal Rack",
+    "authors": [
+      "Luca B"
+    ],
+    "url": "https://polyhaven.com/a/worn_metal_rack",
+    "license": "CC0-1.0"
+  },
+  "shelving": {
+    "id": "steel_frame_shelves_01",
+    "min": [
+      -0.549,
+      0,
+      -0.251
+    ],
+    "max": [
+      0.549,
+      2.141,
+      0.251
+    ],
+    "triangles": 4348,
+    "source": 4348,
+    "bytes": 388212,
+    "materials": 1,
+    "title": "Steel Frame Shelves 01",
+    "authors": [
+      "James Ray Cock"
+    ],
+    "url": "https://polyhaven.com/a/steel_frame_shelves_01",
+    "license": "CC0-1.0"
+  },
+  "office-desk": {
+    "id": "metal_office_desk",
+    "min": [
+      -1,
+      0,
+      -0.474
+    ],
+    "max": [
+      1,
+      0.788,
+      0.474
+    ],
+    "triangles": 6898,
+    "source": 6898,
+    "bytes": 381148,
+    "materials": 1,
+    "title": "Metal Office Desk",
+    "authors": [
+      "Ulan Cabanilla"
+    ],
+    "url": "https://polyhaven.com/a/metal_office_desk",
+    "license": "CC0-1.0"
+  },
+  "dresser": {
+    "id": "WoodenTable_03",
+    "min": [
+      -0.663,
+      0,
+      -0.288
+    ],
+    "max": [
+      0.663,
+      0.83,
+      0.288
+    ],
+    "triangles": 2298,
+    "source": 2298,
+    "bytes": 468912,
+    "materials": 1,
+    "title": "Wooden Table 03",
+    "authors": [
+      "Gabriel Radić"
+    ],
+    "url": "https://polyhaven.com/a/WoodenTable_03",
+    "license": "CC0-1.0"
+  },
+  "school-desk": {
+    "id": "SchoolDesk_01",
+    "min": [
+      -0.356,
+      0,
+      -0.273
+    ],
+    "max": [
+      0.356,
+      0.883,
+      0.273
+    ],
+    "triangles": 4162,
+    "source": 4162,
+    "bytes": 321132,
+    "materials": 1,
+    "title": "School Desk 01",
+    "authors": [
+      "Ethan Place"
+    ],
+    "url": "https://polyhaven.com/a/SchoolDesk_01",
+    "license": "CC0-1.0"
+  },
+  "school-chair": {
+    "id": "SchoolChair_01",
+    "min": [
+      -0.283,
+      0,
+      -0.338
+    ],
+    "max": [
+      0.283,
+      1.006,
+      0.338
+    ],
+    "triangles": 5000,
+    "source": 5072,
+    "bytes": 418180,
+    "materials": 1,
+    "title": "School Chair 01",
+    "authors": [
+      "Ethan Place"
+    ],
+    "url": "https://polyhaven.com/a/SchoolChair_01",
+    "license": "CC0-1.0"
+  },
+  "monobloc-chair": {
+    "id": "plastic_monobloc_chair_01",
+    "min": [
+      -0.321,
+      0,
+      -0.314
+    ],
+    "max": [
+      0.321,
+      0.88,
+      0.314
+    ],
+    "triangles": 3356,
+    "source": 3356,
+    "bytes": 525972,
+    "materials": 1,
+    "title": "Plastic Monobloc Chair 01",
+    "authors": [
+      "Kuutti Siitonen"
+    ],
+    "url": "https://polyhaven.com/a/plastic_monobloc_chair_01",
+    "license": "CC0-1.0"
+  },
+  "wooden-chair": {
+    "id": "painted_wooden_chair_01",
+    "min": [
+      -0.216,
+      0,
+      -0.27
+    ],
+    "max": [
+      0.216,
+      0.956,
+      0.27
+    ],
+    "triangles": 724,
+    "source": 724,
+    "bytes": 424292,
+    "materials": 1,
+    "title": "Painted Wooden Chair 01",
+    "authors": [
+      "Kuutti Siitonen"
+    ],
+    "url": "https://polyhaven.com/a/painted_wooden_chair_01",
+    "license": "CC0-1.0"
+  },
+  "cabinet": {
+    "id": "painted_wooden_cabinet",
+    "min": [
+      -0.597,
+      0,
+      -0.308
+    ],
+    "max": [
+      0.597,
+      1.182,
+      0.308
+    ],
+    "triangles": 2227,
+    "source": 2227,
+    "bytes": 469156,
+    "materials": 1,
+    "title": "Painted Wooden Cabinet",
+    "authors": [
+      "Kirill Sannikov"
+    ],
+    "url": "https://polyhaven.com/a/painted_wooden_cabinet",
+    "license": "CC0-1.0"
+  },
+  "extinguisher": {
+    "id": "korean_fire_extinguisher_01",
+    "min": [
+      -0.139,
+      0,
+      -0.184
+    ],
+    "max": [
+      0.139,
+      0.658,
+      0.184
+    ],
+    "triangles": 2997,
+    "source": 9913,
+    "bytes": 690480,
+    "materials": 3,
+    "title": "Korean Fire Extinguisher 01",
+    "authors": [
+      "UM JOORIN"
+    ],
+    "url": "https://polyhaven.com/a/korean_fire_extinguisher_01",
+    "license": "CC0-1.0"
+  },
+  "toolbox": {
+    "id": "metal_toolbox",
+    "min": [
+      -0.2,
+      0,
+      -0.135
+    ],
+    "max": [
+      0.2,
+      0.305,
+      0.135
+    ],
+    "triangles": 3000,
+    "source": 14228,
+    "bytes": 305796,
+    "materials": 1,
+    "title": "Metal Toolbox",
+    "authors": [
+      "Mateusz Sadek"
+    ],
+    "url": "https://polyhaven.com/a/metal_toolbox",
+    "license": "CC0-1.0"
+  },
+  "vise": {
+    "id": "bench_vice_01",
+    "min": [
+      -0.1,
+      0,
+      -0.198
+    ],
+    "max": [
+      0.1,
+      0.285,
+      0.198
+    ],
+    "triangles": 2864,
+    "source": 2864,
+    "bytes": 396332,
+    "materials": 1,
+    "title": "Bench Vice 01",
+    "authors": [
+      "Yann Kervran",
+      "Antanas Kep"
+    ],
+    "url": "https://polyhaven.com/a/bench_vice_01",
+    "license": "CC0-1.0"
+  },
+  "tyre": {
+    "id": "old_tyre",
+    "min": [
+      -0.3,
+      0,
+      -0.082
+    ],
+    "max": [
+      0.3,
+      0.6,
+      0.082
+    ],
+    "triangles": 2880,
+    "source": 2880,
+    "bytes": 310908,
+    "materials": 1,
+    "title": "Old Tyre",
+    "authors": [
+      "MP"
+    ],
+    "url": "https://polyhaven.com/a/old_tyre",
+    "license": "CC0-1.0"
+  },
+  "step-ladder": {
+    "id": "wooden_ladder_02",
+    "min": [
+      -0.495,
+      0,
+      -0.309
+    ],
+    "max": [
+      0.495,
+      1.722,
+      0.309
+    ],
+    "triangles": 6126,
+    "source": 6126,
+    "bytes": 565452,
+    "materials": 1,
+    "title": "Wooden Ladder 02",
+    "authors": [
+      "JN_3DPRINTINGNERD"
+    ],
+    "url": "https://polyhaven.com/a/wooden_ladder_02",
+    "license": "CC0-1.0"
+  },
+  "fuse-box": {
+    "id": "power_box_01",
+    "min": [
+      -0.228,
+      0,
+      -0.199
+    ],
+    "max": [
+      0.228,
+      0.503,
+      0.199
+    ],
+    "triangles": 3861,
+    "source": 21272,
+    "bytes": 330044,
+    "materials": 1,
+    "title": "Power Box 01",
+    "authors": [
+      "Rico Cilliers",
+      "Yann Kervran"
+    ],
+    "url": "https://polyhaven.com/a/power_box_01",
+    "license": "CC0-1.0"
+  },
+  "breaker-box": {
+    "id": "utility_box_01",
+    "min": [
+      -0.26,
+      0,
+      -0.216
+    ],
+    "max": [
+      0.26,
+      1.12,
+      0.216
+    ],
+    "triangles": 4404,
+    "source": 4404,
+    "bytes": 471728,
+    "materials": 1,
+    "title": "Utility Box 01",
+    "authors": [
+      "James Ray Cock"
+    ],
+    "url": "https://polyhaven.com/a/utility_box_01",
+    "license": "CC0-1.0"
+  },
+  "can": {
+    "id": "can_rusted",
+    "min": [
+      -0.062,
+      0,
+      -0.062
+    ],
+    "max": [
+      0.062,
+      0.151,
+      0.062
+    ],
+    "triangles": 1200,
+    "source": 3520,
+    "bytes": 333156,
+    "materials": 1,
+    "title": "Can Rusted",
+    "authors": [
+      "Rahul Chaudhary"
+    ],
+    "url": "https://polyhaven.com/a/can_rusted",
+    "license": "CC0-1.0"
+  },
+  "television": {
+    "id": "Television_01",
+    "min": [
+      -0.3,
+      0,
+      -0.235
+    ],
+    "max": [
+      0.3,
+      0.457,
+      0.235
+    ],
+    "triangles": 1918,
+    "source": 1918,
+    "bytes": 296888,
+    "materials": 1,
+    "title": "Television 01",
+    "authors": [
+      "Gabriel Radić"
+    ],
+    "url": "https://polyhaven.com/a/Television_01",
+    "license": "CC0-1.0"
+  },
+  "generator": {
+    "id": "portable_generator",
+    "min": [
+      -0.408,
+      0,
+      -0.282
+    ],
+    "max": [
+      0.408,
+      0.575,
+      0.282
+    ],
+    "triangles": 8996,
+    "source": 26419,
+    "bytes": 702384,
+    "materials": 2,
+    "title": "Portable Generator",
+    "authors": [
+      "James Ray Cock"
+    ],
+    "url": "https://polyhaven.com/a/portable_generator",
+    "license": "CC0-1.0"
+  },
+  "road-barrier": {
+    "id": "concrete_road_barrier_02",
+    "min": [
+      -0.783,
+      0,
+      -0.221
+    ],
+    "max": [
+      0.783,
+      1.112,
+      0.221
+    ],
+    "triangles": 9000,
+    "source": 23822,
+    "bytes": 634488,
+    "materials": 1,
+    "title": "Concrete Road Barrier 02",
+    "authors": [
+      "Amal Kumar"
+    ],
+    "url": "https://polyhaven.com/a/concrete_road_barrier_02",
+    "license": "CC0-1.0"
+  }
+}

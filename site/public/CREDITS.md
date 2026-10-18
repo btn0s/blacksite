@@ -1,6 +1,6 @@
 # Site credits
 
-World surfaces, material references and the sky below are CC0. World surfaces are 512 px KTX2 bakes of material graphs that read the ambientCG scans; the sky is reduced to 1024 × 512 WebP. The default found first-person arms use CC BY 4.0 art credited below.
+World surfaces, material references, scanned props and the sky below are CC0. World surfaces are 512 px KTX2 bakes of material graphs that read the ambientCG scans; the sky is reduced to 1024 × 512 WebP. The default found first-person arms use CC BY 4.0 art credited below.
 
 ## World surfaces (ambientCG, CC0)
 
@@ -61,6 +61,45 @@ Author: ambientCG (Lennart Demes). Licence: [CC0 1.0 Universal](https://docs.amb
 Physical scales and processing are recorded in `packages/materials/scans/scans.json`. Ground110 and Bark014 use published dimensions; other scales are estimates. These are comparison references, not claims that every material is a measured scan or an exact match for its procedural variant.
 
 The `packages/materials/library/*-scan.json` graphs read these scans; the procedural `library/*.json` graphs and their baked textures are authored for Blacksite and contain no purchased texture content.
+
+## Scanned props (Poly Haven, CC0)
+
+Licence: [CC0 1.0](https://polyhaven.com/license). Each `packages/look/assets/props/<name>.glb` is the 1k glTF of the listed model, simplified to a phone triangle budget, rested on the origin, recompressed with meshopt and re-encoded to KTX2 by `packages/look/scripts/fetch-props.mjs`. Rigs and animations are dropped.
+
+| Prop | Model | Author |
+| --- | --- | --- |
+| `crate` | [Wooden Crate 02](https://polyhaven.com/a/wooden_crate_02) | James Ray Cock, Jurita Burger |
+| `military-crate` | [Old Military Crate](https://polyhaven.com/a/old_military_crate) | Jack Mava |
+| `cardboard-box` | [Cardboard Box 01](https://polyhaven.com/a/cardboard_box_01) | Rahul Chaudhary |
+| `oil-drum` | [Barrel_01](https://polyhaven.com/a/Barrel_01) | Jorge Camacho |
+| `plastic-drum` | [Barrel 02](https://polyhaven.com/a/Barrel_02) | Jorge Camacho |
+| `fuel-drum` | [Barrel 03](https://polyhaven.com/a/barrel_03) | Serhii Khromov |
+| `plastic-crate` | [Plastic Crate 02](https://polyhaven.com/a/plastic_crate_02) | Fabi_G |
+| `tote` | [Industrial Plastic Container](https://polyhaven.com/a/industrial_pastic_container) | Galo Benivegna |
+| `jerrycan` | [Metal Jerrycan Green](https://polyhaven.com/a/metal_jerrycan_green) | Ulan Cabanilla |
+| `gas-bottle` | [Propane Tank](https://polyhaven.com/a/propane_tank) | Slinc |
+| `cement-bag` | [Cement Bag](https://polyhaven.com/a/cement_bag) | PierreB3D |
+| `trash-cans` | [Metal Trash Can](https://polyhaven.com/a/metal_trash_can) | GurJas Studios |
+| `rack` | [Worn Metal Rack](https://polyhaven.com/a/worn_metal_rack) | Luca B |
+| `shelving` | [Steel Frame Shelves 01](https://polyhaven.com/a/steel_frame_shelves_01) | James Ray Cock |
+| `office-desk` | [Metal Office Desk](https://polyhaven.com/a/metal_office_desk) | Ulan Cabanilla |
+| `dresser` | [Wooden Table 03](https://polyhaven.com/a/WoodenTable_03) | Gabriel Radić |
+| `school-desk` | [School Desk 01](https://polyhaven.com/a/SchoolDesk_01) | Ethan Place |
+| `school-chair` | [School Chair 01](https://polyhaven.com/a/SchoolChair_01) | Ethan Place |
+| `monobloc-chair` | [Plastic Monobloc Chair 01](https://polyhaven.com/a/plastic_monobloc_chair_01) | Kuutti Siitonen |
+| `wooden-chair` | [Painted Wooden Chair 01](https://polyhaven.com/a/painted_wooden_chair_01) | Kuutti Siitonen |
+| `cabinet` | [Painted Wooden Cabinet](https://polyhaven.com/a/painted_wooden_cabinet) | Kirill Sannikov |
+| `extinguisher` | [Korean Fire Extinguisher 01](https://polyhaven.com/a/korean_fire_extinguisher_01) | UM JOORIN |
+| `toolbox` | [Metal Toolbox](https://polyhaven.com/a/metal_toolbox) | Mateusz Sadek |
+| `vise` | [Bench Vice 01](https://polyhaven.com/a/bench_vice_01) | Yann Kervran, Antanas Kep |
+| `tyre` | [Old Tyre](https://polyhaven.com/a/old_tyre) | MP |
+| `step-ladder` | [Wooden Ladder 02](https://polyhaven.com/a/wooden_ladder_02) | JN_3DPRINTINGNERD |
+| `fuse-box` | [Power Box 01](https://polyhaven.com/a/power_box_01) | Rico Cilliers, Yann Kervran |
+| `breaker-box` | [Utility Box 01](https://polyhaven.com/a/utility_box_01) | James Ray Cock |
+| `can` | [Can Rusted](https://polyhaven.com/a/can_rusted) | Rahul Chaudhary |
+| `television` | [Television 01](https://polyhaven.com/a/Television_01) | Gabriel Radić |
+| `generator` | [Portable Generator](https://polyhaven.com/a/portable_generator) | James Ray Cock |
+| `road-barrier` | [Concrete Road Barrier 02](https://polyhaven.com/a/concrete_road_barrier_02) | Amal Kumar |
 
 ## Sky (Poly Haven, CC0)
 
