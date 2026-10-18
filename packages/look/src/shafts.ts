@@ -45,15 +45,17 @@ const MARCH = `
     }
     float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
     float stride = (leave - enter) / float(SHAFT_STEPS);
-    float sum = 0.0;
+    float sun = 0.0;
+    vec3 lamps = vec3(0.0);
     for (int i = 0; i < SHAFT_STEPS; i++) {
       vec3 point = shaftCamera + ray * (enter + (float(i) + jitter) * stride);
       float enclosed = 1.0 - clamp(lookSkyAt(point).x * 1.6, 0.0, 1.0);
-      sum += lookSunAt(point) * enclosed;
+      sun += lookSunAt(point) * enclosed;
+      lamps += lookLampLight(point);
     }
     float cosine = dot(ray, shaftSunDirection);
     float phase = 0.3 + 0.7 * 0.75 / pow(1.25 - cosine, 1.5);
-    gl_FragColor = vec4(shaftColor * (sum * stride * shaftDensity * phase), 1.0);
+    gl_FragColor = vec4((shaftColor * sun * phase + lamps * 0.025) * stride * shaftDensity, 1.0);
   }
 `;
 

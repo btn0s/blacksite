@@ -2,6 +2,8 @@ import {
   AddEquation,
   Box3,
   ClampToEdgeWrapping,
+  Color,
+  CubeCamera,
   CustomBlending,
   DepthTexture,
   DoubleSide,
@@ -25,10 +27,12 @@ import {
   Vector2,
   Vector3,
   WebGL3DRenderTarget,
+  WebGLCubeRenderTarget,
   WebGLRenderTarget,
 } from 'three';
-import type { Material, Object3D, WebGLRenderer, WebGLProgramParametersWithUniforms } from 'three';
+import type { Material, Object3D, Texture, WebGLRenderer, WebGLProgramParametersWithUniforms } from 'three';
 import type { Rgb } from './atmosphere';
+import { WORLD_VARYING } from './varying';
 
 export interface BakeOptions {
   readonly root: Object3D;
@@ -39,12 +43,22 @@ export interface BakeOptions {
   readonly ground?: number;
   readonly albedo?: number;
   readonly reach?: number;
+  readonly lamps?: readonly BakeLamp[];
+}
+
+export interface BakeLamp {
+  readonly position: Rgb;
+  readonly color: Rgb;
+  readonly intensity: number;
+  readonly distance: number;
+  readonly flicker?: boolean;
 }
 
 export interface BakeQuality {
   readonly directions: number;
   readonly sky: number;
   readonly sun: number;
+  readonly lamp: number;
 }
 
 export interface BakedLight {
@@ -53,6 +67,7 @@ export interface BakedLight {
   readonly milliseconds: number;
   bake(sun: Rgb): void;
   setSun(color: Rgb, strength: number): void;
+  setFlicker(gain: number): void;
   light(material: Material): void;
   track(root: Object3D): void;
   dispose(): void;
@@ -69,6 +84,9 @@ export interface BakedUniforms {
   readonly lookSunBias: Uniform<number>;
   readonly lookBounce: Uniform;
   readonly lookSunColor: Uniform<Vector3>;
+  readonly lookLamp: Uniform;
+  readonly lookLampDirection: Uniform;
+  readonly lookFlicker: Uniform<number>;
 }
 
 const SPLAT_VERTEX = `
@@ -152,6 +170,62 @@ const BOUNCE_FRAGMENT = `
   }
 `;
 
+const DISTANCE_VERTEX = `
+  varying vec3 vWorld;
+  void main() {
+    vec4 world = modelMatrix * vec4(position, 1.0);
+    vWorld = world.xyz;
+    gl_Position = projectionMatrix * viewMatrix * world;
+  }
+`;
+
+const DISTANCE_FRAGMENT = `
+  uniform vec3 lamp;
+  uniform float far;
+  varying vec3 vWorld;
+  void main() { gl_FragColor = vec4(length(vWorld - lamp) / far, 0.0, 0.0, 1.0); }
+`;
+
+const LAMP_FRAGMENT = `
+  precision highp float;
+  uniform samplerCube shadow;
+  uniform vec3 origin;
+  uniform vec3 cell;
+  uniform vec3 lamp;
+  uniform vec3 color;
+  uniform float range;
+  uniform float far;
+  uniform float flicker;
+  uniform float layer;
+  void main() {
+    vec2 index = floor(gl_FragCoord.xy);
+    vec3 probe = origin + (vec3(index.x, layer, index.y) + 0.5) * cell;
+    vec3 away = probe - lamp;
+    float distance = length(away);
+    if (distance >= range) discard;
+    vec3 ray = away / max(distance, 1e-4);
+    vec3 side = normalize(cross(ray, abs(ray.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
+    vec3 up = cross(ray, side);
+    float spread = 0.5 * length(cell) / max(distance, 1e-3);
+    float bias = length(cell);
+    float visible = 0.0;
+    for (int i = 0; i < 5; i++) {
+      vec2 offset = i == 0 ? vec2(0.0) : vec2(float(i == 1) - float(i == 2), float(i == 3) - float(i == 4)) * spread;
+      float blocker = textureCube(shadow, ray + side * offset.x + up * offset.y).r * far;
+      visible += step(distance - bias, blocker);
+    }
+    visible *= 0.2;
+    float window = pow(clamp(1.0 - pow(distance / range, 4.0), 0.0, 1.0), 2.0);
+    vec3 light = color * visible * window / max(distance * distance, dot(cell, cell) * 0.5);
+    float luma = dot(light, vec3(0.2126, 0.7152, 0.0722));
+    #ifdef LAMP_DIRECTION
+      gl_FragColor = vec4(-ray * luma, luma);
+    #else
+      gl_FragColor = vec4(light, luma * flicker);
+    #endif
+  }
+`;
+
 export const LIGHT_CHUNK = `
   uniform highp sampler3D lookSky;
   uniform vec3 lookSkyMin;
@@ -163,6 +237,9 @@ export const LIGHT_CHUNK = `
   uniform float lookSunBias;
   uniform highp sampler3D lookBounce;
   uniform vec3 lookSunColor;
+  uniform highp sampler3D lookLamp;
+  uniform highp sampler3D lookLampDirection;
+  uniform float lookFlicker;
 
   float lookInside(vec3 uvw) {
     vec3 edge = min(uvw, 1.0 - uvw) * lookSkySize;
@@ -179,6 +256,20 @@ export const LIGHT_CHUNK = `
     vec3 uvw = (world - lookSkyMin) / lookSkySize;
     vec4 bounce = texture(lookBounce, clamp(uvw.xzy, 0.0, 1.0)) * lookInside(uvw);
     return lookSunColor * max(0.25 * bounce.x + 0.75 * dot(bounce.yzw, n), 0.0);
+  }
+
+  vec3 lookLampLight(vec3 world) {
+    vec3 uvw = (world - lookSkyMin) / lookSkySize;
+    vec4 lamp = texture(lookLamp, clamp(uvw.xzy, 0.0, 1.0)) * lookInside(uvw);
+    float luma = dot(lamp.rgb, vec3(0.2126, 0.7152, 0.0722));
+    return lamp.rgb * mix(1.0, lookFlicker, lamp.a / max(luma, 1e-5));
+  }
+
+  vec3 lookLampAt(vec3 world, vec3 n) {
+    vec3 uvw = (world - lookSkyMin) / lookSkySize;
+    vec4 toward = texture(lookLampDirection, clamp(uvw.xzy, 0.0, 1.0));
+    vec3 mean = toward.xyz / max(toward.w, 1e-5);
+    return lookLampLight(world) * max(dot(n, mean) + 0.5 * (1.0 - length(mean)), 0.0);
   }
 
   float lookOpen(vec4 sky, vec3 n) {
@@ -225,7 +316,7 @@ function occluders(root: Object3D) {
   root.traverseVisible(object => {
     if (!(object instanceof Mesh)) return;
     const materials = Array.isArray(object.material) ? object.material : [object.material];
-    if (materials.some(material => material.transparent || !material.depthWrite || material.blending !== 1)) return;
+    if (materials.some(material => material.transparent || !material.depthWrite || material.blending !== 1 || !('isMeshStandardMaterial' in material || 'isMeshLambertMaterial' in material || 'isMeshPhongMaterial' in material))) return;
     meshes.push(object);
   });
   return meshes;
@@ -258,6 +349,9 @@ export function bakeLight(renderer: WebGLRenderer, sun: Rgb, options: BakeOption
   const sky = volume(counts);
   const bounce = volume(coarse);
   const sunTarget = depthTarget(quality.sun, true);
+  const lamps = options.lamps ?? [];
+  const lamp = volume(counts);
+  const lampDirection = volume(counts);
 
   const uniforms: BakedUniforms = {
     lookSky: new Uniform(sky.texture),
@@ -270,6 +364,9 @@ export function bakeLight(renderer: WebGLRenderer, sun: Rgb, options: BakeOption
     lookSunBias: new Uniform(0),
     lookBounce: new Uniform(bounce.texture),
     lookSunColor: new Uniform(new Vector3(1, 1, 1)),
+    lookLamp: new Uniform(lamp.texture),
+    lookLampDirection: new Uniform(lampDirection.texture),
+    lookFlicker: new Uniform(1),
   };
 
   const additive = { depthTest: false, depthWrite: false, blending: CustomBlending, blendEquation: AddEquation, blendSrc: OneFactor, blendDst: OneFactor } as const;
@@ -311,6 +408,20 @@ export function bakeLight(renderer: WebGLRenderer, sun: Rgb, options: BakeOption
     depthTest: false,
     depthWrite: false,
   });
+  const lampUniforms = {
+    shadow: { value: null as Texture | null },
+    origin: { value: box.min.clone() },
+    cell: { value: step.clone() },
+    lamp: { value: new Vector3() },
+    color: { value: new Vector3() },
+    range: { value: 1 },
+    far: { value: 1 },
+    flicker: { value: 0 },
+    layer: { value: 0 },
+  };
+  const lampColor = new ShaderMaterial({ vertexShader: SPLAT_VERTEX, fragmentShader: LAMP_FRAGMENT, uniforms: lampUniforms, ...additive });
+  const lampToward = new ShaderMaterial({ vertexShader: SPLAT_VERTEX, fragmentShader: LAMP_FRAGMENT, defines: { LAMP_DIRECTION: 1 }, uniforms: lampUniforms, ...additive });
+  const distanceMaterial = new ShaderMaterial({ vertexShader: DISTANCE_VERTEX, fragmentShader: DISTANCE_FRAGMENT, uniforms: { lamp: lampUniforms.lamp, far: lampUniforms.far }, side: DoubleSide });
   const quad = new Mesh(new PlaneGeometry(2, 2), splat);
   quad.frustumCulled = false;
   const quadScene = new Scene();
@@ -340,7 +451,7 @@ export function bakeLight(renderer: WebGLRenderer, sun: Rgb, options: BakeOption
     const wasAuto = options.root.matrixWorldAutoUpdate;
     options.root.updateMatrixWorld(true);
     options.root.matrixWorldAutoUpdate = false;
-    const previous = { target: renderer.getRenderTarget(), autoClear: renderer.autoClear, shadow: renderer.shadowMap.enabled, clear: renderer.getClearAlpha() };
+    const previous = { target: renderer.getRenderTarget(), autoClear: renderer.autoClear, shadow: renderer.shadowMap.enabled, clear: renderer.getClearAlpha(), color: renderer.getClearColor(new Color()) };
     renderer.shadowMap.enabled = false;
     renderer.setClearColor(0x000000, 0);
 
@@ -389,10 +500,40 @@ export function bakeLight(renderer: WebGLRenderer, sun: Rgb, options: BakeOption
     each(bounce, gather);
     sunDepth.dispose();
 
+    renderer.autoClear = true;
+    renderer.setClearColor(0x000000, 0);
+    for (const target of [lamp, lampDirection]) for (let layer = 0; layer < counts.y; layer++) {
+      renderer.setRenderTarget(target, layer);
+      renderer.clear(true, false, false);
+    }
+    if (lamps.length) {
+      const cube = new WebGLCubeRenderTarget(quality.lamp, { type: HalfFloatType, format: RGBAFormat, depthBuffer: true, generateMipmaps: false, minFilter: NearestFilter, magFilter: NearestFilter });
+      for (const mesh of meshes) mesh.material = distanceMaterial;
+      renderer.setClearColor(0xffffff, 1);
+      for (const source of lamps) {
+        const range = source.distance;
+        const cubeCamera = new CubeCamera(0.03, range, cube);
+        cubeCamera.position.set(...source.position);
+        cubeCamera.updateMatrixWorld();
+        lampUniforms.lamp.value.set(...source.position);
+        lampUniforms.far.value = range;
+        renderer.autoClear = true;
+        cubeCamera.update(renderer, options.root as Scene);
+        lampUniforms.shadow.value = cube.texture;
+        lampUniforms.color.value.set(...source.color).multiplyScalar(source.intensity);
+        lampUniforms.range.value = range;
+        lampUniforms.flicker.value = source.flicker ? 1 : 0;
+        renderer.autoClear = false;
+        each(lamp, lampColor);
+        each(lampDirection, lampToward);
+      }
+      cube.dispose();
+    }
+
     renderer.setRenderTarget(previous.target);
     renderer.autoClear = previous.autoClear;
     renderer.shadowMap.enabled = previous.shadow;
-    renderer.setClearAlpha(previous.clear);
+    renderer.setClearColor(previous.color, previous.clear);
     for (const [mesh, material] of swapped) mesh.material = material;
     for (const object of hidden) object.visible = true;
     options.root.matrixWorldAutoUpdate = wasAuto;
@@ -415,7 +556,7 @@ export function bakeLight(renderer: WebGLRenderer, sun: Rgb, options: BakeOption
       before.call(material, shader, renderer);
       Object.assign(shader.uniforms, uniforms);
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vLookWorld;')
+        .replace('#include <common>', `#include <common>\n${WORLD_VARYING}`)
         .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
           vec4 lookWorld = vec4(transformed, 1.0);
           #ifdef USE_BATCHING
@@ -426,7 +567,7 @@ export function bakeLight(renderer: WebGLRenderer, sun: Rgb, options: BakeOption
           #endif
           vLookWorld = (modelMatrix * lookWorld).xyz;`);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\nvarying vec3 vLookWorld;\n${LIGHT_CHUNK}`)
+        .replace('#include <common>', `#include <common>\n${WORLD_VARYING}\n${LIGHT_CHUNK}`)
         .replace('#include <lights_fragment_begin>', `
           vec3 lookNormal = inverseTransformDirection(normal, viewMatrix);
           vec3 lookFace = inverseTransformDirection(nonPerturbedNormal, viewMatrix);
@@ -441,14 +582,14 @@ export function bakeLight(renderer: WebGLRenderer, sun: Rgb, options: BakeOption
         .replace('#include <lights_fragment_end>', `
           irradiance *= lookIndirect;
           iblIrradiance *= lookIndirect;
-          irradiance += lookBounceAt(lookProbe, lookNormal);
+          irradiance += lookBounceAt(lookProbe, lookNormal) + lookLampAt(lookProbe, lookNormal);
           #if defined( RE_IndirectSpecular )
             radiance *= lookSpecular;
           #endif
           #include <lights_fragment_end>`)
         .replace('#include <fog_fragment>', `
           #ifdef USE_FOG
-            vec3 lookFogColor = fogColor * mix(0.12, 1.0, clamp(max(lookSkyAt(cameraPosition).x, lookSkyHere.x) * 1.6, 0.0, 1.0));
+            vec3 lookFogColor = fogColor * mix(0.04, 1.0, clamp(max(lookSkyAt(cameraPosition).x, lookSkyHere.x) * 1.6, 0.0, 1.0));
           #endif
           ${ShaderChunk.fog_fragment.replace('fogColor, fogFactor', 'lookFogColor, fogFactor')}`);
     };
@@ -464,6 +605,9 @@ export function bakeLight(renderer: WebGLRenderer, sun: Rgb, options: BakeOption
     setSun(color, strength) {
       uniforms.lookSunColor.value.set(...color).multiplyScalar(strength);
     },
+    setFlicker(gain) {
+      uniforms.lookFlicker.value = gain;
+    },
     light,
     track(root) {
       root.traverse(object => {
@@ -476,7 +620,12 @@ export function bakeLight(renderer: WebGLRenderer, sun: Rgb, options: BakeOption
     dispose() {
       sky.dispose();
       bounce.dispose();
+      lamp.dispose();
+      lampDirection.dispose();
       sunTarget.dispose();
+      lampColor.dispose();
+      lampToward.dispose();
+      distanceMaterial.dispose();
       splat.dispose();
       gather.dispose();
       quad.geometry.dispose();

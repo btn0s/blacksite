@@ -19,5 +19,5 @@ export type { StochasticTilingOptions } from './stochastic';
 export { SoftParticles, SoftPass } from './soft';
 export type { SoftParticle, SoftParticlesOptions } from './soft';
 export { bakeLight } from './bake';
-export type { BakeOptions, BakeQuality, BakedLight, BakedUniforms } from './bake';
+export type { BakeLamp, BakeOptions, BakeQuality, BakedLight, BakedUniforms } from './bake';
 export { ShaftEffect } from './shafts';

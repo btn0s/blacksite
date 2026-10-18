@@ -112,7 +112,7 @@ export function createLook(renderer: WebGLRenderer, scene: Scene, camera: Camera
     }
     bloomPass.enabled = settings.bloom !== false;
     if (settings.bloom) bloom.mipmapBlurPass.levels = settings.bloom.levels;
-    grade.setFeatures({ aberration: settings.aberration, grain: settings.grain });
+    grade.setFeatures({ aberration: settings.aberration, grain: settings.grain, sharpen: settings.sharpen });
     shafts?.setSteps(settings.shafts);
     physical?.configure(settings.atmosphere);
     aerial?.setEdges(settings.atmosphere.edges);

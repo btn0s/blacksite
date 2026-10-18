@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { WORLD_VARYING } from '../varying'
 import { autoResolution, streamBaked, type BakedMaterial, type StreamedTextures } from '@blacksite/materials/three'
 import { BAKE_INFO, BAKE_MAPS } from './bakes'
 import { TEXTURES } from './textures'
@@ -139,7 +140,7 @@ vAoMapUv *= lookTile;
 #endif`
 
 const surfaceCommon = `
-varying vec3 vLookWorld;
+${WORLD_VARYING}
 varying float vLookUp;
 uniform sampler2D lookMasks;
 uniform vec3 lookWeather;
@@ -205,7 +206,7 @@ function weathered(material: THREE.MeshStandardMaterial, uniforms: SurfaceUnifor
     useRenderer(found)
     Object.assign(shader.uniforms, uniforms, spaces)
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vLookWorld;\nvarying float vLookUp;\nuniform float lookTile;')
+      .replace('#include <common>', `#include <common>\n${WORLD_VARYING}\nvarying float vLookUp;\nuniform float lookTile;`)
       .replace('#include <uv_vertex>', `#include <uv_vertex>\n${surfaceUv}`)
       .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>\n${surfaceVertex}`)
     shader.fragmentShader = shader.fragmentShader

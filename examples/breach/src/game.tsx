@@ -63,10 +63,11 @@ type RapierHandle = ReturnType<typeof useRapier>
 const atmosphere: Atmosphere = {
   ...ZONE,
   exposure: 1.18,
-  fog: { color: [0.33, 0.355, 0.34], near: 9, far: 95 },
-  fill: { sky: [0.4, 0.46, 0.5], ground: ZONE.fill.ground, strength: 0.4 },
-  sun: { color: [1.0, 0.86, 0.66], strength: 1.45, direction: normalize([18, 32, 4]) },
-  grade: { ...ZONE.grade, split: 0.3, adapt: { key: 0.09, strength: 0.5, min: 0.8, max: 1.25 } },
+  fog: { color: [0.55, 0.6, 0.64], near: 14, far: 140 },
+  sky: { zenith: [0.24, 0.37, 0.58], horizon: [0.6, 0.65, 0.68], ground: ZONE.sky.ground, overcast: 0.15 },
+  fill: { sky: [0.5, 0.55, 0.6], ground: ZONE.fill.ground, strength: 0.75 },
+  sun: { color: [1.0, 0.86, 0.66], strength: 2.4, direction: normalize([18, 32, 4]) },
+  grade: { ...ZONE.grade, split: 0.12, grain: 0.07, lift: 0.03, clarity: 0.4, sharpen: 0.5, adapt: { key: 0.07, strength: 0.6, min: 0.55, max: 0.95 } },
 }
 const soldierIds = ENCOUNTERS.flatMap(encounter => encounter.soldiers.map(soldier => soldier.id))
 const encounterOf = new Map(ENCOUNTERS.flatMap((encounter, index) => encounter.soldiers.map(soldier => [soldier.id, index] as const)))
@@ -133,7 +134,9 @@ function Scene({ player, now, paused, tier, audio, restartRef, onArms, onFirstFr
   const handles = useMemo(() => new Map<string, RefObject<AlsRagdollHandle | null>>(), [])
   const { level, chips } = useMemo(() => worldFor(tier, phone), [tier, phone])
   const effects = useMemo(() => effectsFor(scene), [scene])
-  const bake = useMemo(() => ({ root: level.group, ...INTERIOR, ground: 0.03 }), [level])
+  const bake = useMemo(() => ({ root: level.group, ...INTERIOR, ground: 0.03, lamps: level.lamps }), [level])
+  const look = useRef<LookHandle>(null)
+  const ready = useCallback((handle: LookHandle) => { look.current = handle; opaqueAo(handle) }, [])
   const arms = player.arms
   const [presentation, setPresentation] = useState<ArmsPresentation | null>(null)
   const [roster, setRoster] = useState<string[]>([])
@@ -573,6 +576,7 @@ function Scene({ player, now, paused, tier, audio, restartRef, onArms, onFirstFr
     scratch.visible.add(seen.id)
     for (const id of seen.sees) scratch.visible.add(id)
     level.update(state.clock, step, scratch.visible, pose.current ? scratch.lightEye.fromArray(pose.current.position) : camera.position)
+    look.current?.baked?.setFlicker(level.flicker)
     effects.update(step, position => audio.casing(position, footingAt(position.x, position.z)))
     topple()
     rest()
@@ -697,7 +701,7 @@ function Scene({ player, now, paused, tier, audio, restartRef, onArms, onFirstFr
   }), [camera, player, restart, scratch])
 
   return <>
-    <Look atmosphere={atmosphere} quality={tier} environment sun={lights.sun} fill={lights.fill} bake={bake} overlay={posed ? null : presentation} onReady={opaqueAo} />
+    <Look atmosphere={atmosphere} quality={tier} environment sun={lights.sun} fill={lights.fill} bake={bake} overlay={posed ? null : presentation} onReady={ready} />
     <primitive object={lights.sun} />
     <primitive object={lights.sun.target} />
     <primitive object={lights.fill} />

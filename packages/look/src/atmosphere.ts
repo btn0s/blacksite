@@ -36,6 +36,9 @@ export interface GradeSpec {
   readonly bloom?: number;
   readonly tint?: Rgb;
   readonly adapt?: AdaptSpec;
+  readonly lift?: number;
+  readonly clarity?: number;
+  readonly sharpen?: number;
 }
 
 export interface AdaptSpec {

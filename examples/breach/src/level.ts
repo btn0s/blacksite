@@ -1,12 +1,15 @@
 import * as THREE from 'three'
+import type { BakeLamp } from '@blacksite/look'
 import { LevelBuilder, decalBias, apartmentBlock, apc, clutter, deadTree, groundMaterial, lada, puddleMaterial, skylight, surface, waterTower, weatherSpaces, worldBoxGeometry, worldPlaneGeometry, type SurfaceName } from '@blacksite/look/world'
-import { APC_AT, CLUTTER, EXFIL, LEVEL, PATCHES, PRACTICALS, ROOMS, SHAFTS, WINDOWS, type Block, type Practical, type Room, type Vec3 } from './layout'
+import { APC_AT, CLUTTER, EXFIL, INTERIOR, LEVEL, PATCHES, PRACTICALS, ROOMS, SHAFTS, WINDOWS, type Block, type Practical, type Room, type Vec3 } from './layout'
 import { BUDGET, type RoomId } from './model'
 
 export type BreachLevel = {
   group: THREE.Group
   heroes: Map<string, THREE.Mesh>
   practicals: Array<{ light: THREE.PointLight; room: RoomId; base: number; kind: Practical['kind'] }>
+  lamps: BakeLamp[]
+  flicker: number
   update(time: number, dt: number, visibleRooms: ReadonlySet<RoomId>, listener?: { x: number; y: number; z: number }): void
   dispose(): void
 }
@@ -20,7 +23,7 @@ type Tape = { from: number; count: number; base: Float32Array; across: THREE.Vec
 type LightSource = { position: THREE.Vector3; color: THREE.Color; room: RoomId; base: number; kind: Practical['kind']; distance: number; seed: number; score: number; selected: boolean }
 
 const LIGHTS: Record<Practical['kind'], { color: string; intensity: number; distance: number }> = {
-  bulb: { color: '#ffc680', intensity: 9, distance: 7.5 },
+  bulb: { color: '#ffc680', intensity: 14, distance: 8 },
   tube: { color: '#e4ecf4', intensity: 3.5, distance: 8 },
   fire: { color: '#ff8a3a', intensity: 6, distance: 6 },
   emergency: { color: '#ff3020', intensity: 3.5, distance: 5.5 },
@@ -29,11 +32,11 @@ const FIXTURE: Record<Practical['kind'], Fixture> = { bulb: 'pendant', tube: 'tu
 
 const SPOTS: Spot[] = [
   ...PRACTICALS.map(practical => ({ kind: practical.kind, fixture: FIXTURE[practical.kind], at: practical.at, room: practical.room })),
-  { kind: 'bulb', fixture: 'cage', at: [0, 2.7, -1.5], room: 'corridor', intensity: 7, distance: 6 },
+  { kind: 'bulb', fixture: 'cage', at: [0, 2.7, -1.5], room: 'corridor', intensity: 11, distance: 6.5 },
   { kind: 'bulb', fixture: 'cage', at: [0, 2.7, -4.1], room: 'corridor', intensity: 3, distance: 3 },
-  { kind: 'bulb', fixture: 'cage', at: [3.3, 2.65, -1.7], room: 'side', intensity: 5, distance: 5.5 },
+  { kind: 'bulb', fixture: 'cage', at: [3.3, 2.65, -1.7], room: 'side', intensity: 8, distance: 6 },
   { kind: 'tube', fixture: 'tube', at: [-3.6, 4.36, -14.4], room: 'hall', housing: true, intensity: 4, distance: 8 },
-  { kind: 'bulb', fixture: 'lamp', at: [-2.1, 0.79, -22.85], room: 'office', color: '#ffbf70', intensity: 4, distance: 4 },
+  { kind: 'bulb', fixture: 'lamp', at: [-2.1, 0.79, -22.85], room: 'office', color: '#ffbf70', intensity: 6, distance: 4.5 },
   { kind: 'bulb', fixture: 'sodium', at: [4.3, 6.38, 29.25], room: 'yard', color: '#ffb35a', intensity: 24, distance: 16 },
   { kind: 'fire', fixture: 'fire', at: [7.8, 0.96, 12.8], room: 'yard' },
   { kind: 'emergency', fixture: 'emergency', at: [-7.4, 1.95, 29.8], room: 'yard', color: '#ffb35a', intensity: 2.5, distance: 3.5 },
@@ -804,7 +807,10 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
     const base = spot.intensity ?? spec.intensity
     sources.push({ position: new THREE.Vector3(...light), color: new THREE.Color(spot.color ?? spec.color), room: spot.room, base, kind: spot.kind, distance: spot.distance ?? spec.distance, seed: index * 3.7, score: 0, selected: false })
   })
-  const ranked = [...sources]
+  const baked = (source: LightSource) => [0, 1, 2].every(axis => source.position.getComponent(axis) > INTERIOR.min[axis]! && source.position.getComponent(axis) < INTERIOR.max[axis]!)
+  const lamps: BakeLamp[] = sources.filter(baked).map(source => ({ position: source.position.toArray(), color: [source.color.r, source.color.g, source.color.b], intensity: source.base, distance: source.distance, flicker: source.kind === 'fire' }))
+  const fire = sources.find(source => baked(source) && source.kind === 'fire')
+  const ranked = sources.filter(source => !baked(source))
   const lightSlots = Array.from({ length: Math.max(0, BUDGET.pointLights[options.quality] - 2) }, (_, index) => {
     const light = new THREE.PointLight('#ffffff', 0, 1, 2)
     light.name = `practical-pool-${index}`
@@ -982,7 +988,8 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
 
   const tapePosition = tapeGeometry.getAttribute('position') as THREE.BufferAttribute
   const update = (time: number, dt: number, visibleRooms: ReadonlySet<RoomId>, listener = { x: 0, y: 1.63, z: 23 }) => {
-    for (const source of sources) {
+    if (fire) breach.flicker = flicker('fire', time, fire.seed)
+    for (const source of ranked) {
       const x = listener.x - source.position.x, y = listener.y - source.position.y, z = listener.z - source.position.z
       source.score = visibleRooms.has(source.room) ? (x * x + y * y + z * z) * (source.selected ? 0.82 : 1) : Infinity
       source.selected = false
@@ -1041,12 +1048,12 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
       tapePosition.needsUpdate = true
     }
   }
-  update(0, 0, new Set(ROOMS.map(room => room.id)))
-
-  return {
+  const breach: BreachLevel = {
     group,
     heroes,
     practicals,
+    lamps,
+    flicker: 1,
     update,
     dispose() {
       group.traverse(object => { if (object instanceof THREE.Mesh) object.geometry.dispose() })
@@ -1056,4 +1063,6 @@ export function buildLevel(options: { quality: 'low' | 'medium' | 'high'; phone:
       heroes.clear()
     },
   }
+  update(0, 0, new Set(ROOMS.map(room => room.id)))
+  return breach
 }

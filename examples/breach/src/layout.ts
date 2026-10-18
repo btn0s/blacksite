@@ -673,7 +673,11 @@ export const SHAFTS: Shaft[] = [
 ]
 
 export const CLUTTER: { room: RoomId; density: number; clear: { min: Vec2; max: Vec2 }[] }[] = [
+  { room: 'lobby', density: 0.9, clear: [{ min: [-1.2, 8.6], max: [1.2, 10] }, { min: [-1.1, 2], max: [1.1, 3.4] }] },
+  { room: 'corridor', density: 0.7, clear: [{ min: [-1.2, 0.8], max: [1.2, 1.7] }, { min: [-1.2, -4.85], max: [1.2, -4] }, { min: [0.4, -2.4], max: [1.2, -0.6] }, { min: [-1.2, -2.4], max: [-0.4, -0.6] }] },
+  { room: 'side', density: 1.1, clear: [{ min: [1.5, -2.4], max: [2.4, -0.6] }, { min: [3.4, -4.85], max: [5.2, -4] }] },
   { room: 'hall', density: 1, clear: [{ min: [-1, -7.2], max: [1, -5] }, { min: [3.4, -7], max: [5.2, -5] }, { min: [-5.1, -17.2], max: [-3.3, -15.4] }] },
+  { room: 'office', density: 1.3, clear: [{ min: [-5.1, -18.4], max: [-3.3, -17.3] }, { min: [2, -23.7], max: [3, -21.3] }, { min: [-7, -22.8], max: [-6.2, -20.2] }] },
 ]
 export const INTERIOR = { min: [-7.6, -0.25, -25.6] as Vec3, max: [7.6, 5.75, 10.6] as Vec3 }
 

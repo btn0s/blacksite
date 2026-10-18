@@ -1,7 +1,7 @@
 import { BlendFunction, Effect, EffectAttribute } from 'postprocessing';
 import { Data3DTexture, Uniform, Vector2, Vector3 } from 'three';
 import type { WebGLRenderer, WebGLRenderTarget } from 'three';
-import { EyeAdaptation } from './adapt';
+import { Luminance } from './adapt';
 import type { GradeSpec } from './atmosphere';
 
 const GRADE_FRAGMENT = `
@@ -18,6 +18,10 @@ const GRADE_FRAGMENT = `
   uniform float adaptKey;
   uniform float adaptStrength;
   uniform vec2 adaptRange;
+  uniform highp sampler2D localLuma;
+  uniform float clarity;
+  uniform float sharpen;
+  uniform float lift;
 
   vec3 shoulder(vec3 x) {
     vec3 over = max(x - 0.72, 0.0);
@@ -33,6 +37,14 @@ const GRADE_FRAGMENT = `
       return filmicCurve(x * 1.6) / filmicCurve(vec3(9.0));
     }
   #endif
+
+  vec3 display(vec3 source, float exposed) {
+    #ifdef LOOK_FILMIC
+      return pow(clamp(filmic(max(source, 0.0) * exposed), 0.0, 1.0), vec3(1.0 / 2.2));
+    #else
+      return pow(shoulder(max(source, 0.0) * exposed), vec3(1.0 / 2.2));
+    #endif
+  }
 
   float grainNoise(vec2 uv) {
     vec2 cell = floor(uv * resolution) + floor(fract(time * 24.0) * 97.0);
@@ -57,10 +69,17 @@ const GRADE_FRAGMENT = `
     #else
       vec3 source = inputColor.rgb;
     #endif
-    #ifdef LOOK_FILMIC
-      vec3 colour = pow(clamp(filmic(max(source, 0.0) * exposed), 0.0, 1.0), vec3(1.0 / 2.2));
-    #else
-      vec3 colour = pow(shoulder(max(source, 0.0) * exposed), vec3(1.0 / 2.2));
+    #ifdef LOOK_CLARITY
+      float here = log(max(dot(source, vec3(0.2126, 0.7152, 0.0722)), 1e-4));
+      source *= exp(clarity * clamp(here - textureLod(localLuma, uv, 0.0).r, -1.0, 1.0));
+    #endif
+    vec3 colour = display(source, exposed);
+    #ifdef LOOK_SHARPEN
+      vec3 around = display(texture2D(inputBuffer, uv + vec2(texelSize.x, 0.0)).rgb, exposed)
+        + display(texture2D(inputBuffer, uv - vec2(texelSize.x, 0.0)).rgb, exposed)
+        + display(texture2D(inputBuffer, uv + vec2(0.0, texelSize.y)).rgb, exposed)
+        + display(texture2D(inputBuffer, uv - vec2(0.0, texelSize.y)).rgb, exposed);
+      colour = max(colour + sharpen * (colour - around * 0.25), 0.0);
     #endif
     vec3 base = colour;
     #ifdef LOOK_LUT
@@ -80,6 +99,7 @@ const GRADE_FRAGMENT = `
       colour = mix(vec3(dot(colour, vec3(0.2126, 0.7152, 0.0722))), colour, saturation);
     #endif
     colour *= 1.0 - dot(centred, centred) * vignette;
+    colour = lift + colour * (1.0 - lift);
     #ifdef LOOK_GRAIN
       colour += grainNoise(uv) * grain;
     #endif
@@ -89,7 +109,9 @@ const GRADE_FRAGMENT = `
 
 export class GradeEffect extends Effect {
   private readonly empty = new Data3DTexture();
-  private readonly adaptation = new EyeAdaptation();
+  private readonly luminance = new Luminance();
+  private sharpenable = false;
+  private sharpness = 0;
 
   constructor() {
     super('GradeEffect', GRADE_FRAGMENT, {
@@ -109,10 +131,15 @@ export class GradeEffect extends Effect {
         ['adaptKey', new Uniform(1)],
         ['adaptStrength', new Uniform(0)],
         ['adaptRange', new Uniform(new Vector2(1, 1))],
+        ['localLuma', new Uniform(null)],
+        ['clarity', new Uniform(0)],
+        ['sharpen', new Uniform(0)],
+        ['lift', new Uniform(0)],
       ]),
     });
     this.uniforms.get('lut')!.value = this.empty;
-    this.uniforms.get('adapted')!.value = this.adaptation.texture;
+    this.uniforms.get('adapted')!.value = this.luminance.adapted;
+    this.uniforms.get('localLuma')!.value = this.luminance.local;
   }
 
   private toggle(name: string, on: boolean): void {
@@ -148,19 +175,30 @@ export class GradeEffect extends Effect {
     this.toggle('LOOK_TINT', grade.tint !== undefined);
     this.toggle('LOOK_FILMIC', grade.curve === 'filmic');
     this.toggle('LOOK_SATURATION', grade.saturation !== undefined && grade.saturation !== 1);
-    if (grade.adapt && !this.defines.has('LOOK_ADAPT')) this.adaptation.reset();
+    this.uniforms.get('lift')!.value = grade.lift ?? 0;
+    this.uniforms.get('clarity')!.value = grade.clarity ?? 0;
+    this.toggle('LOOK_CLARITY', (grade.clarity ?? 0) !== 0);
+    this.sharpness = grade.sharpen ?? 0;
+    this.uniforms.get('sharpen')!.value = this.sharpness;
+    this.toggle('LOOK_SHARPEN', this.sharpenable && this.sharpness !== 0);
+    if (grade.adapt && !this.defines.has('LOOK_ADAPT')) this.luminance.reset();
     this.toggle('LOOK_ADAPT', grade.adapt !== undefined);
     if (!grade.adapt) return;
     this.uniforms.get('adaptKey')!.value = grade.adapt.key;
     this.uniforms.get('adaptStrength')!.value = grade.adapt.strength;
     (this.uniforms.get('adaptRange')!.value as Vector2).set(grade.adapt.min, grade.adapt.max);
-    this.adaptation.rate = grade.adapt.rate ?? 1.5;
+    this.luminance.rate = grade.adapt.rate ?? 1.5;
+  }
+
+  override setSize(width: number, height: number): void {
+    this.luminance.setSize(width, height);
   }
 
   override update(renderer: WebGLRenderer, inputBuffer: WebGLRenderTarget, deltaTime?: number): void {
-    if (!this.defines.has('LOOK_ADAPT')) return;
-    this.adaptation.update(renderer, inputBuffer.texture, deltaTime ?? 0);
-    this.uniforms.get('adapted')!.value = this.adaptation.texture;
+    const adapting = this.defines.has('LOOK_ADAPT');
+    if (!adapting && !this.defines.has('LOOK_CLARITY')) return;
+    this.luminance.update(renderer, inputBuffer.texture, deltaTime ?? 0, adapting);
+    this.uniforms.get('adapted')!.value = this.luminance.adapted;
   }
 
   setLut(texture: Data3DTexture | null, size = texture?.image.width ?? 1): void {
@@ -169,14 +207,16 @@ export class GradeEffect extends Effect {
     this.toggle('LOOK_LUT', texture !== null);
   }
 
-  setFeatures(features: { readonly aberration: boolean; readonly grain: boolean }): void {
+  setFeatures(features: { readonly aberration: boolean; readonly grain: boolean; readonly sharpen: boolean }): void {
     this.toggle('LOOK_ABERRATION', features.aberration);
     this.toggle('LOOK_GRAIN', features.grain);
+    this.sharpenable = features.sharpen;
+    this.toggle('LOOK_SHARPEN', this.sharpenable && this.sharpness !== 0);
   }
 
   override dispose(): void {
     this.empty.dispose();
-    this.adaptation.dispose();
+    this.luminance.dispose();
     super.dispose();
   }
 }
