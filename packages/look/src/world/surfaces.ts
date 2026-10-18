@@ -80,6 +80,8 @@ function bake(name: SurfaceName) {
 
 export const texturesReady = () => Promise.all(pending)
 
+export const worldRenderer = () => rendererReady
+
 export function preloadSurfaces() {
   for (const name of Object.keys(SURFACES) as SurfaceName[]) bake(name)
   return texturesReady()
