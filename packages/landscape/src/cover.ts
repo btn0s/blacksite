@@ -42,7 +42,7 @@ export interface CoverOptions {
   readonly sun?: CoverSun
   readonly patch?: number
   readonly distance?: number
-  readonly rings?: readonly number[]
+  readonly near?: number
   readonly density?: number
   readonly alphaToCoverage?: boolean
   readonly seed?: number
@@ -119,6 +119,9 @@ function partFor(family: CoverFamily): Part {
 const STAMP = 64
 const HUE_TO_THIRD = 0.85 * (0.05 + 0.33 / 2)
 const GRAZING = 4
+const END = 0.75
+const SHRINK = 0.15
+const RING = 1.4
 
 const linear = (value: number) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
 const rise = (value: number) => { const t = Math.min(1, Math.max(0, value / 0.85)); return t * t * (3 - 2 * t) }
@@ -230,11 +233,12 @@ vec4 bsSurface = terrainSurfaceLod(bsRoot, 0.0);
 vec3 bsTerrainNormal = terrainNormalOf(bsSurface);
 float bsSlope = 1.0 - bsTerrainNormal.y;
 float bsDistance = distance(vec3(bsRoot.x, bsGround, bsRoot.y), coverViewer);
-float bsReach = 1.0 - smoothstep(coverFade.x, coverFade.y, bsDistance);
+float bsThin = coverFade.x / max(bsDistance, coverFade.x);
+float bsReach = bsThin * (1.0 - smoothstep(coverFade.y, coverFade.z, bsDistance));
 float bsMask = clamp(${family.mask}, 0.0, 1.0);
 float bsDensity = bsMask * bsReach;
-float bsKeep = clamp((bsDensity - coverBlade.z) / 0.07, 0.0, 1.0);
-float bsWiden = mix(1.0, coverFade.z, 1.0 - bsReach);
+float bsKeep = clamp((bsDensity * ${glslNumber(1 + SHRINK)} - coverBlade.z) / max(bsDensity * ${glslNumber(SHRINK)}, 1e-5), 0.0, 1.0);
+float bsWiden = 1.0 / bsThin;
 float bsScale = mix(coverShape.x, coverShape.y, coverRandom.y) * bsKeep * max(${family.height ?? '1.0'}, 0.0);
 vec3 bsP = position;
 bsP.xz *= bsWiden * bsScale;
@@ -271,6 +275,7 @@ uniform vec4 coverLight;
 uniform vec3 coverSunDirection;
 uniform vec3 coverSunColor;
 uniform vec2 coverTextureSize;
+uniform vec3 coverAlbedo;
 varying vec3 coverData;
 varying vec3 coverRoot;
 `
@@ -278,16 +283,20 @@ varying vec3 coverRoot;
 const FRAGMENT_COLOR = (textured: boolean) => /* glsl */ `
 ${textured ? `
 vec4 bsTexel = texture2D(map, vMapUv);
+#ifdef COVER_PREMULTIPLIED
+bsTexel.rgb /= max(bsTexel.a, 1e-4);
+#endif
 vec2 bsTexelScale = max(abs(dFdx(vMapUv * coverTextureSize)), abs(dFdy(vMapUv * coverTextureSize)));
 float bsMip = max(log2(max(bsTexelScale.x, bsTexelScale.y)), 0.0);
 bsTexel.a *= 1.0 + bsMip * 0.3;
+bsTexel.rgb = mix(bsTexel.rgb * mix(coverLight.z, 1.0, smoothstep(0.0, 0.85, coverData.x)), coverAlbedo, smoothstep(4.0, 6.0, bsMip));
 diffuseColor *= bsTexel;
 ` : ''}
 float bsPatchTone = bsNoise(coverRoot.xz * 0.035, 61u) * 0.7 + bsNoise(coverRoot.xz * 0.12, 67u) * 0.3;
 vec3 bsTint = mix(coverColors[0], coverColors[1], smoothstep(0.25, 0.75, bsPatchTone));
 bsTint = mix(bsTint, coverColors[2], smoothstep(0.62, 0.95, coverData.y) * 0.85);
 diffuseColor.rgb *= bsTint * (0.88 + coverData.y * 0.24);
-diffuseColor.rgb *= mix(coverLight.z, 1.0, smoothstep(0.0, 0.85, coverData.x));
+${textured ? '' : 'diffuseColor.rgb *= mix(coverLight.z, 1.0, smoothstep(0.0, 0.85, coverData.x));'}
 `
 
 const ALPHA_AA = /* glsl */ `
@@ -315,15 +324,16 @@ totalEmissiveRadiance += diffuseColor.rgb * coverSunColor * coverLight.x * (bsBa
 
 interface Ring {
   readonly mesh: Mesh
-  readonly patch: InstancedBufferAttribute
   readonly geometry: InstancedBufferGeometry
 }
 
 export function createCover(options: CoverOptions): Cover {
   const patchSize = options.patch ?? 8
   const distance = options.distance ?? 75
+  const near = Math.min(options.near ?? 15, distance)
   const density = options.density ?? 1
-  const ringEdges = options.rings ?? [distance * 0.3, distance * 0.62, distance]
+  const ringEdges = [near]
+  while (ringEdges[ringEdges.length - 1]! < distance) ringEdges.push(Math.min(distance, ringEdges[ringEdges.length - 1]! * RING))
   const seed = options.seed ?? 1
   const sun = options.sun ?? { direction: new Vector3(0.4, 0.8, 0.3).normalize(), color: new Color(1, 0.95, 0.85) }
   const object = new Group()
@@ -331,10 +341,14 @@ export function createCover(options: CoverOptions): Cover {
   const viewer = new Vector3()
   const span = Math.ceil(distance / patchSize) + 1
   const maxPatches = (span * 2 + 1) ** 2
-  const fadeStart = distance * 0.45
-  const reach = (d: number) => {
-    const t = Math.min(1, Math.max(0, (d - fadeStart) / (distance - fadeStart)))
-    return 1 - t * t * (3 - 2 * t)
+  const patchAttributes = ringEdges.map(() => {
+    const attribute = new InstancedBufferAttribute(new Float32Array(maxPatches * 3), 3)
+    attribute.setUsage(DynamicDrawUsage)
+    return attribute
+  })
+  const reach = (d: number, end: number) => {
+    const t = Math.min(1, Math.max(0, (d - end * END) / (end - end * END)))
+    return near / Math.max(d, near) * (1 - t * t * (3 - 2 * t))
   }
   const materials: MeshStandardMaterial[] = []
   const familyRings: { family: CoverFamily; rings: Ring[]; per: number }[] = []
@@ -343,13 +357,13 @@ export function createCover(options: CoverOptions): Cover {
   for (const [familyIndex, family] of options.families.entries()) {
     const per = Math.max(1, Math.round(family.perPatch * density))
     const part = partFor(family)
-    const fade = family.fade ?? 1
+    const end = distance * (family.fade ?? 1)
     const look = bladeLook(family, part)
     const palette = [0, 1, 2].map(index => family.colors[Math.min(index, family.colors.length - 1)] ?? [1, 1, 1])
     const toned = (index: number) => palette[index]!.map((value, channel) => (value * (1 - HUE_TO_THIRD) + palette[2]![channel]! * HUE_TO_THIRD) * look.albedo[channel]!)
     const weight = per * bladeArea(family) * look.fill / (patchSize * patchSize)
     groundTerms.push(`bsMask = clamp(${family.mask}, 0.0, 1.0) * ${glslNumber(weight)};
-  bsSum += bsMask * mix(${glslVec3(toned(0))}, ${glslVec3(toned(1))}, bsTone) * mix(${glslNumber(family.ao ?? 0.5)}, 1.0, smoothstep(${glslNumber(fadeStart * fade)}, ${glslNumber(distance * fade)}, bsDistance));
+  bsSum += bsMask * mix(${glslVec3(toned(0))}, ${glslVec3(toned(1))}, bsTone) * mix(${glslNumber(family.ao ?? 0.5)}, 1.0, smoothstep(${glslNumber(end * END)}, ${glslNumber(end)}, bsDistance));
   bsWeight += bsMask;`)
     const shared = patchGeometry(part, per, patchSize, seed * 31 + familyIndex)
     const textured = Boolean(family.texture)
@@ -362,17 +376,21 @@ export function createCover(options: CoverOptions): Cover {
       side: family.shape === 'pebble' ? FrontSide : DoubleSide,
       alphaToCoverage: textured && options.alphaToCoverage === true,
     })
-    if (textured && options.alphaToCoverage) material.defines = { COVER_A2C: '' }
+    material.defines = {
+      ...(textured && options.alphaToCoverage ? { COVER_A2C: '' } : {}),
+      ...(family.texture?.premultiplyAlpha ? { COVER_PREMULTIPLIED: '' } : {}),
+    }
     const colors = [0, 1, 2].map(index => new Vector3(...(family.colors[Math.min(index, family.colors.length - 1)] ?? [1, 1, 1])))
     const uniforms = {
       coverViewer: { value: viewer },
-      coverFade: { value: new Vector4(fadeStart * fade, distance * fade, family.shape === 'pebble' || family.shape === 'card' ? 1.2 : 1.9, 0) },
+      coverFade: { value: new Vector4(near, end * END, end, 0) },
       coverShape: { value: new Vector4(family.size[0], family.size[1], family.bend ?? 0, 0) },
       coverPatchSize: { value: patchSize },
       coverColors: { value: colors },
       coverLight: { value: new Vector4(family.translucency ?? 0, 0, family.ao ?? 0.5, 0) },
       coverSunDirection: { value: sun.direction },
       coverSunColor: { value: sun.color },
+      coverAlbedo: { value: new Vector3(...look.albedo) },
       coverTextureSize: { value: new Vector2((family.texture?.image as { width?: number } | undefined)?.width ?? 256, (family.texture?.image as { height?: number } | undefined)?.height ?? 256) },
     }
     patchMaterial(material, `world-cover-${family.shape}-${textured ? 't' : 'p'}-${family.mask}-${family.height ?? ''}`, shader => {
@@ -388,9 +406,10 @@ export function createCover(options: CoverOptions): Cover {
     })
     materials.push(material)
 
-    const rings: Ring[] = ringEdges.map((edge, ringIndex) => {
+    const rings: Ring[] = ringEdges.flatMap((edge, ringIndex) => {
       const start = ringIndex === 0 ? 0 : ringEdges[ringIndex - 1]!
-      const prefix = ringIndex === 0 ? per : Math.max(1, Math.min(per, Math.ceil(per * reach(start) * 1.02)))
+      const prefix = Math.min(per, Math.ceil(per * reach(start, end) * (1 + SHRINK)))
+      if (prefix === 0) return []
       const geometry = new InstancedBufferGeometry()
       geometry.setAttribute('position', shared.position)
       geometry.setAttribute('normal', shared.normal)
@@ -399,9 +418,7 @@ export function createCover(options: CoverOptions): Cover {
       geometry.setAttribute('coverRandom', shared.random)
       geometry.setIndex(shared.index)
       geometry.setDrawRange(0, prefix * shared.indicesPerItem)
-      const patch = new InstancedBufferAttribute(new Float32Array(maxPatches * 3), 3)
-      patch.setUsage(DynamicDrawUsage)
-      geometry.setAttribute('coverPatch', patch)
+      geometry.setAttribute('coverPatch', patchAttributes[ringIndex]!)
       geometry.instanceCount = 0
       const mesh = new Mesh(geometry, material)
       mesh.name = `world-cover-${family.name}-${ringIndex}`
@@ -409,8 +426,9 @@ export function createCover(options: CoverOptions): Cover {
       mesh.receiveShadow = true
       mesh.castShadow = false
       mesh.userData.edge = edge
+      mesh.visible = false
       object.add(mesh)
-      return { mesh, patch, geometry }
+      return [{ mesh, geometry }]
     })
     familyRings.push({ family, rings, per })
   }
@@ -450,35 +468,33 @@ vec4 coverGround(vec2 bsRoot, vec4 bsSurface, float bsSlope, float bsGround, flo
         const pz = (cz + j) * patchSize
         const dx = Math.max(px - viewer.x, 0, viewer.x - (px + patchSize))
         const dz = Math.max(pz - viewer.z, 0, viewer.z - (pz + patchSize))
-        const near = Math.hypot(dx, dz)
-        if (near > distance) continue
+        const gap = Math.hypot(dx, dz)
+        if (gap > distance) continue
         const centreX = px + patchSize / 2
         const centreZ = pz + patchSize / 2
         sphere.center.set(centreX, options.heightAt(centreX, centreZ) + 1, centreZ)
         sphere.radius = patchSize * 0.75 + 3
         if (!frustum.intersectsSphere(sphere)) continue
         let ring = 0
-        while (ring < ringEdges.length - 1 && near > ringEdges[ring]!) ring++
-        const patchSeed = Math.floor(hash2(cx + i, cz + j, seed + 77) * 8)
-        for (const entry of familyRings) {
-          const target = entry.rings[ring]!
-          const array = target.patch.array as Float32Array
-          const offset = counts[ring]! * 3
-          array[offset] = px
-          array[offset + 1] = pz
-          array[offset + 2] = patchSeed
-        }
+        while (ring < ringEdges.length - 1 && gap > ringEdges[ring]!) ring++
+        const array = patchAttributes[ring]!.array as Float32Array
+        const offset = counts[ring]! * 3
+        array[offset] = px
+        array[offset + 1] = pz
+        array[offset + 2] = Math.floor(hash2(cx + i, cz + j, seed + 77) * 8)
         counts[ring]!++
         patches++
       }
+      patchAttributes.forEach((attribute, index) => {
+        attribute.clearUpdateRanges()
+        attribute.addUpdateRange(0, counts[index]! * 3)
+        attribute.needsUpdate = true
+      })
       let instances = 0
       for (const entry of familyRings) {
         entry.rings.forEach((ring, index) => {
           ring.geometry.instanceCount = counts[index]!
           ring.mesh.visible = counts[index]! > 0
-          ring.patch.clearUpdateRanges()
-          ring.patch.addUpdateRange(0, counts[index]! * 3)
-          ring.patch.needsUpdate = true
           instances += counts[index]! * (ring.geometry.drawRange.count / (ring.geometry.index!.count / entry.per))
         })
       }

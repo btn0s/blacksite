@@ -16,7 +16,7 @@ function canvasTexture(size: number, seed: number, paint: Paint): CanvasTexture 
   texture.magFilter = LinearFilter
   texture.anisotropy = 4
   texture.generateMipmaps = true
-  texture.premultiplyAlpha = false
+  texture.premultiplyAlpha = true
   texture.needsUpdate = true
   return texture
 }

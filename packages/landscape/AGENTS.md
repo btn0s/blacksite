@@ -37,13 +37,13 @@ A mask is a GLSL float expression evaluated per blade in the vertex shader, and 
 
 ## Tiers
 
-Keep one object per tier in the game's model, as Valley's `tiers` does: tree count, near and far fade ranges, impostor frame size, cover distance and density, cascades, shadow distance and map size, `alphaToCoverage` and `singleFrame`. Low turns `alphaToCoverage` off (no MSAA) and `singleFrame` on. Same seeds on every tier; only counts and distances change.
+Keep one object per tier in the game's model, as Valley's `tiers` does: tree count, near and far fade ranges, impostor frame size, cover distance, near radius and density, cascades, shadow distance and map size, `alphaToCoverage` and `singleFrame`. Low turns `alphaToCoverage` off (no MSAA) and `singleFrame` on. Same seeds on every tier; only counts and distances change.
 
 ## Gotchas by symptom
 
 | Symptom | Check |
 |---|---|
-| A visible line where grass thins | The terrain was built without `cover`, so the ground under the last blades is the splat layer, not the grass. Pass the `Cover` to `createTerrain`. Otherwise a family's `fade` is above 1, so its blades outlive the prefix a far ring draws, or custom `rings` cut a prefix too short. Keep `fade` at or below 1 and leave `rings` at the defaults. |
+| A visible line where grass stops | The reach is too short: at grazing angles any fade band shorter than where blades are a pixel or two tall is a line. Raise `distance` and let `near` thin it (Valley high: 250 m, `near` 15). Otherwise the terrain was built without `cover`, so the ground past the last blades is the splat layer; pass the `Cover` to `createTerrain`. A cutout texture mipmapped without premultiplied alpha darkens far blades below the ground. Keep `fade` at or below 1. |
 | Grass sparkles or crawls in a still frame | `alphaToCoverage` is on without MSAA, or off with very thin blades. Match it to the look tier's MSAA. Freeze the wind to separate motion from aliasing. |
 | Cover floats or sinks on slopes | `heightAt` passed to cover is not `terrainHeightAt` on the same sources, or the terrain uniforms come from a different `TerrainSources`. Pass `terrain.uniforms`. |
 | Trees pop between mesh and impostor | `near` range too narrow, or a custom material lost the dither discard. Both sides must use `bsDither` over the same range. |
