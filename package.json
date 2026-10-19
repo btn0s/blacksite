@@ -36,6 +36,7 @@
     "@blacksite/example-breach": "workspace:*",
     "@blacksite/example-traverse": "workspace:*",
     "@blacksite/example-valley": "workspace:*",
+    "@blacksite/geometry": "workspace:*",
     "@blacksite/input": "workspace:*",
     "@blacksite/landscape": "workspace:*",
     "@blacksite/look": "workspace:*",

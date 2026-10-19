@@ -36,6 +36,9 @@ importers:
       '@blacksite/example-valley':
         specifier: workspace:*
         version: link:examples/valley
+      '@blacksite/geometry':
+        specifier: workspace:*
+        version: link:packages/geometry
       '@blacksite/input':
         specifier: workspace:*
         version: link:packages/input

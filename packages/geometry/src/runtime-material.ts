@@ -1,6 +1,6 @@
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, StandardNodeLibrary, TangentSpaceNormalMap, Texture, Vector2 } from 'three/webgpu'
 import { Fn, bumpMap, context, float, max, normalView, positionView, texture, uniform, vec2, vec3, vec4 } from 'three/tsl'
-import type { MeshStandardMaterial, NodeMaterial } from 'three/webgpu'
+import type { MeshStandardMaterial, Node, NodeMaterial } from 'three/webgpu'
 
 const materialLibrary = new StandardNodeLibrary()
 
@@ -26,21 +26,24 @@ export function createGeometryMaterial(source: MeshStandardMaterial | MeshStanda
 export function normalMapWithUV(map: Texture, pulledUv: ReturnType<typeof vec2>, scale = new Vector2(1, 1)) {
   const normalTexture = texture(map, pulledUv).setUpdateMatrix(true)
   const transformedUv = normalTexture.getTransformedUV(pulledUv)
+  const sample = normalTexture.xyz.mul(2).sub(1)
+  return tangentNormalWithUV(vec3(sample.xy.mul(uniform(scale)), sample.z), transformedUv)
+}
+
+export function tangentNormalWithUV(sample: Node<'vec3'>, coordinates: Node<'vec2'>) {
   return Fn(() => {
     const n = normalView.normalize()
     const q0 = positionView.dFdx()
     const q1 = positionView.dFdy()
-    const st0 = transformedUv.dFdx()
-    const st1 = transformedUv.dFdy()
+    const st0 = coordinates.dFdx()
+    const st1 = coordinates.dFdy()
     const q1perp = q1.cross(n)
     const q0perp = n.cross(q0)
     const tangent = q1perp.mul(st0.x).add(q0perp.mul(st1.x))
     const bitangent = q1perp.mul(st0.y).add(q0perp.mul(st1.y))
     const determinant = max(tangent.dot(tangent), bitangent.dot(bitangent))
     const normalization = determinant.greaterThan(0).select(determinant.inverseSqrt(), 0)
-    const sample = normalTexture.xyz.mul(2).sub(1)
-    const xy = sample.xy.mul(uniform(scale))
-    return tangent.mul(xy.x).add(bitangent.mul(xy.y)).mul(normalization).add(n.mul(sample.z)).normalize()
+    return tangent.mul(sample.x).add(bitangent.mul(sample.y)).mul(normalization).add(n.mul(sample.z)).normalize()
   })()
 }
 
@@ -48,14 +51,17 @@ export function bindGeometryMaterial(material: MeshStandardNodeMaterial, pulledU
   material.positionNode = position
   material.contextNode = context({ ...material.contextNode?.value, getUV: () => pulledUv })
 
-  if (!material.normalNode && material.normalMap) {
+  if (material.normalNode) {
+    material.normalNode = material.normalNode.context({ getUV: () => pulledUv })
+  } else if (material.normalMap) {
     if (material.normalMapType !== TangentSpaceNormalMap) throw new Error('Cluster normal maps must use tangent space')
     material.normalNode = normalMapWithUV(material.normalMap, pulledUv, material.normalScale)
-  } else if (!material.normalNode && material.bumpMap) {
+  } else if (material.bumpMap) {
     material.normalNode = bumpMap(texture(material.bumpMap, pulledUv).setUpdateMatrix(true).r, uniform(material.bumpScale))
   }
-  if (material instanceof MeshPhysicalNodeMaterial && !material.clearcoatNormalNode && material.clearcoatNormalMap) {
-    material.clearcoatNormalNode = normalMapWithUV(material.clearcoatNormalMap, pulledUv, material.clearcoatNormalScale)
+  if (material instanceof MeshPhysicalNodeMaterial) {
+    if (material.clearcoatNormalNode) material.clearcoatNormalNode = material.clearcoatNormalNode.context({ getUV: () => pulledUv })
+    else if (material.clearcoatNormalMap) material.clearcoatNormalNode = normalMapWithUV(material.clearcoatNormalMap, pulledUv, material.clearcoatNormalScale)
   }
 }
 

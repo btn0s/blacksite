@@ -18,7 +18,7 @@ import { ClusterShadows } from './runtime-shadows'
 import { DepthOccluders } from './runtime-occluders'
 
 export type { MeshletSceneEntry } from './runtime-data'
-export { normalMapWithUV } from './runtime-material'
+export { normalMapWithUV, tangentNormalWithUV } from './runtime-material'
 export type MeshletDebugView = 'normal' | 'meshlets' | 'lod'
 
 export interface MeshletSceneOptions {
