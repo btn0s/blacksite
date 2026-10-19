@@ -5,6 +5,7 @@ export const site = {
   scanCentre: [632, 720] as const,
   verticalScale: 1,
   walkable: 1024,
+  forestExtent: 6000,
   nearSize: 1025,
   farExtent: 16384,
   farSize: 2049,
@@ -19,12 +20,10 @@ export const site = {
 } as const
 
 export const tiers = {
-  high: { trees: 64000, nearTrees: 70, nearFade: [48, 70] as const, impostorFar: [640, 940] as const, frameSize: 192, impostorBlur: 1.25, coverDistance: 250, coverNear: 15, coverDensity: 1, cascades: 3, shadowDistance: 180, shadowMap: 2048, a2c: true, singleFrame: false, pixelRatio: 0 },
-  medium: { trees: 44000, nearTrees: 58, nearFade: [40, 58] as const, impostorFar: [560, 820] as const, frameSize: 160, impostorBlur: 1.25, coverDistance: 200, coverNear: 12, coverDensity: 0.8, cascades: 2, shadowDistance: 130, shadowMap: 2048, a2c: true, singleFrame: false, pixelRatio: 0 },
-  low: { trees: 28000, nearTrees: 42, nearFade: [28, 42] as const, impostorFar: [440, 660] as const, frameSize: 160, impostorBlur: 0.5, coverDistance: 150, coverNear: 10, coverDensity: 0.8, cascades: 2, shadowDistance: 90, shadowMap: 1024, a2c: false, singleFrame: true, pixelRatio: 2 },
+  high: { trees: 256000, nearTrees: 70, nearFade: [48, 70] as const, impostorFar: [3200, 4200] as const, frameSize: 192, impostorBlur: 1.25, coverDistance: 120, coverNear: 15, coverDensity: 1, cascades: 2, shadowDistance: 260, shadowMap: 2048, a2c: true, singleFrame: false, pixelRatio: 0 },
+  medium: { trees: 192000, nearTrees: 58, nearFade: [40, 58] as const, impostorFar: [2800, 3800] as const, frameSize: 160, impostorBlur: 1.25, coverDistance: 100, coverNear: 12, coverDensity: 0.8, cascades: 2, shadowDistance: 200, shadowMap: 2048, a2c: true, singleFrame: false, pixelRatio: 0 },
+  low: { trees: 128000, nearTrees: 42, nearFade: [28, 42] as const, impostorFar: [2300, 3200] as const, frameSize: 160, impostorBlur: 0.5, coverDistance: 80, coverNear: 10, coverDensity: 0.8, cascades: 2, shadowDistance: 140, shadowMap: 1024, a2c: false, singleFrame: true, pixelRatio: 2 },
 } as const
-
-export const canopy = { height: 13, crown: 8, lead: 90 } as const
 
 export const locomotion = {
   walk: 1.75,

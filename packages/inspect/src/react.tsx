@@ -22,7 +22,7 @@ export function InspectHud({ inspector, dump, className = '' }: { inspector: Ins
       <div><dt>Triangles <small>drawn / scene</small></dt><dd>{metrics ? `${count.format(metrics.drawnTriangles)} / ${count.format(metrics.sceneTriangles)}` : '—'}</dd></div>
       <div><dt>Draw calls</dt><dd>{metrics ? count.format(metrics.drawCalls) : '—'}</dd></div>
       <div><dt>Geometry culled</dt><dd>{metrics ? `${ms(metrics.culledPercent)}%` : '—'}</dd></div>
-      <div><dt>GPU total</dt><dd>{gpu.length ? `${ms(gpu.reduce((sum, [, time]) => sum + time, 0))} ms` : 'Unavailable'}</dd></div>
+      <div><dt>GPU longest pass</dt><dd>{gpu.length ? `${ms(Math.max(...gpu.map(([, time]) => time)))} ms` : 'Unavailable'}</dd></div>
     </dl>
     <div className="bs-inspect-view" role="group" aria-label="Inspection controls">
       <button type="button" aria-pressed={snapshot.view === 'lod'} onClick={() => inspector.setView(snapshot.view === 'lod' ? 'lit' : 'lod')}>LOD colours</button>

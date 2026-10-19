@@ -14,15 +14,16 @@ import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { VALLEY_GLYPHS, createWalker } from './walker'
 import { ValleyAudio } from './audio'
-import { Landscape, type BarkSet, type LandscapeHandle } from './Landscape'
+import { Landscape, type LandscapeHandle } from './Landscape'
 import { Probe } from './probe'
 import { createInspector } from '@blacksite/inspect'
 import { InspectHud } from '@blacksite/inspect/react'
 import { Inspection, type TelemetryAction } from './inspection'
 import { outfit } from './outfit'
 import { locomotion, site, tiers, type Tier } from './model'
-import { asset, buildValley, colliderHeights, type ValleyWorld } from './world'
-import { atmosphereFor } from './atmosphere'
+import { buildValley, colliderHeights, type ValleyWorld } from './world'
+import { atmosphereFor, sunlight, cameraGrade } from './atmosphere'
+import { loadOwned, type Owned } from './owned'
 
 const SHADOW_LAYERS = [2] as const
 
@@ -40,13 +41,6 @@ function tierOf(): Tier {
   return isTouchDevice() ? 'low' : 'high'
 }
 
-async function loadBark(): Promise<BarkSet> {
-  const loader = new THREE.TextureLoader()
-  const [color, normal] = await Promise.all([loader.loadAsync(asset('bark-pine/1k/c.webp')), loader.loadAsync(asset('bark-pine/1k/n.webp'))])
-  color.colorSpace = THREE.SRGBColorSpace
-  for (const texture of [color, normal]) { texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.anisotropy = 4 }
-  return { pine: { color, normal } }
-}
 
 function Ground({ world }: { world: ValleyWorld }) {
   const size = site.nearSize
@@ -73,7 +67,7 @@ function Listener({ shared }: { shared: Shared }) {
   return null
 }
 
-function Scene({ shared, walker, world, bark, tier, events, inspector, telemetry }: { shared: Shared; walker: CharacterHandle; world: ValleyWorld; bark: BarkSet; tier: Tier; events: CharacterEvents; inspector: ReturnType<typeof createInspector>; telemetry: TelemetryAction }) {
+function Scene({ shared, walker, world, owned, tier, events, inspector, telemetry }: { shared: Shared; walker: CharacterHandle; world: ValleyWorld; owned: Owned; tier: Tier; events: CharacterEvents; inspector: ReturnType<typeof createInspector>; telemetry: TelemetryAction }) {
   const [look, setLook] = useState<LookHandle | null>(null)
   const [fault, setFault] = useState<Error | null>(null)
   const onError = useCallback((error: unknown) => setFault(error instanceof Error ? error : new Error(String(error))), [])
@@ -81,8 +75,8 @@ function Scene({ shared, walker, world, bark, tier, events, inspector, telemetry
   const onLook = useCallback((value: LookHandle | null) => { shared.look.current = value; shared.warm.current = value ? 1 : 0; setLook(value) }, [shared])
   if (fault) throw fault
   return <>
-    <WebGPULook atmosphere={atmosphere} quality={tier} shadowDistance={tiers[tier].shadowDistance} shadowMap={tiers[tier].shadowMap} shadowLayers={SHADOW_LAYERS} onReady={onLook} onError={onError} />
-    {look && <Landscape world={world} tier={tier} wind={shared.wind} sun={look.sun} bark={bark} handle={shared.landscape} />}
+    <WebGPULook atmosphere={atmosphere} sunlight={sunlight} camera={cameraGrade} quality={tier} shadowDistance={tiers[tier].shadowDistance} shadowMap={tiers[tier].shadowMap} shadowLayers={SHADOW_LAYERS} onReady={onLook} onError={onError} />
+    {look && <Landscape world={world} tier={tier} wind={shared.wind} look={look} owned={owned} handle={shared.landscape} />}
     <Physics gravity={[0, -locomotion.gravity, 0]} timeStep={locomotion.physicsStep} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <CharacterController controller={walker} events={events} />
       <Ground world={world} />
@@ -105,7 +99,8 @@ export function Game() {
     look: { current: null },
   }), [tier])
   const [world, setWorld] = useState<ValleyWorld | null>(null)
-  const [bark, setBark] = useState<BarkSet | null>(null)
+  const [owned, setOwned] = useState<Owned | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [progress, setProgress] = useState(0.04)
   const walker = useMemo(() => world && createWalker(world.spawn, runtime), [world, runtime])
 
@@ -117,14 +112,14 @@ export function Game() {
     void Promise.all([
       preloadAlsCharacterGltf(undefined, { onProgress: value => { if (value !== undefined) { character = value; report() } } }).then(outfit),
       buildValley(tier, value => { terrain = value; report() }),
-      loadBark(),
+      loadOwned(),
       Promise.resolve().then(() => shared.sound.prepare()),
-    ]).then(([, built, barkSet]) => {
+    ]).then(([, built, ownedSet]) => {
       if (cancelled) return
       setProgress(1)
-      setBark(barkSet)
+      setOwned(ownedSet)
       setWorld(built)
-    })
+    }).catch(error => { if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error)) })
     const unlock = () => shared.sound.unlock()
     addEventListener('pointerdown', unlock)
     addEventListener('keydown', unlock)
@@ -136,15 +131,16 @@ export function Game() {
     }
   }, [shared])
 
-  const ready = world !== null && bark !== null && walker !== null
+  const ready = world !== null && owned !== null && walker !== null
   return <InputProvider runtime={runtime}><div className="hud-screen">
-    {ready && <Valley shared={shared} walker={walker} world={world} bark={bark} tier={tier} />}
+    {loadError && <div className="hud-menu" role="alert"><strong>Valley could not load</strong><span>{loadError}</span></div>}
+    {ready && <Valley shared={shared} walker={walker} world={world} owned={owned} tier={tier} />}
     <TitleCard title={touch ? 'Valley' : 'Valley · The High Meadow'} />
     <Loading title="Valley" detail={progress < 0.5 ? 'Loading the walker' : 'Growing the forest'} progress={progress} done={ready} />
   </div></InputProvider>
 }
 
-function Valley({ shared, walker, world, bark, tier }: { shared: Shared; walker: CharacterHandle; world: ValleyWorld; bark: BarkSet; tier: Tier }) {
+function Valley({ shared, walker, world, owned, tier }: { shared: Shared; walker: CharacterHandle; world: ValleyWorld; owned: Owned; tier: Tier }) {
   const status = useCharacterStatus(walker)
   const session = useLocalSession(walker)
   const home = useCallback(() => walker.respawn(), [walker])
@@ -156,6 +152,8 @@ function Valley({ shared, walker, world, bark, tier }: { shared: Shared; walker:
     const landscape = shared.landscape.current
     landscape?.terrain.setLodView(view === 'lod')
     landscape?.forest.setLodView(view === 'lod')
+    landscape?.cover.setLodView(view === 'lod')
+    landscape?.rocks.setLodView(view === 'lod')
     shared.look.current?.setDebug(view === 'lod')
   } }), [shared, tier])
   const [dumpStatus, setDumpStatus] = useState<'idle' | 'sending' | 'saved' | 'error'>('idle')
@@ -170,7 +168,7 @@ function Valley({ shared, walker, world, bark, tier }: { shared: Shared; walker:
   }, [])
   return <>
     <RenderBoundary><Canvas frameloop={session.frameloop} shadows dpr={tiers[tier].pixelRatio ? Math.min(devicePixelRatio, tiers[tier].pixelRatio) : internalPixelRatio()} camera={{ fov: 55, near: 0.1, far: site.far, position: [0, 260, 0] }} gl={renderer}>
-      <Scene shared={shared} walker={walker} world={world} bark={bark} tier={tier} events={events} inspector={inspector} telemetry={telemetry} />
+      <Scene shared={shared} walker={walker} world={world} owned={owned} tier={tier} events={events} inspector={inspector} telemetry={telemetry} />
     </Canvas></RenderBoundary>
     <InspectHud inspector={inspector} dump={{ onDump: () => { void telemetry.current?.() }, status: dumpStatus }} />
     <CharacterOverlay controller={walker} glyphs={VALLEY_GLYPHS} hints={['move', 'sprint', 'jump', 'roll', 'home']} prompt="Click to look around · T saves telemetry"

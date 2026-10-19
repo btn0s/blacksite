@@ -160,34 +160,35 @@ What isn't there yet: one cloud layer, no high cirrus and no volumetric clouds; 
 
 ## Open worlds (Landscape)
 
-`@blacksite/landscape` provides `createTerrain`, `createCover`, `generateTree` with `createForest`, impostors and `createWind`. Guides: `packages/landscape/AGENTS.md` (the mental model, the API, the mask vocabulary and symptom fixes; read it before wiring a terrain or a forest), `examples/valley/src/Landscape.tsx` (terrain, five cover families, three tree species, forest and shadows wired together, with per-tier numbers in `src/model.ts`) and `src/audio.ts` (the wind and leaves beds).
+`@blacksite/landscape` provides `createTerrain`, procedural `createCover`, authored `createOwnedCover`, `createForest`, same-model impostors and `createWind`. Read `packages/landscape/AGENTS.md` for the ownership, frame order and mask vocabulary, and `packages/landscape/README.md` for the current API. `examples/valley/src/Landscape.tsx` wires these to the native WebGPU look; its model owns tier settings and its audio reads the shared wind.
 
 ```ts
-import { BREEZE, createWind } from '@blacksite/landscape'
-
 const wind = createWind(BREEZE)
 const uniforms = terrainUniforms(sources)
-const cover = createCover({ terrain: uniforms, wind, families, heightAt })
-const terrain = createTerrain({ sources, uniforms, cover, layers, layerSpecs, canopy: { height: 13, start, end, crown: 8.5, color, shade }, detailDistance: 260 })
-const forest = createForest({ renderer, wind, species, density, choose, heightAt, bounds, spacing: 5.2, count: 64000, near: [48, 70], far: [640, 940], shadowDistance: 180, frameSize: 192, alphaToCoverage: true })
+const cover = createOwnedCover({ renderer, wind, families, heightAt, bounds, distance })
+const terrain = createTerrain({ sources, uniforms, cover, layers, layerSpecs, detailDistance: 260 })
+const forest = createForest({ renderer, wind, species, density, choose, heightAt, bounds, spacing: 5.2, count, near, far, shadowDistance, frameSize })
 scene.add(terrain.object, cover.object, forest.object)
+look.onBeforeShadow((renderer, camera) => {
+  forest.prepareShadow(renderer, camera)
+  cover.prepareShadow(renderer, camera)
+})
 
 function frame(dt: number) {
   wind.update(dt)
   terrain.update(camera)
   cover.update(camera)
   forest.update(camera)
-  sound.listen(camera.position, forward, wind, canopy, dt)
 }
 ```
 
-- **Terrain:** near and far heightfields from `createHeightfield` or `loadHeightmap`, blended over `TerrainSources.band`; `terrainHeightAt` samples the blend on the CPU for physics and placement. Splat layers sample through `ANTI_TILING_GLSL`. Each frame `terrain.update(camera)` then `forest.update(camera)`; both cull by frustum and distance on the CPU and write instance data once.
-- **Impostors:** `bakeImpostor(renderer, model, textures, { frames, frameSize })` and `createImpostorMaterial`; `singleFrame` for the low tier. Crossfades use the shared `bsDither` with the same range on both sides. The canopy lead is `canopy.lead` in the Valley model.
-- **Cover masks:** a GLSL expression per family that can read `bsSurface` (forest mask in `.b`, path or rock mask in `.a`), `bsSlope`, `bsRoot` and `bsNoise(bsRoot * scale, seed)`. `density` and `distance` per tier; `translucency` and `ao` per family.
-- **Trees:** `generateTree(OAK)`, `PINE` and `BIRCH` build trunk, branch and leaf-card geometry from a seed, with a `treeWind` attribute weighting sway. `createForest` takes `density(x, z)` and `choose(x, z, random)`.
-- **Wind:** `BREEZE` is `{ direction: [0.8, -0.6], strength: 0.45, gust: 0.75, gustScale: 38, gustSpeed: 7 }`. `sample(x, z)` returns `strength × sway + gust × gust(x, z)`. `WIND_GLSL` defines `windAt(xz)` and `windGustAt(xz)`; merge `wind.uniforms` into a material and prepend `NOISE_GLSL` and `WIND_GLSL` (`patchMaterial` does this for stock materials). `wind.frozen = true` holds the field for shimmer captures; `wind.set({ strength, gust })` retunes it live. Register a wind bed as a looping `ambience` cue and change its volume through the returned handle.
+- **Terrain:** near and far heightfields blend through `TerrainSources.band`; `terrainHeightAt` is the CPU truth for placement and physics. CDLOD vertices morph on fixed world nodes. Native TSL splats four material layers with variance-preserving anti-tiling. The forest mask selects ground materials; terrain never substitutes a raised crown surface for trees.
+- **Authored foliage:** `loadFoliageModel` retains geometry, UVs, material maps and alpha cutouts. `createForest` selects deterministic candidates using `density` and `choose`. The shared GPU foliage core selects representations, culls and builds indirect draws; authored cover recycles bounded world tiles around the player.
+- **Impostors:** `bakeImpostor(renderer, model, { frames, frameSize })` and `createImpostorMaterial` use the original model's albedo and normals. Complementary `landscapeDither` masks crossfade each representation. The final range covers the visible forest population and fades with the atmosphere.
+- **Procedural cover:** `createCover` accepts TSL `CoverSample` functions with `surface`, `slope`, `root`, `ground` and `distance`. `landscapeNoise` matches CPU placement noise. Its `ground` node can share cover colour with terrain through the fade.
+- **Wind:** `createWindNodes(wind)` exposes native `sample`, `gust`, direction, parameters and time. The CPU `wind.sample` and `wind.gust` follow the same equations. One update serves foliage, particles and sound; `wind.set` retunes the field.
 
-What isn't there yet: impostors bake at load time, not build time; terrain is one near and one far heightfield with no tile streaming beyond them; no impostor path for rocks or props; no GPU placement compute; no hero dressing kit (rocks, fallen trunks and ferns are placed by the game); blades don't part around the player; no particle system in the package (a game's particles read the field); no wind on cloth, flags or the player (wire them to `sample`); `wind.set` swaps direction instantly.
+The heightfields and forest population remain resident, and impostors bake at load time. World streaming, player displacement of blades and wind on character clothing remain separate work. Authored assets stay externally served; the package contains no asset packs.
 
 ## Materials
 

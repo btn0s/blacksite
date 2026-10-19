@@ -11,11 +11,13 @@
   },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "build:rocks": "node scripts/build-rocks.mjs",
     "build": "vite build",
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
     "@blacksite/check": "workspace:*",
+    "@blacksite/geometry": "workspace:*",
     "@blacksite/input": "workspace:*",
     "@blacksite/landscape": "workspace:*",
     "@blacksite/look": "workspace:*",

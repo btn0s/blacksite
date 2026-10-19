@@ -16,7 +16,7 @@ Sections: [Sky, sun and air](#sky-sun-and-air) · [The far field](#the-far-field
 - **Low sun, long shadows.** An elevation of 20–30° gives grazing light across terrain and back-lit grass. A noon sun flattens every slope.
 - **The sky scatters.** A clear sky is blue overhead and pale at the horizon because of scattering through more air, and it warms toward the sun near the horizon. Rayleigh scattering deepens the blue; Mie whitens the horizon and brightens the glow round the sun. Computed once into small lookup tables, the per-pixel sky is a few texture reads. A two-colour gradient is the cheap version.
 - **Bake the sky into the environment,** so every material picks up the sky's colour in its reflections and ambient light. Rebake when the sun moves far.
-- **Distance does three things to colour:** contrast falls, colour shifts toward the horizon colour, and the side facing the sun picks up warm in-scatter. Apply it to everything in one depth pass, so terrain, impostors and the far canopy all take the same haze. Without that pass, exponential fog in the horizon's colour is the cheap version.
+- **Distance does three things to colour:** contrast falls, colour shifts toward the horizon colour, and the side facing the sun picks up warm in-scatter. Apply it to everything in one depth pass, so terrain and every forest representation take the same haze. Without that pass, exponential fog in the horizon's colour is the cheap version.
 - **Ridges step back in four or five layers.** If the third ridge has the same value as the first, the fog is too thin; if you can't see the second, it's too thick.
 - **Tune the air in one pass.** Valley's aerial perspective and height fog read the composer's depth in a single pass after AO and replace scene fog; it settled at an aerial multiplier of 3 (from 9) and a height-fog density of 0.00028 (from 0.0009).
 - **Haze pools in valleys.** Air near the ground is denser: height fog thickens toward low altitudes and thins over ridges, so a view down into a valley reads deeper than a view across it.
@@ -24,25 +24,23 @@ Sections: [Sky, sun and air](#sky-sun-and-air) · [The far field](#the-far-field
 
 ## The far field
 
-The player never sees a representation change. They see one forest at every distance. Every tree passes through three forms as it recedes, and each handover is a band, not a line, wide enough that nothing pops.
+The player sees one forest at every distance. Authored meshes transition through any authored mesh LOD to impostors baked from the same models. Each handover is a band wide enough to avoid visible pops.
 
-| Distance (Valley, high tier) | Form |
+| Representation | Purpose |
 |---|---|
-| 0–70 m | Instanced mesh: trunk, branches, leaf cards, real shadows |
-| 48–940 m | Octahedral impostor: one camera-facing quad per tree |
-| 550 m to the horizon | Far canopy: the terrain lifted by the crown height and shaded as lumpy crowns |
+| Original mesh | Nearby trunks, branches and alpha-tested leaves |
+| Authored mesh LOD, when supplied | Lower triangle count before the mesh becomes an impostor |
+| Octahedral impostor | One camera-facing quad per tree through the visible forest's far boundary |
 
-Medium pulls the bands in to 40–58 m and 560–820 m; low to 28–42 m and 440–660 m. Keep the numbers in `src/game/model.ts` with the tier, never inline. The canopy groups crowns into clumps of 2, 4 and 8 as a crown's footprint shrinks to a few pixels, so it doesn't shimmer; on phones it takes over about 350 m out.
+Keep transition ranges and population limits in the game's tier settings. Terrain always renders its actual ground height and material; the forest owns all tree silhouettes. Extend the final impostor range to cover the visible forest population, then fade into the atmosphere.
 
-- **Bake the impostor from the same tree.** An impostor painted separately from its mesh never matches its silhouette, and the swap reads as a different tree. Valley renders each procedural model from a hemi-octahedral grid of 8 × 8 view directions into albedo and normal atlases (192 px frames on high, 160 on medium and low) while the scene loads: 35–45 ms for three species in the latest measurement, about 230 ms in an earlier one. If the tree changes, rebake; never hand-edit an atlas.
+- **Bake the impostor from the same tree.** An impostor painted separately from its mesh never matches its silhouette. `bakeImpostor` renders the loaded authored model from a hemi-octahedral grid into albedo and normal atlases. If the model or material changes, rebake; never hand-edit an atlas.
 - **Blend four frames, not one,** so the tree turns smoothly as you walk round it. Snap to the nearest frame on the low tier only.
 - **Light the impostor.** Rotate the normal atlas by each tree's yaw and light it with the scene, so a far crown has a sunlit and a shaded side that match the near mesh. A flat-shaded billboard reads as a cut-out.
 - **Smudge the distance.** Bias the impostor's mip and widen its coverage edge with distance, so far crowns soften the way they do through air instead of aliasing into sparkle. A crisp silhouette at 800 m reads as a model; a soft one reads as a forest.
 - **Dither, never alpha-blend.** The near mesh discards where a screen-space dither falls below its fade; the impostor discards where the same dither falls above its fade-in. The masks are complementary, so in the band every pixel belongs to exactly one form: no double-bright overlap, no hole, no sorting.
 - **Fade by root distance,** not per pixel, so a tall tree crossfades as one object.
-- **Hand the far end to the canopy early.** The canopy starts rising about 90 m before the impostors fade, so by the time a tree has dithered out the ground under it is already shaded as crown.
-- **Pick one level per pixel on phones.** Blending two crown levels in the far canopy pushed phone p50 from 12 to 21 ms; a dither that picks one level per pixel on the low tier brought p95 back to about 12 ms.
-- **Keep shadows through the swap.** Beyond the mesh band, an invisible proxy (a cone for conifers, an ellipsoid for broadleaf) on a shadow-only layer casts the tree's shadow out to the shadow distance. Without it, shadows vanish at the mesh band and the ground brightens in a ring.
+- **Keep shadows through the swap.** Select a separate draw set against each actual cascade camera. Authored meshes cast nearby, and same-model atlas silhouettes face the light farther away. Shadow fade depends on the shadow reach, independently of the main-view mesh transition.
 
 ## Terrain to the horizon
 

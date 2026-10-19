@@ -1,88 +1,107 @@
 # Valley
 
-A Slice: walk from a flowered meadow ridge into a layered forest valley. The reference is Florian Hoenig's local meadow film, viewed only outside the repository. The composition needs foreground blades and flowers, irregular connected tree crowns, a warm grazing sun, long soft shadows, atmospheric valleys and mountains under real cloud shapes. The ten-minute test is walking through the representation changes without rings, cracks, hitches or audible repetition.
+A Slice: walk from a meadow ridge into a layered forest valley using ALS and its shoulder camera. The visual reference is Florian Hoenig's local meadow film, viewed only outside the repository. The composition goal is foreground blades and flowers, irregular connected tree crowns, a warm grazing sun, long soft shadows, atmospheric valleys and mountains under real cloud shapes. Dedicated flower patches, fallen logs and fern dressing remain composition goals; the implemented content is listed below. Walking through the representation changes should reveal no rings, cracks, hitches or audible repetition.
 
-## Model and budgets
+## Current scene settings
 
-The pure `src/model.ts` owns these numbers. Distances are metres, time is seconds. This is a proposed budget until measured; targets are never presented as results.
+`src/model.ts` owns the tier settings and world dimensions. `src/Landscape.tsx` defines foliage families and placement masks, `src/rocks.ts` defines rock groups, and `src/atmosphere.ts` defines lighting. Distances are metres. Population caps and rendering ranges are configuration, not measured performance results.
 
-| Quantity | Desktop / high | Phone / low |
+| Quantity | High | Medium | Low |
+|---|---|---|---|
+| Walkable heightfield extent | 1,024 × 1,024 m | same | same |
+| Near heightfield samples | 1,025 × 1,025 | same | 513 × 513 |
+| Far heightfield extent | 16,384 × 16,384 m | same | same |
+| Far heightfield samples | 2,049 × 2,049 | same | 1,025 × 1,025 |
+| Camera far plane | 16,000 m | same | same |
+| Tree mesh-to-impostor transition | 48–70 m | 40–58 m | 28–42 m |
+| Tree impostor fade range | 3,200–4,200 m | 2,800–3,800 m | 2,300–3,200 m |
+| Forest placement extent | 6,000 × 6,000 m | same | same |
+| Forest population cap | 256,000 | 192,000 | 128,000 |
+| Tree atlas frame size | 192 px | 160 px | 160 px |
+| Ground-cover radius / density multiplier | 120 m / 1 | 100 m / 0.8 | 80 m / 0.8 |
+| Ground-cover final fade | 96–120 m | 80–100 m | 64–80 m |
+| Terrain material detail distance | 260 m | 260 m | 140 m |
+| Sun shadow reach / cascades / map size | 260 m / 2 / 2,048 px | 200 m / 2 / 2,048 px | 140 m / 2 / 1,024 px |
+| Ground-cover shadow reach | 50 m | 50 m | 50 m |
+| Render pixel-ratio cap | Shared policy: 1 mouse, 1.25 coarse pointer | same | 2 |
+| GTAO / bloom | enabled | enabled | disabled |
+| Audio voice cap | 32 | 32 | 16 |
+
+Forest placement uses a deterministic 5.2 m jittered grid inside `[-3,000, 3,000]` on both horizontal axes, filtered by the terrain forest mask and a stable rank. The same distance-weighted priority favours candidates near the walkable area; expanding the bounds adds actual owned-tree instances across the distant hills. The population cap is an upper bound; the HUD reports the actual retained trees. Birch and Scots pine share the distribution seed across tiers. Pine has an authored intermediate mesh LOD; both species bake matching multi-angle impostors from their original models. Low uses one atlas direction per fragment; the other tiers interpolate directions. All tiers use single-sample WebGPU rendering and TRAA, with alpha coverage preserved by the native foliage materials.
+
+Terrain uses fixed CDLOD nodes with 32 m leaves and a 32 × 32 grid, plus quadrant draws at transitions. Vertices morph toward the parent grid using shared height samples; there are no skirts or fixed 256-chunk layout. Near and far heightfields blend across 200 m. Terrain renders the actual ground at every distance, including the forest-floor material mask; the forest owns all tree silhouettes.
+
+Ground cover uses a bounded cache of 32 m world-aligned tiles inside the walkable square. Each family transitions from its original mesh to its own baked impostor over 18–28 m. Population depends on the local masks, tier density and active tiles; there is no fixed grass/flower/stone/litter percentage or global instance quota.
+
+| Authored cover family | Base candidates per square metre | Placement |
 |---|---|---|
-| Walkable heightfield | 1,024 × 1,024 m | same |
-| Horizon / camera far | 3,200 m | 2,400 m |
-| Terrain chunks | 16 × 16 at 64 m | same, coarser distance selection |
-| Near tree meshes / transition | 0–65 / 45–85 m | 0–40 / 25–55 m |
-| Impostors / far canopy transition | to 650 / 450–700 m | to 450 / 300–500 m |
-| Forest population target | 12,000, 3 crown species | 7,000, same distribution seed |
-| Ground cover maximum / radius | 80,000 / 75 m | 24,000 / 45 m |
-| Grass / flowers / stones / litter mix | 86 / 8 / 3 / 3 percent | same |
-| Sun shadow reach / cascades | 180 m / 3 | 90 m / 2 |
-| Render pixel ratio | 1 | 2 (Valley only; the shared low tier stays at 1.25) |
-| Main-thread p95 | 8.3 ms | 16.7 ms |
-| CPU allocation: input + character | 2.0 ms | 4.0 ms |
-| CPU allocation: world selection + wind | 0.8 ms | 1.5 ms |
-| CPU allocation: render submission | 3.0 ms | 5.5 ms |
-| CPU allocation: audio + UI | 0.5 ms | 0.7 ms |
-| CPU reserve | 2.0 ms | 5.0 ms |
-| GPU target: geometry / shadows / look / reserve | 3.2 / 1.8 / 2.0 / 1.3 ms | 6.5 / 3.0 / 3.0 / 4.2 ms |
-| First playable / hitch limit | 5,000 / 33 ms | same |
-| Active audio voices | 32 maximum, 8 intended | same |
-| Run / sprint / time to 90% | 3.75 / 6.5 m/s / 0.25 s | same |
+| Meadow grass | 4 | Meadow, excluding the path |
+| Bunch grass | 0.65 | Meadow, excluding the path |
+| Dry brome | 0.4 | Meadow, excluding the path |
+| Gooseberry | 0.02 | Forest understory, excluding the path |
+| Nettle | 0.07 | Forest understory, excluding the path |
+| Dock | 0.04 | Noise-selected patches, excluding the path |
+| Thistle | 0.025 | Meadow, excluding the path |
+| Ivy | 0.055 | Forest understory, excluding the path |
 
-Medium uses 10,000 trees, 48,000 ground instances, 60 m ground radius, and two sun cascades. Ground density uses reproducible world masks: slope, height, low-frequency clusters and a path exclusion. Distance attenuation is continuous and stable in world space. Trees use the same source geometry for near meshes and build-baked multi-angle impostors. Far crowns soften in texture space; dither is spatially stable and complementary. Terrain edges use shared samples, skirts and continuous morphing toward the next grid.
+`src/model.ts` records targets of 8.3 ms frame time on desktop, 16.7 ms on phone, a 33 ms hitch limit and 9,000 ms to first playable. These remain targets until measured on the relevant device. The previous detailed CPU/GPU allocations were proposals, not implemented budgets or results.
 
-## Parts list and the cheapness each fixes
+## Implemented parts and composition goals
 
-| Part | Minimum count | Fix |
+| Part | Current content | Purpose |
 |---|---|---|
-| Terrain cells and mountain backdrop | 256 cells, 3 mountain ridges | Terrain: a coherent heightfield, crack-free distance LOD |
-| Redistributable scanned ground blends | 4: soil, gravel, grass, rock | Terrain and flat materials: normal/roughness variation, metre UVs, anti-tiling |
-| Procedural crown species and baked atlases | 3 species, multi-angle atlas each | Far field: matching mesh/impostor silhouettes rather than sudden swaps |
-| Clustered forest instances | 12,000 desktop, 7,000 phone | Bare slopes and harsh distant contours |
-| Cover families | grass, flowers, pebbles, litter | Bare ground, with tier counts above |
-| Hero dressing groups | 6 rock groups, 3 fallen trunks, 3 fern/undergrowth patches | Bare ground and near-field scale |
-| Shared travelling wind | 1 field, grass/tree/particle/audio consumers | Dead stillness; gusts have position and travel speed |
-| Lighting | 1 low sun, sky fill, 3/2 shadow cascades, desktop AO | Flat light, black shade, detached props |
-| Atmosphere | scattering sky, 1 layered cloud system, aerial perspective, height fog | No depth or weather |
-| Post AA | nature preset AA, stable cover fade | Shimmer on blades and thin branches |
-| Animated player | 1 ALS character using the public TPP path | Scale, locomotion, walkable proof |
-| Audio | wind bed, 3 bird variations, movement/landing | Dead stillness and repetition |
-| Inspection | Compact stats, one LOD colour view, technique switches, telemetry dump | Visible representation choices while walking with ALS |
+| Terrain and backdrop | One scanned near heightfield, one blended far field with procedural mountain relief | A coherent walkable surface and distant ridges |
+| Ground materials | Four layers: grass, scanned soil, dirt and gravel; colour and normal maps at metre scale | Surface variation without visible texture repetition |
+| Forest | Scots pine, its supplied mesh LOD, birch, and one matching atlas per species | Connected crowns and consistent silhouettes across distance |
+| Cover | The eight authored families above | Meadow density and forest understory |
+| Rocks | Six fields of up to 24 field-rock candidates each, reduced by path exclusion; six cliff outcrops | Foreground scale, slope structure and meshlet demonstrations |
+| Shared travelling wind | One field driving foliage and audio | Gusts with a shared position and travel direction |
+| Lighting | One low sun, sky/environment fill, two native cascades on every tier, GTAO on high/medium | Shape, grounded props and depth in shade |
+| Atmosphere | Scattering sky, one cloud layer, aerial perspective and height fog | Separation between valley and mountain layers |
+| Antialiasing | TRAA and complementary representation fades | Stable thin foliage and transitions |
+| Player | One ALS character through the public shoulder-view controller | Scale, locomotion and a walkable demonstration |
+| Audio | Wind and leaves beds, five synthesized bird-song variants, nine recorded grass-step variants, landing cues | Motion and variation tied to the walker and wind |
+| Inspection | Compact stats, one LOD colour view, technique switches and telemetry dump | Visible, measurable representation choices |
+
+Future composition work may add dedicated flower drifts, fallen trunks, ferns and additional hero dressing. They are not counted as current scene content. Particle consumers of wind are also future work.
 
 ## Camera bookmarks
 
-Coordinates are provisional until grounded against the pure height function; record final poses in the model. Forward into the valley is negative Z.
+`src/model.ts` stores these composition poses. They are reference coordinates, not alternate player cameras. Forward into the valley is negative Z.
 
-1. **Meadow** near `(0, height(0,100)+2, 100)`, toward `(0, 45, -250)`: foreground flowers, open path, many forest depth layers; matches reference frames 1–3.
-2. **Canopy** near `(65, height(65,-30)+8, -30)`, toward `(-40, 35, -350)`: hero trunks and crown contours; matches frames 6–8.
-3. **Valley** near `(-100, height(-100,-180)+24, -180)`, toward `(100, 45, -500)`: impostors, valley haze and mountain silhouette.
-4. **Ridge** near `(180, height(180,160)+4, 160)`, toward `(-100, 60, -450)`: diagonal meadow, cloud shapes, sun shadows.
+| Bookmark | Position | Target | Field of view |
+|---|---|---|---|
+| Meadow | `[-14, 3.2, 30]` | `[40, 0.6, -40]` | 55° |
+| Canopy | `[-150, 30, -150]` | `[-330, -20, -420]` | 55° |
+| Valley | `[60, 26, -60]` | `[-900, -60, -1500]` | 50° |
+| Ridge | `[210, 70, 230]` | `[-1800, 120, -2600]` | 45° |
 
-These remain composition references. Play and inspection use the ALS shoulder camera. There is no free camera, flyover, recorded route, culling freeze or LOD freeze.
+Meadow frames grass and the forest edge; Canopy frames tree crowns and representation transitions; Valley frames distant forest and haze; Ridge frames the mountain silhouette. Play and inspection use the ALS shoulder camera. There is no free camera, flyover, recorded route, culling freeze or LOD freeze.
 
 ## Public systems and integration
 
-- `@blacksite/landscape`: deterministic terrain sampling and chunked LOD; ground-cover placement/instancing; multi-angle forest impostors and far canopy; shared wind with CPU and shader access. Build-time baking remains an explicit reproducible command. The render path uses native three WebGPU node materials. Placement and visibility selection remain CPU work in this phase; GPU selection is a later technique.
-- `@blacksite/look/webgpu`: native SunLight cascades, physical exposure, Neutral tone mapping, GTAO, TRAA, grade and camera effects, with the nature sky/cloud/aerial equations ported to native shader nodes. Native SunLight provides two cascades. A probe grid is reserved for a later scene with useful bounded probe volumes.
-- `@blacksite/inspect`: renderer-independent rolling frame history, compact stats, technique registration, lit/LOD controls, and a host-provided telemetry action.
-- `@blacksite/example-valley`: exports `mount(element)` and standalone HTML. Thin site registration follows Traverse in Characters. No example imports package internals.
+- `@blacksite/landscape`: shared heightfield sampling, CDLOD terrain, authored cover, forest impostors and wind. Tree placement is deterministic at construction. GPU compute selects representations and visibility, then indirect draws consume compact lists. Ground cover uses the same GPU submission with a bounded world-aligned tile cache; only entering tile stripes are populated on the CPU. Foliage atlases bake at load time from the source models.
+- `@blacksite/geometry`: offline rock hierarchies, GPU meshlet LOD and visibility, indirect material batches, two-pass HiZ with terrain/tree depth, and independent cluster selection for each actual sun cascade camera.
+- `@blacksite/look/webgpu`: native SunLight with two cascades, physical exposure, Neutral tone mapping, tiered GTAO and bloom, TRAA, grade and camera effects, plus native sky/cloud/aerial nodes. Probe lighting is reserved for later work.
+- `@blacksite/inspect`: renderer-independent rolling frame history, compact stats, technique registration, lit/LOD controls and a host-provided telemetry action.
+- `@blacksite/example-valley`: exports `mount(element)` and standalone HTML. No example imports package internals.
 
-## Asset and licensing policy
+## Showcase controls
 
-Use indexed `blacksite assets` metadata first. Install only assets whose source licence expressly permits public redistribution. Never copy owned packs. Existing world-kit CC0 scans are a permissible fallback while indexed install availability is recorded. Tree geometry is original procedural code with its explicit redistribution licence recorded; no third-party canopy art. Every new public asset is credited in `site/public/CREDITS.md`. The local reference stays outside the repository.
+The renderer requires WebGPU. Desktop Chrome and iOS Safari are the targets. ALS is the only controller and the shoulder view is the only camera; touch uses the same controller through a virtual stick and drag look.
 
-## Evidence and deferred lighting
+The HUD shows recent frame p50/p95, drawn triangles versus the current representation before visibility selection, including the ALS body, geometry culled, renderer draw calls across all passes, device tier and native GPU timestamps where supported. Triangle counts describe geometry submissions, including shader-discarded foliage vertices; they are not pixel counts. GPU timings are optional and unsupported queries are shown as unavailable.
 
-Run desktop and phone checks without weakening budgets, read all critic and transition captures at 1× and 4×, and compare matching compositions with local reference frames outside the repository. Capture two zone showcases before and after look changes. Report achieved counts, measured timings, host load and visual gaps honestly. Build-time path-traced lighting is design-only: the report will define static scene extraction, UV/texel budgets, irradiance and directional outputs, probe fallback for moving foliage, compression, cache invalidation and runtime memory budgets.
+The single LOD view uses green near geometry, amber intermediate geometry, blue far geometry and cluster colours for rocks. The techniques panel controls terrain LOD, tree LOD/impostors, GPU tree and ground-cover culling and impostors, rock meshlet LOD, rock HiZ and rock cascade shadows. Disabled comparisons use bounded fallbacks described beside each switch.
 
-## Phase 1 showcase controls
+Press **T**, or tap **Dump stats**, to save the current counters, recent frame-time history, native GPU pass timings, device/UA/adapter/tier, viewport and the ALS player position and view. The dev server appends one JSON object per line to `examples/valley/telemetry/snapshots.jsonl`. The HUD confirms success or allows retry after a failure. Telemetry files are local and ignored by git.
 
-The renderer requires WebGPU. Desktop Chrome and iOS Safari are the targets. ALS is the only controller and the shoulder view is the only camera. Existing terrain samples, tree species, placement seeds, ground-cover families and asset files stay intact.
+There is no baseline comparison or benchmark gate. The user walks the scene and chooses where to capture telemetry. Baked material layers, cached distant shadow cascades, probe lighting, upscaling and remote asset streaming remain later work.
 
-The HUD shows recent frame p50/p95, scene triangles submitted versus their current representation before visibility selection, including the ALS body, geometry culled, renderer draw calls across all passes, device tier and native GPU timestamps where supported. Triangle counts describe geometry submissions, including shader-discarded grass and impostor vertices; they are not pixel counts. GPU timings are optional and unsupported queries are shown as unavailable.
+## Phase 2 rendering
 
-The single LOD view uses green near geometry, amber intermediate geometry and blue far geometry. Tree LOD and impostors share one technique switch. Its disabled comparison is capped to the nearest 256 full trees. Terrain LOD disabled extends finest detail to a bounded 256 m radius and retains LOD beyond it. Ground-cover culling disabled submits all patches inside the existing tier radius. These caps are shown in the controls.
+The dev server mounts the shared `~/dev/owned-assets/` folder at `/owned/`. Scots pine's supplied middle geometry borrows materials through exact source material-name matches; all forest and cover atlases bake from the same original models. No asset copies are placed in the worktree.
 
-Press **T**, or tap **Dump stats**, to save the current counters, the recent frame-time history, native GPU pass timings, device/UA/adapter/tier, viewport and the ALS player position and view. The dev server appends one JSON object per line to `examples/valley/telemetry/snapshots.jsonl`. The HUD confirms success or allows retry after a failure. Telemetry files are local and ignored by git.
+`pnpm build:rocks` rebuilds field-rock and cliff hierarchies in the shared asset folder. Meshlet selection uses a two-pixel projected error; disabling LOD selects original-detail clusters within a 120 m bounding-sphere cap through the same renderer. HiZ includes terrain and tree depth with their foliage coverage. Every sun cascade independently selects rock clusters from its actual light camera before rendering its shadows. Forest and cover also select independent light-view representations.
 
-There is no baseline comparison or benchmark gate. The user walks the scene and chooses where to capture telemetry. Phase 1 stops at the WebGPU port, controls and inspection. Meshlets, GPU tree selection, GPU grass selection, new terrain LOD techniques, baked materials, cached shadow cascades, probe lighting, upscaling and owned-asset streaming remain later work.
+Lighting uses 63,000 lux sun, 12,000 lux sky and EV100 13, with Neutral tone mapping and a camera contrast of 1.06. A low warm sun, controlled sky fill and blocker-search shadow penumbra establish shape. GTAO and bloom run on high/medium, TRAA runs on all tiers, and the olive nature LUT is omitted.

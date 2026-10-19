@@ -23,6 +23,7 @@ export function Probe({ shared, walker, world }: { shared: Shared; walker: Chara
         terrain: shared.landscape.current?.terrain.stats,
         cover: shared.landscape.current?.cover.stats,
         forest: shared.landscape.current?.forest.stats,
+        rocks: shared.landscape.current?.rocks.stats,
         timings: world.timings,
       }),
     }

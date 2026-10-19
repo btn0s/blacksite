@@ -19,13 +19,17 @@ export function Inspection({ shared, walker, inspector, telemetry }: { shared: S
   const active = useRef<LandscapeHandle | null>(null)
   const cleanup = useRef<Array<() => void>>([])
   const resumed = useRef(false)
+  const previousFrame = useRef<number | null>(null)
   const otherMeshes = useRef<Mesh[]>([])
   const frustum = useRef(new Frustum())
   const projection = useRef(new Matrix4())
 
-  useFrame((_, delta) => {
-    if (document.hidden) return
-    if (resumed.current) { resumed.current = false; return }
+  useFrame(() => {
+    const now = performance.now()
+    const previous = previousFrame.current
+    previousFrame.current = now
+    if (document.hidden || walker.status().paused) { previousFrame.current = null; return }
+    if (resumed.current || previous === null) { resumed.current = false; return }
     const landscape = shared.landscape.current
     if (!landscape || !shared.look.current || shared.warm.current < 10 || !walker.als.pose.current.ready) return
     if (active.current !== landscape) {
@@ -34,20 +38,27 @@ export function Inspection({ shared, walker, inspector, telemetry }: { shared: S
       const lod = inspector.getSnapshot().view === 'lod'
       landscape.terrain.setLodView(lod)
       landscape.forest.setLodView(lod)
+      landscape.cover.setLodView(lod)
+      landscape.rocks.setLodView(lod)
       shared.look.current.setDebug(lod)
       otherMeshes.current = []
-      const landscapeRoots = new Set<Object3D>([landscape.terrain.object, landscape.cover.object, landscape.forest.object])
+      const landscapeRoots = new Set<Object3D>([landscape.terrain.object, landscape.cover.object, landscape.forest.object, landscape.rocks.object])
       for (const child of scene.children) {
         if (landscapeRoots.has(child)) continue
         child.traverse(object => { if (object instanceof Mesh) otherMeshes.current.push(object) })
       }
       cleanup.current = [
         inspector.registerTechnique({ id: 'terrain-lod', label: 'Terrain LOD', description: 'Off: finest grid within 256 m; LOD beyond the cap.', enabled: true, setEnabled: landscape.terrain.setLodEnabled }),
-        inspector.registerTechnique({ id: 'tree-lod', label: 'Tree LOD / impostors', description: 'Off: nearest 256 trees as full meshes.', enabled: true, setEnabled: landscape.forest.setLodEnabled }),
-        inspector.registerTechnique({ id: 'cover-culling', label: 'Ground-cover culling', description: 'Off: all patches inside the tier’s cover radius.', enabled: true, setEnabled: landscape.cover.setCullingEnabled }),
+        inspector.registerTechnique({ id: 'tree-lod', label: 'Tree LOD / impostors', description: `Off: source meshes within ${landscape.forest.fallbackDistance} m.`, enabled: true, setEnabled: landscape.forest.setLodEnabled }),
+        inspector.registerTechnique({ id: 'tree-culling', label: 'GPU tree culling', description: `Off: all trees within ${landscape.forest.fallbackDistance} m.`, enabled: true, setEnabled: landscape.forest.setCullingEnabled }),
+        inspector.registerTechnique({ id: 'cover-culling', label: 'GPU ground-cover culling', description: `Off: all cover within ${landscape.cover.fallbackDistance} m.`, enabled: true, setEnabled: landscape.cover.setCullingEnabled }),
+        inspector.registerTechnique({ id: 'cover-lod', label: 'Ground-cover impostors', description: `Off: source meshes within ${landscape.cover.fallbackDistance} m.`, enabled: true, setEnabled: landscape.cover.setLodEnabled }),
+        inspector.registerTechnique({ id: 'meshlet-lod', label: 'Rock meshlet LOD', description: 'Off: source detail within 120 m.', enabled: true, setEnabled: landscape.rocks.setLodEnabled }),
+        inspector.registerTechnique({ id: 'meshlet-occlusion', label: 'Rock HiZ culling', description: 'Terrain, trees and rocks occlude rock clusters.', enabled: true, setEnabled: landscape.rocks.setOcclusionEnabled }),
+        inspector.registerTechnique({ id: 'meshlet-shadows', label: 'Rock cascade shadows', description: 'Each sun cascade selects its own clusters.', enabled: true, setEnabled: landscape.rocks.setShadowEnabled }),
       ]
     }
-    const stats = [landscape.terrain.stats, landscape.cover.stats, landscape.forest.stats]
+    const stats = [landscape.terrain.stats, landscape.cover.stats, landscape.forest.stats, landscape.rocks.stats]
     let sceneTriangles = stats.reduce((sum, entry) => sum + entry.sceneTriangles, 0)
     let drawnTriangles = stats.reduce((sum, entry) => sum + entry.drawnTriangles, 0)
     frustum.current.setFromProjectionMatrix(projection.current.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse), camera.coordinateSystem)
@@ -63,7 +74,7 @@ export function Inspection({ shared, walker, inspector, telemetry }: { shared: S
       if (!mesh.frustumCulled || frustum.current.intersectsObject(mesh)) drawnTriangles += triangles
     }
     inspector.sample({
-      frameMs: delta * 1000,
+      frameMs: now - previous,
       sceneTriangles,
       drawnTriangles,
       drawCalls: renderer.info.render.drawCalls,
@@ -106,7 +117,7 @@ export function Inspection({ shared, walker, inspector, telemetry }: { shared: S
         history: inspector.history(),
         view: stats.view,
         techniques: stats.techniques,
-        landscape: landscape && { terrain: { ...landscape.terrain.stats }, cover: { ...landscape.cover.stats }, forest: { ...landscape.forest.stats } },
+        landscape: landscape && { terrain: { ...landscape.terrain.stats }, cover: { ...landscape.cover.stats }, forest: { ...landscape.forest.stats }, rocks: { ...landscape.rocks.stats } },
         submissions: { triangles: renderer.info.render.triangles, drawCalls: renderer.info.render.drawCalls, passes: renderer.info.render.frameCalls },
       }
       try {
@@ -139,8 +150,13 @@ export function Inspection({ shared, walker, inspector, telemetry }: { shared: S
 
   useEffect(() => {
     const visibility = () => { resumed.current = true }
+    let paused = walker.status().paused
+    const unsubscribe = walker.subscribe(() => {
+      const next = walker.status().paused
+      if (next !== paused) { resumed.current = true; previousFrame.current = null; paused = next }
+    })
     addEventListener('visibilitychange', visibility)
-    return () => { removeEventListener('visibilitychange', visibility); cleanup.current.forEach(dispose => dispose()) }
-  }, [])
+    return () => { unsubscribe(); removeEventListener('visibilitychange', visibility); cleanup.current.forEach(dispose => dispose()) }
+  }, [walker])
   return null
 }

@@ -300,7 +300,7 @@ ${CLOUDS}`)
 }
 
 const aerialNode = wgslFn(`
-fn atmosphereAerial(color: vec4f, uv: vec2f, depth: f32, projectionInverse: mat4x4f, cameraWorld: mat4x4f, reversed: f32, medium: vec4f, sun: vec4f, size: vec2f, aerial: f32, clearDistance: f32, fog: vec4f, fogTint: vec3f, transmittance: texture_2d<f32>, transSampler: sampler, skyView: texture_2d<f32>, viewSampler: sampler) -> vec4f {
+fn atmosphereAerial(color: vec4f, uv: vec2f, depth: f32, projectionInverse: mat4x4f, cameraWorld: mat4x4f, reversed: f32, medium: vec4f, sun: vec4f, size: vec2f, aerial: f32, clearDistance: f32, radianceScale: f32, fog: vec4f, fogTint: vec3f, transmittance: texture_2d<f32>, transSampler: sampler, skyView: texture_2d<f32>, viewSampler: sampler) -> vec4f {
   if ((reversed < 0.5 && depth >= 1.0) || (reversed > 0.5 && depth <= 0.0)) { return color; }
   let projected = projectionInverse * vec4f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0);
   let point = projected.xyz / projected.w;
@@ -324,7 +324,7 @@ fn atmosphereAerial(color: vec4f, uv: vec2f, depth: f32, projectionInverse: mat4
     fogColor = fogTint * (atSky(skyView, viewSampler, vec3f(0.0, 1.0, 0.0), medium, sun, size) * 0.55 + air * 0.45 + sunlight);
   }
   let weight = vec3f(tauFog) / max(tauAir + vec3f(tauFog), vec3f(1e-6));
-  let inscatter = mix(air, fogColor, weight) * (vec3f(1.0) - transmission);
+  let inscatter = mix(air, fogColor, weight) * (vec3f(1.0) - transmission) * radianceScale;
   return vec4f(color.rgb * transmission + inscatter, color.a);
 }
 fn atLayer(h0: f32, h1: f32, span: f32, scale: f32) -> f32 {
@@ -392,9 +392,9 @@ export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmospher
     backgroundNode,
     environment,
     irradiance,
-    aerial(color: Node<'vec4'>, depth: Node<'float'>, camera: Camera) {
+    aerial(color: Node<'vec4'>, depth: Node<'float'>, camera: Camera, radianceScale: number) {
       const fog = spec.heightFog
-      return aerialNode({ color, uv: screenUV, depth, projectionInverse: uniform(camera.projectionMatrixInverse), cameraWorld: uniform(camera.matrixWorld), reversed: uniform(camera.reversedDepth ? 1 : 0), ...shared, aerial: uniform(spec.aerial), clearDistance: uniform(spec.clear ?? 0), fog: uniform(new Vector4(fog?.density ?? 0, fog?.base ?? 0, Math.max(fog?.falloff ?? 1, 1), 0)), fogTint: uniform(new Vector3(...(fog?.tint ?? [1, 1, 1] as const))) }) as Node<'vec4'>
+      return aerialNode({ color, uv: screenUV, depth, projectionInverse: uniform(camera.projectionMatrixInverse), cameraWorld: uniform(camera.matrixWorld), reversed: uniform(camera.reversedDepth ? 1 : 0), ...shared, aerial: uniform(spec.aerial), clearDistance: uniform(spec.clear ?? 0), radianceScale: uniform(radianceScale), fog: uniform(new Vector4(fog?.density ?? 0, fog?.base ?? 0, Math.max(fog?.falloff ?? 1, 1), 0)), fogTint: uniform(new Vector3(...(fog?.tint ?? [1, 1, 1] as const))) }) as Node<'vec4'>
     },
     tick(dt: number) { cloudTime.value += dt * (spec.clouds?.wind ?? 0) },
     dispose() { for (const target of targets) target.dispose(); environment.dispose() },

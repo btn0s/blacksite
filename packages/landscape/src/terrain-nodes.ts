@@ -1,46 +1,8 @@
-import { Vector3 } from 'three'
 import { MeshStandardNodeMaterial, type Node } from 'three/webgpu'
-import { Fn, If, attribute, cameraPosition, cameraViewMatrix, clamp, color, cross, dFdx, dFdy, dot, exp2, float, floor, fract, fwidth, int, length, log2, mat3, max, min, mix, normalize, normalLocal, output, positionGeometry, screenCoordinate, select, sign, sin, smoothstep, texture, uint, uniform, uniformArray, varying, vec2, vec3, vec4, wgslFn } from 'three/tsl'
-import type { Vector2, DataArrayTexture } from 'three'
+import { Fn, If, attribute, cameraViewMatrix, clamp, color, cross, dFdx, dFdy, dot, float, floor, fract, int, length, mat3, max, mix, normalize, normalLocal, output, positionGeometry, select, sin, smoothstep, texture, uniform, uniformArray, varying, vec2, vec3, vec4 } from 'three/tsl'
+import type { Vector2, Vector3, DataArrayTexture } from 'three'
 import type { TerrainOptions, TerrainUniforms } from './terrain'
-import { createTerrainNodes, landscapeDither, landscapeHashFunction, landscapeNoise } from './nodes'
-
-const crowns = wgslFn(`
-fn landscapeCrowns(p: vec2f, salt: u32, view: vec3f, fill: f32) -> mat3x3f {
-  let cell = floor(p);
-  let local = p - cell;
-  let along = view.xy;
-  let side = vec2f(-along.y, along.x);
-  let sine = view.z;
-  let cosine = sqrt(max(1.0 - sine * sine, 0.0));
-  let squash = max(sine, 0.3);
-  let stretch = vec2f(sqrt(squash), inverseSqrt(squash));
-  var top = -1e9;
-  var cover = -1.0;
-  var result = vec4f(0.0, 1.0, 0.0, 0.5);
-  for (var j = -1; j <= 1; j++) {
-    for (var i = -1; i <= 1; i++) {
-      let id = vec2i(cell) + vec2i(i, j);
-      let centre = vec2f(f32(i), f32(j)) + 0.2 + 0.6 * vec2f(landscapeHash(id, salt), landscapeHash(id, salt + 2u));
-      let radius = (0.4 + 0.3 * landscapeHash(id, salt + 4u)) * fill;
-      let r = local - centre;
-      let e = vec2f(dot(r, side), dot(r, along)) / (radius * stretch);
-      let d2 = dot(e, e);
-      let z = sqrt(max(1.0 - d2, 0.0));
-      let depth = (z * radius + landscapeHash(id, salt + 6u) * 0.35) * sine - dot(centre, along) * cosine;
-      if (d2 < 1.0 && depth > top) {
-        top = depth;
-        cover = z;
-        result = vec4f(e, max(z, 0.14), landscapeHash(id, salt + 8u));
-      }
-    }
-  }
-  if (cover < 0.0) { return mat3x3f(result.xyz, vec3f(result.w, cover, 0.0), vec3f(0.0)); }
-  let c = vec3f(-along.x * cosine, sine, -along.y * cosine);
-  let u = vec3f(along.x * sine, cosine, along.y * sine);
-  let s = vec3f(side.x, 0.0, side.y);
-  return mat3x3f(normalize(s * result.x + u * result.y + c * result.z), vec3f(result.w, cover, 0.0), vec3f(0.0));
-}`, [landscapeHashFunction])
+import { createTerrainNodes, landscapeNoise } from './nodes'
 
 function tileSample(image: DataArrayTexture, uv: Node<'vec2'>, layer: number, mean: Node<'vec4'>) {
   const p = uv.mul(3.4641016)
@@ -75,15 +37,10 @@ export function createTerrainMaterial(options: TerrainOptions, source: TerrainUn
   const grid = positionGeometry.xz.sub(fract(positionGeometry.xz.mul(0.5)).mul(2).mul(factor))
   const root = info.xy.add(grid.mul(info.z))
   const height = terrain.height(root)
-  const distance = length(vec3(root.x, height, root.y).sub(eye))
-  const canopy = options.canopy
-  const canopyWeight = smoothstep(0.35, 0.75, terrain.surface(root, 2).b).mul(smoothstep(canopy.start, canopy.end, distance))
-  const position = vec3(root.x, height.add(canopyWeight.mul(canopy.height)), root.y)
+  const position = vec3(root.x, height, root.y)
   const world = varying(position)
-  const canopyAmount = varying(canopyWeight)
   const nodeLevel = varying(info.w)
   const lodView = uniform(false)
-  const sunDirection = uniform(new Vector3(0.4, 0.8, 0.3).normalize())
   const shade = Fn(() => {
     const surface = terrain.surface(world.xz)
     const base = terrain.normal(surface)
@@ -132,56 +89,18 @@ export function createTerrainMaterial(options: TerrainOptions, source: TerrainUn
     }
     const tangent = normalize(cross(base, vec3(0, 0, 1)))
     const bitangent = cross(tangent, base)
-    const normal = normalize(tangent.mul(detailNormal.x).sub(bitangent.mul(detailNormal.y)).add(base.mul(detailNormal.z))).toVar()
-    If(canopyAmount.greaterThan(0.001), () => {
-      const footprint = length(fwidth(world.xz))
-      const rawLevel = log2(footprint.div(canopy.crown * 0.3))
-      const lumpFade = float(1).sub(smoothstep(3.6, 4.8, rawLevel))
-      const level = clamp(rawLevel, 0, 3)
-      const low = min(floor(level), 2)
-      const fraction = level.sub(low)
-      const scale = exp2(low).mul(canopy.crown)
-      const toEye = cameraPosition.sub(world)
-      const away = toEye.xz.negate().div(max(length(toEye.xz), 1e-3))
-      const geometric = normalize(cross(dFdx(world), dFdy(world))).toVar()
-      geometric.mulAssign(sign(geometric.y.add(1e-4)))
-      const viewDirection = toEye.div(max(length(toEye), 1e-3))
-      const steep = smoothstep(0.25, 0.65, float(1).sub(min(geometric.y, base.y)))
-      const view = vec3(away, clamp(max(max(dot(viewDirection, base), dot(viewDirection, geometric)), mix(0.3, 0.75, steep)), 0, 1))
-      const stand = smoothstep(0.42, 0.62, landscapeNoise(world.xz.mul(0.0024), 91))
-      const light = smoothstep(0.5, 0.72, landscapeNoise(world.xz.mul(0.0041), 93)).mul(float(1).sub(stand))
-      const fill = mix(0.78, 1.08, landscapeNoise(world.xz.mul(0.0031), 95))
-      const pick = select(landscapeDither(screenCoordinate).greaterThanEqual(fraction), 1, 0)
-      const c0 = mat3(crowns(world.xz.div(canopy.dither ? scale.mul(pick.add(1)) : scale), uint(low).mul(13).add(canopy.dither ? select(pick.greaterThan(0.5), uint(74), uint(61)) : uint(61)), view, fill))
-      const c1 = canopy.dither ? c0 : mat3(crowns(world.xz.div(scale.mul(2)), uint(low).mul(13).add(74), view, fill))
-      const lump = normalize(mix(c0.element(0), c1.element(0), fraction))
-      const top = mix(c0.element(1).y, c1.element(1).y, fraction)
-      const rim = mix(max(c0.element(1).y, 0), max(c1.element(1).y, 0), fraction)
-      const tone = mix(fract(c0.element(1).x), fract(c1.element(1).x), fraction)
-      const covered = smoothstep(-0.6, 0.2, top)
-      const relief = float(1).div(level.mul(0.3).add(1))
-      const canopyNormal = normalize(mix(base, lump, covered.mul(0.68).add(0.15).mul(lumpFade).mul(relief).add(0.1)))
-      const sunSide = smoothstep(-0.25, 0.55, dot(lump, sunDirection))
-      const ao = mix(float(0.52).sub(relief.mul(0.48)), mix(0.16, 1, smoothstep(0, 0.75, rim)).mul(mix(0.28, 1, sunSide)), covered)
-      const standColor = vec3(...canopy.color).mul(mix(mix(vec3(1), vec3(1.22, 1.16, 0.8), light), vec3(0.5, 0.68, 0.9), stand))
-      const cellAlbedo = mix(vec3(...canopy.shade), standColor.mul(tone.mul(0.76).add(0.62)), ao)
-      const meanAlbedo = mix(vec3(...canopy.shade), standColor.mul(0.95), fill.mul(0.5))
-      const canopyAlbedo = mix(meanAlbedo, cellAlbedo, lumpFade).mul(macro.mul(0.3).add(0.85)).mul(mix(0.84, 1, smoothstep(canopy.start, canopy.end + 450, distance)))
-      albedo.assign(mix(albedo, canopyAlbedo, canopyAmount))
-      normal.assign(normalize(mix(normal, canopyNormal, canopyAmount)))
-      roughness.assign(mix(roughness, 0.9, canopyAmount))
-    })
+    const normal = normalize(tangent.mul(detailNormal.x).sub(bitangent.mul(detailNormal.y)).add(base.mul(detailNormal.z)))
     return mat3(albedo, normal, vec3(roughness, 0, 0))
   })().toVar()
   const debug = select(nodeLevel.lessThan(0.5), color('#62d995'), select(nodeLevel.lessThan(1.5), color('#f2c45a'), color('#80a6ff')))
   const material = new MeshStandardNodeMaterial({ name: 'world-terrain', roughness: 1, metalness: 0, envMapIntensity: 0.55 })
   material.positionNode = Fn(() => {
-    normalLocal.assign(mix(terrain.normal(terrain.surface(root, 0)), vec3(0, 1, 0), canopyWeight))
+    normalLocal.assign(terrain.normal(terrain.surface(root, 0)))
     return position
   })()
   material.colorNode = shade.element(0)
   material.outputNode = vec4(select(lodView, debug, output.rgb), output.a)
   material.normalNode = normalize(cameraViewMatrix.mul(vec4(shade.element(1), 0)).xyz)
   material.roughnessNode = shade.element(2).x
-  return { material, lodView, sunDirection }
+  return { material, lodView }
 }

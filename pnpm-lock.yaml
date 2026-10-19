@@ -391,6 +391,9 @@ importers:
       '@blacksite/check':
         specifier: workspace:*
         version: link:../../packages/check
+      '@blacksite/geometry':
+        specifier: workspace:*
+        version: link:../../packages/geometry
       '@blacksite/input':
         specifier: workspace:*
         version: link:../../packages/input

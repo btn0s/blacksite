@@ -9,3 +9,7 @@ export * from './trees'
 export * from './impostor'
 export * from './forest'
 export * from './nodes'
+
+export * from './foliage-model'
+export * from './gpu-foliage'
+export * from './owned-cover'

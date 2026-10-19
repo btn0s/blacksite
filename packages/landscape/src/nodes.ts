@@ -29,10 +29,10 @@ export const landscapeNoise = Fn(([p, seed]: [Node<'vec2'>, Node<'uint'>]) => {
 
 export const landscapeDither = Fn(([pixel]: [Node<'vec2'>]) => fract(fract(dot(pixel, vec2(0.06711056, 0.00583715))).mul(52.9829189)))
 
-export function createWindNodes(wind: Wind) {
+export function createWindNodes(wind: Wind, timeNode?: Node<'float'>) {
   const direction = uniform(wind.uniforms.windDirection.value)
   const params = uniform(wind.uniforms.windParams.value)
-  const time = uniform(wind.time).onFrameUpdate(() => wind.time)
+  const time = timeNode ?? uniform(wind.time).onFrameUpdate(() => wind.time)
   const gust = Fn(([root]: [Node<'vec2'>]) => {
     const p = root.sub(direction.mul(time).mul(params.w)).div(params.z)
     return smoothstep(0.42, 0.86, landscapeNoise(p, 7).mul(0.65).add(landscapeNoise(p.mul(2.7).add(3.1), 11).mul(0.35)))

@@ -59,22 +59,11 @@ export interface TerrainLayerSpec {
   readonly normalScale: number
 }
 
-export interface CanopySpec {
-  readonly height: number
-  readonly start: number
-  readonly end: number
-  readonly color: readonly [number, number, number]
-  readonly shade: readonly [number, number, number]
-  readonly crown: number
-  readonly dither?: boolean
-}
-
 export interface TerrainOptions {
   readonly sources: TerrainSources
   readonly uniforms?: TerrainUniforms
   readonly layers: { readonly color: DataArrayTexture; readonly normal: DataArrayTexture; readonly averages: readonly (readonly [number, number, number])[] }
   readonly layerSpecs: readonly [TerrainLayerSpec, TerrainLayerSpec, TerrainLayerSpec, TerrainLayerSpec]
-  readonly canopy: CanopySpec
   readonly leafSize?: number
   readonly grid?: number
   readonly rangeFactor?: number
@@ -91,7 +80,6 @@ export interface Terrain {
   readonly stats: { nodes: number; candidateNodes: number; culledNodes: number; sceneTriangles: number; drawnTriangles: number; fullDetailTriangles: number }
   setLodView(enabled: boolean): void
   setLodEnabled(enabled: boolean): void
-  setSunDirection(direction: Vector3): void
   update(camera: Camera): void
   heightAt(x: number, z: number): number
   dispose(): void
@@ -123,7 +111,7 @@ function gridGeometry(cells: number) {
 const MAX_LEVELS = 14
 
 export function createTerrain(options: TerrainOptions): Terrain {
-  const { sources, canopy } = options
+  const { sources } = options
   const leafSize = options.leafSize ?? 32
   const grid = options.grid ?? 32
   const rangeFactor = options.rangeFactor ?? 2.4
@@ -155,7 +143,7 @@ export function createTerrain(options: TerrainOptions): Terrain {
       const d = corners[(j + 1) * (side + 1) + i + 1]!
       const centre = terrainHeightAt(sources, rootOrigin.x + (i + 0.5) * leafSize, rootOrigin.y + (j + 0.5) * leafSize)
       min[j * side + i] = Math.min(a, b, c, d, centre) - 6
-      max[j * side + i] = Math.max(a, b, c, d, centre) + 6 + canopy.height
+      max[j * side + i] = Math.max(a, b, c, d, centre) + 6
     }
     pyramid.push({ min, max, side })
     let current = pyramid[0]!
@@ -181,7 +169,7 @@ export function createTerrain(options: TerrainOptions): Terrain {
 
   const uniforms = options.uniforms ?? terrainUniforms(sources)
   const viewer = new Vector3()
-  const { material, lodView, sunDirection } = createTerrainMaterial(options, uniforms, viewer, morph)
+  const { material, lodView } = createTerrainMaterial(options, uniforms, viewer, morph)
   const baseRanges = [...ranges]
   const capacity = 1024
   const makeMesh = (cells: number) => {
@@ -279,7 +267,6 @@ export function createTerrain(options: TerrainOptions): Terrain {
         morph[level]!.set(start, level === maxLevel ? 1e9 + 1 : end * 0.97)
       }
     },
-    setSunDirection(direction) { sunDirection.value.copy(direction) },
     update(camera) {
       viewer.setFromMatrixPosition(camera.matrixWorld)
       projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)

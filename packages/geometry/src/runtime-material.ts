@@ -1,13 +1,15 @@
-import { MeshBasicNodeMaterial, MeshPhysicalMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, TangentSpaceNormalMap, Texture, Vector2 } from 'three/webgpu'
-import { Fn, bumpMap, context, max, normalView, positionView, texture, uniform, vec2, vec3 } from 'three/tsl'
-import type { MeshStandardMaterial } from 'three/webgpu'
+import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, StandardNodeLibrary, TangentSpaceNormalMap, Texture, Vector2 } from 'three/webgpu'
+import { Fn, bumpMap, context, float, max, normalView, positionView, texture, uniform, vec2, vec3, vec4 } from 'three/tsl'
+import type { MeshStandardMaterial, NodeMaterial } from 'three/webgpu'
+
+const materialLibrary = new StandardNodeLibrary()
 
 export function createGeometryMaterial(source: MeshStandardMaterial | MeshStandardNodeMaterial) {
   const material = source instanceof MeshStandardNodeMaterial
     ? source.clone()
-    : source instanceof MeshPhysicalMaterial
-      ? new MeshPhysicalNodeMaterial().copy(source)
-      : new MeshStandardNodeMaterial().copy(source)
+    : materialLibrary.fromMaterial(source.clone())
+  if (!(material instanceof MeshStandardNodeMaterial)) throw new Error('Cluster surfaces require standard or physical materials')
+  material.alphaTest = source.alphaTest
   if (material.transparent || material.displacementMap || material.positionNode || material.vertexNode || material.fragmentNode || material.depthNode) {
     throw new Error('Cluster materials require opaque or alpha-tested surfaces with static geometry and standard depth')
   }
@@ -55,20 +57,49 @@ export function bindGeometryMaterial(material: MeshStandardNodeMaterial, pulledU
   if (material instanceof MeshPhysicalNodeMaterial && !material.clearcoatNormalNode && material.clearcoatNormalMap) {
     material.clearcoatNormalNode = normalMapWithUV(material.clearcoatNormalMap, pulledUv, material.clearcoatNormalScale)
   }
+}
+
+export function createGeometryDepthMaterial(material: MeshStandardMaterial & Partial<NodeMaterial>) {
   const depth = new MeshBasicNodeMaterial({
     colorWrite: false,
     side: material.side,
     map: material.map,
     alphaMap: material.alphaMap,
     alphaTest: material.alphaTest,
+    alphaHash: material.alphaHash,
     opacity: material.opacity,
     depthWrite: material.depthWrite,
     depthTest: material.depthTest,
   })
-  depth.positionNode = position
-  depth.contextNode = material.contextNode
-  depth.colorNode = material.colorNode
-  depth.opacityNode = material.opacityNode
-  depth.alphaTestNode = material.alphaTestNode
+  depth.positionNode = material.positionNode ?? null
+  depth.contextNode = material.contextNode ?? null
+  depth.colorNode = material.alphaTest > 0 || material.alphaTestNode ? material.colorNode ?? null : null
+  depth.opacityNode = material.opacityNode ?? null
+  depth.alphaTestNode = material.alphaTestNode ?? null
+  depth.maskNode = material.maskNode ?? null
+  depth.depthNode = material.depthNode ?? null
+  depth.displacementMap = material.displacementMap
+  depth.displacementScale = material.displacementScale
+  depth.displacementBias = material.displacementBias
   return depth
+}
+
+export function createGeometryShadowMaterial(source: MeshStandardMaterial | MeshStandardNodeMaterial, pulledUv: ReturnType<typeof vec2>, position: ReturnType<typeof vec3>) {
+  const node = source as MeshStandardNodeMaterial
+  const material = new MeshBasicNodeMaterial({ side: source.side, alphaTest: node.alphaTestNode ? 0 : source.alphaTest, depthWrite: true })
+  const context = { ...node.contextNode?.value, getUV: () => pulledUv }
+  const colorAlpha = node.colorNode ? vec4(node.colorNode).a : source.map ? texture(source.map, pulledUv).setUpdateMatrix(true).a : float(1)
+  const opacity = node.opacityNode ?? float(source.opacity).mul(source.alphaMap ? texture(source.alphaMap, pulledUv).setUpdateMatrix(true).g : 1)
+  const alpha = colorAlpha.mul(opacity).context(context)
+  const sourceMask = node.maskShadowNode ?? node.maskNode
+  let mask = sourceMask ? sourceMask.context(context) : null
+  if (node.alphaTestNode) {
+    const cutout = alpha.greaterThan(node.alphaTestNode.context(context))
+    mask = mask ? mask.and(cutout) : cutout
+  }
+  material.positionNode = position
+  material.shadowSide = source.shadowSide
+  material.colorNode = vec4(0, 0, 0, alpha)
+  material.maskNode = mask
+  return material
 }

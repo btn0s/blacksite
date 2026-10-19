@@ -1,17 +1,21 @@
 import {
-  BufferAttribute, DepthTexture, Frustum, Group, IndirectStorageBufferAttribute, InstancedBufferGeometry,
+  DepthTexture, Frustum, Group, IndirectStorageBufferAttribute, InstancedBufferGeometry,
   Matrix4, Mesh, MeshBasicNodeMaterial, MeshStandardNodeMaterial, RenderTarget, Scene,
   StorageBufferAttribute, Vector2, Vector3, Vector4, WebGPUCoordinateSystem,
 } from 'three/webgpu'
-import type { PerspectiveCamera, WebGPURenderer } from 'three/webgpu'
+import type { Object3D, OrthographicCamera, PerspectiveCamera, WebGPURenderer } from 'three/webgpu'
 import {
-  Fn, If, Loop, atomicAdd, atomicLoad, atomicStore, bool, ceil, clamp, cos, dot, float,
-  floor, instanceIndex, log2, max, min, mix, normalLocal, output, storage, struct,
-  textureLoad, uint, uniform, uniformArray, uvec2, vec2, vec3, vec4, vertexIndex, varyingProperty,
+  Fn, If, Loop, atomicAdd, atomicLoad, atomicStore, bool, ceil, clamp, dot, float,
+  floor, instanceIndex, log2, max, min, mix, output, storage,
+  textureLoad, uint, uniform, uniformArray, uvec2, vec2, vec4,
 } from 'three/tsl'
 import { DRAW_ARGUMENT_OFFSET, packScene, validateTransform } from './runtime-data'
 import type { MeshletSceneEntry } from './runtime-data'
-import { bindGeometryMaterial, createGeometryMaterial } from './runtime-material'
+import { bindGeometryMaterial, createGeometryDepthMaterial, createGeometryMaterial } from './runtime-material'
+import { clusterLayout, instanceLayout } from './runtime-layout'
+import { clusterGeometry, clusterVertex } from './runtime-vertex'
+import { ClusterShadows } from './runtime-shadows'
+import { DepthOccluders } from './runtime-occluders'
 
 export type { MeshletSceneEntry } from './runtime-data'
 export { normalMapWithUV } from './runtime-material'
@@ -21,6 +25,13 @@ export interface MeshletSceneOptions {
   pixelError?: number
   occlusion?: boolean
   occlusionSize?: number
+  fallbackDistance?: number
+  shadowLayer?: number
+  shadowPixelError?: number
+}
+
+export interface MeshletPrepareOptions {
+  occluders?: readonly Object3D[]
 }
 
 export interface MeshletStats {
@@ -33,14 +44,12 @@ export interface MeshletStats {
   visibleClusters: number
   firstPassClusters: number
   drawnTriangles: number
+  sceneTriangles: number
   submittedTriangles: number
   totalTriangles: number
   materialBatches: number
+  shadowPasses: number
 }
-
-const clusterLayout = struct({ bounds: 'vec4', selfSphere: 'vec4', parentSphere: 'vec4', errors: 'vec4', draw: 'uvec4' }, 'GeometryCluster')
-const instanceLayout = struct({ transform: 'mat4', normal: 'mat4', scale: 'vec4' }, 'GeometryInstance')
-const vertexLayout = struct({ position: 'vec4', normal: 'vec4' }, 'GeometryVertex')
 
 export class MeshletScene {
   readonly object = new Group()
@@ -49,6 +58,14 @@ export class MeshletScene {
   readonly candidateClusters: number
   pixelError: number
   occlusionEnabled: boolean
+  readonly fallbackDistance: number
+  readonly shadowLayer: number
+  shadowPixelError: number
+  private readonly shadows: ClusterShadows
+  private readonly externalDepth = new DepthOccluders()
+  private readonly lodEnabled = uniform(true)
+  private readonly fallbackReach = uniform(120)
+  private shadowPasses = 0
   private readonly depthScene = new Scene()
   private readonly depthMeshes: Mesh<InstancedBufferGeometry, MeshBasicNodeMaterial>[] = []
   private readonly target: RenderTarget
@@ -79,6 +96,8 @@ export class MeshletScene {
   private readonly recoverCompute
   private readonly pyramidCompute
   private readonly reductionCompute
+  private readonly selectionComputes
+  private readonly occlusionComputes
   private readonly computeNodes
 
   constructor(entries: readonly MeshletSceneEntry[], options: MeshletSceneOptions = {}) {
@@ -88,6 +107,13 @@ export class MeshletScene {
     this.occlusionEnabled = options.occlusion ?? true
     this.candidateClusters = packed.candidateCount
     this.totalTriangles = packed.totalTriangles
+    this.fallbackDistance = options.fallbackDistance ?? 120
+    if (!(this.fallbackDistance > 0)) throw new Error('Geometry fallback distance must be positive')
+    this.fallbackReach.value = this.fallbackDistance
+    this.shadowLayer = options.shadowLayer ?? 31
+    this.shadowPixelError = options.shadowPixelError ?? 1
+    this.shadows = new ClusterShadows(packed, this.world, this.worldScale, this.shadowLayer)
+    this.object.add(this.shadows.object)
     const pyramidSize = options.occlusionSize ?? 512
     if (pyramidSize < 32 || pyramidSize > 2048 || (pyramidSize & (pyramidSize - 1)) !== 0) {
       throw new Error('Occlusion size must be a power of two between 32 and 2048')
@@ -99,11 +125,8 @@ export class MeshletScene {
     const pyramidAttribute = new StorageBufferAttribute((pyramidSize * pyramidSize * 4 - 1) / 3, 1)
     const clusters = storage(packed.clusters, clusterLayout, packed.clusterCount).toReadOnly()
     const instances = storage(packed.instances, instanceLayout, packed.instanceCount).toReadOnly()
-    const vertices = storage(packed.vertices, vertexLayout, packed.vertexCount).toReadOnly()
-    const indices = storage(packed.indices, 'uint', packed.indexCount).toReadOnly()
     const candidates = storage(packed.candidates, 'uvec4', this.candidateClusters).toReadOnly()
     const visibleWrite = storage(visibleAttribute, 'uint', this.candidateClusters)
-    const visibleRead = storage(visibleAttribute, 'uint', this.candidateClusters).toReadOnly()
     const rejectedWrite = storage(rejectedAttribute, 'uint', this.candidateClusters)
     const rejectedRead = storage(rejectedAttribute, 'uint', this.candidateClusters).toReadOnly()
     const counters = storage(this.counters, 'uint', argumentCount).toAtomic()
@@ -167,7 +190,7 @@ export class MeshletScene {
       for (let i = 0; i < packed.batches.length; i++) {
         atomicStore(counters.element(DRAW_ARGUMENT_OFFSET + i * 4), uint(packed.batches[i]!.triangles * 3))
       }
-    })().compute(1)
+    })().compute(1).setName('Cluster reset')
     this.cullCompute = Fn(() => {
       const candidate = candidates.element(instanceIndex)
       const cluster = clusters.element(candidate.x)
@@ -177,9 +200,12 @@ export class MeshletScene {
       const parentSphere = sphereInWorld(cluster.get('parentSphere'), instance.get('transform'), scale)
       const ownError = projectedError(ownSphere, cluster.get('errors').x, scale)
       const parentError = projectedError(parentSphere, cluster.get('errors').y, scale)
-      If(ownError.lessThanEqual(this.threshold).and(parentError.greaterThan(this.threshold)), () => {
+      const bounds = sphereInWorld(cluster.get('bounds'), instance.get('transform'), scale).toVar()
+      const lod = ownError.lessThanEqual(this.threshold).and(parentError.greaterThan(this.threshold))
+      const finest = cluster.get('draw').z.equal(0).and(this.eye.sub(bounds.xyz).length().sub(bounds.w).lessThanEqual(this.fallbackReach))
+      If(this.lodEnabled.select(lod, finest), () => {
         atomicAdd(counters.element(4), uint(1))
-        const bounds = sphereInWorld(cluster.get('bounds'), instance.get('transform'), scale).toVar()
+        atomicAdd(counters.element(12), cluster.get('draw').y.div(3))
         const inside = bool(true).toVar()
         Loop(6, ({ i }) => {
           const plane = this.frustumPlanes.element(i)
@@ -194,12 +220,14 @@ export class MeshletScene {
           }).Else(() => { appendVisible(instanceIndex, cluster.get('draw').y) })
         }).Else(() => { atomicAdd(counters.element(5), uint(1)) })
       })
-    })().compute(this.candidateClusters, [64])
+    })().compute(this.candidateClusters, [64]).setName('Cluster selection')
     this.dispatchCompute = Fn(() => {
-      dispatch.element(0).assign(atomicLoad(counters.element(6)).add(63).div(64))
-      dispatch.element(1).assign(1)
+      const count = atomicLoad(counters.element(6))
+      const groups = count.div(64).add(uint(count.mod(64).greaterThan(0)))
+      dispatch.element(0).assign(min(groups, uint(65535)))
+      dispatch.element(1).assign(max(groups.add(65534).div(65535), uint(1)))
       dispatch.element(2).assign(1)
-    })().compute(1)
+    })().compute(1).setName('Recovery dispatch')
     this.recoverCompute = Fn(() => {
       If(instanceIndex.lessThan(atomicLoad(counters.element(6))), () => {
         const candidateId = rejectedRead.element(instanceIndex).toVar()
@@ -214,39 +242,16 @@ export class MeshletScene {
           atomicAdd(counters.element(8), uint(1))
         })
       })
-    })().compute(this.candidateClusters, [64])
+    })().compute(this.candidateClusters, [64]).setName('Cluster recovery')
     for (let batchIndex = 0; batchIndex < packed.batches.length; batchIndex++) {
       const batch = packed.batches[batchIndex]!
-      const geometry = new InstancedBufferGeometry()
-      geometry.instanceCount = batch.capacity
-      geometry.setAttribute('position', new BufferAttribute(new Float32Array(batch.triangles * 9), 3))
-      geometry.setAttribute('normal', new BufferAttribute(new Float32Array(batch.triangles * 9), 3))
-      geometry.setAttribute('uv', new BufferAttribute(new Float32Array(batch.triangles * 6), 2))
-      geometry.setIndirect(this.counters, (DRAW_ARGUMENT_OFFSET + batchIndex * 4) * 4)
-      const pulledUv = varyingProperty('vec2', 'geometryUv')
-      const clusterColor = varyingProperty('vec3', 'geometryClusterColor')
-      const position = Fn(() => {
-        const candidateId = visibleRead.element(instanceIndex.add(batch.offset)).toVar()
-        const candidate = candidates.element(candidateId)
-        const cluster = clusters.element(candidate.x)
-        const instance = instances.element(candidate.y)
-        const draw = cluster.get('draw')
-        const corner = vertexIndex.mod(3)
-        const mirroredCorner = corner.equal(0).select(uint(0), uint(3).sub(corner))
-        const orientedCorner = instance.get('scale').y.lessThan(0).select(mirroredCorner, corner)
-        const localIndex = min(vertexIndex.div(3).mul(3).add(orientedCorner), draw.y.sub(1))
-        const index = indices.element(draw.x.add(localIndex))
-        const vertex = vertices.element(index)
-        normalLocal.assign(instance.get('normal').mul(vec4(vertex.get('normal').xyz, 0)).xyz)
-        pulledUv.assign(vec2(vertex.get('position').w, vertex.get('normal').w))
-        const shadeId = mix(float(candidate.x), float(draw.z), float(this.debug.equal(2)))
-        clusterColor.assign(cos(vec3(0, 2, 4).add(shadeId.mul(2.399963))).mul(0.36).add(0.58))
-        return instance.get('transform').mul(vec4(vertex.get('position').xyz, 1)).xyz
-      })()
+      const geometry = clusterGeometry(batch.triangles, batch.capacity, this.counters, batchIndex)
+      const pulled = clusterVertex(packed, visibleAttribute, batch.offset, this.debug)
       const material = createGeometryMaterial(batch.material)
-      const depthMaterial = bindGeometryMaterial(material, pulledUv, position)
+      bindGeometryMaterial(material, pulled.uv, pulled.position)
+      const depthMaterial = createGeometryDepthMaterial(material)
       const standardOutput = material.outputNode ?? output
-      material.outputNode = vec4(mix(standardOutput.rgb, clusterColor, float(this.debug.greaterThan(0))), standardOutput.a)
+      material.outputNode = vec4(mix(standardOutput.rgb, pulled.color, float(this.debug.greaterThan(0))), standardOutput.a)
       const mesh = new Mesh(geometry, material)
       mesh.name = batch.material.name || `Cluster material ${batchIndex}`
       mesh.frustumCulled = false
@@ -275,7 +280,7 @@ export class MeshletScene {
         })
       })
       pyramidWrite.element(instanceIndex).assign(farthest)
-    })().compute(pyramidSize * pyramidSize, [64])
+    })().compute(pyramidSize * pyramidSize, [64]).setName('HiZ depth')
     this.reductionCompute = []
     let sourceOffset = 0
     let size = pyramidSize
@@ -294,23 +299,46 @@ export class MeshletScene {
         const c = pyramidWrite.element(index.add(sourceSize))
         const d = pyramidWrite.element(index.add(sourceSize + 1))
         pyramidWrite.element(uint(writeOffset).add(instanceIndex)).assign(max(max(a, b), max(c, d)))
-      })().compute(destinationSize * destinationSize, [64])
+      })().compute(destinationSize * destinationSize, [64]).setName(`HiZ ${destinationSize}`)
       this.reductionCompute.push(reduction)
       sourceOffset = destinationOffset
       size = destinationSize
       destinationOffset += size * size
     }
+    this.selectionComputes = [this.resetCompute, this.cullCompute]
+    this.occlusionComputes = [this.pyramidCompute, ...this.reductionCompute, this.dispatchCompute]
     this.computeNodes = [this.resetCompute, this.cullCompute, this.dispatchCompute, this.recoverCompute, this.pyramidCompute, ...this.reductionCompute]
   }
   setDebugView(view: MeshletDebugView) {
     this.debug.value = view === 'meshlets' ? 1 : view === 'lod' ? 2 : 0
   }
 
+  setLodEnabled(enabled: boolean) {
+    if (this.lodEnabled.value === enabled) return
+    this.lodEnabled.value = enabled
+    this.resetHistory()
+  }
+
+  get shadowEnabled() { return this.shadows.object.visible }
+
+  setShadowEnabled(enabled: boolean) { this.shadows.object.visible = enabled }
+
+  prepareShadow(renderer: WebGPURenderer, camera: OrthographicCamera, mapSize: Readonly<Vector2>) {
+    if (!this.shadowEnabled) return
+    this.object.updateWorldMatrix(true, true)
+    validateTransform(this.object.matrixWorld)
+    this.world.value.copy(this.object.matrixWorld)
+    this.worldScale.value = this.object.matrixWorld.getMaxScaleOnAxis()
+    this.shadows.prepare(renderer, camera, mapSize, this.shadowPixelError)
+    this.shadowPasses++
+  }
+
   resetHistory() {
     this.historyValid = false
   }
 
-  prepare(renderer: WebGPURenderer, camera: PerspectiveCamera) {
+  prepare(renderer: WebGPURenderer, camera: PerspectiveCamera, options: MeshletPrepareOptions = {}) {
+    this.shadowPasses = 0
     if (!camera.isPerspectiveCamera) throw new Error('Geometry currently requires a perspective camera')
     if (!(this.pixelError > 0)) throw new Error('Geometry pixel error must be positive')
     const finalTarget = renderer.getRenderTarget()
@@ -342,7 +370,7 @@ export class MeshletScene {
       this.frustumPlanes.array[i]!.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant)
     }
     this.history.value = this.historyValid && this.occlusionEnabled ? 1 : 0
-    renderer.compute([this.resetCompute, this.cullCompute])
+    renderer.compute(this.selectionComputes)
     if (this.occlusionEnabled) {
       this.target.setSize(this.viewport.x, this.viewport.y)
       this.depthSize.value.copy(this.viewport)
@@ -350,14 +378,19 @@ export class MeshletScene {
       const previousAutoClear = renderer.autoClear
       const previousMrt = renderer.getMRT()
       for (const depthMesh of this.depthMeshes) depthMesh.matrix.copy(this.object.matrixWorld)
-      renderer.setMRT(null)
-      renderer.setRenderTarget(this.target)
-      renderer.autoClear = true
-      renderer.render(this.depthScene, camera)
-      renderer.setRenderTarget(previousTarget)
-      renderer.setMRT(previousMrt)
-      renderer.autoClear = previousAutoClear
-      renderer.compute([this.pyramidCompute, ...this.reductionCompute, this.dispatchCompute])
+      try {
+        renderer.setMRT(null)
+        renderer.setRenderTarget(this.target)
+        renderer.autoClear = true
+        renderer.render(this.depthScene, camera)
+        renderer.autoClear = false
+        this.externalDepth.render(renderer, camera, options.occluders ?? [])
+      } finally {
+        renderer.setRenderTarget(previousTarget)
+        renderer.setMRT(previousMrt)
+        renderer.autoClear = previousAutoClear
+      }
+      renderer.compute(this.occlusionComputes)
       renderer.compute(this.recoverCompute, this.dispatch)
       this.previousView.value.copy(camera.matrixWorldInverse)
       this.previousProjection.value.copy(camera.projectionMatrix)
@@ -380,9 +413,11 @@ export class MeshletScene {
       visibleClusters: values[10]!,
       firstPassClusters: values[10]! - values[8]!,
       drawnTriangles: values[9]!,
+      sceneTriangles: values[12]!,
       submittedTriangles: values[11]!,
       totalTriangles: this.totalTriangles,
       materialBatches: this.meshes.length,
+      shadowPasses: this.shadowPasses,
     }
   }
 
@@ -392,6 +427,8 @@ export class MeshletScene {
       mesh.material.dispose()
     }
     for (const mesh of this.depthMeshes) mesh.material.dispose()
+    this.shadows.dispose()
+    this.externalDepth.dispose()
     this.target.dispose()
     for (const node of this.computeNodes) node.dispose()
   }
