@@ -14,18 +14,17 @@ export function clusterGeometry(triangles: number, capacity: number, counters: I
   return geometry
 }
 
-export function clusterVertex(packed: ReturnType<typeof packScene>, visibleAttribute: StorageBufferAttribute, offset: number, debug: Node<'uint'> = uint(0)) {
+export function clusterVertex(packed: ReturnType<typeof packScene>, visibleAttribute: StorageBufferAttribute, batchIndex: number, offsetsAttribute: StorageBufferAttribute, debug: Node<'uint'> = uint(0)) {
   const readCluster = clusterReader(packed.clusters)
   const readInstance = instanceReader(packed.instances)
   const readVertex = vertexReader(packed.vertices)
   const indices = storage(packed.indices, 'uint', packed.indexCount).toReadOnly()
-  const candidates = storage(packed.candidates, 'uvec4', packed.candidateCount).toReadOnly()
-  const visible = storage(visibleAttribute, 'uint', packed.candidateCount).toReadOnly()
+  const visible = storage(visibleAttribute, 'uvec2', visibleAttribute.count).toReadOnly()
+  const offsets = storage(offsetsAttribute, 'uint', offsetsAttribute.count).toReadOnly()
   const uv = varyingProperty('vec2', 'geometryUv')
   const color = varyingProperty('vec3', 'geometryClusterColor')
   const position = Fn(() => {
-    const candidateId = visible.element(instanceIndex.add(offset)).toVar()
-    const candidate = candidates.element(candidateId)
+    const candidate = visible.element(instanceIndex.add(offsets.element(uint(batchIndex)))).toVar()
     const cluster = readCluster(candidate.x)
     const instance = readInstance(candidate.y)
     const draw = cluster.draw

@@ -35,7 +35,7 @@ await buildMeshletGeometry({
 
 The reference partitions geometry into clusters capped at 128 triangles, groups adjacent clusters, locks shared group boundaries, simplifies each group, and reclusters the result. UV discontinuities are protected and simplification considers normal error. Vertices shared between primitives are locked. The simplification error uses the reference's conservative additive accumulation configuration; sloppy simplification is enabled as the upstream fallback when ordinary simplification stalls. The reference generates the DAG and conservative error spheres. The wrapper serializes those results without implementing an alternative hierarchy algorithm.
 
-## Binary version 1
+## Binary version 2
 
 All numbers are little endian. The 32-byte header contains eight unsigned 32-bit words: magic `0x4c4d5342`, version, section count, metadata byte count, total file byte count, then three reserved zeros. It is followed by one 16-byte directory record per section: section id, byte offset, element count, and element type (`0` = float32, `1` = uint32). UTF-8 JSON metadata follows the directory. Section data starts at 16-byte aligned offsets. The loader exposes zero-copy typed array views into the downloaded buffer.
 
@@ -52,9 +52,13 @@ All numbers are little endian. The 32-byte header contains eight unsigned 32-bit
 | groupData | four uint32 per group: first cluster, cluster count, first child edge, child edge count |
 | groupBounds | eight float32 per group: simplified sphere xyzr, error, level, two reserved |
 | groupChildren | uint32 references to finer groups, deduplicated within each parent group |
+| nodeData | four uint32 per traversal node: group or `0xffffffff`, child offset, child count, reserved |
+| nodeBounds | eight float32 per traversal node: conservative sphere xyzr, maximum group error, three reserved |
 
 Original clusters have refined group `0xffffffff` and self error zero. A cluster's self error sphere is its refined group's simplified sphere. Its parent error sphere belongs to its containing group. Terminal groups have parent error `FLT_MAX`.
 
 The LOD cut selects a cluster when its projected self error is at or below the pixel threshold and its projected parent error is above that threshold. Projection uses `error * projection[1][1] * viewportHeight / (2 * max(distance(camera, sphereCenter) - sphereRadius, nearPlane))`. The containing and refined group references remain available for future hierarchical traversal or streaming.
 
-This format stores uncompressed geometry and the complete hierarchy. It has no paging, quantization, or on-demand streaming.
+The native builder calls upstream `clodBuildHierarchy` with node width 8. It builds a forest with one root per original DAG depth, at nodes `0..rootCount-1`. Each group appears once, avoiding DAG revisits and a group-instance visitation table. `nodeCount` and `rootCount` are recorded in metadata. A traversal node is pruned when its projected maximum group error meets the threshold; group leaves use the existing cluster self/parent cut rule. This is the upstream acceleration structure for selecting the cluster DAG.
+
+The build API accepts `{minimumError}` as a residency budget (object-space metres, default zero). Groups with simplified error at or below this budget are removed before building the traversal BVH. Remaining references are remapped, references across the resident boundary become terminal, and vertex fetch remapping drops unused vertices without changing the vertex layout. `sourceTriangles` preserves provenance; `residentTriangles` counts the finest resident cut, which is stored in `sourceIndices`. Primitive ranges describe source material slots. `sourceVertices` counts resident vertices. Zero budget retains the original source indices. This format has no paging, quantization, or on-demand streaming.

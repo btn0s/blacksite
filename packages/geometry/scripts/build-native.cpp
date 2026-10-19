@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cstdint>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <set>
@@ -39,7 +40,9 @@ void appendSphere(std::vector<float>& destination, const clodBounds& bounds) {
 }
 int main(int argc, char** argv) {
   try {
-    if (argc != 3) throw std::runtime_error("Expected input and output paths");
+    if (argc != 4) throw std::runtime_error("Expected input, output and minimum resident error");
+    const float minimumError = std::stof(argv[3]);
+    if (!std::isfinite(minimumError) || minimumError < 0) throw std::runtime_error("Invalid minimum resident error");
     std::ifstream input(argv[1], std::ios::binary);
     uint32_t header[4];
     read(input, header, 4);
@@ -96,6 +99,36 @@ int main(int argc, char** argv) {
       mesh.attribute_protect_mask = (1 << 3) | (1 << 4);
       clodBuild(config, mesh, &out, emitGroup);
     }
+    if (minimumError > 0) {
+      Output resident;
+      std::vector<uint32_t> groupRemap(out.groups.size(), uint32_t(-1));
+      for (size_t i = 0; i < out.groups.size(); i++) {
+        const Group& group = out.groups[i];
+        if (group.value.simplified.error <= minimumError) continue;
+        groupRemap[i] = uint32_t(resident.groups.size());
+        resident.groups.push_back({uint32_t(resident.clusters.size()), group.count, group.value});
+        for (uint32_t j = 0; j < group.count; j++) {
+          Cluster cluster = out.clusters[group.offset + j];
+          uint32_t oldOffset = cluster.offset;
+          cluster.group = groupRemap[i];
+          cluster.offset = uint32_t(resident.indices.size());
+          resident.clusters.push_back(cluster);
+          resident.indices.insert(resident.indices.end(), out.indices.begin() + oldOffset, out.indices.begin() + oldOffset + cluster.count);
+        }
+      }
+      indices.clear();
+      for (Cluster& cluster : resident.clusters) {
+        if (cluster.refined != uint32_t(-1)) cluster.refined = groupRemap[cluster.refined];
+        if (cluster.refined == uint32_t(-1)) indices.insert(indices.end(), resident.indices.begin() + cluster.offset, resident.indices.begin() + cluster.offset + cluster.count);
+      }
+      std::vector<unsigned int> compact(vertices.size());
+      size_t count = meshopt_optimizeVertexFetchRemap(compact.data(), resident.indices.data(), resident.indices.size(), vertices.size());
+      meshopt_remapIndexBuffer(resident.indices.data(), resident.indices.data(), resident.indices.size(), compact.data());
+      meshopt_remapIndexBuffer(indices.data(), indices.data(), indices.size(), compact.data());
+      meshopt_remapVertexBuffer(vertices.data(), vertices.data(), vertices.size(), sizeof(Vertex), compact.data());
+      vertices.resize(count);
+      out = std::move(resident);
+    }
     std::vector<uint32_t> clusterData, groupData, groupChildren;
     std::vector<float> clusterBounds, clusterLod, groupBounds;
     uint32_t levels = 0;
@@ -123,8 +156,19 @@ int main(int argc, char** argv) {
       appendSphere(groupBounds, group.value.simplified);
       groupBounds.insert(groupBounds.end(), {group.value.simplified.error, float(group.value.depth), 0.f, 0.f});
     }
+    std::vector<clodGroup> hierarchyGroups;
+    for (const Group& group : out.groups) hierarchyGroups.push_back(group.value);
+    std::vector<clodNode> nodes(clodBuildHierarchyBound(hierarchyGroups.size(), 8, levels));
+    nodes.resize(clodBuildHierarchy(nodes.data(), hierarchyGroups.data(), hierarchyGroups.size(), 8, levels));
+    std::vector<uint32_t> nodeData;
+    std::vector<float> nodeBounds;
+    for (const clodNode& node : nodes) {
+      nodeData.insert(nodeData.end(), {uint32_t(node.group), node.child_offset, node.child_count, 0});
+      appendSphere(nodeBounds, node.bounds);
+      nodeBounds.insert(nodeBounds.end(), {node.bounds.error, 0.f, 0.f, 0.f});
+    }
     std::ofstream output(argv[2], std::ios::binary);
-    write(output, std::vector<uint32_t>{0x4f475342, uint32_t(out.clusters.size()), uint32_t(out.groups.size()), uint32_t(out.indices.size()), uint32_t(groupChildren.size()), levels, uint32_t(vertices.size()), uint32_t(indices.size())});
+    write(output, std::vector<uint32_t>{0x4f475342, uint32_t(out.clusters.size()), uint32_t(out.groups.size()), uint32_t(out.indices.size()), uint32_t(groupChildren.size()), levels, uint32_t(vertices.size()), uint32_t(indices.size()), uint32_t(nodes.size()), 0, 0, 0});
     write(output, vertices);
     write(output, indices);
     write(output, out.indices);
@@ -134,6 +178,8 @@ int main(int argc, char** argv) {
     write(output, groupData);
     write(output, groupBounds);
     write(output, groupChildren);
+    write(output, nodeData);
+    write(output, nodeBounds);
     std::cout << "Built " << out.clusters.size() << " clusters in " << out.groups.size() << " groups across " << levels << " levels\n";
     return 0;
   } catch (const std::exception& error) {
