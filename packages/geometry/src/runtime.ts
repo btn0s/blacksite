@@ -12,7 +12,7 @@ import {
 import { DRAW_ARGUMENT_OFFSET, packScene, validateTransform } from './runtime-data'
 import type { MeshletSceneEntry } from './runtime-data'
 import { bindGeometryMaterial, createGeometryDepthMaterial, createGeometryMaterial } from './runtime-material'
-import { clusterLayout, instanceLayout } from './runtime-layout'
+import { clusterReader, instanceReader } from './runtime-layout'
 import { clusterGeometry, clusterVertex } from './runtime-vertex'
 import { ClusterShadows } from './runtime-shadows'
 import { DepthOccluders } from './runtime-occluders'
@@ -123,8 +123,8 @@ export class MeshletScene {
     const visibleAttribute = new StorageBufferAttribute(this.candidateClusters, 1, Uint32Array)
     const rejectedAttribute = new StorageBufferAttribute(this.candidateClusters, 1, Uint32Array)
     const pyramidAttribute = new StorageBufferAttribute((pyramidSize * pyramidSize * 4 - 1) / 3, 1)
-    const clusters = storage(packed.clusters, clusterLayout, packed.clusterCount).toReadOnly()
-    const instances = storage(packed.instances, instanceLayout, packed.instanceCount).toReadOnly()
+    const readCluster = clusterReader(packed.clusters)
+    const readInstance = instanceReader(packed.instances)
     const candidates = storage(packed.candidates, 'uvec4', this.candidateClusters).toReadOnly()
     const visibleWrite = storage(visibleAttribute, 'uint', this.candidateClusters)
     const rejectedWrite = storage(rejectedAttribute, 'uint', this.candidateClusters)
@@ -193,19 +193,19 @@ export class MeshletScene {
     })().compute(1).setName('Cluster reset')
     this.cullCompute = Fn(() => {
       const candidate = candidates.element(instanceIndex)
-      const cluster = clusters.element(candidate.x)
-      const instance = instances.element(candidate.y)
-      const scale = instance.get('scale').x
-      const ownSphere = sphereInWorld(cluster.get('selfSphere'), instance.get('transform'), scale)
-      const parentSphere = sphereInWorld(cluster.get('parentSphere'), instance.get('transform'), scale)
-      const ownError = projectedError(ownSphere, cluster.get('errors').x, scale)
-      const parentError = projectedError(parentSphere, cluster.get('errors').y, scale)
-      const bounds = sphereInWorld(cluster.get('bounds'), instance.get('transform'), scale).toVar()
+      const cluster = readCluster(candidate.x)
+      const instance = readInstance(candidate.y)
+      const scale = instance.scale.x
+      const ownSphere = sphereInWorld(cluster.selfSphere, instance.transform, scale)
+      const parentSphere = sphereInWorld(cluster.parentSphere, instance.transform, scale)
+      const ownError = projectedError(ownSphere, cluster.errors.x, scale)
+      const parentError = projectedError(parentSphere, cluster.errors.y, scale)
+      const bounds = sphereInWorld(cluster.bounds, instance.transform, scale).toVar()
       const lod = ownError.lessThanEqual(this.threshold).and(parentError.greaterThan(this.threshold))
-      const finest = cluster.get('draw').z.equal(0).and(this.eye.sub(bounds.xyz).length().sub(bounds.w).lessThanEqual(this.fallbackReach))
+      const finest = cluster.draw.z.equal(0).and(this.eye.sub(bounds.xyz).length().sub(bounds.w).lessThanEqual(this.fallbackReach))
       If(this.lodEnabled.select(lod, finest), () => {
         atomicAdd(counters.element(4), uint(1))
-        atomicAdd(counters.element(12), cluster.get('draw').y.div(3))
+        atomicAdd(counters.element(12), cluster.draw.y.div(3))
         const inside = bool(true).toVar()
         Loop(6, ({ i }) => {
           const plane = this.frustumPlanes.element(i)
@@ -217,7 +217,7 @@ export class MeshletScene {
           If(hidden, () => {
             const slot = atomicAdd(counters.element(6), uint(1))
             rejectedWrite.element(slot).assign(instanceIndex)
-          }).Else(() => { appendVisible(instanceIndex, cluster.get('draw').y) })
+          }).Else(() => { appendVisible(instanceIndex, cluster.draw.y) })
         }).Else(() => { atomicAdd(counters.element(5), uint(1)) })
       })
     })().compute(this.candidateClusters, [64]).setName('Cluster selection')
@@ -232,13 +232,13 @@ export class MeshletScene {
       If(instanceIndex.lessThan(atomicLoad(counters.element(6))), () => {
         const candidateId = rejectedRead.element(instanceIndex).toVar()
         const candidate = candidates.element(candidateId)
-        const cluster = clusters.element(candidate.x)
-        const instance = instances.element(candidate.y)
-        const bounds = sphereInWorld(cluster.get('bounds'), instance.get('transform'), instance.get('scale').x)
+        const cluster = readCluster(candidate.x)
+        const instance = readInstance(candidate.y)
+        const bounds = sphereInWorld(cluster.bounds, instance.transform, instance.scale.x)
         If(isOccluded(bounds, this.currentView, this.currentProjection, this.currentNear), () => {
           atomicAdd(counters.element(7), uint(1))
         }).Else(() => {
-          appendVisible(candidateId, cluster.get('draw').y)
+          appendVisible(candidateId, cluster.draw.y)
           atomicAdd(counters.element(8), uint(1))
         })
       })

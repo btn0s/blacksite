@@ -11,7 +11,9 @@ export type DumpControl = {
 const count = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })
 const ms = (value: number) => value.toFixed(1)
 
-export function InspectHud({ inspector, dump, className = '' }: { inspector: Inspector; dump?: DumpControl; className?: string }) {
+const distanceLegend = [{ color: '#62d995', label: 'Near' }, { color: '#f2c45a', label: 'Mid' }, { color: '#80a6ff', label: 'Far' }]
+
+export function InspectHud({ inspector, dump, lodLegend = distanceLegend, className = '' }: { inspector: Inspector; dump?: DumpControl; lodLegend?: readonly { color: string; label: string }[]; className?: string }) {
   const snapshot = useSyncExternalStore(inspector.subscribe, inspector.getSnapshot, inspector.getSnapshot)
   const metrics = snapshot.metrics
   const gpu = Object.entries(metrics?.gpuMs ?? {})
@@ -28,7 +30,7 @@ export function InspectHud({ inspector, dump, className = '' }: { inspector: Ins
       <button type="button" aria-pressed={snapshot.view === 'lod'} onClick={() => inspector.setView(snapshot.view === 'lod' ? 'lit' : 'lod')}>LOD colours</button>
       {dump && <button type="button" disabled={dump.status === 'sending'} onClick={dump.onDump}>{dump.status === 'sending' ? 'Saving…' : 'Dump stats · T'}</button>}
     </div>
-    {snapshot.view === 'lod' && <p className="bs-inspect-legend"><span style={{ color: '#62d995' }}>Near</span><span style={{ color: '#f2c45a' }}>Mid</span><span style={{ color: '#80a6ff' }}>Far</span></p>}
+    {snapshot.view === 'lod' && <p className="bs-inspect-legend">{lodLegend.map(entry => <span key={entry.label} style={{ color: entry.color }}>{entry.label}</span>)}</p>}
     {(snapshot.techniques.length > 0 || gpu.length > 0) && <details className="bs-inspect-techniques">
       <summary>Techniques{gpu.length > 0 && ' · GPU passes'}</summary>
       {snapshot.techniques.map(technique => <label key={technique.id} title={technique.description}>

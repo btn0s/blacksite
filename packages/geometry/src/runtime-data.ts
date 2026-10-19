@@ -109,10 +109,10 @@ export function packScene(entries: readonly MeshletSceneEntry[]) {
   }
   return {
     batches, vertexCount, indexCount, clusterCount, instanceCount, candidateCount, totalTriangles,
-    clusters: new StorageBufferAttribute(clusterIntegers, 20),
-    vertices: new StorageBufferAttribute(vertexData, 8),
+    clusters: new StorageBufferAttribute(clusterIntegers, 4),
+    vertices: new StorageBufferAttribute(vertexData, 4),
     indices: new StorageBufferAttribute(indexData, 1),
-    instances: new StorageBufferAttribute(instanceData, 36),
+    instances: new StorageBufferAttribute(instanceData, 4),
     candidates: new StorageBufferAttribute(candidateData, 4),
   }
 }

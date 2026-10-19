@@ -2,7 +2,7 @@ import { Frustum, Group, IndirectStorageBufferAttribute, Matrix4, Mesh, StorageB
 import type { Node, OrthographicCamera, Vector2, WebGPURenderer } from 'three/webgpu'
 import { Fn, If, Loop, atomicAdd, atomicStore, bool, dot, instanceIndex, storage, uint, uniform, uniformArray, vec4 } from 'three/tsl'
 import { DRAW_ARGUMENT_OFFSET, type packScene } from './runtime-data'
-import { clusterLayout, instanceLayout } from './runtime-layout'
+import { clusterReader, instanceReader } from './runtime-layout'
 import { createGeometryShadowMaterial } from './runtime-material'
 import { clusterGeometry, clusterVertex } from './runtime-vertex'
 
@@ -26,8 +26,8 @@ export class ClusterShadows {
     const visibleAttribute = new StorageBufferAttribute(packed.candidateCount, 1, Uint32Array)
     const visible = storage(visibleAttribute, 'uint', packed.candidateCount)
     const counters = storage(this.counters, 'uint', argumentCount).toAtomic()
-    const clusters = storage(packed.clusters, clusterLayout, packed.clusterCount).toReadOnly()
-    const instances = storage(packed.instances, instanceLayout, packed.instanceCount).toReadOnly()
+    const readCluster = clusterReader(packed.clusters)
+    const readInstance = instanceReader(packed.instances)
     const candidates = storage(packed.candidates, 'uvec4', packed.candidateCount).toReadOnly()
     this.reset = Fn(() => {
       Loop(argumentCount, ({ i }) => { atomicStore(counters.element(i), uint(0)) })
@@ -35,15 +35,15 @@ export class ClusterShadows {
     })().compute(1).setName('Shadow cluster reset')
     this.select = Fn(() => {
       const candidate = candidates.element(instanceIndex)
-      const cluster = clusters.element(candidate.x)
-      const instance = instances.element(candidate.y)
-      const scale = instance.get('scale').x.mul(worldScale)
+      const cluster = readCluster(candidate.x)
+      const instance = readInstance(candidate.y)
+      const scale = instance.scale.x.mul(worldScale)
       const errorScale = scale.mul(this.projectionScale)
-      const ownError = cluster.get('errors').x.mul(errorScale)
-      const parentError = cluster.get('errors').y.mul(errorScale)
+      const ownError = cluster.errors.x.mul(errorScale)
+      const parentError = cluster.errors.y.mul(errorScale)
       If(ownError.lessThanEqual(this.threshold).and(parentError.greaterThan(this.threshold)), () => {
-        const localBounds = cluster.get('bounds')
-        const center = world.mul(instance.get('transform')).mul(vec4(localBounds.xyz, 1)).xyz
+        const localBounds = cluster.bounds
+        const center = world.mul(instance.transform).mul(vec4(localBounds.xyz, 1)).xyz
         const radius = localBounds.w.mul(scale)
         const inside = bool(true).toVar()
         Loop(6, ({ i }) => {

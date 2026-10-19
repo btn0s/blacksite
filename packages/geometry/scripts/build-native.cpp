@@ -50,6 +50,12 @@ int main(int argc, char** argv) {
     read(input, vertices.data(), vertices.size());
     read(input, indices.data(), indices.size());
     read(input, primitives.data(), primitives.size());
+    std::vector<unsigned int> vertexRemap(vertices.size());
+    size_t uniqueVertices = meshopt_generateVertexRemap(vertexRemap.data(), indices.data(), indices.size(), vertices.data(), vertices.size(), sizeof(Vertex));
+    meshopt_remapIndexBuffer(indices.data(), indices.data(), indices.size(), vertexRemap.data());
+    meshopt_remapVertexBuffer(vertices.data(), vertices.data(), vertices.size(), sizeof(Vertex), vertexRemap.data());
+    vertices.resize(uniqueVertices);
+    std::cout << "Indexed " << header[1] << " source corners into " << uniqueVertices << " exact vertices\n";
     std::vector<unsigned int> remap(vertices.size());
     meshopt_generatePositionRemap(remap.data(), vertices[0].position, vertices.size(), sizeof(Vertex));
     std::vector<uint32_t> owners(vertices.size(), uint32_t(-1));
@@ -118,7 +124,9 @@ int main(int argc, char** argv) {
       groupBounds.insert(groupBounds.end(), {group.value.simplified.error, float(group.value.depth), 0.f, 0.f});
     }
     std::ofstream output(argv[2], std::ios::binary);
-    write(output, std::vector<uint32_t>{0x4f475342, uint32_t(out.clusters.size()), uint32_t(out.groups.size()), uint32_t(out.indices.size()), uint32_t(groupChildren.size()), levels, 0, 0});
+    write(output, std::vector<uint32_t>{0x4f475342, uint32_t(out.clusters.size()), uint32_t(out.groups.size()), uint32_t(out.indices.size()), uint32_t(groupChildren.size()), levels, uint32_t(vertices.size()), uint32_t(indices.size())});
+    write(output, vertices);
+    write(output, indices);
     write(output, out.indices);
     write(output, clusterData);
     write(output, clusterBounds);

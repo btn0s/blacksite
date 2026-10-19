@@ -1,12 +1,12 @@
 import { appendFile, mkdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-export function valleyTelemetry(directory) {
+export function sceneTelemetry(directory) {
   const file = resolve(directory, 'telemetry/snapshots.jsonl')
   return {
-    name: 'valley-telemetry',
+    name: 'scene-telemetry',
     configureServer(server) {
-      server.middlewares.use('/__valley/telemetry', async (request, response) => {
+      server.middlewares.use('/__inspect/telemetry', async (request, response) => {
         response.setHeader('Content-Type', 'application/json')
         response.setHeader('Cache-Control', 'no-store')
         if (request.method !== 'POST') {
@@ -29,7 +29,7 @@ export function valleyTelemetry(directory) {
           const snapshot = JSON.parse(Buffer.concat(chunks).toString('utf8'))
           if (snapshot?.version !== 1 || snapshot?.renderer !== 'WebGPU' || !snapshot?.device || !snapshot?.stats || !snapshot?.player) {
             response.statusCode = 400
-            response.end(JSON.stringify({ error: 'Invalid Valley snapshot' }))
+            response.end(JSON.stringify({ error: 'Invalid scene snapshot' }))
             return
           }
           const receivedAt = new Date().toISOString()

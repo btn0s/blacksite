@@ -1,0 +1,22 @@
+{
+  "name": "@blacksite/example-archway",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite --host 0.0.0.0", "build:asset": "node scripts/build.mjs" },
+  "dependencies": {
+    "@blacksite/geometry": "workspace:*",
+    "@blacksite/input": "workspace:*",
+    "@blacksite/inspect": "workspace:*",
+    "@blacksite/look": "workspace:*",
+    "@blacksite/subject": "workspace:*",
+    "@blacksite/ui": "workspace:*",
+    "@react-three/fiber": "^9.8.2",
+    "@react-three/rapier": "^2.2.0",
+    "als-ue5-r3f": "workspace:*",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "three": "^0.186.1"
+  },
+  "license": "FSL-1.1-ALv2"
+}

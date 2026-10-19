@@ -2,7 +2,7 @@ import { BufferAttribute, InstancedBufferGeometry } from 'three/webgpu'
 import type { IndirectStorageBufferAttribute, Node, StorageBufferAttribute } from 'three/webgpu'
 import { Fn, cos, float, instanceIndex, min, mix, normalLocal, storage, uint, varyingProperty, vec2, vec3, vec4, vertexIndex } from 'three/tsl'
 import { DRAW_ARGUMENT_OFFSET, type packScene } from './runtime-data'
-import { clusterLayout, instanceLayout, vertexLayout } from './runtime-layout'
+import { clusterReader, instanceReader, vertexReader } from './runtime-layout'
 
 export function clusterGeometry(triangles: number, capacity: number, counters: IndirectStorageBufferAttribute, batchIndex: number) {
   const geometry = new InstancedBufferGeometry()
@@ -15,9 +15,9 @@ export function clusterGeometry(triangles: number, capacity: number, counters: I
 }
 
 export function clusterVertex(packed: ReturnType<typeof packScene>, visibleAttribute: StorageBufferAttribute, offset: number, debug: Node<'uint'> = uint(0)) {
-  const clusters = storage(packed.clusters, clusterLayout, packed.clusterCount).toReadOnly()
-  const instances = storage(packed.instances, instanceLayout, packed.instanceCount).toReadOnly()
-  const vertices = storage(packed.vertices, vertexLayout, packed.vertexCount).toReadOnly()
+  const readCluster = clusterReader(packed.clusters)
+  const readInstance = instanceReader(packed.instances)
+  const readVertex = vertexReader(packed.vertices)
   const indices = storage(packed.indices, 'uint', packed.indexCount).toReadOnly()
   const candidates = storage(packed.candidates, 'uvec4', packed.candidateCount).toReadOnly()
   const visible = storage(visibleAttribute, 'uint', packed.candidateCount).toReadOnly()
@@ -26,20 +26,20 @@ export function clusterVertex(packed: ReturnType<typeof packScene>, visibleAttri
   const position = Fn(() => {
     const candidateId = visible.element(instanceIndex.add(offset)).toVar()
     const candidate = candidates.element(candidateId)
-    const cluster = clusters.element(candidate.x)
-    const instance = instances.element(candidate.y)
-    const draw = cluster.get('draw')
+    const cluster = readCluster(candidate.x)
+    const instance = readInstance(candidate.y)
+    const draw = cluster.draw
     const corner = vertexIndex.mod(3)
     const mirroredCorner = corner.equal(0).select(uint(0), uint(3).sub(corner))
-    const orientedCorner = instance.get('scale').y.lessThan(0).select(mirroredCorner, corner)
+    const orientedCorner = instance.scale.y.lessThan(0).select(mirroredCorner, corner)
     const localIndex = min(vertexIndex.div(3).mul(3).add(orientedCorner), draw.y.sub(1))
     const index = indices.element(draw.x.add(localIndex))
-    const vertex = vertices.element(index)
-    normalLocal.assign(instance.get('normal').mul(vec4(vertex.get('normal').xyz, 0)).xyz)
-    uv.assign(vec2(vertex.get('position').w, vertex.get('normal').w))
+    const vertex = readVertex(index)
+    normalLocal.assign(instance.normal.mul(vec4(vertex.normal.xyz, 0)).xyz)
+    uv.assign(vec2(vertex.position.w, vertex.normal.w))
     const shadeId = mix(float(candidate.x), float(draw.z), float(debug.equal(2)))
     color.assign(cos(vec3(0, 2, 4).add(shadeId.mul(2.399963))).mul(0.36).add(0.58))
-    return instance.get('transform').mul(vec4(vertex.get('position').xyz, 1)).xyz
+    return instance.transform.mul(vec4(vertex.position.xyz, 1)).xyz
   })()
   return { position, uv, color }
 }

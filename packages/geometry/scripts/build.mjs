@@ -12,7 +12,7 @@ import { Matrix3, Matrix4, Vector3 } from 'three'
 
 const revision = 'f0a684f11ead064e176775c9b796f82a55910e92'
 const archiveSha256 = '52cec854745cd6b39531e07161a2224778700bdc7c8f0e2d8bc8825efde8af1a'
-const configuration = { max_triangles: 128, min_triangles: 64, partition_size: 16, optimize_bounds: true, simplify_ratio: 0.5, simplify_error_merge_previous: 1, simplify_error_merge_additive: 1, simplify_permissive: true, simplify_fallback_sloppy: true, normal_weight: 0.5, protect_uv_seams: true }
+const configuration = { deduplicate_vertices: 'exact', max_triangles: 128, min_triangles: 64, partition_size: 16, optimize_bounds: true, simplify_ratio: 0.5, simplify_error_merge_previous: 1, simplify_error_merge_additive: 1, simplify_permissive: true, simplify_fallback_sloppy: true, normal_weight: 0.5, protect_uv_seams: true }
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const sha256 = (data) => createHash('sha256').update(data).digest('hex')
 const run = (command, args) => new Promise((resolvePromise, reject) => {
@@ -39,13 +39,16 @@ async function nativeBuilder() {
   await writeFile(archive, archiveData)
   await run('tar', ['-xzf', archive, '-C', cache, '--strip-components=1', `meshoptimizer-${revision}/src`, `meshoptimizer-${revision}/demo/clusterlod.h`, `meshoptimizer-${revision}/LICENSE.md`])
   const source = join(scriptDirectory, 'build-native.cpp')
-  const compiler = process.env.CXX || 'c++'
+  const compiler = process.env.CXX || (process.platform === 'win32' ? 'cl.exe' : 'c++')
   const identity = sha256(Buffer.concat([await readFile(source), Buffer.from(`${revision}:${compiler}:${process.platform}:${process.arch}`)])).slice(0, 16)
-  const executable = join(cache, `build-${identity}`)
+  const executable = join(cache, `build-${identity}${process.platform === 'win32' ? '.exe' : ''}`)
   try { await access(executable) } catch {
     console.log('Compiling the native cluster hierarchy builder')
     const files = (await readdir(join(cache, 'src'))).filter((name) => name.endsWith('.cpp')).sort().map((name) => join(cache, 'src', name))
-    await run(compiler, ['-std=c++17', '-O3', '-DNDEBUG', '-I', join(cache, 'src'), '-I', join(cache, 'demo'), source, ...files, '-o', executable])
+    const args = /(^|[\\/])cl(\.exe)?$/i.test(compiler)
+      ? ['/nologo', '/std:c++17', '/O2', '/DNDEBUG', '/EHsc', '/I', join(cache, 'src'), '/I', join(cache, 'demo'), source, ...files, `/Fe:${executable}`, `/Fo:${cache}\\`]
+      : ['-std=c++17', '-O3', '-DNDEBUG', '-I', join(cache, 'src'), '-I', join(cache, 'demo'), source, ...files, '-o', executable]
+    await run(compiler, args)
   }
   return executable
 }
@@ -208,17 +211,27 @@ export async function buildMeshletGeometry(input, outputArgument, source) {
     const buffer = nativeOutput.buffer.slice(nativeOutput.byteOffset, nativeOutput.byteOffset + nativeOutput.byteLength)
     const data = new Uint32Array(buffer, 0, 8)
     if (data[0] !== 0x4f475342) throw new Error('Native builder output signature is invalid')
-    const [, clusterCount, groupCount, indexCount, edgeCount, levelCount] = data
+    const [, clusterCount, groupCount, indexCount, edgeCount, levelCount, vertexCount, sourceIndexCount] = data
     let offset = 32
     const section = (Type, count) => { const value = new Type(buffer, offset, count); offset += count * 4; return value }
+    const vertices = section(Float32Array, vertexCount * 8)
+    const positions = new Float32Array(vertexCount * 3)
+    const normals = new Float32Array(vertexCount * 3)
+    const uvs = new Float32Array(vertexCount * 2)
+    for (let i = 0; i < vertexCount; i++) {
+      positions.set(vertices.subarray(i * 8, i * 8 + 3), i * 3)
+      normals.set(vertices.subarray(i * 8 + 3, i * 8 + 6), i * 3)
+      uvs.set(vertices.subarray(i * 8 + 6, i * 8 + 8), i * 2)
+    }
+    const sourceIndices = section(Uint32Array, sourceIndexCount)
     const arrays = {
-      positions: geometry.positions, normals: geometry.normals, uvs: geometry.uvs,
-      indices: section(Uint32Array, indexCount), sourceIndices: geometry.sourceIndices,
+      positions, normals, uvs,
+      indices: section(Uint32Array, indexCount), sourceIndices,
       clusterData: section(Uint32Array, clusterCount * 8), clusterBounds: section(Float32Array, clusterCount * 4), clusterLod: section(Float32Array, clusterCount * 12),
       groupData: section(Uint32Array, groupCount * 4), groupBounds: section(Float32Array, groupCount * 8), groupChildren: section(Uint32Array, edgeCount),
     }
     const metadata = {
-      name: input.name ?? basename(outputPath, '.meshlets'), sourceTriangles: geometry.sourceIndices.length / 3, sourceVertices: geometry.positions.length / 3,
+      name: input.name ?? basename(outputPath, '.meshlets'), sourceTriangles: sourceIndexCount / 3, sourceVertices: vertexCount,
       clusterCount, groupCount, levelCount, maxClusterTriangles: 128, bounds: geometry.bounds,
       primitives: geometry.primitives, materials: geometry.materials,
       builder: { project: 'https://github.com/zeux/meshoptimizer', revision, archiveSha256, configuration },
