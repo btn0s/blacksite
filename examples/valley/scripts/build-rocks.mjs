@@ -5,5 +5,4 @@ import { buildGltfMeshes } from '../../../packages/geometry/scripts/build.mjs'
 const assets = join(homedir(), 'dev/owned-assets')
 for (const [source, destination] of [
   ['rileyb3d/field-rock.glb', 'field-rock'],
-  ['polyhaven/coastal_cliff_01/coastal_cliff_01.gltf', 'coastal-cliff'],
 ]) await buildGltfMeshes(join(assets, source), join(assets, 'meshlets', destination))

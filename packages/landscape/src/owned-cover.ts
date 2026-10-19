@@ -2,7 +2,7 @@ import { Group, Vector3 } from 'three'
 import type { Camera } from 'three'
 import type { WebGPURenderer } from 'three/webgpu'
 import { vec4 } from 'three/tsl'
-import { createGpuFoliage, type GpuFoliageStats } from './gpu-foliage'
+import { createGpuFoliage, type FoliageTint, type GpuFoliageStats } from './gpu-foliage'
 import type { FoliageModel } from './foliage-model'
 import { bakeImpostor } from './impostor'
 import type { CoverGround } from './nodes'
@@ -22,6 +22,7 @@ export interface OwnedCoverFamily {
   readonly lodRange?: readonly [number, number]
   readonly shadowDistance?: number
   readonly yOffset?: number
+  readonly tint?: FoliageTint
 }
 
 export interface OwnedCoverOptions {
@@ -86,6 +87,7 @@ export function createOwnedCover(options: OwnedCoverOptions) {
       shadowLayer: options.shadowLayer,
       fallbackDistance,
       windStrength: family.windStrength,
+      tint: family.tint,
       alphaToCoverage: options.alphaToCoverage,
     })
     foliage.object.name = `Owned cover · ${family.name}`

@@ -8,6 +8,7 @@ export * from './cover'
 export * from './trees'
 export * from './impostor'
 export * from './forest'
+export * from './forest-coverage'
 export * from './nodes'
 
 export * from './foliage-model'

@@ -124,6 +124,8 @@ export interface ImpostorMaterialOptions {
   readonly alphaToCoverage?: boolean
   readonly singleFrame?: boolean
   readonly tint?: readonly [number, number, number]
+  readonly tintNode?: Node<'vec3'>
+  readonly coverageNode?: Node<'float'>
   readonly contact?: number
   readonly blur?: number
   readonly farTint?: readonly [number, number, number]
@@ -153,7 +155,7 @@ export function createImpostorMaterial(options: ImpostorMaterialOptions): MeshSt
   const distance = length(toCamera)
   const rootDistance = length((options.distanceOrigin ?? cameraPosition).sub(instance.xyz))
   const fadeIn = smoothstep(range.x, range.y, rootDistance)
-  const fadeOut = float(1).sub(smoothstep(range.z, range.w, rootDistance))
+  const fadeOut = float(1).sub(smoothstep(range.z, range.w, rootDistance)).mul(options.coverageNode ?? float(1))
   const direction = options.orthographic ? normalize(cameraWorldMatrix.element(2).xyz) : toCamera.div(max(distance, 0.001))
   const local = normalize(vec3(c.mul(direction.x).sub(s.mul(direction.z)), max(direction.y, 0).add(0.0001), s.mul(direction.x).add(c.mul(direction.z))))
   const oct = local.div(local.abs().x.add(local.abs().y).add(local.abs().z))
@@ -172,7 +174,7 @@ export function createImpostorMaterial(options: ImpostorMaterialOptions): MeshSt
   const previousUp = select(previousLocal.y.greaterThan(0.999), vec3(0, 0, -1), vec3(0, 1, 0))
   const previousRight = normalize(cross(previousUp, previousLocal))
   const previousRootDistance = length(previousCamera.sub(instance.xyz))
-  const previousSize = shape.w.mul(scale).mul(2).mul(step(0.0001, smoothstep(range.x, range.y, previousRootDistance).mul(float(1).sub(smoothstep(range.z, range.w, previousRootDistance)))))
+  const previousSize = shape.w.mul(scale).mul(2).mul(step(0.0001, smoothstep(range.x, range.y, previousRootDistance).mul(float(1).sub(smoothstep(range.z, range.w, previousRootDistance))).mul(options.coverageNode ?? float(1))))
   const previousSway = previousWind.sample(instance.xz).mul(0.025).mul(shape.w).mul(scale).mul(lift.mul(lift))
   const previousPosition = centre.add(rotate(previousRight).mul(positionGeometry.x).add(rotate(cross(previousLocal, previousRight)).mul(positionGeometry.y)).mul(previousSize)).add(vec3(previousWind.direction.x, 0, previousWind.direction.y).mul(previousSway))
   const fade = varying(vec3(fadeIn, fadeOut, smoothstep(range.y, range.w, rootDistance)))
@@ -200,7 +202,7 @@ export function createImpostorMaterial(options: ImpostorMaterialOptions): MeshSt
   const sphere = normalize(offset.add(view.mul(depth)))
   const worldNormal = normalize(mix(baked, sphere, mix(0.55, 0.75, fade.z)))
   const contact = mix(0.42, 1, smoothstep(-0.85, 0.35, offset.y)).mul(mix(0.78, 1, smoothstep(0, 0.55, depth)))
-  const albedoColor = albedo.rgb.div(max(coverage, 0.001)).mul(vec3(...(options.tint ?? [1, 1, 1]))).mul(mix(vec3(1), vec3(...(options.farTint ?? [1, 1, 1])), fade.z.mul(fade.z))).mul(mix(1, contact, options.contact ?? 1))
+  const albedoColor = albedo.rgb.div(max(coverage, 0.001)).mul(vec3(...(options.tint ?? [1, 1, 1]))).mul(options.tintNode ?? vec3(1)).mul(mix(vec3(1), vec3(...(options.farTint ?? [1, 1, 1])), fade.z.mul(fade.z))).mul(mix(1, contact, options.contact ?? 1))
   material.positionNode = Fn(() => { positionPrevious.assign(previousPosition); return position })()
   material.colorNode = albedoColor
   material.outputNode = vec4(mix(output.rgb, uniform(new Color('#80a6ff')), options.lodView ?? float(0)), output.a)

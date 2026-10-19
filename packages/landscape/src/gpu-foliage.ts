@@ -2,11 +2,12 @@ import { Box3, Color, Frustum, Group, InstancedBufferGeometry, Matrix4, Mesh, Pl
 import type { Camera, Material } from 'three'
 import { IndirectStorageBufferAttribute, StorageBufferAttribute, StorageInstancedBufferAttribute } from 'three/webgpu'
 import type { MeshStandardNodeMaterial, WebGPURenderer } from 'three/webgpu'
-import { Fn, If, Loop, Return, atan, atomicAdd, atomicLoad, atomicStore, bool, cos, float, instanceIndex, mat4, max, mix, normalGeometry, normalLocal, output, positionGeometry, positionPrevious, screenCoordinate, sin, smoothstep, storage, transformNormal, uint, uniform, uniformArray, varying, vec3, vec4 } from 'three/tsl'
+import { Fn, If, Loop, Return, atan, atomicAdd, atomicLoad, atomicStore, bool, cos, float, floor, instanceIndex, mat4, materialColor, max, mix, normalGeometry, normalLocal, output, positionGeometry, positionPrevious, screenCoordinate, sin, smoothstep, storage, transformNormal, uint, uniform, uniformArray, varying, vec3, vec4 } from 'three/tsl'
 import type { FoliageModel, FoliagePrimitive } from './foliage-model'
 import { createImpostorMaterial, type ImpostorAtlas } from './impostor'
-import { createWindNodes, landscapeDither } from './nodes'
+import { createWindNodes, landscapeDither, landscapeHash, landscapeNoise } from './nodes'
 import type { Wind } from './wind'
+import { forestDomainWeight, type ForestCoverage } from './forest-coverage'
 
 export interface GpuFoliageOptions {
   readonly renderer: WebGPURenderer
@@ -26,6 +27,16 @@ export interface GpuFoliageOptions {
   readonly singleFrame?: boolean
   readonly impostorBlur?: number
   readonly impostorFarTint?: readonly [number, number, number]
+  readonly tint?: FoliageTint
+  readonly coverage?: ForestCoverage
+}
+
+export interface FoliageTint {
+  readonly low: readonly [number, number, number]
+  readonly high: readonly [number, number, number]
+  readonly patchSize?: number
+  readonly individual?: number
+  readonly seed?: number
 }
 
 export interface GpuFoliageStats {
@@ -88,6 +99,13 @@ export function createGpuFoliage(options: GpuFoliageOptions) {
   const boundCentre = uniform(bounds.center)
   const boundRadius = bounds.radius + Math.max(0.2, model.height * windStrength)
   const triangleCounts = [model.triangles, lod?.triangles ?? 0, 2]
+  const tintAt = (root: ReturnType<typeof vec3>) => {
+    const tint = options.tint
+    if (!tint) return vec3(1)
+    const patch = landscapeNoise(root.xz.div(tint.patchSize ?? 90), tint.seed ?? 97)
+    const individual = landscapeHash(floor(root.xz.mul(4)), tint.seed ?? 97)
+    return varying(mix(vec3(...tint.low), vec3(...tint.high), mix(patch, individual, tint.individual ?? 0.25)))
+  }
   const fadeFor = (lane: number, distance: ReturnType<typeof float>) => {
     const noLod = lodEnabled.equal(0)
     const bounded = noLod.or(cullingEnabled.equal(0))
@@ -133,8 +151,10 @@ export function createGpuFoliage(options: GpuFoliageOptions) {
       positionPrevious.assign(base.add(windOffset(previousWind)))
       return base.add(windOffset(wind))
     })()
+    if (options.tint) material.colorNode = vec4(material.colorNode ?? materialColor).mul(vec4(tintAt(root), 1))
     const distance = varying(viewer.sub(root).length())
-    const fade = fadeFor(lane, distance)
+    const domainWeight = options.coverage ? forestDomainWeight(options.coverage, root.xz) : float(1)
+    const fade = fadeFor(lane, distance).mul(domainWeight)
     material.maskNode = landscapeDither(screenCoordinate.xy).lessThan(fade)
     material.maskShadowNode = material.maskNode
     material.alphaToCoverage = options.alphaToCoverage === true && material.alphaTest > 0
@@ -169,6 +189,8 @@ export function createGpuFoliage(options: GpuFoliageOptions) {
       distanceOrigin: viewer, orthographic: shadow,
       alphaToCoverage: options.alphaToCoverage, singleFrame: options.singleFrame, blur: options.impostorBlur,
       farTint: options.impostorFarTint, lodView,
+      tintNode: tintAt(transform.element(3).xyz),
+      coverageNode: options.coverage ? forestDomainWeight(options.coverage, transform.element(3).xz) : undefined,
       previousCamera: previousViewer, previousWindTime: previousTime,
       instance: vec4(transform.element(3).xyz, atan(transform.element(2).x, transform.element(0).x)),
       scale: transform.element(0).xyz.length(),

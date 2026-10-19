@@ -7,6 +7,7 @@ import { heightAt as fieldHeight, heightTexture, type Heightfield } from './heig
 import type { MeshStandardNodeMaterial } from 'three/webgpu'
 import type { CoverGround } from './nodes'
 import { createTerrainMaterial } from './terrain-nodes'
+import type { ForestCoverage } from './forest-coverage'
 
 export interface TerrainSources {
   readonly near: Heightfield
@@ -59,6 +60,15 @@ export interface TerrainLayerSpec {
   readonly normalScale: number
 }
 
+export interface CanopySpec {
+  readonly height: number
+  readonly crown: number
+  readonly forest: ForestCoverage
+  readonly colors: readonly [readonly [number, number, number], readonly [number, number, number]]
+  readonly broadleaf?: number
+  readonly dither?: boolean
+}
+
 export interface TerrainOptions {
   readonly sources: TerrainSources
   readonly uniforms?: TerrainUniforms
@@ -70,6 +80,7 @@ export interface TerrainOptions {
   readonly detailDistance?: number
   readonly shadowDistance?: number
   readonly cover?: { readonly ground: CoverGround }
+  readonly canopy?: CanopySpec
 }
 
 export interface Terrain {
@@ -143,7 +154,7 @@ export function createTerrain(options: TerrainOptions): Terrain {
       const d = corners[(j + 1) * (side + 1) + i + 1]!
       const centre = terrainHeightAt(sources, rootOrigin.x + (i + 0.5) * leafSize, rootOrigin.y + (j + 0.5) * leafSize)
       min[j * side + i] = Math.min(a, b, c, d, centre) - 6
-      max[j * side + i] = Math.max(a, b, c, d, centre) + 6
+      max[j * side + i] = Math.max(a, b, c, d, centre) + 6 + (options.canopy?.height ?? 0)
     }
     pyramid.push({ min, max, side })
     let current = pyramid[0]!

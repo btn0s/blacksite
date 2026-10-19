@@ -31,8 +31,9 @@ The player sees one forest at every distance. Authored meshes transition through
 | Original mesh | Nearby trunks, branches and alpha-tested leaves |
 | Authored mesh LOD, when supplied | Lower triangle count before the mesh becomes an impostor |
 | Octahedral impostor | One camera-facing quad per tree through the visible forest's far boundary |
+| Shared-density canopy | Raised terrain canopy beyond the final impostors, driven by the same forest density field |
 
-Keep transition ranges and population limits in the game's tier settings. Terrain always renders its actual ground height and material; the forest owns all tree silhouettes. Extend the final impostor range to cover the visible forest population, then fade into the atmosphere.
+Keep transition ranges and population limits in the game's tier settings. One continuous forest density field drives placed trees, impostors and the distant raised terrain canopy. Store that density in terrain surface `.b`; canopy detail shades crowns within it and never invents independent clearings. Use the exact final impostor fade band for the canopy's height and colour handover, and let atmosphere soften the far forest into the horizon. Terrain physics retains the actual ground height.
 
 - **Bake the impostor from the same tree.** An impostor painted separately from its mesh never matches its silhouette. `bakeImpostor` renders the loaded authored model from a hemi-octahedral grid into albedo and normal atlases. If the model or material changes, rebake; never hand-edit an atlas.
 - **Blend four frames, not one,** so the tree turns smoothly as you walk round it. Snap to the nearest frame on the low tier only.

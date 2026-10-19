@@ -1,21 +1,18 @@
+import { bookmarkSites } from './layout'
+
 export type Vec3 = [number, number, number]
 export type Tier = 'high' | 'medium' | 'low'
 
 export const site = {
-  scanCentre: [632, 720] as const,
-  verticalScale: 1,
-  walkable: 1024,
+  walkable: 4096,
   forestExtent: 6000,
-  nearSize: 1025,
+  nearSize: 2049,
   farExtent: 16384,
   farSize: 2049,
-  band: 200,
+  band: 256,
   layerSize: 1024,
-  meadowCentre: [10, 10] as const,
-  meadowRadius: 230,
-  treeline: 980,
-  spawn: [6, 14] as const,
-  spawnYaw: -2.2,
+  spawn: bookmarkSites[0].at,
+  spawnYaw: Math.atan2(bookmarkSites[0].target[2] - bookmarkSites[0].at[1], bookmarkSites[0].target[0] - bookmarkSites[0].at[0]),
   far: 16000,
 } as const
 
@@ -66,12 +63,6 @@ export const quality = {
   popLimit: 0.035,
 } as const
 
-export type ValleyBookmark = { name: string; position: Vec3; target: Vec3; fov: number; note: string }
+export type ValleyBookmark = { id: number; name: string; position: Vec3; target: Vec3; note: string }
 
-export const bookmarks: ValleyBookmark[] = [
-  { name: 'meadow', position: [-14, 3.2, 30], target: [40, 0.6, -40], fov: 55, note: 'Eye level in the meadow grass, looking down the hill toward the forest edge' },
-  { name: 'canopy', position: [-150, 30, -150], target: [-330, -20, -420], fov: 55, note: 'Mid-distance forest canopy: near trees, impostors and the crossfade band' },
-  { name: 'valley', position: [60, 26, -60], target: [-900, -60, -1500], fov: 50, note: 'Across the forested valley to the far ridges in haze' },
-  { name: 'ridge', position: [210, 70, 230], target: [-1800, 120, -2600], fov: 45, note: 'From the high meadow to the mountains at the horizon' },
-]
-
+export const bookmarks = bookmarkSites

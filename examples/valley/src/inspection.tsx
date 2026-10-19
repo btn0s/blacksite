@@ -53,9 +53,9 @@ export function Inspection({ shared, walker, inspector, telemetry }: { shared: S
         inspector.registerTechnique({ id: 'tree-culling', label: 'GPU tree culling', description: `Off: all trees within ${landscape.forest.fallbackDistance} m.`, enabled: true, setEnabled: landscape.forest.setCullingEnabled }),
         inspector.registerTechnique({ id: 'cover-culling', label: 'GPU ground-cover culling', description: `Off: all cover within ${landscape.cover.fallbackDistance} m.`, enabled: true, setEnabled: landscape.cover.setCullingEnabled }),
         inspector.registerTechnique({ id: 'cover-lod', label: 'Ground-cover impostors', description: `Off: source meshes within ${landscape.cover.fallbackDistance} m.`, enabled: true, setEnabled: landscape.cover.setLodEnabled }),
-        inspector.registerTechnique({ id: 'meshlet-lod', label: 'Rock meshlet LOD', description: 'Off: source detail within 120 m.', enabled: true, setEnabled: landscape.rocks.setLodEnabled }),
-        inspector.registerTechnique({ id: 'meshlet-occlusion', label: 'Rock HiZ culling', description: 'Terrain, trees and rocks occlude rock clusters.', enabled: true, setEnabled: landscape.rocks.setOcclusionEnabled }),
-        inspector.registerTechnique({ id: 'meshlet-shadows', label: 'Rock cascade shadows', description: 'Each sun cascade selects its own clusters.', enabled: true, setEnabled: landscape.rocks.setShadowEnabled }),
+        inspector.registerTechnique({ id: 'meshlet-lod', label: 'Stone meshlet LOD', description: 'Off: source detail within 120 m.', enabled: true, setEnabled: landscape.rocks.setLodEnabled }),
+        inspector.registerTechnique({ id: 'meshlet-occlusion', label: 'Stone HiZ culling', description: 'Terrain, trees and stonework occlude stone clusters.', enabled: true, setEnabled: landscape.rocks.setOcclusionEnabled }),
+        inspector.registerTechnique({ id: 'meshlet-shadows', label: 'Stone cascade shadows', description: 'Each sun cascade selects its own clusters.', enabled: true, setEnabled: landscape.rocks.setShadowEnabled }),
       ]
     }
     const stats = [landscape.terrain.stats, landscape.cover.stats, landscape.forest.stats, landscape.rocks.stats]

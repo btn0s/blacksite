@@ -2,8 +2,9 @@ import { Group } from 'three'
 import type { Camera, Material } from 'three'
 import type { WebGPURenderer } from 'three/webgpu'
 import { bakeImpostor, type ImpostorAtlas } from './impostor'
-import { createGpuFoliage } from './gpu-foliage'
+import { createGpuFoliage, type FoliageTint } from './gpu-foliage'
 import type { FoliageModel } from './foliage-model'
+import type { ForestCoverage } from './forest-coverage'
 import { hash2 } from './random'
 import type { Wind } from './wind'
 
@@ -11,6 +12,7 @@ export interface ForestSpecies {
   readonly model: FoliageModel
   readonly lod?: FoliageModel
   readonly scale?: readonly [number, number]
+  readonly tint?: FoliageTint
 }
 
 export interface ForestOptions {
@@ -19,10 +21,10 @@ export interface ForestOptions {
   readonly species: readonly ForestSpecies[]
   readonly density: (x: number, z: number) => number
   readonly choose: (x: number, z: number, random: number) => number
-  readonly priority?: (x: number, z: number) => number
   readonly heightAt: (x: number, z: number) => number
   readonly bounds: { readonly min: readonly [number, number]; readonly max: readonly [number, number] }
   readonly spacing: number
+  readonly edgeFade?: number
   readonly count: number
   readonly near: readonly [number, number]
   readonly lodRange?: readonly [number, number]
@@ -45,6 +47,7 @@ export interface Forest {
   readonly stats: { trees: number; candidates: number; near: number; middle: number; proxies: number; impostors: number; bakeMs: number; sceneTriangles: number; drawnTriangles: number; fullDetailTriangles: number; candidateInstances: number; drawnInstances: number; culledInstances: number; cappedInstances: number }
   readonly fallbackDistance: number
   readonly positions: Float32Array
+  readonly coverage: ForestCoverage
   setLodView(enabled: boolean): void
   setLodEnabled(enabled: boolean): void
   setCullingEnabled(enabled: boolean): void
@@ -71,13 +74,20 @@ export function createForest(options: ForestOptions): Forest {
       if (density <= 0.02 || hash2(gx, gz, seed + 2) > density) continue
       const kind = options.choose(x, z, hash2(gx, gz, seed + 3))
       const range = species[kind]?.scale ?? [0.8, 1.2]
-      candidates.push({ x, z, rank: hash2(gx, gz, seed + 4) * (options.priority?.(x, z) ?? 1), species: kind, yaw: hash2(gx, gz, seed + 5) * Math.PI * 2, scale: range[0] + (range[1] - range[0]) * hash2(gx, gz, seed + 6) })
+      candidates.push({ x, z, rank: hash2(gx, gz, seed + 4), species: kind, yaw: hash2(gx, gz, seed + 5) * Math.PI * 2, scale: range[0] + (range[1] - range[0]) * hash2(gx, gz, seed + 6) })
     }
   }
   stats.candidates = candidates.length
   if (candidates.length > options.count) candidates.sort((a, b) => a.rank - b.rank).length = options.count
   const total = candidates.length
   stats.trees = total
+  const coverage: ForestCoverage = {
+    bounds: options.bounds,
+    edgeFade: options.edgeFade ?? Math.min(500, (maxX - minX) * 0.15, (maxZ - minZ) * 0.15),
+    range: options.far,
+    spacing,
+    densityScale: stats.candidates > 0 ? total / stats.candidates : 0,
+  }
   const cellSize = 64
   const cellsX = Math.ceil((maxX - minX) / cellSize)
   const cellsZ = Math.ceil((maxZ - minZ) / cellSize)
@@ -122,6 +132,8 @@ export function createForest(options: ForestOptions): Forest {
       fallbackDistance,
       alphaToCoverage: options.alphaToCoverage, singleFrame: options.singleFrame,
       impostorBlur: options.impostorBlur, impostorFarTint: options.impostorFarTint,
+      tint: entry.tint,
+      coverage,
     })
     object.add(group.object)
     materials.push(...group.materials)
@@ -144,7 +156,7 @@ export function createForest(options: ForestOptions): Forest {
     }
   }
   return {
-    object, materials, atlases, stats, positions, fallbackDistance,
+    object, materials, atlases, stats, positions, fallbackDistance, coverage,
     setLodView(enabled) { for (const group of groups) group.setLodView(enabled) },
     setLodEnabled(enabled) { for (const group of groups) group.setLodEnabled(enabled) },
     setCullingEnabled(enabled) { for (const group of groups) group.setCullingEnabled(enabled) },

@@ -15,6 +15,7 @@
 | Patch | A world-grid cell of procedural cover. Each draws a prefix of one shared blade buffer, flipped by a seed from its cell. |
 | Ring | A distance band of patches that draws a shorter prefix. Rings save cost; blades thin individually. |
 | Impostor | One quad per foliage instance, sampled from a hemi-octahedral atlas baked from its original model. The main view faces the walking camera; the shadow view faces the active orthographic light. |
+| Canopy | Optional raised terrain beyond tree impostors. It reads the same forest density from surface `.b` and uses the exact impostor fade band; crown detail cannot invent a separate forest distribution. |
 | Shadow lane | A separate GPU-compacted representation set on `proxyLayer`, selected against the active cascade frustum. It uses authored meshes nearby and same-model atlas silhouettes farther away. |
 | Wind | One `Wind` from `createWind`; CPU `sample`/`gust` equal `createWindNodes(wind).sample`/`.gust`. |
 
@@ -66,4 +67,4 @@ Original meshes are green, authored mesh LOD is amber, and impostors are blue in
 
 ## Rules
 
-Terrain always renders the actual heightfield and its ground materials; authored forest meshes and same-model impostors own trees at every visible distance. Keep the package free of game themes, assets and React. Use native TSL material nodes so lighting, fog, shadows and the look still apply. Do not restore string shader patches or a second renderer path. Placement is deterministic from seeds and world positions; nothing may depend on the camera path. Don't add code comments.
+One continuous forest density drives placed trees, same-model impostors and optional distant raised terrain canopy. Share that density through terrain surface `.b`; never invent an independent canopy mask that disagrees with tree clearings. Use the same impostor fade band for canopy height and colour. Physics continues to sample the actual ground heightfield. Keep the package free of game themes, assets and React. Use native TSL material nodes so lighting, fog, shadows and the look still apply. Do not restore string shader patches or a second renderer path. Placement is deterministic from seeds and world positions; nothing may depend on the camera path. Don't add code comments.

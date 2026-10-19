@@ -1,8 +1,10 @@
 import { MeshStandardNodeMaterial, type Node } from 'three/webgpu'
-import { Fn, If, attribute, cameraViewMatrix, clamp, color, cross, dFdx, dFdy, dot, float, floor, fract, int, length, mat3, max, mix, normalize, normalLocal, output, positionGeometry, select, sin, smoothstep, texture, uniform, uniformArray, varying, vec2, vec3, vec4 } from 'three/tsl'
+import { Fn, If, attribute, cameraViewMatrix, clamp, color, cross, dFdx, dFdy, dot, float, floor, fract, int, length, mat3, max, mix, normalize, normalLocal, output, positionGeometry, screenCoordinate, select, sin, smoothstep, texture, uniform, uniformArray, varying, vec2, vec3, vec4 } from 'three/tsl'
 import type { Vector2, Vector3, DataArrayTexture } from 'three'
 import type { TerrainOptions, TerrainUniforms } from './terrain'
-import { createTerrainNodes, landscapeNoise } from './nodes'
+import { createTerrainNodes, landscapeDither, landscapeNoise } from './nodes'
+import { canopyCoverage, canopySurface } from './canopy-nodes'
+import { forestRepresentationWeight } from './forest-coverage'
 
 function tileSample(image: DataArrayTexture, uv: Node<'vec2'>, layer: number, mean: Node<'vec4'>) {
   const p = uv.mul(3.4641016)
@@ -37,7 +39,11 @@ export function createTerrainMaterial(options: TerrainOptions, source: TerrainUn
   const grid = positionGeometry.xz.sub(fract(positionGeometry.xz.mul(0.5)).mul(2).mul(factor))
   const root = info.xy.add(grid.mul(info.z))
   const height = terrain.height(root)
-  const position = vec3(root.x, height, root.y)
+  const distance = length(vec3(root.x, height, root.y).sub(eye))
+  const canopy = options.canopy
+  const canopyBlend = canopy ? float(1).sub(forestRepresentationWeight(canopy.forest, root, distance)) : float(0)
+  const canopyWeight = canopy ? canopyCoverage(terrain.surface(root, 0).b, canopy).mul(canopyBlend) : float(0)
+  const position = vec3(root.x, height.add(canopyWeight.mul(canopy?.height ?? 0)), root.y)
   const world = varying(position)
   const nodeLevel = varying(info.w)
   const lodView = uniform(false)
@@ -48,7 +54,7 @@ export function createTerrainMaterial(options: TerrainOptions, source: TerrainUn
     const variation = landscapeNoise(world.xz.mul(0.045), 21)
     const macro = landscapeNoise(world.xz.mul(0.011), 23).mul(0.6).add(landscapeNoise(world.xz.mul(0.06), 29).mul(0.4))
     const slope = float(1).sub(base.y)
-    const forest = smoothstep(0.3, 0.75, surface.b.add(variation.sub(0.5).mul(0.25)))
+    const forest = surface.b.clamp(0, 1)
     const path = smoothstep(0.25, 0.65, surface.a.add(variation.sub(0.5).mul(0.2)))
     const rock = smoothstep(0.24, 0.42, slope.add(macro.sub(0.5).mul(0.12))).mul(float(1).sub(smoothstep(0.3, 0.6, surface.b).mul(0.85)))
     const rawWeights = vec4(float(1).sub(forest).mul(float(1).sub(path)).mul(float(1).sub(rock)), forest.mul(float(1).sub(path)).mul(float(1).sub(rock)), path.mul(float(1).sub(rock)), rock)
@@ -89,7 +95,18 @@ export function createTerrainMaterial(options: TerrainOptions, source: TerrainUn
     }
     const tangent = normalize(cross(base, vec3(0, 0, 1)))
     const bitangent = cross(tangent, base)
-    const normal = normalize(tangent.mul(detailNormal.x).sub(bitangent.mul(detailNormal.y)).add(base.mul(detailNormal.z)))
+    const normal = normalize(tangent.mul(detailNormal.x).sub(bitangent.mul(detailNormal.y)).add(base.mul(detailNormal.z))).toVar()
+    if (canopy) {
+      const transition = float(1).sub(forestRepresentationWeight(canopy.forest, world.xz, length(vec3(world.x, terrain.height(world.xz), world.z).sub(eye))))
+      If(transition.greaterThan(0), () => {
+        const crown = canopySurface(world, base, eye, canopy)
+        const coverage = canopyCoverage(surface.b, canopy)
+        const handover = select(landscapeDither(screenCoordinate.xy).greaterThanEqual(float(1).sub(transition)), 1, 0).mul(coverage)
+        albedo.assign(mix(albedo, crown.albedo, handover))
+        normal.assign(normalize(mix(normal, crown.normal, handover)))
+        roughness.assign(mix(roughness, 0.96, handover))
+      })
+    }
     return mat3(albedo, normal, vec3(roughness, 0, 0))
   })().toVar()
   const debug = select(nodeLevel.lessThan(0.5), color('#62d995'), select(nodeLevel.lessThan(1.5), color('#f2c45a'), color('#80a6ff')))
