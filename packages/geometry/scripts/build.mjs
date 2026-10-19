@@ -1,0 +1,316 @@
+import { createHash } from 'node:crypto'
+import { spawn } from 'node:child_process'
+import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { NodeIO } from '@gltf-transform/core'
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
+import { cloneDocument } from '@gltf-transform/functions'
+import { MeshoptDecoder } from 'meshoptimizer'
+import { Matrix3, Matrix4, Vector3 } from 'three'
+
+const revision = 'f0a684f11ead064e176775c9b796f82a55910e92'
+const archiveSha256 = '52cec854745cd6b39531e07161a2224778700bdc7c8f0e2d8bc8825efde8af1a'
+const configuration = { max_triangles: 128, min_triangles: 64, partition_size: 16, optimize_bounds: true, simplify_ratio: 0.5, simplify_error_merge_previous: 1, simplify_error_merge_additive: 1, simplify_permissive: true, simplify_fallback_sloppy: false, normal_weight: 0.5, protect_uv_seams: true }
+const scriptDirectory = dirname(fileURLToPath(import.meta.url))
+const sha256 = (data) => createHash('sha256').update(data).digest('hex')
+const run = (command, args) => new Promise((resolvePromise, reject) => {
+  const child = spawn(command, args, { stdio: 'inherit' })
+  child.once('error', reject)
+  child.once('exit', (code) => code === 0 ? resolvePromise() : reject(new Error(`${command} exited with ${code}`)))
+})
+
+let nativeBuilderPromise
+const getNativeBuilder = () => nativeBuilderPromise ??= nativeBuilder()
+
+async function nativeBuilder() {
+  const cache = process.env.BLACKSITE_GEOMETRY_CACHE || join(tmpdir(), `blacksite-geometry-meshopt-${revision}`)
+  await mkdir(cache, { recursive: true })
+  const archive = join(cache, 'source.tar.gz')
+  let archiveData
+  try { archiveData = await readFile(archive) } catch {
+    console.log('Downloading the pinned MIT geometry builder')
+    const response = await fetch(`https://codeload.github.com/zeux/meshoptimizer/tar.gz/${revision}`)
+    if (!response.ok) throw new Error(`Source download failed: ${response.status}`)
+    archiveData = Buffer.from(await response.arrayBuffer())
+  }
+  if (sha256(archiveData) !== archiveSha256) throw new Error('Geometry builder archive checksum mismatch')
+  await writeFile(archive, archiveData)
+  await run('tar', ['-xzf', archive, '-C', cache, '--strip-components=1', `meshoptimizer-${revision}/src`, `meshoptimizer-${revision}/demo/clusterlod.h`, `meshoptimizer-${revision}/LICENSE.md`])
+  const source = join(scriptDirectory, 'build-native.cpp')
+  const compiler = process.env.CXX || 'c++'
+  const identity = sha256(Buffer.concat([await readFile(source), Buffer.from(`${revision}:${compiler}:${process.platform}:${process.arch}`)])).slice(0, 16)
+  const executable = join(cache, `build-${identity}`)
+  try { await access(executable) } catch {
+    console.log('Compiling the native cluster hierarchy builder')
+    const files = (await readdir(join(cache, 'src'))).filter((name) => name.endsWith('.cpp')).sort().map((name) => join(cache, 'src', name))
+    await run(compiler, ['-std=c++17', '-O3', '-DNDEBUG', '-I', join(cache, 'src'), '-I', join(cache, 'demo'), source, ...files, '-o', executable])
+  }
+  return executable
+}
+
+async function readGeometry(path) {
+  await MeshoptDecoder.ready
+  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.decoder': MeshoptDecoder })
+  const document = await io.read(path)
+  const root = document.getRoot()
+  const scene = root.getDefaultScene() || root.listScenes()[0]
+  if (!scene) throw new Error('The source has no scene')
+  const entries = []
+  scene.traverse((node) => {
+    const mesh = node.getMesh()
+    if (!mesh) return
+    if (node.getSkin()) throw new Error('The geometry builder accepts static meshes only')
+    for (const primitive of mesh.listPrimitives()) {
+      if (primitive.getMode() !== 4 || primitive.listTargets().length) throw new Error('The geometry builder accepts static triangle primitives only')
+      const position = primitive.getAttribute('POSITION')
+      if (!position) throw new Error('A primitive has no positions')
+      entries.push({ primitive, matrix: new Matrix4().fromArray(node.getWorldMatrix()), count: position.getCount() })
+    }
+  })
+  if (!entries.length) throw new Error('The source contains no mesh geometry')
+  return geometryFromEntries(entries, root.listMaterials())
+}
+
+function geometryFromEntries(entries, materials) {
+  const vertexCount = entries.reduce((sum, entry) => sum + entry.count, 0)
+  const indexCount = entries.reduce((sum, entry) => sum + (entry.primitive.getIndices()?.getCount() ?? entry.count), 0)
+  const positions = new Float32Array(vertexCount * 3)
+  const normals = new Float32Array(vertexCount * 3)
+  const uvs = new Float32Array(vertexCount * 2)
+  const sourceIndices = new Uint32Array(indexCount)
+  const primitives = []
+  let vertexOffset = 0
+  let indexOffset = 0
+  const point = new Vector3()
+  const normalMatrix = new Matrix3()
+  const tuple = []
+  for (const { primitive, matrix, count } of entries) {
+    const position = primitive.getAttribute('POSITION')
+    const normal = primitive.getAttribute('NORMAL')
+    const uv = primitive.getAttribute('TEXCOORD_0')
+    normalMatrix.getNormalMatrix(matrix)
+    for (let i = 0; i < count; i++) {
+      const global = vertexOffset + i
+      position.getElement(i, tuple)
+      point.fromArray(tuple).applyMatrix4(matrix)
+      positions.set([point.x, point.y, point.z], global * 3)
+      if (normal) {
+        normal.getElement(i, tuple)
+        point.fromArray(tuple).applyMatrix3(normalMatrix).normalize()
+        normals.set([point.x, point.y, point.z], global * 3)
+      }
+      if (uv) {
+        uv.getElement(i, tuple)
+        uvs.set([tuple[0], tuple[1]], global * 2)
+      }
+    }
+    const accessor = primitive.getIndices()
+    const countIndices = accessor?.getCount() ?? count
+    if (countIndices % 3) throw new Error('Triangle indices must be divisible by three')
+    for (let i = 0; i < countIndices; i++) sourceIndices[indexOffset + i] = vertexOffset + (accessor ? accessor.getScalar(i) : i)
+    if (matrix.determinant() < 0) for (let i = indexOffset; i < indexOffset + countIndices; i += 3) [sourceIndices[i + 1], sourceIndices[i + 2]] = [sourceIndices[i + 2], sourceIndices[i + 1]]
+    if (!normal) {
+      const a = new Vector3(), b = new Vector3(), c = new Vector3()
+      for (let i = indexOffset; i < indexOffset + countIndices; i += 3) {
+        const ids = [sourceIndices[i], sourceIndices[i + 1], sourceIndices[i + 2]]
+        a.fromArray(positions, ids[0] * 3)
+        b.fromArray(positions, ids[1] * 3).sub(a)
+        c.fromArray(positions, ids[2] * 3).sub(a)
+        b.cross(c)
+        for (const id of ids) for (let axis = 0; axis < 3; axis++) normals[id * 3 + axis] += b.getComponent(axis)
+      }
+      for (let i = vertexOffset; i < vertexOffset + count; i++) {
+        point.fromArray(normals, i * 3).normalize()
+        normals.set([point.x, point.y, point.z], i * 3)
+      }
+    }
+    primitives.push({ indexOffset, indexCount: countIndices, materialIndex: Math.max(0, materials.indexOf(primitive.getMaterial())) })
+    vertexOffset += count
+    indexOffset += countIndices
+  }
+  return {
+    positions, normals, uvs, sourceIndices, primitives,
+    materials: materials.map(describeMaterial),
+  }
+}
+
+function pack(metadata, arrays) {
+  const names = ['positions', 'normals', 'uvs', 'indices', 'sourceIndices', 'clusterData', 'clusterBounds', 'clusterLod', 'groupData', 'groupBounds', 'groupChildren']
+  const json = Buffer.from(JSON.stringify(metadata))
+  const metadataOffset = 32 + names.length * 16
+  let offset = (metadataOffset + json.length + 15) & ~15
+  const entries = names.map((name, id) => {
+    const array = arrays[name]
+    const entry = { id, offset, count: array.length, type: array instanceof Float32Array ? 0 : 1, array }
+    offset += array.byteLength
+    offset = (offset + 15) & ~15
+    return entry
+  })
+  const output = Buffer.alloc(offset)
+  ;[0x4c4d5342, 1, names.length, json.length, output.length, 0, 0, 0].forEach((value, i) => output.writeUInt32LE(value, i * 4))
+  json.copy(output, metadataOffset)
+  for (const { id, offset: start, count, type, array } of entries) {
+    ;[id, start, count, type].forEach((value, i) => output.writeUInt32LE(value, 32 + id * 16 + i * 4))
+    Buffer.from(array.buffer, array.byteOffset, array.byteLength).copy(output, start)
+  }
+  return output
+}
+
+function describeMaterial(material) {
+  return { name: material.getName(), baseColor: material.getBaseColorFactor(), metalness: material.getMetallicFactor(), roughness: material.getRoughnessFactor(), doubleSided: material.getDoubleSided(), alphaMode: material.getAlphaMode(), alphaCutoff: material.getAlphaCutoff(), normalScale: material.getNormalScale() }
+}
+
+function prepareGeometry(input) {
+  const positions = Float32Array.from(input.positions)
+  const normals = Float32Array.from(input.normals)
+  const uvs = Float32Array.from(input.uvs)
+  const sourceIndices = Uint32Array.from(input.indices)
+  const vertexCount = positions.length / 3
+  if (!vertexCount || positions.length % 3 || normals.length !== positions.length || uvs.length !== vertexCount * 2 || sourceIndices.length % 3 || !sourceIndices.length) throw new Error('Geometry requires positions, normals, UVs and triangle indices')
+  if (![positions, normals, uvs].every(array => array.every(Number.isFinite)) || sourceIndices.some(index => index >= vertexCount)) throw new Error('Geometry contains invalid vertex data')
+  const materials = input.materials ?? [{ name: 'Surface', baseColor: [1, 1, 1, 1], metalness: 0, roughness: 1, doubleSided: false, alphaMode: 'OPAQUE', alphaCutoff: 0.5, normalScale: 1 }]
+  const primitives = input.primitives ?? [{ indexOffset: 0, indexCount: sourceIndices.length, materialIndex: 0 }]
+  let expected = 0
+  for (const primitive of primitives) {
+    if (primitive.indexOffset !== expected || primitive.indexCount <= 0 || primitive.indexCount % 3 || !Number.isInteger(primitive.materialIndex) || primitive.materialIndex < 0 || primitive.materialIndex >= materials.length) throw new Error('Geometry primitives must partition indices and reference a material')
+    expected += primitive.indexCount
+  }
+  if (expected !== sourceIndices.length) throw new Error('Geometry primitive ranges do not cover the indices')
+  const vertices = new Float32Array(vertexCount * 8)
+  const bounds = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }
+  for (let i = 0; i < vertexCount; i++) {
+    vertices.set(positions.subarray(i * 3, i * 3 + 3), i * 8)
+    vertices.set(normals.subarray(i * 3, i * 3 + 3), i * 8 + 3)
+    vertices.set(uvs.subarray(i * 2, i * 2 + 2), i * 8 + 6)
+    for (let axis = 0; axis < 3; axis++) {
+      bounds.min[axis] = Math.min(bounds.min[axis], positions[i * 3 + axis])
+      bounds.max[axis] = Math.max(bounds.max[axis], positions[i * 3 + axis])
+    }
+  }
+  return { positions, normals, uvs, sourceIndices, vertices, primitives, materials, bounds }
+}
+
+export async function buildMeshletGeometry(input, outputArgument, source) {
+  const outputPath = resolve(outputArgument)
+  const started = performance.now()
+  const executable = await getNativeBuilder()
+  const geometry = prepareGeometry(input)
+  const work = await mkdtemp(join(tmpdir(), 'blacksite-geometry-build-'))
+  try {
+    const header = new Uint32Array([0x49475342, geometry.positions.length / 3, geometry.sourceIndices.length, geometry.primitives.length])
+    const primitiveData = new Uint32Array(geometry.primitives.flatMap((primitive) => [primitive.indexOffset, primitive.indexCount, primitive.materialIndex]))
+    const sourceData = Buffer.concat([header, geometry.vertices, geometry.sourceIndices, primitiveData].map((array) => Buffer.from(array.buffer, array.byteOffset, array.byteLength)))
+    await writeFile(join(work, 'input.bin'), sourceData)
+    await run(executable, [join(work, 'input.bin'), join(work, 'output.bin')])
+    const nativeOutput = await readFile(join(work, 'output.bin'))
+    const buffer = nativeOutput.buffer.slice(nativeOutput.byteOffset, nativeOutput.byteOffset + nativeOutput.byteLength)
+    const data = new Uint32Array(buffer, 0, 8)
+    if (data[0] !== 0x4f475342) throw new Error('Native builder output signature is invalid')
+    const [, clusterCount, groupCount, indexCount, edgeCount, levelCount] = data
+    let offset = 32
+    const section = (Type, count) => { const value = new Type(buffer, offset, count); offset += count * 4; return value }
+    const arrays = {
+      positions: geometry.positions, normals: geometry.normals, uvs: geometry.uvs,
+      indices: section(Uint32Array, indexCount), sourceIndices: geometry.sourceIndices,
+      clusterData: section(Uint32Array, clusterCount * 8), clusterBounds: section(Float32Array, clusterCount * 4), clusterLod: section(Float32Array, clusterCount * 12),
+      groupData: section(Uint32Array, groupCount * 4), groupBounds: section(Float32Array, groupCount * 8), groupChildren: section(Uint32Array, edgeCount),
+    }
+    const metadata = {
+      name: input.name ?? basename(outputPath, '.meshlets'), sourceTriangles: geometry.sourceIndices.length / 3, sourceVertices: geometry.positions.length / 3,
+      clusterCount, groupCount, levelCount, maxClusterTriangles: 128, bounds: geometry.bounds,
+      primitives: geometry.primitives, materials: geometry.materials,
+      builder: { project: 'https://github.com/zeux/meshoptimizer', revision, archiveSha256, configuration },
+      source: source ?? { sha256: sha256(sourceData), bytes: sourceData.byteLength },
+    }
+    const packed = pack(metadata, arrays)
+    await mkdir(dirname(outputPath), { recursive: true })
+    await writeFile(outputPath, packed)
+    const result = { metadata, output: outputPath, bytes: packed.byteLength, seconds: (performance.now() - started) / 1000 }
+    console.log(JSON.stringify({ output: outputPath, bytes: packed.byteLength, sourceTriangles: metadata.sourceTriangles, clusterCount, groupCount, levelCount, seconds: result.seconds }))
+    return result
+  } finally {
+    await rm(work, { recursive: true, force: true })
+  }
+}
+
+async function writeDocumentMaterials(document, outputPath) {
+  const library = cloneDocument(document)
+  const root = library.getRoot()
+  const geometryExtensions = new Set(['EXT_meshopt_compression', 'KHR_draco_mesh_compression', 'KHR_mesh_quantization', 'EXT_mesh_gpu_instancing', 'KHR_lights_punctual'])
+  for (const extension of root.listExtensionsUsed()) {
+    if (geometryExtensions.has(extension.extensionName)) extension.dispose()
+  }
+  for (const property of [
+    ...root.listScenes(), ...root.listNodes(), ...root.listAnimations(), ...root.listSkins(),
+    ...root.listCameras(), ...root.listMeshes(), ...root.listAccessors(), ...root.listBuffers(),
+  ]) property.dispose()
+  if (root.listTextures().length) library.createBuffer('Material images')
+  await mkdir(dirname(outputPath), { recursive: true })
+  await new NodeIO().registerExtensions(ALL_EXTENSIONS).write(outputPath, library)
+  return { output: outputPath, materials: root.listMaterials().length, textures: root.listTextures().length }
+}
+
+export async function writeMaterialLibrary(inputArgument, outputArgument) {
+  await MeshoptDecoder.ready
+  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.decoder': MeshoptDecoder })
+  return writeDocumentMaterials(await io.read(resolve(inputArgument)), resolve(outputArgument))
+}
+
+export async function buildGltfMeshes(inputArgument, outputArgument) {
+  const inputPath = resolve(inputArgument)
+  const outputDirectory = resolve(outputArgument)
+  await MeshoptDecoder.ready
+  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.decoder': MeshoptDecoder })
+  const document = await io.read(inputPath)
+  const root = document.getRoot()
+  const scene = root.getDefaultScene() || root.listScenes()[0]
+  if (!scene) throw new Error('The source has no scene')
+  const materials = root.listMaterials()
+  const meshes = root.listMeshes()
+  const instances = []
+  const used = new Set()
+  scene.traverse(node => {
+    const mesh = node.getMesh()
+    if (!mesh) return
+    if (node.getSkin()) throw new Error('The geometry builder accepts static meshes only')
+    const meshIndex = meshes.indexOf(mesh)
+    used.add(meshIndex)
+    instances.push({ name: node.getName(), geometry: meshIndex, matrix: node.getWorldMatrix() })
+  })
+  const sourceData = await readFile(inputPath)
+  const source = { sha256: sha256(sourceData), bytes: sourceData.byteLength }
+  const geometries = []
+  for (const meshIndex of used) {
+    const mesh = meshes[meshIndex]
+    const entries = mesh.listPrimitives().map(primitive => {
+      if (primitive.getMode() !== 4 || primitive.listTargets().length) throw new Error('The geometry builder accepts static triangle primitives only')
+      const position = primitive.getAttribute('POSITION')
+      if (!position) throw new Error('A primitive has no positions')
+      return { primitive, matrix: new Matrix4(), count: position.getCount() }
+    })
+    const geometry = geometryFromEntries(entries, materials)
+    const name = mesh.getName() || `geometry-${meshIndex}`
+    const filename = `${meshIndex}-${name.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase()}.meshlets`
+    const { metadata } = await buildMeshletGeometry({ name, ...geometry, indices: geometry.sourceIndices }, join(outputDirectory, filename), source)
+    geometries.push({ meshIndex, name, url: filename, primitives: metadata.primitives, sourceTriangles: metadata.sourceTriangles, bounds: metadata.bounds })
+  }
+  if (!geometries.length) throw new Error('The source contains no mesh geometry')
+  const materialUrl = 'materials.glb'
+  await writeDocumentMaterials(document, join(outputDirectory, materialUrl))
+  const manifest = { source, materialUrl, materials: materials.map(describeMaterial), geometries, instances }
+  await writeFile(join(outputDirectory, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
+  return manifest
+}
+
+async function main() {
+  const [inputArgument, outputArgument] = process.argv.slice(2)
+  if (!inputArgument || !outputArgument) throw new Error('Usage: node packages/geometry/scripts/build.mjs input.glb output.meshlets')
+  const inputPath = resolve(inputArgument)
+  const geometry = await readGeometry(inputPath)
+  const sourceData = await readFile(inputPath)
+  await buildMeshletGeometry({ name: basename(inputPath, '.glb'), ...geometry, indices: geometry.sourceIndices }, outputArgument, { sha256: sha256(sourceData), bytes: sourceData.byteLength })
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main().catch((error) => { console.error(error.message); process.exitCode = 1 })

@@ -1,0 +1,27 @@
+{
+  "name": "@blacksite/geometry",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Offline cluster geometry hierarchy and GPU driven rendering for three.js WebGPU",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./format": "./src/format.ts",
+    "./load": "./src/load.ts",
+    "./load-model": "./src/load-model.ts",
+    "./build": "./scripts/build.mjs"
+  },
+  "scripts": {
+    "build:meshlets": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
+    "meshoptimizer": "^1.3.0"
+  },
+  "peerDependencies": {
+    "three": "^0.186.1"
+  },
+  "license": "FSL-1.1-ALv2"
+}
