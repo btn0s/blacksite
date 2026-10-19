@@ -76,10 +76,3 @@ export const bookmarks: ValleyBookmark[] = [
   { name: 'ridge', position: [210, 70, 230], target: [-1800, 120, -2600], fov: 45, note: 'From the high meadow to the mountains at the horizon' },
 ]
 
-export const flyover: { position: Vec3; target: Vec3 }[] = [
-  { position: [40, 60, 120], target: [-60, 20, -80] },
-  { position: [-60, 45, -60], target: [-260, 0, -300] },
-  { position: [-260, 70, -300], target: [-520, 0, -620] },
-  { position: [-520, 120, -620], target: [-1200, 40, -1400] },
-  { position: [-380, 160, -200], target: [200, 40, 120] },
-]

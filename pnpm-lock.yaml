@@ -394,6 +394,9 @@ importers:
       '@blacksite/input':
         specifier: workspace:*
         version: link:../../packages/input
+      '@blacksite/inspect':
+        specifier: workspace:*
+        version: link:../../packages/inspect
       '@blacksite/landscape':
         specifier: workspace:*
         version: link:../../packages/landscape
@@ -805,6 +808,8 @@ importers:
         version: 1.3.0
 
   packages/input: {}
+
+  packages/inspect: {}
 
   packages/landscape: {}
 

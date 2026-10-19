@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { resolve } from 'node:path'
 import { blacksiteAssets } from '../../cli/serve-assets.mjs'
+import { valleyTelemetry } from './scripts/telemetry.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 
@@ -15,7 +16,7 @@ export default defineConfig({
     },
     dedupe: ['react', 'react-dom', 'three', '@react-three/fiber', '@react-three/rapier', '@dimforge/rapier3d-compat'],
   },
-  plugins: [react(), tsconfigPaths({ root }), blacksiteAssets({ blacksiteRoot: root })],
+  plugins: [react(), tsconfigPaths({ root }), blacksiteAssets({ blacksiteRoot: root }), valleyTelemetry(import.meta.dirname)],
   server: { host: '0.0.0.0', allowedHosts: true, fs: { allow: [root] } },
   optimizeDeps: { entries: ['index.html'], include: ['@react-three/rapier > @dimforge/rapier3d-compat'] },
   build: {

@@ -1,13 +1,13 @@
-import {
-  ConeGeometry, DoubleSide, DynamicDrawUsage, Group, IcosahedronGeometry, InstancedBufferAttribute, InstancedBufferGeometry, InstancedMesh,
-  Matrix4, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshStandardMaterial, PlaneGeometry, Quaternion, RGBADepthPacking, Vector3, Vector4,
-} from 'three'
-import type { BufferGeometry, Camera, Color, Material, WebGLRenderer } from 'three'
+import { ConeGeometry, DynamicDrawUsage, Frustum, Group, IcosahedronGeometry, InstancedBufferAttribute, InstancedBufferGeometry, InstancedMesh, Matrix4, Mesh, PlaneGeometry, Quaternion, Sphere, Vector3 } from 'three'
+import type { BufferGeometry, Camera, Color, Material } from 'three'
+import { MeshBasicNodeMaterial } from 'three/webgpu'
+import type { WebGPURenderer } from 'three/webgpu'
+import { uniform } from 'three/tsl'
 import { createImpostorMaterial, bakeImpostor, type ImpostorAtlas, type TreeTextures } from './impostor'
+import { createTreeMaterial } from './tree-nodes'
 import { hash2 } from './random'
-import { patchMaterial, replaceChunk } from './patch'
 import type { TreeModel } from './trees'
-import { NOISE_GLSL, WIND_GLSL, type Wind } from './wind'
+import type { Wind } from './wind'
 
 export interface ForestSpecies {
   readonly model: TreeModel
@@ -16,7 +16,7 @@ export interface ForestSpecies {
 }
 
 export interface ForestOptions {
-  readonly renderer: WebGLRenderer
+  readonly renderer: WebGPURenderer
   readonly wind: Wind
   readonly species: readonly ForestSpecies[]
   readonly density: (x: number, z: number) => number
@@ -44,49 +44,14 @@ export interface Forest {
   readonly object: Group
   readonly materials: readonly Material[]
   readonly atlases: readonly ImpostorAtlas[]
-  readonly stats: { trees: number; candidates: number; near: number; proxies: number; bakeMs: number }
+  readonly stats: { trees: number; candidates: number; near: number; proxies: number; impostors: number; bakeMs: number; sceneTriangles: number; drawnTriangles: number; fullDetailTriangles: number; candidateInstances: number; drawnInstances: number; culledInstances: number }
+  readonly fallbackCap: number
   readonly positions: Float32Array
+  setLodView(enabled: boolean): void
+  setLodEnabled(enabled: boolean): void
   update(camera: Camera): void
   dispose(): void
 }
-
-const TREE_HEAD = /* glsl */ `
-attribute vec3 treeWind;
-uniform vec4 treeRange;
-varying float vTreeFade;
-`
-
-const TREE_BODY = /* glsl */ `
-vec3 transformed = vec3(position);
-vec3 bsRoot = vec3(instanceMatrix[3].xyz);
-float bsW = windAt(bsRoot.xz);
-vec3 bsDirLocal = transpose(mat3(instanceMatrix)) * vec3(windDirection.x, 0.0, windDirection.y);
-bsDirLocal.y = 0.0;
-bsDirLocal = normalize(bsDirLocal + vec3(0.0001, 0.0, 0.0));
-float bsTrunk = treeWind.x * (bsW * 0.55 + sin(windTime * 0.75 + treeWind.z * 6.283 + bsRoot.x * 0.05) * 0.18 * (0.35 + bsW)) * treeRange.z;
-float bsBranch = treeWind.y * sin(windTime * (1.6 + treeWind.z * 1.4) + treeWind.z * 12.0 + dot(position, vec3(0.35, 0.2, 0.3))) * (0.05 + bsW * 0.09);
-transformed.xz += bsDirLocal.xz * bsTrunk;
-transformed += objectNormal * bsBranch * 0.5;
-transformed.y += bsBranch * 0.25;
-vTreeFade = smoothstep(treeRange.x, treeRange.y, distance(cameraPosition, bsRoot));
-`
-
-const LEAF_ALPHA = /* glsl */ `
-#ifdef TREE_A2C
-diffuseColor.a = clamp((diffuseColor.a - 0.5) / max(fwidth(diffuseColor.a), 0.0001) + 0.5, 0.0, 1.0);
-if (diffuseColor.a < 0.02) discard;
-#else
-if (diffuseColor.a < 0.5) discard;
-diffuseColor.a = 1.0;
-#endif
-`
-
-const LEAF_TRANSLUCENCY = /* glsl */ `
-#include <emissivemap_fragment>
-vec3 bsSunView = normalize((viewMatrix * vec4(treeSunDirection, 0.0)).xyz);
-float bsBack = pow(max(dot(normalize(-vViewPosition), bsSunView), 0.0), 4.0);
-totalEmissiveRadiance += diffuseColor.rgb * treeSunColor * (bsBack * 0.5 + 0.06);
-`
 
 function proxyGeometry(model: TreeModel): BufferGeometry {
   const crown = model.crownCentre
@@ -105,8 +70,7 @@ function proxyGeometry(model: TreeModel): BufferGeometry {
 export function createForest(options: ForestOptions): Forest {
   const { wind, species } = options
   const seed = options.seed ?? 5
-  const sun = options.sun
-  const stats = { trees: 0, candidates: 0, near: 0, proxies: 0, bakeMs: 0 }
+  const stats = { trees: 0, candidates: 0, near: 0, proxies: 0, impostors: 0, bakeMs: 0, sceneTriangles: 0, drawnTriangles: 0, fullDetailTriangles: 0, candidateInstances: 0, drawnInstances: 0, culledInstances: 0 }
   const [minX, minZ] = options.bounds.min
   const [maxX, maxZ] = options.bounds.max
   const spacing = options.spacing
@@ -132,9 +96,6 @@ export function createForest(options: ForestOptions): Forest {
   const cellsZ = Math.ceil((maxZ - minZ) / cellSize)
   const cellOf = (x: number, z: number) => Math.min(cellsZ - 1, Math.max(0, Math.floor((z - minZ) / cellSize))) * cellsX + Math.min(cellsX - 1, Math.max(0, Math.floor((x - minX) / cellSize)))
   candidates.sort((a, b) => cellOf(a.x, a.z) - cellOf(b.x, b.z))
-  const cellStart = new Int32Array(cellsX * cellsZ + 1)
-  for (const tree of candidates) cellStart[cellOf(tree.x, tree.z) + 1]!++
-  for (let index = 0; index < cellsX * cellsZ; index++) cellStart[index + 1]! += cellStart[index]!
   const positions = new Float32Array(total * 4)
   const scales = new Float32Array(total)
   const kinds = new Uint8Array(total)
@@ -151,184 +112,200 @@ export function createForest(options: ForestOptions): Forest {
   object.name = 'world-forest'
   const materials: Material[] = []
   const atlases: ImpostorAtlas[] = []
-  const nearCapacity = Math.max(64, Math.ceil(Math.PI * options.near[1] ** 2 / (spacing * spacing) * 1.6))
+  const fallbackCap = 256
+  const nearCapacity = Math.max(fallbackCap, Math.ceil(Math.PI * options.near[1] ** 2 / (spacing * spacing) * 1.6))
   const proxyCapacity = Math.max(64, Math.ceil(Math.PI * options.shadowDistance ** 2 / (spacing * spacing) * 1.4))
-  const treeRange = new Vector4(options.near[0], options.near[1], 0.55, 0)
-  const sunUniforms = { treeSunDirection: { value: sun?.direction ?? new Vector3(0.4, 0.8, 0.3).normalize() }, treeSunColor: { value: sun?.color ?? null } }
-  const proxyMaterial = new MeshBasicMaterial({ colorWrite: false, depthWrite: true })
+  const viewer = new Vector3()
+  const lodView = uniform(0)
+  const fullDetail = uniform(0)
+  const proxyMaterial = new MeshBasicNodeMaterial({ colorWrite: false, depthWrite: true })
   const layer = options.proxyLayer ?? 2
-
+  let lodEnabled = true
+  let dirty = true
   const kindsData = species.map((entry, kind) => {
     const { model, textures } = entry
-    const wood = new MeshStandardMaterial({ name: `world-tree-${model.species.name}-wood`, map: textures.bark, normalMap: textures.barkNormal ?? null, vertexColors: true, roughness: 0.95, metalness: 0 })
-    wood.color.setRGB(...model.species.bark)
-    const leaves = new MeshStandardMaterial({ name: `world-tree-${model.species.name}-leaves`, map: textures.leaf, vertexColors: true, roughness: 0.78, metalness: 0, side: DoubleSide, alphaToCoverage: options.alphaToCoverage === true })
-    leaves.color.setRGB(...model.species.leaves)
-    if (options.alphaToCoverage) leaves.defines = { TREE_A2C: '' }
-    const shared = { treeRange: { value: treeRange } }
-    for (const [material, isLeaf] of [[wood, false], [leaves, true]] as const) {
-      patchMaterial(material, `world-tree-${isLeaf ? 'leaf' : 'wood'}`, shader => {
-        Object.assign(shader.uniforms, wind.uniforms, shared, sunUniforms)
-        shader.vertexShader = `${NOISE_GLSL}\n${WIND_GLSL}\n${TREE_HEAD}\n${shader.vertexShader}`
-        shader.vertexShader = replaceChunk(shader.vertexShader, 'begin_vertex', TREE_BODY)
-        shader.fragmentShader = `${NOISE_GLSL}\nuniform vec3 treeSunDirection;\nuniform vec3 treeSunColor;\nvarying float vTreeFade;\n${shader.fragmentShader}`
-        shader.fragmentShader = replaceChunk(shader.fragmentShader, 'clipping_planes_fragment', '#include <clipping_planes_fragment>\nif (bsDither(gl_FragCoord.xy) < vTreeFade) discard;')
-        if (isLeaf) {
-          shader.fragmentShader = replaceChunk(shader.fragmentShader, 'alphatest_fragment', LEAF_ALPHA)
-          if (sun) shader.fragmentShader = replaceChunk(shader.fragmentShader, 'emissivemap_fragment', LEAF_TRANSLUCENCY)
-        }
-      })
-    }
-    const leafDepth = new MeshDepthMaterial({ depthPacking: RGBADepthPacking, map: textures.leaf, alphaTest: 0.5, side: DoubleSide })
-    const woodDepth = new MeshDepthMaterial({ depthPacking: RGBADepthPacking })
-    for (const depth of [leafDepth, woodDepth]) {
-      patchMaterial(depth, 'world-tree-depth', shader => {
-        Object.assign(shader.uniforms, wind.uniforms, shared)
-        shader.vertexShader = `${NOISE_GLSL}\n${WIND_GLSL}\n${TREE_HEAD}\n${shader.vertexShader}`
-        shader.vertexShader = replaceChunk(shader.vertexShader, 'begin_vertex', `vec3 objectNormal = normal;\n${TREE_BODY}`)
-      })
-    }
-    const woodMesh = new InstancedMesh(model.wood, wood, nearCapacity)
-    const leafMesh = new InstancedMesh(model.leaves, leaves, nearCapacity)
-    woodMesh.customDepthMaterial = woodDepth
-    leafMesh.customDepthMaterial = leafDepth
-    for (const mesh of [woodMesh, leafMesh]) {
+    const roots = new InstancedBufferAttribute(new Float32Array(nearCapacity * 3), 3).setUsage(DynamicDrawUsage)
+    const nearScales = new InstancedBufferAttribute(new Float32Array(nearCapacity), 1).setUsage(DynamicDrawUsage)
+    const nearMeshes = [false, true].map(leaf => {
+      const geometry = (leaf ? model.leaves : model.wood).clone()
+      geometry.setAttribute('treeRoot', roots)
+      geometry.setAttribute('treeScale', nearScales)
+      const material = createTreeMaterial({ model, textures, wind, leaf, alphaToCoverage: options.alphaToCoverage === true, range: options.near, viewer, lodView, fullDetail, sun: options.sun })
+      const mesh = new InstancedMesh(geometry, material, nearCapacity)
       mesh.count = 0
       mesh.castShadow = true
       mesh.receiveShadow = true
       mesh.frustumCulled = false
       mesh.instanceMatrix.setUsage(DynamicDrawUsage)
+      mesh.name = material.name
+      materials.push(material)
       object.add(mesh)
-    }
-    woodMesh.name = `world-tree-${model.species.name}-wood`
-    leafMesh.name = `world-tree-${model.species.name}-leaves`
-
+      return mesh
+    })
     const proxy = new InstancedMesh(proxyGeometry(model), proxyMaterial, proxyCapacity)
     proxy.count = 0
     proxy.castShadow = true
-    proxy.receiveShadow = false
     proxy.frustumCulled = false
     proxy.layers.set(layer)
     proxy.instanceMatrix.setUsage(DynamicDrawUsage)
     proxy.name = `world-tree-${model.species.name}-shadow`
     object.add(proxy)
-
     const atlas = bakeImpostor(options.renderer, model, textures, { frames: options.frames, frameSize: options.frameSize })
     stats.bakeMs += atlas.milliseconds
     atlases.push(atlas)
-    const impostorMaterial = createImpostorMaterial({ atlas, wind, range: [options.near[0], options.near[1], options.far[0], options.far[1]], alphaToCoverage: options.alphaToCoverage, singleFrame: options.singleFrame, blur: options.impostorBlur, farTint: options.impostorFarTint })
-    const indices: number[] = []
-    for (let index = 0; index < total; index++) if (kinds[index] === kind) indices.push(index)
+    const impostorMaterial = createImpostorMaterial({ atlas, wind, range: [options.near[0], options.near[1], options.far[0], options.far[1]], alphaToCoverage: options.alphaToCoverage, singleFrame: options.singleFrame, blur: options.impostorBlur, farTint: options.impostorFarTint, lodView })
+    let population = 0
+    for (let i = 0; i < total; i++) if (kinds[i] === kind) population++
     const plane = new PlaneGeometry(1, 1)
     const geometry = new InstancedBufferGeometry()
     geometry.index = plane.index
     geometry.setAttribute('position', plane.getAttribute('position'))
     geometry.setAttribute('normal', plane.getAttribute('normal'))
     geometry.setAttribute('uv', plane.getAttribute('uv'))
-    const instance = new Float32Array(indices.length * 4)
-    const scale = new Float32Array(indices.length)
-    indices.forEach((source, target) => {
-      instance.set(positions.subarray(source * 4, source * 4 + 4), target * 4)
-      scale[target] = scales[source]!
-    })
-    geometry.setAttribute('treeInstance', new InstancedBufferAttribute(instance, 4))
-    geometry.setAttribute('treeScale', new InstancedBufferAttribute(scale, 1))
-    geometry.instanceCount = indices.length
+    const instances = new InstancedBufferAttribute(new Float32Array(population * 4), 4).setUsage(DynamicDrawUsage)
+    const impostorScales = new InstancedBufferAttribute(new Float32Array(population), 1).setUsage(DynamicDrawUsage)
+    geometry.setAttribute('treeInstance', instances)
+    geometry.setAttribute('treeScale', impostorScales)
+    geometry.instanceCount = 0
     const impostors = new Mesh(geometry, impostorMaterial)
     impostors.frustumCulled = false
     impostors.receiveShadow = true
     impostors.name = `world-tree-${model.species.name}-impostors`
     object.add(impostors)
-    materials.push(wood, leaves, impostorMaterial)
-    return { woodMesh, leafMesh, proxy, depth: [leafDepth, woodDepth], impostors, impostorMaterial }
+    materials.push(impostorMaterial)
+    const triangles = ((model.wood.index?.count ?? model.wood.getAttribute('position').count) + (model.leaves.index?.count ?? model.leaves.getAttribute('position').count)) / 3
+    stats.fullDetailTriangles += triangles * population
+    return { model, nearMeshes, roots, nearScales, proxy, impostors, instances, impostorScales, triangles }
   })
-
   const matrix = new Matrix4()
+  const projection = new Matrix4()
+  const previousProjection = new Matrix4().makeScale(0, 0, 0)
+  const frustum = new Frustum()
+  const sphere = new Sphere()
   const quaternion = new Quaternion()
   const up = new Vector3(0, 1, 0)
   const position = new Vector3()
   const scaleVector = new Vector3()
-  const viewer = new Vector3()
-  const last = new Vector3(Infinity, 0, 0)
   const nearCounts = new Int32Array(species.length)
   const proxyCounts = new Int32Array(species.length)
-  const reach = Math.max(options.near[1], options.shadowDistance)
-
+  const impostorCounts = new Int32Array(species.length)
+  const fallbackOrder = Array.from({ length: total }, (_, index) => index)
+  const fallbackSelection = new Uint8Array(total)
+  const lastSelection = new Vector3(Infinity, 0, 0)
+  const distanceOf = (i: number) => (positions[i * 4]! - viewer.x) ** 2 + (positions[i * 4 + 1]! - viewer.y) ** 2 + (positions[i * 4 + 2]! - viewer.z) ** 2
+  const upload = (attribute: InstancedBufferAttribute, count: number) => {
+    attribute.clearUpdateRanges()
+    if (count > 0) attribute.addUpdateRange(0, count * attribute.itemSize)
+    attribute.needsUpdate = true
+  }
   return {
-    object,
-    materials,
-    atlases,
-    stats,
-    positions,
+    object, materials, atlases, stats, positions, fallbackCap,
+    setLodView(enabled) { lodView.value = enabled ? 1 : 0 },
+    setLodEnabled(enabled) {
+      if (lodEnabled === enabled) return
+      lodEnabled = enabled
+      fullDetail.value = enabled ? 0 : 1
+      dirty = true
+    },
     update(camera) {
       viewer.setFromMatrixPosition(camera.matrixWorld)
-      if (viewer.distanceToSquared(last) < 0.25) return
-      last.copy(viewer)
+      projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+      if (!dirty && projection.equals(previousProjection)) return
+      previousProjection.copy(projection)
+      frustum.setFromProjectionMatrix(projection, camera.coordinateSystem)
+      if (!lodEnabled && (dirty || viewer.distanceToSquared(lastSelection) > 0.25)) {
+        fallbackOrder.sort((a, b) => distanceOf(a) - distanceOf(b))
+        fallbackSelection.fill(0)
+        for (let i = 0; i < Math.min(total, fallbackCap); i++) fallbackSelection[fallbackOrder[i]!] = 1
+        lastSelection.copy(viewer)
+      }
+      dirty = false
       nearCounts.fill(0)
       proxyCounts.fill(0)
-      const c0x = Math.max(0, Math.floor((viewer.x - reach - minX) / cellSize))
-      const c1x = Math.min(cellsX - 1, Math.floor((viewer.x + reach - minX) / cellSize))
-      const c0z = Math.max(0, Math.floor((viewer.z - reach - minZ) / cellSize))
-      const c1z = Math.min(cellsZ - 1, Math.floor((viewer.z + reach - minZ) / cellSize))
+      impostorCounts.fill(0)
+      stats.sceneTriangles = 0
+      stats.drawnTriangles = 0
+      stats.candidateInstances = 0
+      stats.drawnInstances = 0
       const nearSq = options.near[1] ** 2
+      const nearStartSq = options.near[0] ** 2
       const shadowSq = options.shadowDistance ** 2
-      for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++) {
-        const cell = cz * cellsX + cx
-        for (let index = cellStart[cell]!; index < cellStart[cell + 1]!; index++) {
-          const x = positions[index * 4]!
-          const y = positions[index * 4 + 1]!
-          const z = positions[index * 4 + 2]!
-          const dx = x - viewer.x
-          const dy = y - viewer.y
-          const dz = z - viewer.z
-          const distanceSq = dx * dx + dy * dy + dz * dz
-          if (distanceSq > shadowSq && distanceSq > nearSq) continue
-          const kind = kinds[index]!
-          const data = kindsData[kind]!
+      const farSq = options.far[1] ** 2
+      for (let index = 0; index < total; index++) {
+        const x = positions[index * 4]!
+        const y = positions[index * 4 + 1]!
+        const z = positions[index * 4 + 2]!
+        const distanceSq = distanceOf(index)
+        const kind = kinds[index]!
+        const data = kindsData[kind]!
+        const scale = scales[index]!
+        const yaw = positions[index * 4 + 3]!
+        const meshSelected = lodEnabled ? distanceSq <= nearSq : fallbackSelection[index] === 1
+        if (meshSelected && nearCounts[kind]! < nearCapacity) {
+          const target = nearCounts[kind]!
           position.set(x, y, z)
-          quaternion.setFromAxisAngle(up, positions[index * 4 + 3]!)
-          const s = scales[index]!
-          scaleVector.set(s, s, s)
-          matrix.compose(position, quaternion, scaleVector)
-          if (distanceSq <= nearSq) {
-            if (nearCounts[kind]! < nearCapacity) {
-              data.woodMesh.setMatrixAt(nearCounts[kind]!, matrix)
-              data.leafMesh.setMatrixAt(nearCounts[kind]!, matrix)
-              nearCounts[kind]!++
-            }
-          } else if (proxyCounts[kind]! < proxyCapacity) {
-            data.proxy.setMatrixAt(proxyCounts[kind]!, matrix)
-            proxyCounts[kind]!++
-          }
+          quaternion.setFromAxisAngle(up, yaw)
+          matrix.compose(position, quaternion, scaleVector.setScalar(scale))
+          for (const mesh of data.nearMeshes) mesh.setMatrixAt(target, matrix)
+          data.roots.setXYZ(target, x, y, z)
+          data.nearScales.setX(target, scale)
+          nearCounts[kind]!++
+          stats.sceneTriangles += data.triangles
+          stats.drawnTriangles += data.triangles
+          stats.candidateInstances++
+          stats.drawnInstances++
+        } else if (lodEnabled && distanceSq <= shadowSq && proxyCounts[kind]! < proxyCapacity) {
+          position.set(x, y, z)
+          quaternion.setFromAxisAngle(up, yaw)
+          matrix.compose(position, quaternion, scaleVector.setScalar(scale))
+          data.proxy.setMatrixAt(proxyCounts[kind]!, matrix)
+          proxyCounts[kind]!++
         }
+        if (!lodEnabled || distanceSq < nearStartSq || distanceSq > farSq) continue
+        stats.sceneTriangles += 2
+        stats.candidateInstances++
+        const centre = data.model.bounds.center
+        const c = Math.cos(yaw)
+        const s = Math.sin(yaw)
+        sphere.center.set(x + (centre.x * c + centre.z * s) * scale, y + centre.y * scale, z + (-centre.x * s + centre.z * c) * scale)
+        sphere.radius = data.model.bounds.radius * scale * 1.05
+        if (!frustum.intersectsSphere(sphere)) continue
+        const target = impostorCounts[kind]!
+        data.instances.setXYZW(target, x, y, z, yaw)
+        data.impostorScales.setX(target, scale)
+        impostorCounts[kind]!++
+        stats.drawnTriangles += 2
+        stats.drawnInstances++
       }
-      let near = 0
-      let proxies = 0
-      kindsData.forEach((data, kind) => {
-        for (const mesh of [data.woodMesh, data.leafMesh]) {
-          mesh.count = nearCounts[kind]!
-          mesh.instanceMatrix.clearUpdateRanges()
-          mesh.instanceMatrix.addUpdateRange(0, nearCounts[kind]! * 16)
-          mesh.instanceMatrix.needsUpdate = true
+      stats.near = 0
+      stats.proxies = 0
+      stats.impostors = 0
+      for (let kind = 0; kind < kindsData.length; kind++) {
+        const data = kindsData[kind]!
+        const near = nearCounts[kind]!
+        for (const mesh of data.nearMeshes) {
+          mesh.count = near
+          upload(mesh.instanceMatrix, near)
         }
+        upload(data.roots, near)
+        upload(data.nearScales, near)
         data.proxy.count = proxyCounts[kind]!
-        data.proxy.instanceMatrix.clearUpdateRanges()
-        data.proxy.instanceMatrix.addUpdateRange(0, proxyCounts[kind]! * 16)
-        data.proxy.instanceMatrix.needsUpdate = true
-        near += nearCounts[kind]!
-        proxies += proxyCounts[kind]!
-      })
-      stats.near = near
-      stats.proxies = proxies
+        upload(data.proxy.instanceMatrix, data.proxy.count)
+        data.impostors.geometry.instanceCount = impostorCounts[kind]!
+        upload(data.instances, impostorCounts[kind]!)
+        upload(data.impostorScales, impostorCounts[kind]!)
+        stats.near += near
+        stats.proxies += data.proxy.count
+        stats.impostors += impostorCounts[kind]!
+      }
+      stats.culledInstances = stats.candidateInstances - stats.drawnInstances
     },
     dispose() {
       for (const data of kindsData) {
-        data.woodMesh.dispose()
-        data.leafMesh.dispose()
+        for (const mesh of data.nearMeshes) { mesh.geometry.dispose(); mesh.dispose() }
         data.proxy.geometry.dispose()
         data.proxy.dispose()
         data.impostors.geometry.dispose()
-        for (const depth of data.depth) depth.dispose()
       }
       for (const material of materials) material.dispose()
       proxyMaterial.dispose()

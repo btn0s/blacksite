@@ -1,0 +1,19 @@
+{
+  "name": "@blacksite/inspect",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Renderer-independent performance sampling, telemetry and inspection controls",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./react": "./src/react.tsx",
+    "./style.css": "./src/style.css"
+  },
+  "peerDependencies": {
+    "react": "^19.3.1"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true }
+  },
+  "license": "FSL-1.1-ALv2"
+}

@@ -144,3 +144,13 @@ Set `atmosphere.physical` and the look draws a physically based sky instead: tra
 ## LUTs
 
 `luts/zone.cube`, `luts/haze.cube` and `luts/nature.cube` are generated in this repository by `scripts/make-lut.mjs`. The script grades display-referred input with a luminance-weighted shadow, mid and highlight tint, saturation that keeps the warm-olive band, a green lift on warm hues, an `olive` shift that pulls saturated greens toward olive, a lifted toe, an S-curve and a soft highlight shoulder. Regenerate with `node packages/look/scripts/make-lut.mjs all [size]` (default size 33) or one preset by name. Load any `.cube` with `loadLut(url)` or `parseLut(text)`.
+
+## WebGPU
+
+`@blacksite/look/webgpu` exports `createWebGPULook(renderer, scene, camera, options)`. Initialize a three `WebGPURenderer` with `trackTimestamp: true`, await the look, then call `look.render(delta)` each frame. `@blacksite/look/webgpu-r3f` provides `<WebGPULook onReady={look => ...} onError={error => ...} />` and owns rendering at priority 1. This entry requires WebGPU and a physical atmosphere; existing WebGL consumers use the original entry points.
+
+The WebGPU chain uses three's native SunLight, GTAO, TRAA, bloom, Neutral tone mapping and LUT nodes. Its physical sky keeps the nature atmosphere's transmittance, multiple-scattering and sky-view tables, clouds and aerial/height fog as native WGSL nodes. The look owns lighting and exposure: `sunlight: { sunLux, skyLux, ev100 }` controls sun illuminance and environment irradiance, with the latter measured through three's LightProbeGenerator. `atmosphere.exposure` is the artistic exposure compensation. Camera options support temperature, tint, contrast, toe, shoulder and optional peripheral lens softness. Low quality keeps TRAA and the grade while omitting GTAO, bloom and lens blur.
+
+`shadowMap` and `shadowDistance` set sun coverage. Native SunLight has two cascades on every tier. `shadowLayers` adds caster layers to the active view's layers on both native cascade cameras. The returned `sun` is available to vegetation and impostor lighting; it has a direction in `position`, with no target. LightProbeGrid's native node is registered for bounded, authored probe volumes; the open Valley uses its sky environment and does not bake a world-sized probe grid.
+
+`look.timings()` returns GPU milliseconds by native render pass when timestamp queries are available, or `null` otherwise. Measurements use three's InspectorBase hooks and timestamp readback, never CPU submission duration. `look.setDebug(true)` selects an ungraded scene output for the host's LOD-colour materials. The host owns the pixel ratio, stats UI, technique controls and device reporting.

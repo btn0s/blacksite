@@ -11,48 +11,6 @@ export interface WindSpec {
 
 export const BREEZE: WindSpec = { direction: [0.8, -0.6], strength: 0.45, gust: 0.75, gustScale: 38, gustSpeed: 7 }
 
-export const NOISE_GLSL = /* glsl */ `
-float bsHash(ivec2 cell, uint seed) {
-  uint x = uint(cell.x);
-  uint z = uint(cell.y);
-  uint h = ((x ^ 0x27d4eb2du) * 0x165667b1u) ^ ((z + seed * 0x9e3779b9u) * 0x85ebca77u);
-  h = (h ^ (h >> 15u)) * 0x2c1b3c6du;
-  h = (h ^ (h >> 12u)) * 0x297a2d39u;
-  h ^= h >> 15u;
-  return float(h) / 4294967296.0;
-}
-float bsNoise(vec2 p, uint seed) {
-  vec2 i = floor(p);
-  vec2 f = p - i;
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  ivec2 c = ivec2(i);
-  float a = bsHash(c, seed);
-  float b = bsHash(c + ivec2(1, 0), seed);
-  float d = bsHash(c + ivec2(0, 1), seed);
-  float e = bsHash(c + ivec2(1, 1), seed);
-  return a + (b - a) * u.x + (d - a) * u.y + (a - b - d + e) * u.x * u.y;
-}
-float bsDither(vec2 pixel) {
-  return fract(52.9829189 * fract(dot(pixel, vec2(0.06711056, 0.00583715))));
-}
-`
-
-export const WIND_GLSL = /* glsl */ `
-uniform vec2 windDirection;
-uniform vec4 windParams;
-uniform float windTime;
-float windGustAt(vec2 xz) {
-  vec2 travel = windDirection * windTime * windParams.w;
-  vec2 p = (xz - travel) / windParams.z;
-  float n = bsNoise(p, 7u) * 0.65 + bsNoise(p * 2.7 + 3.1, 11u) * 0.35;
-  return smoothstep(0.42, 0.86, n);
-}
-float windAt(vec2 xz) {
-  float sway = 0.75 + 0.25 * sin(windTime * 0.7 + dot(xz, windDirection) * 0.02);
-  return windParams.x * sway + windParams.y * windGustAt(xz);
-}
-`
-
 export interface WindUniforms {
   windDirection: { value: Vector2 }
   windParams: { value: Vector4 }

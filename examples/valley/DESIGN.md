@@ -47,7 +47,7 @@ Medium uses 10,000 trees, 48,000 ground instances, 60 m ground radius, and two s
 | Post AA | nature preset AA, stable cover fade | Shimmer on blades and thin branches |
 | Animated player | 1 ALS character using the public TPP path | Scale, locomotion, walkable proof |
 | Audio | wind bed, 3 bird variations, movement/landing | Dead stillness and repetition |
-| Critic cameras | 4 bookmarks, 1 flyover route | Measurable composition and transition evidence |
+| Inspection | Compact stats, one LOD colour view, technique switches, telemetry dump | Visible representation choices while walking with ALS |
 
 ## Camera bookmarks
 
@@ -58,13 +58,13 @@ Coordinates are provisional until grounded against the pure height function; rec
 3. **Valley** near `(-100, height(-100,-180)+24, -180)`, toward `(100, 45, -500)`: impostors, valley haze and mountain silhouette.
 4. **Ridge** near `(180, height(180,160)+4, 160)`, toward `(-100, 60, -450)`: diagonal meadow, cloud shapes, sun shadows.
 
-The scripted flyover moves continuously from Meadow through Canopy and Valley, crossing the mesh/impostor and impostor/cloud bands. Shimmer captures hold a camera still, freeze deliberate wind/cloud animation through a diagnostic hook, and measure temporal pixel fluctuations without disabling AA or LOD.
+These remain composition references. Play and inspection use the ALS shoulder camera. There is no free camera, flyover, recorded route, culling freeze or LOD freeze.
 
 ## Public systems and integration
 
-- `@blacksite/landscape`: deterministic terrain sampling and chunked LOD; ground-cover placement/instancing; multi-angle forest impostors and far canopy; shared wind with CPU and shader access. Build-time baking remains an explicit reproducible command. WebGPU placement compute is capability-selected with the same deterministic WebGL2 placement fallback.
-- `@blacksite/look`: opt-in `nature` atmosphere, sky/cloud/height-fog additions, sun cascades and post AA. Existing zone defaults remain byte-for-byte where possible, with two showcase before/after captures.
-- `@blacksite/check`: shimmer measurement and scripted flyover contact sheet using public contract hooks.
+- `@blacksite/landscape`: deterministic terrain sampling and chunked LOD; ground-cover placement/instancing; multi-angle forest impostors and far canopy; shared wind with CPU and shader access. Build-time baking remains an explicit reproducible command. The render path uses native three WebGPU node materials. Placement and visibility selection remain CPU work in this phase; GPU selection is a later technique.
+- `@blacksite/look/webgpu`: native SunLight cascades, physical exposure, Neutral tone mapping, GTAO, TRAA, grade and camera effects, with the nature sky/cloud/aerial equations ported to native shader nodes. Native SunLight provides two cascades. A probe grid is reserved for a later scene with useful bounded probe volumes.
+- `@blacksite/inspect`: renderer-independent rolling frame history, compact stats, technique registration, lit/LOD controls, and a host-provided telemetry action.
 - `@blacksite/example-valley`: exports `mount(element)` and standalone HTML. Thin site registration follows Traverse in Characters. No example imports package internals.
 
 ## Asset and licensing policy
@@ -74,3 +74,15 @@ Use indexed `blacksite assets` metadata first. Install only assets whose source 
 ## Evidence and deferred lighting
 
 Run desktop and phone checks without weakening budgets, read all critic and transition captures at 1× and 4×, and compare matching compositions with local reference frames outside the repository. Capture two zone showcases before and after look changes. Report achieved counts, measured timings, host load and visual gaps honestly. Build-time path-traced lighting is design-only: the report will define static scene extraction, UV/texel budgets, irradiance and directional outputs, probe fallback for moving foliage, compression, cache invalidation and runtime memory budgets.
+
+## Phase 1 showcase controls
+
+The renderer requires WebGPU. Desktop Chrome and iOS Safari are the targets. ALS is the only controller and the shoulder view is the only camera. Existing terrain samples, tree species, placement seeds, ground-cover families and asset files stay intact.
+
+The HUD shows recent frame p50/p95, scene triangles submitted versus their current representation before visibility selection, including the ALS body, geometry culled, renderer draw calls across all passes, device tier and native GPU timestamps where supported. Triangle counts describe geometry submissions, including shader-discarded grass and impostor vertices; they are not pixel counts. GPU timings are optional and unsupported queries are shown as unavailable.
+
+The single LOD view uses green near geometry, amber intermediate geometry and blue far geometry. Tree LOD and impostors share one technique switch. Its disabled comparison is capped to the nearest 256 full trees. Terrain LOD disabled extends finest detail to a bounded 256 m radius and retains LOD beyond it. Ground-cover culling disabled submits all patches inside the existing tier radius. These caps are shown in the controls.
+
+Press **T**, or tap **Dump stats**, to save the current counters, the recent frame-time history, native GPU pass timings, device/UA/adapter/tier, viewport and the ALS player position and view. The dev server appends one JSON object per line to `examples/valley/telemetry/snapshots.jsonl`. The HUD confirms success or allows retry after a failure. Telemetry files are local and ignored by git.
+
+There is no baseline comparison or benchmark gate. The user walks the scene and chooses where to capture telemetry. Phase 1 stops at the WebGPU port, controls and inspection. Meshlets, GPU tree selection, GPU grass selection, new terrain LOD techniques, baked materials, cached shadow cascades, probe lighting, upscaling and owned-asset streaming remain later work.

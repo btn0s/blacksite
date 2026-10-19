@@ -1,31 +1,37 @@
 import * as THREE from 'three'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { WebGPURenderer } from 'three/webgpu'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { CuboidCollider, HeightfieldCollider, Physics, RigidBody, type HeightfieldArgs } from '@react-three/rapier'
 import { InputProvider, makeInputDevices } from '@blacksite/input'
 import { CharacterController, CharacterOverlay, CharacterPause, useCharacterStatus, useLocalSession, type CharacterEvents, type CharacterHandle } from '@blacksite/subject'
-import { depthDefaults } from '@blacksite/look'
-import { Look } from '@blacksite/look/r3f'
+import { WebGPULook } from '@blacksite/look/webgpu-r3f'
+import type { WebGPULook as LookHandle } from '@blacksite/look/webgpu'
 import { internalPixelRatio, isTouchDevice } from '@blacksite/look/world'
 import { BREEZE, createWind, type Wind } from '@blacksite/landscape'
-import { attachPerfProbe } from '@blacksite/ui/perf-overlay'
 import { Loading, TitleCard, useTouch } from '@blacksite/ui/hud'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
-import { VALLEY_GLYPHS, createWalker, yawOf } from './walker'
+import { VALLEY_GLYPHS, createWalker } from './walker'
 import { ValleyAudio } from './audio'
 import { Landscape, type BarkSet, type LandscapeHandle } from './Landscape'
-import { Probe, type ProbeApi } from './probe'
+import { Probe } from './probe'
+import { createInspector } from '@blacksite/inspect'
+import { InspectHud } from '@blacksite/inspect/react'
+import { Inspection, type TelemetryAction } from './inspection'
 import { outfit } from './outfit'
 import { locomotion, site, tiers, type Tier } from './model'
 import { asset, buildValley, colliderHeights, type ValleyWorld } from './world'
 import { atmosphereFor } from './atmosphere'
+
+const SHADOW_LAYERS = [2] as const
 
 export type Shared = {
   sound: ValleyAudio
   wind: Wind
   landscape: { current: LandscapeHandle | null }
   warm: { current: number }
+  look: { current: LookHandle | null }
 }
 
 function tierOf(): Tier {
@@ -40,28 +46,6 @@ async function loadBark(): Promise<BarkSet> {
   color.colorSpace = THREE.SRGBColorSpace
   for (const texture of [color, normal]) { texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.anisotropy = 4 }
   return { pine: { color, normal } }
-}
-
-function Warmup({ onDone }: { onDone: () => void }) {
-  const { gl, scene, camera } = useThree()
-  useFrame(() => {}, 1)
-  useEffect(() => {
-    let cancelled = false
-    const frame = requestAnimationFrame(() => {
-      void gl.compileAsync(scene, camera).then(() => {
-        if (cancelled) return
-        scene.traverse(object => {
-          const material = (object as THREE.Mesh).material
-          for (const entry of Array.isArray(material) ? material : material ? [material] : []) {
-            for (const value of Object.values(entry)) if (value instanceof THREE.Texture) gl.initTexture(value)
-          }
-        })
-        onDone()
-      })
-    })
-    return () => { cancelled = true; cancelAnimationFrame(frame) }
-  }, [gl, scene, camera, onDone])
-  return null
 }
 
 function Ground({ world }: { world: ValleyWorld }) {
@@ -89,23 +73,23 @@ function Listener({ shared }: { shared: Shared }) {
   return null
 }
 
-function Scene({ shared, walker, world, bark, tier, events, api }: { shared: Shared; walker: CharacterHandle; world: ValleyWorld; bark: BarkSet; tier: Tier; events: CharacterEvents; api: ProbeApi }) {
-  const [compiled, setCompiled] = useState(false)
-  const done = useCallback(() => setCompiled(true), [])
-  const sun = useMemo(() => new THREE.DirectionalLight(), [])
-  const fill = useMemo(() => new THREE.HemisphereLight(), [])
+function Scene({ shared, walker, world, bark, tier, events, inspector, telemetry }: { shared: Shared; walker: CharacterHandle; world: ValleyWorld; bark: BarkSet; tier: Tier; events: CharacterEvents; inspector: ReturnType<typeof createInspector>; telemetry: TelemetryAction }) {
+  const [look, setLook] = useState<LookHandle | null>(null)
+  const [fault, setFault] = useState<Error | null>(null)
+  const onError = useCallback((error: unknown) => setFault(error instanceof Error ? error : new Error(String(error))), [])
   const atmosphere = useMemo(() => atmosphereFor(tier), [tier])
-  const onLook = useCallback((look: unknown) => { shared.warm.current = look ? 1 : 0 }, [shared])
+  const onLook = useCallback((value: LookHandle | null) => { shared.look.current = value; shared.warm.current = value ? 1 : 0; setLook(value) }, [shared])
+  if (fault) throw fault
   return <>
-    <primitive object={fill} />
-    <Landscape world={world} tier={tier} wind={shared.wind} sun={sun} bark={bark} handle={shared.landscape} />
-    {compiled ? <Look atmosphere={atmosphere} quality={tier} sky fog environment sun={sun} fill={fill} onReady={onLook} /> : <Warmup onDone={done} />}
+    <WebGPULook atmosphere={atmosphere} quality={tier} shadowDistance={tiers[tier].shadowDistance} shadowMap={tiers[tier].shadowMap} shadowLayers={SHADOW_LAYERS} onReady={onLook} onError={onError} />
+    {look && <Landscape world={world} tier={tier} wind={shared.wind} sun={look.sun} bark={bark} handle={shared.landscape} />}
     <Physics gravity={[0, -locomotion.gravity, 0]} timeStep={locomotion.physicsStep} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <CharacterController controller={walker} events={events} />
       <Ground world={world} />
-      {compiled && <Probe shared={shared} walker={walker} world={world} api={api} />}
+      <Probe shared={shared} walker={walker} world={world} />
     </Physics>
     <Listener shared={shared} />
+    <Inspection shared={shared} walker={walker} inspector={inspector} telemetry={telemetry} />
   </>
 }
 
@@ -118,6 +102,7 @@ export function Game() {
     wind: createWind(BREEZE),
     landscape: { current: null },
     warm: { current: 0 },
+    look: { current: null },
   }), [tier])
   const [world, setWorld] = useState<ValleyWorld | null>(null)
   const [bark, setBark] = useState<BarkSet | null>(null)
@@ -163,19 +148,41 @@ function Valley({ shared, walker, world, bark, tier }: { shared: Shared; walker:
   const status = useCharacterStatus(walker)
   const session = useLocalSession(walker)
   const home = useCallback(() => walker.respawn(), [walker])
-  const respawn = useCallback((position: [number, number, number], heading: number) => walker.teleport(position, yawOf(heading)), [walker])
   const events = useMemo<CharacterEvents>(() => ({
     onFootstep: request => shared.sound.PlayFootstepSound(request),
     onAction: action => { if (action === 'home') home() },
   }), [home, shared])
-  const api = useMemo<ProbeApi>(() => ({ respawn }), [respawn])
+  const inspector = useMemo(() => createInspector({ renderer: 'WebGPU', tier, windowFrames: 600, onViewChange: view => {
+    const landscape = shared.landscape.current
+    landscape?.terrain.setLodView(view === 'lod')
+    landscape?.forest.setLodView(view === 'lod')
+    shared.look.current?.setDebug(view === 'lod')
+  } }), [shared, tier])
+  const [dumpStatus, setDumpStatus] = useState<'idle' | 'sending' | 'saved' | 'error'>('idle')
+  const telemetry = useMemo<TelemetryAction>(() => ({ current: null, status: setDumpStatus }), [])
+  const renderer = useCallback(async (props: object) => {
+    if (!navigator.gpu) throw new Error('WebGPU is unavailable. Open Valley in a browser with WebGPU enabled.')
+    const gl = new WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', trackTimestamp: true })
+    await gl.init()
+    if (!gl.backend.isWebGPUBackend) { gl.dispose(); throw new Error('A WebGPU adapter is required to open Valley.') }
+    gl.info.autoReset = false
+    return gl
+  }, [])
   return <>
-    <Canvas frameloop={session.frameloop} shadows dpr={tiers[tier].pixelRatio ? Math.min(devicePixelRatio, tiers[tier].pixelRatio) : internalPixelRatio()} camera={{ fov: 55, ...depthDefaults(tier, { far: site.far }).camera, position: [0, 260, 0] }} gl={{ antialias: false, powerPreference: 'high-performance' }}
-      onCreated={state => { state.gl.domElement.style.filter = 'none'; attachPerfProbe(state.gl) }}>
-      <Scene shared={shared} walker={walker} world={world} bark={bark} tier={tier} events={events} api={api} />
-    </Canvas>
-    <CharacterOverlay controller={walker} glyphs={VALLEY_GLYPHS} hints={['move', 'sprint', 'jump', 'roll', 'view', 'home']} prompt="Click to look around · walk down the path into the forest"
+    <RenderBoundary><Canvas frameloop={session.frameloop} shadows dpr={tiers[tier].pixelRatio ? Math.min(devicePixelRatio, tiers[tier].pixelRatio) : internalPixelRatio()} camera={{ fov: 55, near: 0.1, far: site.far, position: [0, 260, 0] }} gl={renderer}>
+      <Scene shared={shared} walker={walker} world={world} bark={bark} tier={tier} events={events} inspector={inspector} telemetry={telemetry} />
+    </Canvas></RenderBoundary>
+    <InspectHud inspector={inspector} dump={{ onDump: () => { void telemetry.current?.() }, status: dumpStatus }} />
+    <CharacterOverlay controller={walker} glyphs={VALLEY_GLYPHS} hints={['move', 'sprint', 'jump', 'roll', 'home']} prompt="Click to look around · T saves telemetry"
       buttons={[{ id: 'jump', label: 'Jump' }, { id: 'roll', label: 'Roll' }, { id: 'crouch', label: 'Crouch' }, { id: 'home', label: 'Home' }]} />
     {status.paused && <CharacterPause controller={walker} items={[{ id: 'home', label: 'Back to the meadow', onPress: home }]} />}
   </>
+}
+
+class RenderBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  state = { error: null as string | null }
+  static getDerivedStateFromError(error: Error) { return { error: error.message } }
+  render() {
+    return this.state.error ? <div className="hud-menu" role="alert"><strong>Valley could not start</strong><span>{this.state.error}</span></div> : this.props.children
+  }
 }
