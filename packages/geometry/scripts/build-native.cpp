@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
     config.min_triangles = 64;
     config.optimize_bounds = true;
     config.simplify_error_merge_additive = 1.f;
-    config.simplify_fallback_sloppy = false;
+    config.simplify_fallback_sloppy = true;
     const float weights[5] = {0.5f, 0.5f, 0.5f, 0.f, 0.f};
     for (const Primitive& primitive : primitives) {
       if (size_t(primitive.offset) + primitive.count > indices.size() || primitive.count % 3) throw std::runtime_error("Invalid primitive range");

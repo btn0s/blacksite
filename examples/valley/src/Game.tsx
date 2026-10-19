@@ -115,7 +115,7 @@ export function Game() {
     const shot = Number(new URLSearchParams(location.search).get('shot') ?? 1)
     return world.bookmarks.find(bookmark => bookmark.id === shot) ?? world.bookmarks[0]
   }, [world])
-  const stones = useMemo(() => world && buildStonework(world), [world])
+  const stones = useMemo(() => world && owned && buildStonework(world, owned.ruins), [world, owned])
   const walker = useMemo(() => start && createWalker(start, runtime), [start, runtime])
 
   useEffect(() => {

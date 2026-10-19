@@ -13,8 +13,7 @@ export function createRocks(owned: Owned, stones: Stonework, renderer: WebGPURen
       entries.push({ asset, materials: model.materials as MeshStandardMaterial[], instances: transforms.flatMap(matrix => local.map(instance => matrix.clone().multiply(instance.matrix))) })
     }
   }
-  add(owned.rock, stones.fieldRocks)
-  for (const id of Object.keys(stones.pieces) as RuinPiece[]) add(owned.ruins[id], stones.pieces[id])
+  for (const id of Object.keys(stones.pieces) as RuinPiece[]) add(owned.ruins[id].model, stones.pieces[id])
   const geometry = new MeshletScene(entries, { pixelError: 2, occlusion: true, shadowLayer: 2, fallbackDistance: 120 })
   geometry.object.name = 'Valley stonework'
   const stats = { sceneTriangles: 0, drawnTriangles: 0, totalTriangles: geometry.totalTriangles, candidateClusters: geometry.candidateClusters, visibleClusters: 0, occludedClusters: 0, submittedTriangles: 0 }

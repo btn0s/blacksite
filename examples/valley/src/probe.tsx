@@ -14,6 +14,8 @@ export function Probe({ shared, walker, world }: { shared: Shared; walker: Chara
   }, 0.6)
   useEffect(() => {
     const valley = {
+      camera,
+      world,
       ready: () => ready.current,
       state: () => ({
         ready: ready.current,

@@ -4,16 +4,16 @@ import type { Tier } from './model'
 const GOLDEN_HOUR: Atmosphere = {
   ...NATURE,
   exposure: 1,
-  sun: { ...NATURE.sun, color: [1, 0.9, 0.76], direction: [-0.65, 0.34, -0.68] },
+  sun: { ...NATURE.sun, color: [1, 0.8, 0.58], direction: [-0.76, 0.22, -0.61] },
   grade: { ...NATURE.grade, lut: null, saturation: 0.94, bloom: 0.12, vignette: 0.12 },
   physical: NATURE.physical && {
     ...NATURE.physical,
     rayleigh: 1.1,
     mie: 9,
-    aerial: 3,
+    aerial: 5,
     sky: 1.15,
     clear: 70,
-    heightFog: { density: 0.00045, base: 110, falloff: 80, tint: [0.78, 0.87, 1] },
+    heightFog: { density: 0.0008, base: 110, falloff: 90, tint: [0.68, 0.78, 0.94] },
     clouds: NATURE.physical.clouds && { ...NATURE.physical.clouds, coverage: 0.5, density: 1.15 },
   },
 }

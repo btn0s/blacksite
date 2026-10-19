@@ -12,7 +12,7 @@ import { Matrix3, Matrix4, Vector3 } from 'three'
 
 const revision = 'f0a684f11ead064e176775c9b796f82a55910e92'
 const archiveSha256 = '52cec854745cd6b39531e07161a2224778700bdc7c8f0e2d8bc8825efde8af1a'
-const configuration = { max_triangles: 128, min_triangles: 64, partition_size: 16, optimize_bounds: true, simplify_ratio: 0.5, simplify_error_merge_previous: 1, simplify_error_merge_additive: 1, simplify_permissive: true, simplify_fallback_sloppy: false, normal_weight: 0.5, protect_uv_seams: true }
+const configuration = { max_triangles: 128, min_triangles: 64, partition_size: 16, optimize_bounds: true, simplify_ratio: 0.5, simplify_error_merge_previous: 1, simplify_error_merge_additive: 1, simplify_permissive: true, simplify_fallback_sloppy: true, normal_weight: 0.5, protect_uv_seams: true }
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const sha256 = (data) => createHash('sha256').update(data).digest('hex')
 const run = (command, args) => new Promise((resolvePromise, reject) => {

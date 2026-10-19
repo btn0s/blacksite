@@ -3,8 +3,8 @@ export type XYZ = readonly [number, number, number]
 export type CubicPath = readonly [XZ, XZ, XZ, XZ]
 
 export const layout = {
-  watchtower: { at: [-1500, 150] as XZ, ground: 260, clearing: [52, 90] as XZ, pad: [62, 90] as XZ },
-  stones: { at: [-1100, 300] as XZ, ground: 205, clearing: [65, 120] as XZ, pad: [65, 120] as XZ },
+  watchtower: { at: [-1500, 150] as XZ, ground: 276, clearing: [52, 90] as XZ, pad: [10, 30] as XZ },
+  stones: { at: [-1100, 300] as XZ, ground: 165, clearing: [65, 120] as XZ, pad: [24, 60] as XZ },
   arch: { at: [-500, -150] as XZ, ground: 125, clearing: [12, 28] as XZ, pad: [18, 45] as XZ },
   shrine: { at: [50, 1260] as XZ, ground: 70, clearing: [55, 100] as XZ, pad: [48, 100] as XZ, pool: { centre: [50, 1238] as XZ, radius: [15, 23] as XZ, level: 68.8, bed: 67.2 } },
   temple: { at: [1270, -95] as XZ, ground: 210, platform: 234, footprint: { min: [950, -335] as XZ, max: [1400, 90] as XZ }, frontX: 1190, stairStartX: 1094 },
@@ -96,13 +96,13 @@ export function riverLevel(z: number) {
   return 115 - z * 0.03 - 18 * t * t * (3 - 2 * t)
 }
 
-export const bookmarkSites = [
-  { id: 1, name: 'reveal', at: [-1450, 140] as XZ, target: [1270, 280, -95] as XYZ, note: 'Watchtower ridge: the forest basin, river, aqueduct and temple share the first view' },
-  { id: 2, name: 'stones', at: [-1250, 430] as XZ, target: [-1100, 210, 300] as XYZ, note: 'Standing stones in the meadow, with the mesa beyond' },
-  { id: 3, name: 'arch', at: [-640, -30] as XZ, target: [-500, 142, -150] as XYZ, note: 'The swallowed arch frames the forest and distant temple' },
-  { id: 4, name: 'aqueduct', at: [-170, -960] as XZ, target: [170, 170, -380] as XYZ, note: 'Follow the broken aqueduct and river toward the mesa' },
-  { id: 5, name: 'shrine', at: [0, 1080] as XZ, target: [50, 85, 1260] as XYZ, note: 'The spring shrine beneath the south valley wall' },
-  { id: 6, name: 'bridge', at: [560, -55] as XZ, target: [1270, 280, -95] as XYZ, note: 'The rising bridge crosses the gorge to the temple forecourt' },
-  { id: 7, name: 'temple', at: [960, -90] as XZ, target: [1190, 270, -95] as XYZ, note: 'The forecourt leads to the monumental western staircase and entrance' },
-  { id: 8, name: 'lookback', at: [1100, -380] as XZ, target: [-1450, 260, 140] as XYZ, note: 'From the mesa terrace, look back across the whole route to the watchtower' },
+export const bookmarkSites: readonly { id: number; name: string; at: XZ; floor?: number; target: XYZ; note: string }[] = [
+  { id: 1, name: 'reveal', at: [-1507, 171], target: [-563, 70, -159], note: 'Watchtower ridge: the forest basin, river, aqueduct and temple share the first view' },
+  { id: 2, name: 'stones', at: [-1128, 322], target: [1270, -20, -95], note: 'Among the standing stones on the meadow, the temple on the horizon' },
+  { id: 3, name: 'arch', at: [-536, -116], target: [-500, 128, -150], note: 'The swallowed gateway under the canopy, trees growing through it' },
+  { id: 4, name: 'aqueduct', at: [-128, -880], target: [400, 60, -150], note: 'The broken aqueduct beside the river, leading toward the temple' },
+  { id: 5, name: 'shrine', at: [40, 1205], target: [50, 66, 1275], note: 'The spring shrine: the carved face in the cliff above its pool' },
+  { id: 6, name: 'bridge', at: [650, -63], floor: bridgeDeckHeight(650, -63), target: [1190, 215, -95], note: 'Crossing the bridge over the gorge, the temple stair ahead' },
+  { id: 7, name: 'temple', at: [1035, -80], target: [1190, 240, -95], note: 'The forecourt and the monumental stair below the temple facade' },
+  { id: 8, name: 'lookback', at: [1184, -196], floor: layout.temple.platform, target: [-1450, -80, 140], note: 'From the temple terrace, the forest valley back to the watchtower ridge' },
 ] as const

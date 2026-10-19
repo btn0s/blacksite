@@ -10,6 +10,9 @@ import type { Owned } from './owned'
 import { createRocks, type Rocks } from './rocks'
 import type { Stonework } from './stonework'
 
+const treeScale = { birch: [1.1, 1.6] as [number, number], pine: [1.4, 2.1] as [number, number] }
+const pineMean = (treeScale.pine[0] + treeScale.pine[1]) / 2
+
 export type LandscapeHandle = { terrain: Terrain; cover: ReturnType<typeof createOwnedCover>; forest: Forest; rocks: Rocks }
 
 export function Landscape({ world, tier, wind, look, owned, stones, handle }: { world: ValleyWorld; tier: Tier; wind: Wind; look: WebGPULook; owned: Owned; stones: Stonework; handle: { current: LandscapeHandle | null } }) {
@@ -46,8 +49,8 @@ export function Landscape({ world, tier, wind, look, owned, stones, handle }: { 
     const forest = createForest({
       renderer, wind,
       species: [
-        { model: owned.birch, scale: [0.8, 1.2], tint: { low: [0.95, 0.92, 0.66], high: [1.15, 1.1, 0.9], patchSize: 110, seed: 163 } },
-        { model: owned.pine, lod: owned.pineLod, scale: [0.9, 1.5], tint: { low: [0.78, 0.88, 0.9], high: [1.12, 1.08, 0.86], patchSize: 110, seed: 167 } },
+        { model: owned.birch, scale: treeScale.birch, tint: { low: [0.95, 0.92, 0.66], high: [1.15, 1.1, 0.9], patchSize: 110, seed: 163 } },
+        { model: owned.pine, lod: owned.pineLod, scale: treeScale.pine, tint: { low: [0.78, 0.88, 0.9], high: [1.12, 1.08, 0.86], patchSize: 110, seed: 167 } },
       ],
       density: world.forest,
       choose: (x, z, random) => random < 0.65 + 0.25 * smoothstep(0.4, 0.75, valueNoise(x / 110, z / 110, 509)) ? 1 : 0,
@@ -78,10 +81,10 @@ export function Landscape({ world, tier, wind, look, owned, stones, handle }: { 
       cover,
       shadowDistance: settings.shadowDistance,
       canopy: {
-        height: owned.pine.height * 0.85,
-        crown: Math.max(owned.pine.box.max.x - owned.pine.box.min.x, owned.pine.box.max.z - owned.pine.box.min.z) * 0.6,
+        height: owned.pine.height * 0.85 * pineMean,
+        crown: Math.max(owned.pine.box.max.x - owned.pine.box.min.x, owned.pine.box.max.z - owned.pine.box.min.z) * 0.6 * pineMean,
         forest: forest.coverage,
-        colors: [[0.045, 0.067, 0.044], [0.2, 0.23, 0.12]],
+        colors: [[0.03, 0.05, 0.034], [0.13, 0.15, 0.075]],
         broadleaf: 0.25,
         dither: tier === 'low',
       },

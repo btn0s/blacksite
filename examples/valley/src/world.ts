@@ -83,7 +83,7 @@ const pathSample = distanceField(walkingPaths, 40)
 const aqueductSample = distanceField([aqueductPath], 20)
 const mainProfiles = mainPathCurves.map(curve => sampleCurves([curve]))
 const mainSample = distanceField(mainProfiles, 35)
-const pathLevels = [260, 205, 155, 125, 120, 118.6, 155]
+const pathLevels = [276, 165, 138, 125, 120, 118.6, 155]
 const clearings = [layout.watchtower, layout.stones, layout.arch, layout.shrine] as const
 const landings = [layout.bridge.start, layout.bridge.end] as const
 const mix = (a: number, b: number, t: number) => a + (b - a) * t
@@ -101,8 +101,10 @@ function terrainShape(x: number, z: number) {
   let height = riverLevel(z) + 15 + (broad - 0.5) * 36 + detail
   const crest = -1640 + Math.sin(z / 620) * 85
   const across = x - crest
-  const ridge = (across < 0 ? 1 - smoothstep(120, 480, -across) : 1 - smoothstep(180, 1080, across)) * (1 - smoothstep(1250, 2000, Math.abs(z)))
-  height = mix(height, 268 + Math.sin(z / 380) * 15 + (broad - 0.5) * 14 + detail, ridge)
+  const reach = 1 - smoothstep(1250, 2000, Math.abs(z))
+  const ridge = (across < 0 ? 1 - smoothstep(120, 480, -across) : 1 - smoothstep(150, 400, across)) * reach
+  const bench = across < 0 ? 0 : (1 - smoothstep(380, 820, across)) * reach
+  height = mix(height + 45 * bench, 268 + Math.sin(z / 380) * 15 + (broad - 0.5) * 14 + detail, ridge)
   const mesaRadius = Math.hypot((x - 1195) / 390, (z + 65) / 700)
   const mesa = 1 - smoothstep(0.83, 1.04, mesaRadius)
   height = mix(height, layout.temple.ground + (valueNoise(x / 130, z / 130, 211) - 0.5) * 5, mesa)
@@ -208,7 +210,7 @@ export async function buildValley(tier: Tier, onProgress: (value: number) => voi
   ], site.layerSize)
   lap('layers')
   onProgress(0.95)
-  const bookmarks: ValleyBookmark[] = bookmarkSites.map(bookmark => ({ id: bookmark.id, name: bookmark.name, position: [bookmark.at[0], heightAtWorld(...bookmark.at) + 1.2, bookmark.at[1]], target: [...bookmark.target], note: bookmark.note }))
+  const bookmarks: ValleyBookmark[] = bookmarkSites.map(bookmark => ({ id: bookmark.id, name: bookmark.name, position: [bookmark.at[0], (bookmark.floor ?? heightAtWorld(...bookmark.at)) + 1.2, bookmark.at[1]], target: [...bookmark.target], note: bookmark.note }))
   const spawn = bookmarks[0]!.position
   return { sources, layers, heightAt: heightAtWorld, forest, coverMask: (x, z) => vegetationClearance(x, z, false), riverDistance: (x, z) => riverSample(x, z).distance, path: walkingPaths[0], paths: walkingPaths, pathDistance, spawn, bookmarks, timings }
 }
