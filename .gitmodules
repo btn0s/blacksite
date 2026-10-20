@@ -1,3 +1,7 @@
 [submodule "vendor/als-web"]
 	path = vendor/als-web
 	url = https://github.com/btn0s/als-web.git
+[submodule "vendor/three"]
+	path = vendor/three
+	url = https://github.com/btn0s/three.js.git
+	branch = blacksite
