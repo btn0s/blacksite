@@ -30,7 +30,7 @@ export class ClusterShadows {
     const pulled = clusterVertex(packed, this.traversal.visible)
     for (const batch of packed.depthBatches) {
       const geometry = clusterGeometry(this.traversal.indices.indices, this.traversal.counters, batch.argument)
-      const material = createGeometryDepthMaterial(batch.material, pulled, packed, true)
+      const material = createGeometryDepthMaterial(batch, pulled, true)
       this.materials.add(material)
       const mesh = new Mesh(geometry, material)
       mesh.name = `Cluster shadow ${batch.material?.name || 'opaque'}`

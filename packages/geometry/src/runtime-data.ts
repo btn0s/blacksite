@@ -1,5 +1,5 @@
 import { BackSide, DoubleSide, FrontSide, Matrix4, StorageBufferAttribute, Vector3 } from 'three/webgpu'
-import type { MeshStandardMaterial, MeshStandardNodeMaterial, WebGPURenderer } from 'three/webgpu'
+import type { MeshStandardMaterial, MeshStandardNodeMaterial, Side, WebGPURenderer } from 'three/webgpu'
 import { Fn, storage } from 'three/tsl'
 import type { MeshletAssetSource } from './load'
 import type { MeshletMetadata } from './format'
@@ -13,8 +13,7 @@ export interface MeshletSceneEntry {
 
 export interface PackedMeshletScene {
   batches: { material: MeshletSceneEntry['materials'][number]; capacity: number }[]
-  depthBatches: { material: MeshletSceneEntry['materials'][number] | null; argument: number }[]
-  opaqueBatches: number
+  depthBatches: { material: MeshletSceneEntry['materials'][number] | null; argument: number; firstMaterial: number; materialCount: number; side: Side; shadowSide: Side }[]
   drawCount: number
   clusterCount: number
   instanceCount: number
@@ -33,7 +32,6 @@ export interface PackedMeshletScene {
   instanceInfo: StorageBufferAttribute
   instanceBounds: StorageBufferAttribute
   materialMap: StorageBufferAttribute
-  materialSides: StorageBufferAttribute
   vertices: StorageBufferAttribute
   vertexReferences: StorageBufferAttribute
   indices: StorageBufferAttribute
@@ -43,6 +41,14 @@ export const CLUSTER_RECORD_WORDS = 40
 export const DRAW_ARGUMENT_OFFSET = 32
 export const DRAW_ARGUMENT_STRIDE = 5
 export const INDEX_BUDGET_OFFSET = 24
+
+function shadowSide(material: MeshletSceneEntry['materials'][number]) {
+  return material.shadowSide ?? (material.side === FrontSide ? BackSide : material.side === BackSide ? FrontSide : DoubleSide)
+}
+
+function depthState(material: MeshletSceneEntry['materials'][number]) {
+  return geometryUsesCoverage(material) ? 9 : material.side * 3 + shadowSide(material)
+}
 
 function geometryPoolLayout(metadata: readonly MeshletMetadata[]) {
   return metadata.reduce((pool, asset) => ({
@@ -237,13 +243,20 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     if (!(asset.vertices.buffer instanceof ArrayBuffer)) throw new Error('Geometry sources require transferable buffers')
     asset.vertices.buffer.transfer(0)
   }
-  batches.sort((a, b) => Number(geometryUsesCoverage(a.material)) - Number(geometryUsesCoverage(b.material)))
+  batches.sort((a, b) => depthState(a.material) - depthState(b.material))
   const remap = new Uint32Array(batches.length)
   batches.forEach((batch, index) => { remap[materialIndices.get(batch.material)!] = index })
   for (let i = 0; i < materialMap.length; i++) if (materialMap[i] !== 0xffffffff) materialMap[i] = remap[materialMap[i]!]!
-  const opaqueBatches = batches.filter(batch => !geometryUsesCoverage(batch.material)).length
-  const depthBatches: PackedMeshletScene['depthBatches'] = opaqueBatches ? [{ material: null, argument: batches.length }] : []
-  for (let i = opaqueBatches; i < batches.length; i++) depthBatches.push({ material: batches[i]!.material, argument: i })
+  const depthBatches: PackedMeshletScene['depthBatches'] = []
+  let drawCount = batches.length
+  for (let first = 0; first < batches.length;) {
+    const material = batches[first]!.material
+    const coverage = geometryUsesCoverage(material)
+    let end = first + 1
+    if (!coverage) while (end < batches.length && depthState(batches[end]!.material) === depthState(material)) end++
+    depthBatches.push({ material: coverage ? material : null, argument: coverage ? first : drawCount++, firstMaterial: first, materialCount: end - first, side: material.side, shadowSide: shadowSide(material) })
+    first = end
+  }
   let candidateCount = 0
   for (const batch of batches) candidateCount += batch.capacity
   if (candidateCount === 0) throw new Error('Geometry requires at least one visible cluster')
@@ -255,14 +268,13 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     instanceInfo: new StorageBufferAttribute(instanceInfo, 4),
     instanceBounds: new StorageBufferAttribute(instanceBounds, 4),
     materialMap: new StorageBufferAttribute(new Uint32Array(materialMap), 1),
-    materialSides: new StorageBufferAttribute(new Uint32Array(batches.flatMap(({ material }) => [material.side, material.shadowSide ?? (material.side === FrontSide ? BackSide : material.side === BackSide ? FrontSide : DoubleSide)])), 2),
     vertices: new StorageBufferAttribute(vertices, 1),
     vertexReferences: new StorageBufferAttribute(references, 1),
     indices: new StorageBufferAttribute(indices.subarray(0, indexBase), 1),
   }
   const residentBytes = Object.values(attributes).reduce((sum, attribute) => sum + attribute.array.byteLength, 0)
   const packed: PackedMeshletScene = {
-    batches, depthBatches, opaqueBatches, drawCount: batches.length + Number(opaqueBatches > 0),
+    batches, depthBatches, drawCount,
     clusterCount, instanceCount, candidateCount, totalTriangles, residentGeometryBytes, residentBytes,
     hierarchyDepth: frontierWidths.length,
     queueCapacity: Math.max(...frontierWidths),
@@ -270,6 +282,6 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     ...attributes,
   }
   await uploadAttributes(renderer, [attributes.vertices, attributes.vertexReferences, attributes.indices])
-  await uploadAttributes(renderer, [attributes.clusters, attributes.instances, attributes.nodes, attributes.instanceInfo, attributes.instanceBounds, attributes.materialMap, attributes.materialSides])
+  await uploadAttributes(renderer, [attributes.clusters, attributes.instances, attributes.nodes, attributes.instanceInfo, attributes.instanceBounds, attributes.materialMap])
   return packed
 }

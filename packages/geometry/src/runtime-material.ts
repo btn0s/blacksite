@@ -1,5 +1,5 @@
-import { DoubleSide, FrontSide, MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, StandardNodeLibrary, TangentSpaceNormalMap, Texture, Vector2 } from 'three/webgpu'
-import { Fn, bumpMap, context, float, frontFacing, materialColor, max, modelWorldMatrix, normalView, positionView, storage, texture, uniform, uv, varying, vec2, vec3, vec4, vertexColor } from 'three/tsl'
+import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, StandardNodeLibrary, TangentSpaceNormalMap, Texture, Vector2 } from 'three/webgpu'
+import { Fn, bumpMap, context, float, materialColor, max, modelWorldMatrix, normalView, positionView, texture, uniform, uv, vec2, vec3, vec4, vertexColor } from 'three/tsl'
 import type { MeshStandardMaterial, Node } from 'three/webgpu'
 import type { clusterVertex } from './runtime-vertex'
 import type { PackedMeshletScene } from './runtime-data'
@@ -89,15 +89,13 @@ export function geometryUsesCoverage(source: MeshStandardMaterial | MeshStandard
   return source.alphaTest > 0 || Boolean(node.alphaTestNode) || source.alphaHash || Boolean(node.maskNode || node.maskShadowNode)
 }
 
-export function createGeometryDepthMaterial(source: MeshStandardMaterial | MeshStandardNodeMaterial | null, pulled: PulledVertex, packed: PackedMeshletScene, shadow = false) {
+export function createGeometryDepthMaterial(batch: PackedMeshletScene['depthBatches'][number], pulled: PulledVertex, shadow = false) {
+  const source = batch.material
   if (!source) {
-    const sides = storage(packed.materialSides, 'uvec2', packed.materialSides.count).toReadOnly().element(pulled.materialIndex)
-    const side = varying(shadow ? sides.y : sides.x, 'geometryCullSide')
-    const material = new MeshBasicNodeMaterial({ side: DoubleSide })
+    const material = new MeshBasicNodeMaterial({ side: batch.side, shadowSide: batch.shadowSide })
     material.name = shadow ? 'Opaque cluster shadows' : 'Opaque cluster depth'
     material.positionNode = pulled.position
     material.colorNode = vec4(0, 0, 0, 1)
-    material.maskNode = side.equal(DoubleSide).or(frontFacing.equal(side.equal(FrontSide)))
     return material
   }
   const node = source as MeshStandardNodeMaterial

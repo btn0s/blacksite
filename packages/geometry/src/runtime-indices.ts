@@ -72,7 +72,6 @@ export class ClusterIndices {
     })().compute(1).setName(`${label} Index budget retry ${attempt + 1}`))
     this.prefix = Fn(() => {
       const start = uint(0).toVar()
-      const opaque = uint(0).toVar()
       for (let index = 0; index < packed.batches.length; index++) {
         const argument = DRAW_ARGUMENT_OFFSET + index * DRAW_ARGUMENT_STRIDE
         const count = atomicLoad(counters.element(argument))
@@ -81,13 +80,17 @@ export class ClusterIndices {
         atomicStore(counters.element(argument + 3), uint(0))
         atomicStore(counters.element(argument + 4), uint(0))
         start.addAssign(count)
-        if (index + 1 === packed.opaqueBatches) opaque.assign(start)
       }
-      if (packed.opaqueBatches) {
-        const argument = DRAW_ARGUMENT_OFFSET + packed.batches.length * DRAW_ARGUMENT_STRIDE
-        atomicStore(counters.element(argument), opaque)
+      for (const batch of packed.depthBatches) {
+        if (batch.material) continue
+        const first = DRAW_ARGUMENT_OFFSET + batch.firstMaterial * DRAW_ARGUMENT_STRIDE
+        const last = first + (batch.materialCount - 1) * DRAW_ARGUMENT_STRIDE
+        const offset = atomicLoad(counters.element(first + 2)).toVar()
+        const count = atomicLoad(counters.element(last + 2)).add(atomicLoad(counters.element(last))).sub(offset)
+        const argument = DRAW_ARGUMENT_OFFSET + batch.argument * DRAW_ARGUMENT_STRIDE
+        atomicStore(counters.element(argument), count)
         atomicStore(counters.element(argument + 1), uint(1))
-        atomicStore(counters.element(argument + 2), uint(0))
+        atomicStore(counters.element(argument + 2), offset)
         atomicStore(counters.element(argument + 3), uint(0))
         atomicStore(counters.element(argument + 4), uint(0))
       }

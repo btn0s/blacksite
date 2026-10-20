@@ -231,7 +231,7 @@ export class MeshletScene {
       this.lit.add(mesh)
     }
     for (const batch of packed.depthBatches) {
-      const material = createGeometryDepthMaterial(batch.material, pulled, packed)
+      const material = createGeometryDepthMaterial(batch, pulled)
       this.materials.add(material)
       const mesh = new Mesh(clusterGeometry(this.traversal.indices.indices, this.counters, batch.argument), material)
       mesh.name = `Cluster depth ${batch.material?.name || 'opaque'}`
