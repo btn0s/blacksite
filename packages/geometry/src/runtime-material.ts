@@ -1,5 +1,5 @@
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, NoBlending, StandardNodeLibrary, TangentSpaceNormalMap, Texture, Vector2 } from 'three/webgpu'
-import { Fn, bumpMap, context, faceDirection, float, materialColor, max, modelWorldMatrix, mrt, normalView, normalViewGeometry, packNormalToRGB, positionView, texture, uniform, uv, vec2, vec3, vec4, velocity, vertexColor } from 'three/tsl'
+import { Fn, bumpMap, context, faceDirection, float, materialColor, max, modelWorldMatrix, mrt, normalViewGeometry, packNormalToRGB, positionView, texture, uniform, uv, vec2, vec3, vec4, velocity, vertexColor } from 'three/tsl'
 import type { MeshStandardMaterial, Node } from 'three/webgpu'
 import type { clusterVertex } from './runtime-vertex'
 import type { PackedMeshletScene } from './runtime-data'
@@ -34,7 +34,7 @@ export function normalMapWithUV(map: Texture, pulledUv: ReturnType<typeof vec2>,
 
 export function tangentNormalWithUV(sample: Node<'vec3'>, coordinates: Node<'vec2'>) {
   return Fn(() => {
-    const n = normalView.normalize()
+    const n = normalViewGeometry.mul(faceDirection).normalize()
     const q0 = positionView.dFdx()
     const q1 = positionView.dFdy()
     const st0 = coordinates.dFdx()
@@ -52,11 +52,18 @@ export function tangentNormalWithUV(sample: Node<'vec3'>, coordinates: Node<'vec
 export const geometryVertexColor = Fn(builder => builder.context.getVertexColor?.() ?? vertexColor())
 export const geometrySecondaryUV = Fn(builder => builder.context.getSecondaryUV?.() ?? uv(1))
 export const geometryScaleX = Fn(builder => builder.context.getScaleX?.() ?? modelWorldMatrix.element(0).xyz.length())
+export const geometryMaterialId = Fn(builder => {
+  if (!builder.context.getMaterialId) throw new Error('Material data requires a cluster material id')
+  return builder.context.getMaterialId()
+})
 
 type PulledVertex = ReturnType<typeof clusterVertex>
+const contexts = new WeakMap<PulledVertex, Map<Node | null, ReturnType<typeof context>>>()
+const normals = new WeakMap<PulledVertex, WeakMap<Node, Node<'vec3'>>>()
+const depthMaterials = new WeakMap<PulledVertex, Map<string, MeshBasicNodeMaterial>>()
 
 function vertexContext(source: MeshStandardNodeMaterial, pulled: PulledVertex) {
-  return { ...source.contextNode?.value, getUV: (map?: { value: Texture }) => map?.value.channel === 1 ? pulled.secondaryUv : pulled.uv, getVertexColor: () => pulled.vertexColor, getSecondaryUV: () => pulled.secondaryUv, getScaleX: () => pulled.scaleX }
+  return { ...source.contextNode?.value, getUV: (map?: { value: Texture }) => map?.value.channel === 1 ? pulled.secondaryUv : pulled.uv, getVertexColor: () => pulled.vertexColor, getSecondaryUV: () => pulled.secondaryUv, getScaleX: () => pulled.scaleX, getMaterialId: () => pulled.materialId }
 }
 
 function coordinatesFor(map: Texture, pulled: PulledVertex) {
@@ -65,14 +72,20 @@ function coordinatesFor(map: Texture, pulled: PulledVertex) {
 
 export function bindGeometryMaterial(material: MeshStandardNodeMaterial, pulled: PulledVertex) {
   material.positionNode = pulled.position
-  material.contextNode = context(vertexContext(material, pulled))
+  if (!contexts.has(pulled)) contexts.set(pulled, new Map())
+  const shared = contexts.get(pulled)!, sourceContext = material.contextNode
+  if (!shared.has(sourceContext)) shared.set(sourceContext, context(vertexContext(material, pulled)))
+  material.contextNode = shared.get(sourceContext)!
   if (material.vertexColors) {
     material.colorNode = vec4(material.colorNode ?? materialColor).mul(pulled.vertexColor)
     material.vertexColors = false
   }
 
   if (material.normalNode) {
-    material.normalNode = material.normalNode.context(vertexContext(material, pulled))
+    if (!normals.has(pulled)) normals.set(pulled, new WeakMap())
+    const sharedNormals = normals.get(pulled)!
+    if (!sharedNormals.has(material.normalNode)) sharedNormals.set(material.normalNode, material.normalNode.context(material.contextNode.value))
+    material.normalNode = sharedNormals.get(material.normalNode)!
   } else if (material.normalMap) {
     if (material.normalMapType !== TangentSpaceNormalMap) throw new Error('Cluster normal maps must use tangent space')
     material.normalNode = normalMapWithUV(material.normalMap, coordinatesFor(material.normalMap, pulled), material.normalScale)
@@ -92,7 +105,16 @@ export function geometryUsesCoverage(source: MeshStandardMaterial | MeshStandard
 
 export function createGeometryDepthMaterial(batch: PackedMeshletScene['depthBatches'][number], pulled: PulledVertex, shadow = false) {
   const source = batch.material
+  if (!depthMaterials.has(pulled)) depthMaterials.set(pulled, new Map())
+  const shared = depthMaterials.get(pulled)!
+  const signature = JSON.stringify([shadow, batch.side, batch.shadowSide, source?.customProgramCacheKey(), source?.opacity, source?.alphaTest, source?.alphaHash, source?.vertexColors, source?.map?.uuid, source?.alphaMap?.uuid])
+  if (shared.has(signature)) {
+    const material = shared.get(signature)!.clone()
+    material.name = `${source?.name || 'Opaque'} cluster ${shadow ? 'shadows' : 'depth'}`
+    return material
+  }
   const material = new MeshBasicNodeMaterial({ blending: NoBlending, fog: false })
+  shared.set(signature, material)
   material.allowOverride = false
   material.positionNode = pulled.position
   material.side = shadow ? batch.shadowSide : batch.side

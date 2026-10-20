@@ -37,6 +37,7 @@ export interface PackedMeshletScene {
   instanceInfo: StorageBufferAttribute
   instanceBounds: StorageBufferAttribute
   materialMap: StorageBufferAttribute
+  materialIds: StorageBufferAttribute
 }
 
 export const CLUSTER_RECORD_WORDS = 40
@@ -82,7 +83,7 @@ export function transformScale(matrix: Matrix4) {
   return Math.sqrt(Math.max(xx + xy + xz, yy + xy + yz, zz + xz + yz))
 }
 
-export async function packScene(renderer: WebGPURenderer, entries: readonly MeshletSceneEntry[], arenaBytes = GEOMETRY_ARENA_BYTES, cpuStaging?: ResidencyLedger): Promise<PackedMeshletScene> {
+export async function packScene(renderer: WebGPURenderer, entries: readonly MeshletSceneEntry[], arenaBytes = GEOMETRY_ARENA_BYTES, cpuStaging?: ResidencyLedger, materialIds?: ReadonlyMap<MeshletSceneEntry['materials'][number], number>): Promise<PackedMeshletScene> {
   const sources = new Map<GeometryPageSource, MeshletSceneEntry[]>()
   let clusterCount = 0, instanceCount = 0, nodeCount = 0, groupCount = 0, pageCount = 0, totalTriangles = 0
   for (const entry of entries) {
@@ -205,6 +206,7 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     groups: new StorageBufferAttribute(groups, 4), nodes: new StorageBufferAttribute(nodes, 4),
     instances: new StorageBufferAttribute(instances, 4), instanceInfo: new StorageBufferAttribute(instanceInfo, 4),
     instanceBounds: new StorageBufferAttribute(instanceBounds, 4), materialMap: new StorageBufferAttribute(new Uint32Array(materialMap), 1),
+    materialIds: new StorageBufferAttribute(new Uint32Array(batches.map((batch, index) => materialIds?.get(batch.material) ?? index)), 1),
   }
   const arena = new GeometryPageArena(ranges, arenaBytes, cpuStaging)
   const spatial = [coverage.spatial, coverage.spatialRoots, coverage.placements]
