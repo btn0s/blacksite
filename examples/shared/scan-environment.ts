@@ -1,9 +1,10 @@
 import { NATURE, type Atmosphere } from '@blacksite/look'
-import type { ArchwayAsset } from './asset'
 
-export function courtyardEnvironment(owned: ArchwayAsset) {
+type EnvironmentComponent = { class: string; transform: { matrix: number[]; position: number[] }; properties: Record<string, unknown> }
+
+export function scanEnvironment(components: readonly EnvironmentComponent[]) {
   const component = (name: string) => {
-    const value = owned.manifest.environment.find(entry => entry.class === name)
+    const value = components.find(entry => entry.class === name)
     if (!value) throw new Error(`Missing environment component: ${name}`)
     return value
   }
