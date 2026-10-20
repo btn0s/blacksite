@@ -1,7 +1,7 @@
 import { Box3, Matrix4, Vector3 } from 'three'
 import type { WebGPURenderer } from 'three/webgpu'
 import { loadMeshletAsset, MeshletScene, type MeshletAssetSource, type MeshletMetadata, type MeshletSceneEntry } from '@blacksite/geometry'
-import { loadScanMaterials, type ScanSurface } from '../../shared/scan-material'
+import { loadScanMaterials, scanTextureFeedback, type ScanSurface } from '../../shared/scan-material'
 
 const root = '/owned/dark-ruins/level/'
 type GeometryRecord = MeshletMetadata & { id: string; url: string; bytes: number; collision: string; mesh: string; primitiveSlots: number[] }
@@ -77,7 +77,7 @@ export async function loadRuins(progress: (detail: string) => void) {
         grouped.get(id)!.instances.push(placements[index]!.matrix)
       }
       progress(`Uploading ${assets.size} resident geometries`)
-      return MeshletScene.create(renderer, [...grouped.values()], { pixelError: 2, occlusion: true, shadowLayer: 2, shadowPixelError: 1 })
+      return MeshletScene.create(renderer, [...grouped.values()], { pixelError: 2, occlusion: true, shadowLayer: 2, shadowPixelError: 1, textureFeedback: scanTextureFeedback(renderer) })
     },
   }
 }

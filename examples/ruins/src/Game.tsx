@@ -40,7 +40,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
 }) {
   const { gl, camera, scene } = useThree()
   const renderer = gl as unknown as WebGPURenderer
-  const textures = useMemo(() => createScanMaterialStreaming(renderer, owned.placements.map((placement, index) => ({ materials: owned.manifest.instances[index]!.materials, bounds: placement.bounds }))), [owned, renderer])
+  const textures = useMemo(() => createScanMaterialStreaming(renderer), [renderer])
   useEffect(() => () => textures.dispose(), [textures])
   const [look, setLook] = useState<Look | null>(null)
   const [error, setError] = useState<Error | null>(null)
@@ -78,9 +78,9 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     ]
     return () => { for (const dispose of remove) dispose() }
   }, [geometry, look])
-  useFrame(({ size }) => {
+  useFrame(() => {
     if (!look) return
-    if (shared.warm.current >= 10) textures.update(camera, size.height * renderer.getPixelRatio())
+    if (shared.warm.current >= 10) textures.update()
     shared.warm.current++
     if (shared.warm.current === 10) onReady()
   }, 0.5)

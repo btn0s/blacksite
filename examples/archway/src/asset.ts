@@ -2,7 +2,7 @@ import { Matrix4 } from 'three'
 import { MeshStandardNodeMaterial, type WebGPURenderer } from 'three/webgpu'
 import type { RapierContext } from '@react-three/rapier'
 import { loadMeshletAsset, meshletStorageSize, MeshletScene, type MeshletAssetSource, type MeshletMetadata, type MeshletSceneEntry } from '@blacksite/geometry'
-import { loadScanMaterials, type ScanSurface } from '../../shared/scan-material'
+import { loadScanMaterials, scanTextureFeedback, type ScanSurface } from '../../shared/scan-material'
 
 const root = '/owned/dark-ruins/'
 type EnvironmentComponent = { class: string; transform: { position: number[]; matrix: number[] }; properties: Record<string, unknown> }
@@ -120,7 +120,7 @@ export async function loadArchway() {
         }
         grouped.get(id)!.instances.push(new Matrix4().fromArray(placement.matrix))
       }
-      return MeshletScene.create(renderer, [...grouped.values()], { pixelError: 2, occlusion: true, shadowLayer: 2, shadowPixelError: 4 })
+      return MeshletScene.create(renderer, [...grouped.values()], { pixelError: 2, occlusion: true, shadowLayer: 2, shadowPixelError: 4, textureFeedback: scanTextureFeedback(renderer) })
     },
   }
 }
