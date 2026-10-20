@@ -17,15 +17,12 @@ export type RuinsViews = Record<Exclude<RuinsView, 'spawn'>, RuinsViewGeometry>
 
 export const ruinsNearRadius = 12
 
-export function createRuinsHome(archway: Box3) {
-  const base = archway.getCenter(new Vector3()).setY(archway.min.y)
-  return {
-    id: 1,
-    name: 'Spawn',
-    position: base.clone().add(new Vector3(0, 2, 7.1)).toArray() as [number, number, number],
-    target: base.clone().add(new Vector3(0, 6, 0)).toArray() as [number, number, number],
-    note: '',
-  }
+export const ruinsHome = {
+  id: 1,
+  name: 'Spawn',
+  position: [25.8, 25.8, 4.6] as [number, number, number],
+  target: [35.8, 27, 4.6] as [number, number, number],
+  note: '',
 }
 
 export function createRuinsCameras(views: RuinsViews) {
@@ -33,7 +30,7 @@ export function createRuinsCameras(views: RuinsViews) {
   const centre = bounds.getCenter(new Vector3())
   const diameter = bounds.getSize(new Vector3()).length()
   const aspect = window.innerWidth / window.innerHeight
-  const home = createRuinsHome(views.archway.bounds)
+  const home = ruinsHome
   const cameraFor = (geometry: RuinsViewGeometry, direction: Vector3) => {
     const camera = new PerspectiveCamera(55, aspect)
     const target = geometry.bounds.getCenter(new Vector3())

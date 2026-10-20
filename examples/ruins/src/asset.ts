@@ -3,7 +3,7 @@ import { MeshStandardNodeMaterial, type WebGPURenderer } from 'three/webgpu'
 import { GEOMETRY_ARENA_BYTES, loadGeometryPageSource, MeshletScene, type GeometryPageSource, type MeshletSceneEntry } from '@blacksite/geometry'
 import { loadScanMaterials, scanTextureFeedback, type ScanSurface } from '../../shared/scan-material'
 import { ScanFlames, type ScanFlameGeometry } from '../../shared/scan-flames'
-import { createRuinsHome, type RuinsViews } from './views'
+import { ruinsHome, type RuinsViews } from './views'
 import type { CollisionDirectory } from './collision'
 
 const root = '/owned/dark-ruins/'
@@ -104,7 +104,7 @@ export async function loadRuins(progress: (detail: string) => void) {
   }
   if (Object.values(views).some(view => view.bounds.isEmpty())) throw new Error('The level is missing its landmark geometry')
   const bounds = views.overview.bounds
-  const home = createRuinsHome(views.archway.bounds)
+  const home = ruinsHome
   return {
     manifest, placements, bounds, views, home, environment, collision, describe,
     collisionRoot: new URL(root + manifest.collision.slice(0, manifest.collision.lastIndexOf('/') + 1), location.href).href,
