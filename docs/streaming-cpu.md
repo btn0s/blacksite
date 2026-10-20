@@ -36,7 +36,7 @@ One texture reader worker now performs the response body read and size validatio
 
 ## Production measurements
 
-Chrome 155.0.8059.85, headless, RTX 3070, 1920x1080, DPR 1, high tier. Vite build plus Vite preview on 5253. GPU free memory before launch was 7,529 MiB. No Chrome existed before launch or after close. Every approximately 500 ms audit during the marked intervals and every camera-switch audit found exactly one Chrome root process. Browser/GPU errors: zero. Screenshots retain the ground, arches, stairs, materials and character.
+Chrome 155.0.8059.85, headless, RTX 3070, 1920x1080, DPR 1, high tier. Vite build plus Vite preview on 5253. GPU free memory before launch was 7,496 MiB. No Chrome existed before launch or after close. Every approximately 500 ms audit during the marked intervals and every camera-switch audit found exactly one Chrome root process. Browser/GPU errors: zero. Screenshots retain the ground, arches, stairs, materials and character.
 
 Main-thread busy time is the RunTask interval union between user-timing frame marks on the renderer thread. Thread CPU uses those marks' thread-clock deltas. Sampling/tracing overhead is included. Profile weights classify exclusive leaf samples by ancestry and are approximate elapsed sample weights, rather than additive thread CPU clocks.
 
@@ -53,10 +53,10 @@ Main-thread busy time is the RunTask interval union between user-timing frame ma
 | GC | 0.023 ms/frame | 0.024 ms/frame |
 | Actual GPU draw commands/frame | **113** | **113** |
 | GPU timestamp sum | **7.110 ms** | **5.842 ms** |
-| View selection/recovery/compaction GPU | 1.668 ms | 1.478 ms |
+| View selection/recovery/compaction GPU | 1.668 ms | 1.486 ms |
 | Active shadow selection/compaction GPU | 1.380 ms | 1.101 ms |
-| Scene lighting GPU | 1.658 ms | 1.516 ms |
-| Depth/normals/motion GPU | 0.850 ms | 0.648 ms |
+| Scene lighting GPU | 1.658 ms | 1.518 ms |
+| Depth/normals/motion GPU | 0.850 ms | 0.649 ms |
 
 GPU totals sum the latest asynchronous timestamp snapshot, rather than a GPU p95 or frame wall-clock measurement. Walk's snapshot updates the near cascade; Wide's updates the far cascade. Other costs include the active shadow raster, 0.100 ms tile clear, AO, TRAA, HiZ and output. Actual draw counts include bundle contents, measured at GPU command encoding/replay. r186 renderer.info omits replayed bundled draws, so its HUD count is lower. Walk held W and moved 3.314 m to the same collision boundary as the earlier captures.
 
