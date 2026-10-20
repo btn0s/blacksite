@@ -239,7 +239,7 @@ export class MeshletScene {
       mesh.receiveShadow = true
       mesh.castShadow = false
       this.meshes.push(mesh)
-      this.submission.add(this.lit, mesh, batchIndex)
+      this.submission.add(this.lit, mesh, batchIndex, 1, batch.material)
     }
     for (const batch of packed.depthBatches) {
       const material = createGeometryDepthMaterial(batch, pulled)
@@ -247,7 +247,7 @@ export class MeshletScene {
       const mesh = new Mesh(clusterGeometry(this.traversal.indices.indices, this.counters, batch.argument), material)
       mesh.name = `Cluster depth ${batch.material?.name || 'opaque'}`
       mesh.frustumCulled = false
-      this.submission.add(this.depth, mesh, batch.firstMaterial, batch.materialCount)
+      this.submission.add(this.depth, mesh, batch.firstMaterial, batch.materialCount, batch.material)
     }
     this.pyramidCompute = Fn(() => {
       const xy = uvec2(instanceIndex.mod(pyramidSize), instanceIndex.div(pyramidSize))
@@ -325,7 +325,7 @@ export class MeshletScene {
   }
 
   prepare(renderer: WebGPURenderer, camera: PerspectiveCamera, viewport: Readonly<Vector2>) {
-    this.submission.updateBindings(this.textureFeedback?.feedback.bindingVersion ?? 0, viewport)
+    this.submission.updateBindings(this.textureFeedback?.feedback.bindingVersions, viewport)
     if (this.textureFeedback) this.textureFeedback.feedback.frame++
     this.lit.visible = false
     this.depth.visible = true
@@ -414,8 +414,8 @@ export class MeshletScene {
   dispose() {
     this.textureFeedback?.feedback.ledger.release(this)
     this.textureFeedback?.dispose()
-    for (const mesh of this.meshes) mesh.geometry.dispose()
-    for (const mesh of this.depth.children) (mesh as Mesh).geometry.dispose()
+    this.submission.disposeGeometry('lit')
+    this.submission.disposeGeometry('depth')
     for (const material of this.materials) material.dispose()
     this.shadows.dispose()
     this.traversal.dispose()

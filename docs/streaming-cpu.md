@@ -1,6 +1,6 @@
 # Courtyard bounded selection and CPU
 
-Slice 2 is integrated with the texture residency and geometry bake slices. Walk and Wide render correctly in the production build. Cluster depth, lit and shadow draws replay render bundles; the look survives camera changes. Walk main-thread p95 remains above 8.33 ms, and its rendering/submission profile weight is slightly above 5 ms.
+Slice 2 is integrated with the texture residency and geometry bake slices. Walk and Wide render correctly. Cluster depth, lit and shadow draws replay render bundles; the look survives camera changes. After the bounded follow-up below, production Walk main-thread p50/p95 is 7.750/10.460 ms and rendering/submission profile weight is 4.961 ms/frame. The 8.33 ms p95 target remains unmet.
 
 ## Bounded selection
 
@@ -14,7 +14,7 @@ The complete frustum cut fits before depth. Previous-depth and current-depth vis
 
 One material submission owner queries an immutable spatial tree with conservative material bitsets. Queries visit at most 4,096 spatial nodes before adding complete remaining subtree bitsets. A fixed 64-entry stack suffices for the balanced tree. The view/two-cascade union activates newly covered buckets immediately. Unsigned bitset comparison avoids treating bit 31 as a material-set change every frame.
 
-Lit, depth and shadow groups are BundleGroups. Opaque depth/shadow objects own their cull-state material; alpha-tested objects own their coverage material. Cluster materials disable override. Depth materials write the actual normals/motion MRT outputs. Shadow materials own their side and alpha coverage. Material coverage, texture binding publication and viewport changes invalidate bundle recordings. Shader uniforms and indirect counts continue updating on replay.
+Each lit, depth and shadow draw bucket owns a BundleGroup under its pass group. Opaque depth/shadow objects own their cull-state material; alpha-tested objects own their coverage material. Cluster materials disable override. Depth materials write the actual normals/motion MRT outputs. Shadow materials own their side and alpha coverage. Texture publication increments versions only for materials using that image, invalidating their bundles. Viewport changes invalidate every bucket. Material coverage toggles bucket visibility without changing recorded contents. Shader uniforms and indirect counts continue updating on replay.
 
 The remaining r186 failure was nested rendering during bundle recording. A debugger capture found GTAO's fullscreen AO object inside the cluster lit bundle, with a null cached PassMultipleTextureNode sampler. The recorder also covers nested node updates. The look now declares depth, sun shadows and AO as dependencies before lighting, so those passes complete before a lit bundle starts. No renderer source is patched.
 
@@ -69,3 +69,42 @@ Evidence is under D:/dev/probe/ruins-cpu-slice2i-production: JSON, analysis JSON
 The earlier paired capture of the same pre-bundle code measured dev versus production Walk busy mean **10.978 versus 10.970 ms/frame**, and busy p95 **18.149 versus 18.084 ms/frame**. It showed no material CPU recovery from production mode alone. The final numbers above use production; the original 15.4 ms dev figure is not used as the final baseline.
 
 The geometry asset format and owned manifests are unchanged by this slice. The combined run reads the texture slice's already-published mip-tail build. No owned content, generated builds or probe files are committed. Dependencies are linked; no installs, tests, gates or blacksite check were run.
+
+## One bounded Walk follow-up
+
+The existing slice2i Walk trace contains 256/606 frames above 8.33 ms. Comparing those frames with the middle 20% around the median (121 frames) attributes the extra sampled time as follows. These are cohort averages, not individual p95 components; nested measurements are not additive.
+
+| Work | Above-budget frames | Median cohort | Extra |
+| --- | ---: | ---: | ---: |
+| Rendering/submission | 5.656 ms | 4.945 ms | +0.711 ms |
+| Of that: bundle recording | 0.447 ms | 0.030 ms | +0.416 ms |
+| Texture streaming update, including upload | 0.217 ms | 0.048 ms | +0.169 ms |
+| ALS/Subject animation and movement | 1.453 ms | 1.314 ms | +0.139 ms |
+| Physics | 0.405 ms | 0.275 ms | +0.130 ms |
+| GC | 0.045 ms | 0.019 ms | +0.026 ms |
+| React | 0.0055 ms | 0.0040 ms | +0.0015 ms |
+| Browser/native unassigned | 1.960 ms | 1.723 ms | +0.238 ms |
+
+WebGPU return-data tasks average 0.0274 versus 0.0255 ms; all microtask checkpoints average 0.121 versus 0.104 ms. Feedback/readback callbacks do not explain the main difference. Physics and ALS use the same sampled paths; this sampling trace cannot establish doubled fixed steps. Selection retries execute the same fixed CPU dispatch sequence, with retry admission on the GPU; there is no CPU re-selection loop. Upload frames are the clear identifiable trigger: their bundle recording averages 3.077 ms, versus effectively zero without an upload.
+
+Previously one texture publication invalidated all three pass BundleGroups, re-recording every lit bucket and both opaque cascade recordings. The follow-up replaces that global invalidation with one bundle per draw bucket and material binding versions. Opaque depth/shadow buckets have no texture dependencies. The previous pass-wide invalidation path is deleted.
+
+One new isolated production Walk run used the same Chrome, GPU, viewport, profiler and tracing settings, with 7,528 MiB free before launch. It rendered 577 frames in 9,616.628 ms and moved the same 3.314 m. Every Chrome-root audit found one process; no Chrome existed before or after. No browser/GPU errors or post-readiness pipeline/shader creations occurred.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| Main-thread busy p50 | 8.110 ms | **7.750 ms** |
+| Main-thread busy p95 | 10.595 ms | **10.460 ms** |
+| Main-thread busy maximum | 13.114 ms | 15.539 ms |
+| Frames above 8.33 ms | 256/606 (42.2%) | 171/576 (29.7%) |
+| Rendering/submission profile weight | 5.119 ms/frame | **4.961 ms/frame** |
+| Upload-frame bundle recording | 3.077 ms | **0.098 ms** |
+| Render bundle recordings / measured frame | 0.514 | 0.260 |
+| Actual GPU draws / frame | 113 | 113 |
+| GPU timestamp sum, near-cascade snapshot | 7.110 ms | **6.979 ms** |
+
+The observed p95 improvement is modest: 0.135 ms (1.3%) in one before/after pair, with a higher maximum after. The specific upload-triggered recording cost fell substantially. Remaining slow frames contain renderer uniform/texture updates and ALS/physics variation; browser/native samples cannot be attributed further from this trace. The result does not establish that all remaining tail time is browser/native, and no second optimization pass was attempted.
+
+After-run average costs are rendering/submission 4.961, browser/native 1.703, ALS/Subject 1.177, physics 0.329 and GC 0.024 ms/frame. GPU costs are view selection/recovery 1.657, shadow selection 1.328, lighting 1.649, depth/normals/motion 0.828 and active near shadow raster 0.890 ms. Final current view/shadow overflows are zero; lifetime restart counts remain three and 35.
+
+Evidence: D:/dev/probe/ruins-cpu-slice2i-production-tail-attribution.json and D:/dev/probe/ruins-cpu-tail-production with JSON, analysis, attribution, Walk trace/profile, source map and before/after screenshots. The bounded follow-up measures Walk only; Wide and Walk are also checked through the merged 5247 preview.

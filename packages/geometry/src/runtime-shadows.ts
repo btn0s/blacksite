@@ -40,7 +40,7 @@ export class ClusterShadows {
       mesh.frustumCulled = false
       mesh.castShadow = true
       mesh.receiveShadow = false
-      this.submission.add(this.object, mesh, batch.firstMaterial, batch.materialCount)
+      this.submission.add(this.object, mesh, batch.firstMaterial, batch.materialCount, batch.material)
     }
   }
 
@@ -72,10 +72,7 @@ export class ClusterShadows {
   }
 
   dispose() {
-    for (const child of this.object.children) {
-      const mesh = child as Mesh
-      mesh.geometry.dispose()
-    }
+    this.submission.disposeGeometry('shadow')
     for (const material of this.materials) material.dispose()
     this.traversal.dispose()
   }
