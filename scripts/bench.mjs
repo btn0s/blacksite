@@ -1,6 +1,6 @@
-import { spawn, execFileSync } from 'node:child_process'
+import { spawn, spawnSync, execFileSync } from 'node:child_process'
 import { createServer } from 'node:net'
-import { existsSync, mkdirSync, openSync, closeSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, openSync, closeSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'file:///D:/dev/wall/examples/wall/node_modules/playwright/index.mjs'
@@ -20,6 +20,19 @@ const viewUrls = {
 }
 const settleMs = 20000
 const captureMs = 10000
+
+function ensureNodeVersion() {
+  const [major, minor] = process.versions.node.split('.').map(Number)
+  if (major > 22 || major === 22 && minor >= 12) return
+  const volta = process.env.VOLTA_HOME ?? join(process.env.LOCALAPPDATA ?? '', 'Volta')
+  const images = join(volta, 'tools', 'image', 'node')
+  const available = existsSync(images) ? readdirSync(images).filter(version => /^\d+\.\d+\.\d+$/.test(version)).map(version => version.split('.').map(Number)).filter(([vMajor, vMinor]) => vMajor > 22 || vMajor === 22 && vMinor >= 12).sort((left, right) => right[0] - left[0] || right[1] - left[1] || right[2] - left[2]) : []
+  const selected = available[0]
+  if (!selected) throw new Error(`Node.js ${process.versions.node} is too old; Node.js 22.12 or newer is required and no compatible Volta runtime is already installed.`)
+  const executable = join(images, selected.join('.'), 'node.exe')
+  const result = spawnSync(executable, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], { stdio: 'inherit', env: process.env })
+  process.exit(result.status ?? 1)
+}
 
 function options() {
   const result = { views: defaultViews, dev: false, compare: null, compareEnabled: false, output: join(benchRoot, 'run') }
@@ -139,7 +152,8 @@ function instrument() {
   }
   const writeBuffer = GPUQueue.prototype.writeBuffer
   GPUQueue.prototype.writeBuffer = function (buffer, offset, data, ...args) {
-    record('buffer-upload', ArrayBuffer.isView(data) ? data.byteLength : data?.byteLength ?? 0)
+    const bytes = ArrayBuffer.isView(data) ? data.byteLength : data?.byteLength ?? 0
+    if (bytes >= 64 * 1024) record('buffer-upload', bytes)
     return writeBuffer.call(this, buffer, offset, data, ...args)
   }
   const writeTexture = GPUQueue.prototype.writeTexture
@@ -184,6 +198,7 @@ async function runView(page, baseUrl, view, outputDir, identity) {
   if (view.endsWith('-walk')) await page.keyboard.down('w')
   const captureStarted = new Date().toISOString()
   await page.waitForTimeout(captureMs)
+  await page.evaluate(() => { window.__benchCapture = false })
   if (view.endsWith('-walk')) await page.keyboard.up('w')
   const after = await dump()
   const telemetry = after
@@ -231,7 +246,7 @@ async function runView(page, baseUrl, view, outputDir, identity) {
       offset += frameTimes[index]
       offsets.push(offset)
     }
-    result.frameLog.spikes = gpuTimes.map((gpuMs, index) => ({ gpuMs, atMs: offsets[index] })).sort((a, b) => b.gpuMs - a.gpuMs).slice(0, 10).map(spike => ({ ...spike, eventsWithin100Ms: result.events.filter(event => Math.abs(event.at - spike.atMs) <= 100) }))
+    result.frameLog.spikes = gpuTimes.map((gpuMs, index) => ({ gpuMs, atMs: captureMs + offsets[index] })).sort((a, b) => b.gpuMs - a.gpuMs).slice(0, 10).map(spike => ({ ...spike, eventsWithin100Ms: result.events.filter(event => Math.abs(event.at - spike.atMs) <= 100) }))
   }
   writeFileSync(join(outputDir, `${view}.json`), JSON.stringify(result, null, 2))
   if (result.consoleErrors.length) throw new Error(`${view} emitted ${result.consoleErrors.length} console error(s): ${result.consoleErrors.join('\n')}`)
@@ -247,11 +262,12 @@ function table(results, compareResults = null) {
     return [result.view, fmt(result.firstPlayableMs / 1000), `${fmt(result.cpuMs?.p50)} / ${fmt(result.cpuMs?.p95)}${delta('cpuMs', 'p95')}`, `${fmt(result.gpuMs?.p50)} / ${fmt(result.gpuMs?.p95)}${delta('gpuMs', 'p95')}`, fmt(result.gpuMs?.max), result.draws ?? '—', result.triangles ?? '—', fmt(result.resident.geometryBytes / 1048576), fmt(result.resident.textureBytes / 1048576), fmt(result.resident.ledgerPeakBytes / 1048576), result.pipelinesCreatedAfterReady]
   })
   console.log('\nView             Ready(s) CPU p50/p95 ms      GPU p50/p95 ms      GPU max Draws Triangles Geo MiB Tex MiB Ledger peak MiB Pipelines+')
-  for (const row of rows) console.log(`${row[0].padEnd(16)} ${row[1].padStart(8)} ${row[2].padEnd(20)} ${row[3].padEnd(20)} ${row[4].padStart(7)} ${String(row[5]).padStart(5)} ${String(row[6]).padStart(9)} ${row[7].padStart(7)} ${row[8].padStart(7)} ${row[9].padStart(15)} ${row[10].padStart(10)}`)
+  for (const row of rows) console.log(`${row[0].padEnd(16)} ${row[1].padStart(8)} ${row[2].padEnd(20)} ${row[3].padEnd(20)} ${row[4].padStart(7)} ${String(row[5]).padStart(5)} ${String(row[6]).padStart(9)} ${row[7].padStart(7)} ${row[8].padStart(7)} ${row[9].padStart(15)} ${String(row[10]).padStart(10)}`)
   if (compareResults) console.log('Parenthesized values are p95 deltas against --compare.')
 }
 
 const config = options()
+ensureNodeVersion()
 let lock
 let server
 let browser
