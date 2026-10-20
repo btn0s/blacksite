@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const archway = 'D:/dev/archway'
-const runner = 'D:/dev/bench-runner'
+const runner = 'D:/dev/bench-runner-auto'
 const ownedAssets = 'D:/dev/owned-assets'
 const benchRoot = 'D:/dev/probe/bench'
 const baseline = join(benchRoot, 'baseline')
