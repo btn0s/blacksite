@@ -1,6 +1,6 @@
-import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Canvas, createPortal, useFrame, useThree } from '@react-three/fiber'
-import { CuboidCollider, Physics, RigidBody, TrimeshCollider } from '@react-three/rapier'
+import { Physics, RigidBody, TrimeshCollider } from '@react-three/rapier'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { WebGPURenderer } from 'three/webgpu'
 import { InputProvider, makeInputDevices } from '@blacksite/input'
@@ -9,7 +9,6 @@ import { MeshletScene } from '@blacksite/geometry'
 import { createInspector } from '@blacksite/inspect'
 import { InspectHud } from '@blacksite/inspect/react'
 import { WebGPULook } from '@blacksite/look/webgpu-r3f'
-import { NATURE, type Atmosphere } from '@blacksite/look'
 import type { WebGPULook as Look } from '@blacksite/look/webgpu'
 import { Loading, TitleCard } from '@blacksite/ui/hud'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
@@ -17,20 +16,13 @@ import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { createWalker } from '../../valley/src/walker'
 import { outfit } from '../../valley/src/outfit'
 import { SceneInspection, type InspectionContent, type TelemetryAction } from '../../shared/Inspection'
+import { residentScanTextures } from '../../shared/scan-material'
 import { loadArchway, type ArchwayAsset } from './asset'
-import { archwayViews, createArchwayCameras, type ArchwayView } from './views'
+import { courtyardEnvironment } from './environment'
+import { archwayViews, createArchwayCameras, createArchwayHome, type ArchwayView } from './views'
 
-const atmosphere: Atmosphere = {
-  ...NATURE,
-  exposure: 1,
-  sun: { ...NATURE.sun, direction: [-0.6, 0.65, 0.5], color: [1, 0.94, 0.84] },
-  grade: { ...NATURE.grade, lut: null, saturation: 1, bloom: 0, vignette: 0, grain: 0 },
-  physical: NATURE.physical && { ...NATURE.physical, clear: 100, heightFog: { density: 0.0001, base: 0, falloff: 90, tint: [0.68, 0.78, 0.94] } },
-}
-const sunlight = { sunLux: 63000, skyLux: 16000, ev100: 13 }
 const cameraGrade = { contrast: 1, toe: 0 }
 const shadowLayers = [2]
-const home = { id: 1, name: 'Archway', position: [0, 0.1, 31] as [number, number, number], target: [0, 7, 0] as [number, number, number], note: '' }
 const glyphs = { home: { label: 'Archway', keyboard: 'R', touch: 'Home', gamepad: { xbox: 'View', playstation: 'Create', generic: 'Back' } } }
 const lodLegend = [{ color: '#ffc1aa', label: 'Source · 0' }, { color: '#adc4ef', label: 'Level 1' }, { color: '#e3ffa3', label: 'Level 2' }]
 
@@ -44,11 +36,12 @@ function Scene({ owned, walker, gameplayCamera, inspector, telemetry, shared }: 
 }) {
   const { gl, camera, scene } = useThree()
   const renderer = gl as unknown as WebGPURenderer
+  const home = useMemo(() => createArchwayHome(owned.manifest.centre), [owned])
   const [look, setLook] = useState<Look | null>(null)
   const [error, setError] = useState<Error | null>(null)
-  const geometry = useMemo(() => new MeshletScene([{ asset: owned.asset, materials: owned.materials, instances: [owned.matrix] }], { pixelError: 1, occlusion: true, shadowLayer: 2, shadowPixelError: 1 }), [owned])
+  const geometry = useMemo(() => new MeshletScene(owned.entries, { pixelError: 1, occlusion: true, shadowLayer: 2, shadowPixelError: 1 }), [owned])
   const stats = useMemo(() => ({ sceneTriangles: 0, drawnTriangles: 0 }), [])
-  const ground = useRef(null)
+  const { atmosphere, sunlight } = useMemo(() => courtyardEnvironment(owned), [owned])
   const onLook = useCallback((value: Look | null) => { shared.look.current = value; shared.warm.current = 0; setLook(value) }, [shared])
   const onError = useCallback((value: unknown) => setError(value instanceof Error ? value : new Error(String(value))), [])
   const content = useCallback((): InspectionContent => ({
@@ -62,8 +55,9 @@ function Scene({ owned, walker, gameplayCamera, inspector, telemetry, shared }: 
       { id: 'meshlet-debug', label: 'Meshlet colours', enabled: false, setEnabled: enabled => geometry.setDebugView(enabled ? 'meshlets' : inspector.getSnapshot().view === 'lod' ? 'lod' : 'normal') },
     ],
     setView: view => { geometry.setDebugView(view === 'lod' ? 'lod' : 'normal'); shared.look.current?.setDebug(view === 'lod') },
-    details: () => ({ sourceTriangles: owned.asset.metadata.sourceTriangles, meshletCount: owned.asset.metadata.clusterCount, levels: owned.asset.metadata.levelCount, ...stats }),
-  }), [geometry, inspector, owned, shared, stats])
+    textures: () => residentScanTextures(renderer),
+    details: () => ({ placements: owned.manifest.placements.length, uniqueMeshes: owned.assets.length, sourceTriangles: owned.sourceTriangles, meshletCount: owned.meshlets, levels: Math.max(...owned.assets.map(asset => asset.metadata.levelCount)), residentGeometryBytes: owned.assets.reduce((sum, asset) => sum + asset.vertices.byteLength + asset.vertexReferences.byteLength + asset.indices.byteLength + asset.metadata.clusterCount * 128, 0), untranslated: owned.manifest.untranslated, ...stats }),
+  }), [geometry, inspector, owned, renderer, shared, stats])
   useEffect(() => {
     shared.geometry.current = geometry
     scene.add(geometry.object)
@@ -74,7 +68,7 @@ function Scene({ owned, walker, gameplayCamera, inspector, telemetry, shared }: 
   useFrame(() => {
     if (!look) return
     camera.updateMatrixWorld()
-    geometry.prepare(renderer, camera as PerspectiveCamera, { occluders: ground.current ? [ground.current] : [] })
+    geometry.prepare(renderer, camera as PerspectiveCamera)
     shared.warm.current++
   }, 0.5)
   useEffect(() => {
@@ -88,16 +82,14 @@ function Scene({ owned, walker, gameplayCamera, inspector, telemetry, shared }: 
   }, [geometry, onError, renderer, shared, stats])
   const events = useMemo<CharacterEvents>(() => ({ onAction: action => {
     if (action === 'home') { walker.respawn(undefined, [...home.position]); walker.face(new Vector3(...home.target)); geometry.resetHistory() }
-  } }), [geometry, walker])
+  } }), [geometry, home, walker])
   if (error) throw error
   return <>
     <WebGPULook atmosphere={atmosphere} sunlight={sunlight} camera={cameraGrade} quality="high" shadowDistance={80} shadowMap={2048} shadowLayers={shadowLayers} onReady={onLook} onError={onError} />
-    <mesh ref={ground} rotation={[-Math.PI / 2, 0, 0]} receiveShadow><planeGeometry args={[1000, 1000]} /><meshStandardMaterial color="#807c6b" roughness={0.95} /></mesh>
     <Physics gravity={[0, -9.8, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       {createPortal(<CharacterController controller={walker} events={events} />, scene, { camera: gameplayCamera })}
       <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider args={[500, 1, 500]} position={[0, -1, 0]} />
-        <TrimeshCollider args={[owned.collider.vertices, owned.collider.indices]} />
+        {owned.colliders.map((collider, index) => <TrimeshCollider key={index} args={[collider.vertices, collider.indices]} />)}
       </RigidBody>
     </Physics>
     <SceneInspection name="archway" look={shared.look} warm={shared.warm} walker={walker} inspector={inspector} telemetry={telemetry} content={content} />
@@ -105,8 +97,9 @@ function Scene({ owned, walker, gameplayCamera, inspector, telemetry, shared }: 
 }
 
 function Archway({ owned, runtime }: { owned: ArchwayAsset; runtime: ReturnType<typeof makeInputDevices> }) {
-  const walker = useMemo(() => createWalker(home, runtime), [runtime])
-  const cameras = useMemo(createArchwayCameras, [])
+  const home = useMemo(() => createArchwayHome(owned.manifest.centre), [owned])
+  const walker = useMemo(() => createWalker(home, runtime), [home, runtime])
+  const cameras = useMemo(() => createArchwayCameras(owned.manifest.centre), [owned])
   const [view, setView] = useState<ArchwayView>(() => {
     const requested = new URLSearchParams(location.search).get('view')
     return requested === 'wide' || requested === 'close' ? requested : 'walk'
@@ -130,10 +123,11 @@ function Archway({ owned, runtime }: { owned: ArchwayAsset; runtime: ReturnType<
   const telemetry = useMemo<TelemetryAction>(() => ({ current: null, status: setDumpStatus }), [])
   const renderer = useCallback(async (props: object) => {
     if (!navigator.gpu) throw new Error('WebGPU is required for the archway')
-    const storageSize = Math.max(owned.asset.positions.length / 3 * 32, owned.asset.indices.byteLength)
+    const storageSize = owned.storageSize
     const gl = new WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', trackTimestamp: true, requiredLimits: { maxStorageBufferBindingSize: storageSize, maxBufferSize: storageSize } })
     await gl.init()
     if (!gl.backend.isWebGPUBackend) throw new Error('A WebGPU adapter is required')
+    await owned.prepareMaterials(gl)
     gl.info.autoReset = false
     return gl
   }, [owned])
@@ -147,7 +141,7 @@ function Archway({ owned, runtime }: { owned: ArchwayAsset; runtime: ReturnType<
         <button type="button" aria-pressed={view === 'walk'} onClick={() => selectView('walk')}>Walk</button>
       </div>
     </section>
-    <InspectHud inspector={inspector} lodLegend={lodLegend} dump={{ onDump: () => { void telemetry.current?.() }, status: dumpStatus, message: `${owned.asset.metadata.sourceTriangles.toLocaleString()} source triangles · ${owned.asset.metadata.clusterCount.toLocaleString()} meshlets` }} />
+    <InspectHud inspector={inspector} lodLegend={lodLegend} dump={{ onDump: () => { void telemetry.current?.() }, status: dumpStatus, message: `${owned.sourceTriangles.toLocaleString()} source triangles · ${owned.meshlets.toLocaleString()} meshlets` }} />
     <CharacterOverlay controller={walker} visible={view === 'walk'} glyphs={glyphs} hints={['move', 'sprint', 'jump', 'roll', 'home']} prompt="Click to look around · T saves telemetry" buttons={[{ id: 'jump', label: 'Jump' }, { id: 'roll', label: 'Roll' }, { id: 'crouch', label: 'Crouch' }, { id: 'home', label: 'Home' }]} />
     {status.paused && view === 'walk' && <CharacterPause controller={walker} items={[{ id: 'home', label: 'Return to the archway', onPress: () => { walker.respawn(undefined, [...home.position]); walker.face(new Vector3(...home.target)) } }]} />}
   </>

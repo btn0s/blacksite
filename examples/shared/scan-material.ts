@@ -1,6 +1,9 @@
-import { NoColorSpace, RepeatWrapping, SRGBColorSpace, TextureLoader, type Texture } from 'three'
-import { MeshPhysicalNodeMaterial, type Node } from 'three/webgpu'
-import { Fn, float, frameId, max, mix, normalWorldGeometry, positionWorld, screenCoordinate, texture, uv, varying, vec2, vec3 } from 'three/tsl'
+import { LoadingManager, Matrix3, NoColorSpace, RepeatWrapping, SRGBColorSpace, type Texture } from 'three'
+import { MeshPhysicalNodeMaterial, type Node, type WebGPURenderer } from 'three/webgpu'
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
+import transcoderScript from 'three/examples/jsm/libs/basis/basis_transcoder.js?url'
+import transcoderWasm from 'three/examples/jsm/libs/basis/basis_transcoder.wasm?url'
+import { Fn, float, frameId, max, mix, normalWorldGeometry, positionWorld, screenCoordinate, texture, uniform, uv, varying, vec2, vec3 } from 'three/tsl'
 import { tangentNormalWithUV } from '@blacksite/geometry'
 
 type Channel = 'r' | 'g' | 'b' | 'a'
@@ -16,6 +19,11 @@ export type ScanSurface = {
 const luma = (value: Node<'vec3'>) => value.dot(vec3(0.212639, 0.715169, 0.072192))
 const saturate = (value: Node<'float'>) => value.clamp(0, 1)
 const cheapContrast = (value: Node<'float'>, contrast: number) => saturate(value.mul(1 + 2 * contrast).sub(contrast))
+const loaders = new WeakMap<WebGPURenderer, { loader: KTX2Loader; images: Map<string, Promise<Texture>>; resident: Map<Texture, number> }>()
+
+export function residentScanTextures(renderer: WebGPURenderer) {
+  return [...(loaders.get(renderer)?.resident ?? [])].map(([texture, reportedBytes]) => ({ texture, reportedBytes }))
+}
 
 function sCurve(value: Node<'float'>, power: number) {
   const high = float(1).sub(float(1).sub(value.sub(0.5).mul(2).clamp(0, 1)).pow(power))
@@ -50,32 +58,39 @@ function boxUV() {
   return weights.z.sub(dither).greaterThan(max(weights.x, weights.y)).select(z, side)
 }
 
-export async function loadScanMaterial(surface: ScanSurface, root: string) {
+export async function loadScanMaterial(surface: ScanSurface, root: string, renderer: WebGPURenderer) {
   if (surface.family !== 'custom-general') throw new Error(`Unsupported surface family: ${surface.family}`)
   const { scalar: s, vector: v, static_switch: switches } = surface.parameters
   for (const feature of ['Use Pure Metallic Base?', 'Switch - Use UV Random Offset?', 'Use Reconstructed Normal?']) {
     if (switches[feature]) throw new Error(`${surface.path}: unsupported surface feature ${feature}`)
   }
   if (s['Base - Metallic Intensity'] !== 0) throw new Error(`${surface.path}: metallic color response is unsupported`)
-  const loader = new TextureLoader()
-  const entries = await Promise.all(Object.entries(surface.maps).map(async ([name, source]) => {
-    const map = await loader.loadAsync(root + source.file)
+  if (!loaders.has(renderer)) {
+    const manager = new LoadingManager()
+    manager.setURLModifier(url => url.endsWith('basis_transcoder.js') ? transcoderScript : url.endsWith('basis_transcoder.wasm') ? transcoderWasm : url)
+    loaders.set(renderer, { loader: new KTX2Loader(manager).setTranscoderPath('/').detectSupport(renderer), images: new Map(), resident: new Map() })
+  }
+  const { loader, images, resident } = loaders.get(renderer)!
+  const used = Object.entries(surface.maps).filter(([name]) => name !== 'Metalness' && (name !== 'Packed' || !switches['Use Dedrived Roughness from Albedo?']) && (name !== 'RGBNoise' || !switches['RGB Blend - Disable']))
+  const entries = await Promise.all(used.map(async ([name, source]) => {
+    const url = root + source.file
+    if (!images.has(url)) images.set(url, loader.loadAsync(url))
+    const map = await images.get(url)!
     map.flipY = false
     map.wrapS = map.wrapT = RepeatWrapping
     map.anisotropy = 8
     map.colorSpace = source.srgb ? SRGBColorSpace : NoColorSpace
-    if (name !== 'RGBNoise') {
-      map.repeat.setScalar(s['UVs - Base  Scale'])
-      map.center.set(s['UVs - Base  Pivot X'], s['UVs - Base  Pivot Y'])
-      map.rotation = s['UVs - Base  Rotation']
-      map.offset.set(s['UVs - Base  Offset X'], s['UVs - Base  Offset  Y'])
-      map.updateMatrix()
+    if (!resident.has(map)) {
+      const before = renderer.info.memory.texturesSize
+      renderer.initTexture(map)
+      resident.set(map, renderer.info.memory.texturesSize - before)
     }
     return [name, map] as const
   }))
   const maps = Object.fromEntries(entries) as Record<keyof ScanSurface['maps'], Texture>
   const primaryUV = Fn(builder => builder.context.getUV?.() ?? uv())()
-  const coordinates = texture(maps.Albedo).getTransformedUV(primaryUV)
+  const transform = new Matrix3().setUvTransform(s['UVs - Base  Offset X'], s['UVs - Base  Offset  Y'], s['UVs - Base  Scale'], s['UVs - Base  Scale'], s['UVs - Base  Rotation'], s['UVs - Base  Pivot X'], s['UVs - Base  Pivot Y'])
+  const coordinates = uniform(transform).mul(vec3(primaryUV, 1)).xy
   const sample = (map: Texture) => texture(map, coordinates).setUpdateMatrix(false)
   const albedo = sample(maps.Albedo).rgb
   const controls = v['Base - Albedo Controls']

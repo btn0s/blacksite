@@ -82,6 +82,7 @@ function geometryFromEntries(entries, materials) {
   const positions = new Float32Array(vertexCount * 3)
   const normals = new Float32Array(vertexCount * 3)
   const uvs = new Float32Array(vertexCount * 2)
+  const tangents = new Float32Array(vertexCount * 4)
   const sourceIndices = new Uint32Array(indexCount)
   const primitives = []
   let vertexOffset = 0
@@ -93,6 +94,7 @@ function geometryFromEntries(entries, materials) {
     const position = primitive.getAttribute('POSITION')
     const normal = primitive.getAttribute('NORMAL')
     const uv = primitive.getAttribute('TEXCOORD_0')
+    const tangent = primitive.getAttribute('TANGENT')
     normalMatrix.getNormalMatrix(matrix)
     for (let i = 0; i < count; i++) {
       const global = vertexOffset + i
@@ -103,6 +105,11 @@ function geometryFromEntries(entries, materials) {
         normal.getElement(i, tuple)
         point.fromArray(tuple).applyMatrix3(normalMatrix).normalize()
         normals.set([point.x, point.y, point.z], global * 3)
+      }
+      if (tangent) {
+        tangent.getElement(i, tuple)
+        point.fromArray(tuple).transformDirection(matrix)
+        tangents.set([point.x, point.y, point.z, tuple[3] * Math.sign(matrix.determinant())], global * 4)
       }
       if (uv) {
         uv.getElement(i, tuple)
@@ -134,13 +141,13 @@ function geometryFromEntries(entries, materials) {
     indexOffset += countIndices
   }
   return {
-    positions, normals, uvs, sourceIndices, primitives,
+    positions, normals, uvs, tangents, sourceIndices, primitives,
     materials: materials.map(describeMaterial),
   }
 }
 
 function pack(metadata, arrays) {
-  const names = ['positions', 'normals', 'uvs', 'indices', 'sourceIndices', 'clusterData', 'clusterBounds', 'clusterLod', 'groupData', 'groupBounds', 'groupChildren']
+  const names = ['vertices', 'vertexReferences', 'indices', 'clusterData', 'clusterBounds', 'clusterLod', 'clusterQuantization', 'groupData', 'groupBounds', 'groupChildren']
   const json = Buffer.from(JSON.stringify(metadata))
   const metadataOffset = 32 + names.length * 16
   let offset = (metadataOffset + json.length + 15) & ~15
@@ -152,7 +159,7 @@ function pack(metadata, arrays) {
     return entry
   })
   const output = Buffer.alloc(offset)
-  ;[0x4c4d5342, 1, names.length, json.length, output.length, 0, 0, 0].forEach((value, i) => output.writeUInt32LE(value, i * 4))
+  ;[0x4c4d5342, 2, names.length, json.length, output.length, 0, 0, 0].forEach((value, i) => output.writeUInt32LE(value, i * 4))
   json.copy(output, metadataOffset)
   for (const { id, offset: start, count, type, array } of entries) {
     ;[id, start, count, type].forEach((value, i) => output.writeUInt32LE(value, 32 + id * 16 + i * 4))
@@ -171,6 +178,8 @@ function prepareGeometry(input) {
   const uvs = Float32Array.from(input.uvs)
   const sourceIndices = Uint32Array.from(input.indices)
   const vertexCount = positions.length / 3
+  const tangents = input.tangents ? Float32Array.from(input.tangents) : new Float32Array(vertexCount * 4)
+  if (tangents.length !== vertexCount * 4 || !tangents.every(Number.isFinite)) throw new Error('Geometry tangents must be finite four-component values')
   if (!vertexCount || positions.length % 3 || normals.length !== positions.length || uvs.length !== vertexCount * 2 || sourceIndices.length % 3 || !sourceIndices.length) throw new Error('Geometry requires positions, normals, UVs and triangle indices')
   if (![positions, normals, uvs].every(array => array.every(Number.isFinite)) || sourceIndices.some(index => index >= vertexCount)) throw new Error('Geometry contains invalid vertex data')
   const materials = input.materials ?? [{ name: 'Surface', baseColor: [1, 1, 1, 1], metalness: 0, roughness: 1, doubleSided: false, alphaMode: 'OPAQUE', alphaCutoff: 0.5, normalScale: 1 }]
@@ -181,12 +190,13 @@ function prepareGeometry(input) {
     expected += primitive.indexCount
   }
   if (expected !== sourceIndices.length) throw new Error('Geometry primitive ranges do not cover the indices')
-  const vertices = new Float32Array(vertexCount * 8)
+  const vertices = new Float32Array(vertexCount * 12)
   const bounds = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }
   for (let i = 0; i < vertexCount; i++) {
-    vertices.set(positions.subarray(i * 3, i * 3 + 3), i * 8)
-    vertices.set(normals.subarray(i * 3, i * 3 + 3), i * 8 + 3)
-    vertices.set(uvs.subarray(i * 2, i * 2 + 2), i * 8 + 6)
+    vertices.set(positions.subarray(i * 3, i * 3 + 3), i * 12)
+    vertices.set(normals.subarray(i * 3, i * 3 + 3), i * 12 + 3)
+    vertices.set(uvs.subarray(i * 2, i * 2 + 2), i * 12 + 6)
+    vertices.set(tangents.subarray(i * 4, i * 4 + 4), i * 12 + 8)
     for (let axis = 0; axis < 3; axis++) {
       bounds.min[axis] = Math.min(bounds.min[axis], positions[i * 3 + axis])
       bounds.max[axis] = Math.max(bounds.max[axis], positions[i * 3 + axis])
@@ -209,29 +219,20 @@ export async function buildMeshletGeometry(input, outputArgument, source) {
     await run(executable, [join(work, 'input.bin'), join(work, 'output.bin')])
     const nativeOutput = await readFile(join(work, 'output.bin'))
     const buffer = nativeOutput.buffer.slice(nativeOutput.byteOffset, nativeOutput.byteOffset + nativeOutput.byteLength)
-    const data = new Uint32Array(buffer, 0, 8)
+    const data = new Uint32Array(buffer, 0, 12)
     if (data[0] !== 0x4f475342) throw new Error('Native builder output signature is invalid')
-    const [, clusterCount, groupCount, indexCount, edgeCount, levelCount, vertexCount, sourceIndexCount] = data
-    let offset = 32
+    const [, clusterCount, groupCount, indexCount, edgeCount, levelCount, vertexCount, sourceIndexCount, meshletVertices] = data
+    let offset = 48
     const section = (Type, count) => { const value = new Type(buffer, offset, count); offset += count * 4; return value }
-    const vertices = section(Float32Array, vertexCount * 8)
-    const positions = new Float32Array(vertexCount * 3)
-    const normals = new Float32Array(vertexCount * 3)
-    const uvs = new Float32Array(vertexCount * 2)
-    for (let i = 0; i < vertexCount; i++) {
-      positions.set(vertices.subarray(i * 8, i * 8 + 3), i * 3)
-      normals.set(vertices.subarray(i * 8 + 3, i * 8 + 6), i * 3)
-      uvs.set(vertices.subarray(i * 8 + 6, i * 8 + 8), i * 2)
-    }
-    const sourceIndices = section(Uint32Array, sourceIndexCount)
     const arrays = {
-      positions, normals, uvs,
-      indices: section(Uint32Array, indexCount), sourceIndices,
+      vertices: section(Uint32Array, vertexCount * 5), vertexReferences: section(Uint32Array, meshletVertices), indices: section(Uint32Array, indexCount),
       clusterData: section(Uint32Array, clusterCount * 8), clusterBounds: section(Float32Array, clusterCount * 4), clusterLod: section(Float32Array, clusterCount * 12),
+      clusterQuantization: section(Float32Array, clusterCount * 12),
       groupData: section(Uint32Array, groupCount * 4), groupBounds: section(Float32Array, groupCount * 8), groupChildren: section(Uint32Array, edgeCount),
     }
     const metadata = {
-      name: input.name ?? basename(outputPath, '.meshlets'), sourceTriangles: sourceIndexCount / 3, sourceVertices: vertexCount,
+      name: input.name ?? basename(outputPath, '.meshlets'), sourceTriangles: sourceIndexCount / 3, residentVertices: vertexCount, meshletVertices,
+      vertexStride: 20, positionBits: 16, normalBits: 16, tangentBits: 16, uvBits: 16, indexBits: 8,
       clusterCount, groupCount, levelCount, maxClusterTriangles: 128, bounds: geometry.bounds,
       primitives: geometry.primitives, materials: geometry.materials,
       builder: { project: 'https://github.com/zeux/meshoptimizer', revision, archiveSha256, configuration },

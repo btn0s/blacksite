@@ -1,5 +1,5 @@
 import { BufferAttribute, BufferGeometry } from 'three/webgpu'
-import type { MeshletAsset } from '@blacksite/geometry'
+import { meshletPosition, type MeshletAsset } from '@blacksite/geometry'
 import { createHeightfield, fbm, heightAt, normalAt, ridged, slopeAt, smoothstep } from '@blacksite/landscape'
 
 const islands = [
@@ -82,8 +82,15 @@ export function createTerrainSurface(heights?: Float32Array) {
 export type CoastalTerrain = ReturnType<typeof createTerrainSurface>
 
 export function createTerrainFromAsset(asset: MeshletAsset) {
-  if (asset.positions.length !== 513 * 513 * 3) throw new Error('Packed coastal terrain has an incompatible heightfield')
   const heights = new Float32Array(513 * 513)
-  for (let i = 0; i < heights.length; i++) heights[i] = asset.positions[i * 3 + 1]!
+  for (let cluster = 0; cluster < asset.metadata.clusterCount; cluster++) {
+    if (asset.clusterData[cluster * 8 + 4] !== 0) continue
+    for (let vertex = 0; vertex < asset.clusterData[cluster * 8 + 6]!; vertex++) {
+      const [x, y, z] = meshletPosition(asset, cluster, vertex)
+      const column = Math.round(x + 256), row = Math.round(z + 256)
+      if (column < 0 || column > 512 || row < 0 || row > 512) throw new Error('Packed coastal terrain is outside its heightfield')
+      heights[row * 513 + column] = y
+    }
+  }
   return createTerrainSurface(heights)
 }

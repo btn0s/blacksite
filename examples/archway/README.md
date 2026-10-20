@@ -1,27 +1,23 @@
-# Archway
-
-One full-detail scan, the shared look, and the ALS shoulder-camera walker. Geometry is built offline and rendered exclusively by `MeshletScene`.
-
-Build the local owned content from the repository root in a compiler environment:
-
-```sh
-node examples/archway/scripts/build.mjs D:/Archive/dark-ruins-export D:/dev/owned-assets/dark-ruins D:/dev/owned-assets/dark-ruins-source/materials.json
-```
-
-The build resolves the visible source placement's material overrides and primitive slots, converts its original images to lossless WebP, builds the complete meshlet hierarchy, and derives a collision surface at 2.5 cm geometric error. The material source descriptor contains effective parameters, explicit channel mappings and every sampled image with its colour-space metadata, including the parent material's fixed RGB variation texture. Its image paths are relative to the descriptor. The original geometry export remains read-only.
-
-The shared scan-material loader translates the source family's saturation, brightness and power contrast, roughness selection and remapping, specular response, normal adjustments, HSV offsets, world-space RGB variation and shoreline wetness into standard physical surface nodes. It supports the family's nonmetallic surfaces; pure-metal, random-offset and packed-normal reconstruction branches are explicitly rejected. It does not reinterpret height as AO. Normals use the shared geometry tangent-frame helper and the source green-channel convention. Source positions are translated to centre the study on the ground without changing scale.
-
-Refresh only materials without rebuilding geometry:
-
-```sh
-node examples/shared/build-scan-materials.mjs D:/dev/owned-assets/dark-ruins-source/materials.json D:/dev/owned-assets/dark-ruins
-```
-
-Processed geometry, textures, material parameters and collision data live outside the repository in `D:/dev/owned-assets/dark-ruins`, served through the shared owned-assets middleware.
-
-```sh
-pnpm --dir examples/archway dev --port 5247
-```
-
-Use Wide and Close for the fixed reference cameras, or open `?view=wide` and `?view=close`. Walk restores the ALS shoulder camera with WASD, Shift and mouse look; R returns the walker to its starting position. The shared performance inspector supplies LOD colours, meshlet colours, geometry technique controls, and T / Dump stats. Snapshots are written to `artifacts/archway/telemetry/snapshots.jsonl` by the dev server. Reference and desktop captures stay in ignored local artifacts.
+# Archway courtyard
+
+Every placement whose transformed source-mesh bounds intersects the 10 metre sphere centred on the archway’s base. The centre comes from the archway’s transformed geometry bounds, because its asset pivot is far from its visible geometry. Exported matrices are applied without recentering individual assets. Geometry uses the compressed resident layout in `@blacksite/geometry`; the full source hierarchy remains available at close range. ALS supplies the shoulder-camera walker.
+
+Build owned content from the repository root in a compiler environment with the native [Basis Universal encoder](https://github.com/BinomialLLC/basis_universal) on PATH, or its executable path in `BASISU`:
+
+```sh
+node examples/archway/scripts/build.mjs D:/Archive/dark-ruins-export D:/dev/owned-assets/dark-ruins D:/dev/owned-assets/dark-ruins-source/materials.json
+```
+
+The builder writes an isolated asset generation and atomically replaces the root `courtyard.json` only after geometry, collision and every surface image are complete. Readers resolve all resources through that one manifest. It reads the level export without modifying it, resolves each placement's geometry and material-slot overrides, and applies its authoritative column-major matrix once. It retains hidden collision placements for collision while respecting their visibility. A 2.5 cm geometric-error cut supplies one static triangle collider per placement, retaining the full collision detail without constructing one world-sized acceleration structure. There is no substitute ground plane. The collision cooking stage can run independently with `node examples/archway/scripts/build-collision.mjs D:/dev/owned-assets/dark-ruins/courtyard.json`.
+
+Source images retain their resolution and are encoded as UASTC KTX2 with mipmaps. Shared images use one texture object and GPU allocation; per-material UV transforms live in node uniforms. Telemetry adds the resident compressed mip payloads to the renderer counter, whose compressed-texture estimate is otherwise one byte per texture. The shared scan translator handles the approved custom scan family, including source normal convention, colour controls, roughness, specular, RGB variation and wetness. The approved descriptor supplies the parent's fixed RGB noise texture and its channel mapping. Unsupported material families are listed in `courtyard.json` and telemetry and remain undrawn; their geometry stays resident, with no replacement surface. Vertex-colour material masks and shader displacement remain untranslated.
+
+The exported directional-light orientation and illuminance, sky scattering coefficients, and exponential height-fog parameters configure the shared look. The sky-light intensity scales its existing sky illuminance calibration. Local light volumes and authored post-process volume blends are outside this scene translation.
+
+Processed meshes, textures, material parameters and collision live outside Git under `D:/dev/owned-assets/dark-ruins`, served by the owned-assets middleware. ALS assets remain unchanged.
+
+```sh
+pnpm --dir examples/archway dev --port 5247
+```
+
+Wide and Close select fixed courtyard cameras; Walk restores ALS with WASD, Shift and mouse look. R returns to the starting position. The shared inspector supplies LOD colours, meshlet colours, technique controls, GPU pass timings, renderer allocations, and T / Dump stats. Telemetry goes to `artifacts/archway/telemetry/snapshots.jsonl`. Desktop captures stay in ignored artifacts.

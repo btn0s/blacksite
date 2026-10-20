@@ -10,7 +10,7 @@
 #define CLUSTERLOD_IMPLEMENTATION
 #include "clusterlod.h"
 
-struct Vertex { float position[3]; float normal[3]; float uv[2]; };
+struct Vertex { float position[3]; float normal[3]; float uv[2]; float tangent[4]; };
 struct Primitive { uint32_t offset; uint32_t count; uint32_t material; };
 struct Cluster { uint32_t offset; uint32_t count; uint32_t group; uint32_t refined; uint32_t level; uint32_t material; uint32_t vertices; clodBounds bounds; };
 struct Group { uint32_t offset; uint32_t count; clodGroup value; };
@@ -96,11 +96,54 @@ int main(int argc, char** argv) {
       mesh.attribute_protect_mask = (1 << 3) | (1 << 4);
       clodBuild(config, mesh, &out, emitGroup);
     }
-    std::vector<uint32_t> clusterData, groupData, groupChildren;
-    std::vector<float> clusterBounds, clusterLod, groupBounds;
+    std::vector<uint32_t> clusterData, groupData, groupChildren, packedVertices, packedIndices, vertexReferences;
+    std::vector<float> clusterBounds, clusterLod, groupBounds, clusterQuantization;
+    float lower[5] = {FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX};
+    float upper[5] = {-FLT_MAX, -FLT_MAX, -FLT_MAX, -FLT_MAX, -FLT_MAX};
+    for (const Vertex& vertex : vertices) for (int axis = 0; axis < 5; axis++) {
+      float value = axis < 3 ? vertex.position[axis] : vertex.uv[axis - 3];
+      lower[axis] = std::min(lower[axis], value);
+      upper[axis] = std::max(upper[axis], value);
+    }
+    float step[5];
+    for (int axis = 0; axis < 5; axis++) step[axis] = (upper[axis] - lower[axis]) / 65535.f;
+    for (const Vertex& vertex : vertices) {
+      uint16_t quantized[5];
+      for (int axis = 0; axis < 5; axis++) {
+        float value = axis < 3 ? vertex.position[axis] : vertex.uv[axis - 3];
+        quantized[axis] = uint16_t(meshopt_quantizeUnorm(upper[axis] > lower[axis] ? (value - lower[axis]) / (upper[axis] - lower[axis]) : 0.f, 16));
+      }
+      float normal[4] = {vertex.normal[0], vertex.normal[1], vertex.normal[2], 0.f};
+      int16_t octNormal[4], octTangent[4];
+      meshopt_encodeFilterOct(octNormal, 1, 8, 16, normal);
+      meshopt_encodeFilterOct(octTangent, 1, 8, 16, vertex.tangent);
+      packedVertices.insert(packedVertices.end(), {
+        uint32_t(quantized[0]) | (uint32_t(quantized[1]) << 16),
+        uint32_t(quantized[2]) | (uint32_t(uint16_t(octTangent[3])) << 16),
+        uint32_t(uint16_t(octNormal[0])) | (uint32_t(uint16_t(octNormal[1])) << 16),
+        uint32_t(quantized[3]) | (uint32_t(quantized[4]) << 16),
+        uint32_t(uint16_t(octTangent[0])) | (uint32_t(uint16_t(octTangent[1])) << 16)
+      });
+    }
     uint32_t levels = 0;
     for (const Cluster& cluster : out.clusters) {
-      clusterData.insert(clusterData.end(), {cluster.offset, cluster.count, cluster.group, cluster.refined, cluster.level, cluster.material, cluster.vertices, 0});
+      unsigned int localVertices[256];
+      unsigned char localTriangles[384];
+      size_t localCount = clodLocalIndices(localVertices, localTriangles, out.indices.data() + cluster.offset, cluster.count);
+      uint32_t vertexOffset = uint32_t(vertexReferences.size());
+      uint32_t indexOffset = uint32_t(packedIndices.size() * 4);
+      vertexReferences.insert(vertexReferences.end(), localVertices, localVertices + localCount);
+      for (uint32_t i = 0; i < cluster.count; i += 4) {
+        uint32_t word = 0;
+        for (uint32_t j = 0; j < 4 && i + j < cluster.count; j++) word |= uint32_t(localTriangles[i + j]) << (j * 8);
+        packedIndices.push_back(word);
+      }
+      clusterData.insert(clusterData.end(), {indexOffset, cluster.count, cluster.group, cluster.refined, cluster.level, cluster.material, uint32_t(localCount), vertexOffset});
+      clusterQuantization.insert(clusterQuantization.end(), {
+        lower[0], lower[1], lower[2], 0.f,
+        step[0], step[1], step[2], 0.f,
+        lower[3], lower[4], upper[3] - lower[3], upper[4] - lower[4]
+      });
       appendSphere(clusterBounds, cluster.bounds);
       const clodBounds& parent = out.groups[cluster.group].value.simplified;
       clodBounds self = cluster.bounds;
@@ -124,13 +167,14 @@ int main(int argc, char** argv) {
       groupBounds.insert(groupBounds.end(), {group.value.simplified.error, float(group.value.depth), 0.f, 0.f});
     }
     std::ofstream output(argv[2], std::ios::binary);
-    write(output, std::vector<uint32_t>{0x4f475342, uint32_t(out.clusters.size()), uint32_t(out.groups.size()), uint32_t(out.indices.size()), uint32_t(groupChildren.size()), levels, uint32_t(vertices.size()), uint32_t(indices.size())});
-    write(output, vertices);
-    write(output, indices);
-    write(output, out.indices);
+    write(output, std::vector<uint32_t>{0x4f475342, uint32_t(out.clusters.size()), uint32_t(out.groups.size()), uint32_t(packedIndices.size()), uint32_t(groupChildren.size()), levels, uint32_t(packedVertices.size() / 5), uint32_t(indices.size()), uint32_t(vertexReferences.size()), 0, 0, 0});
+    write(output, packedVertices);
+    write(output, vertexReferences);
+    write(output, packedIndices);
     write(output, clusterData);
     write(output, clusterBounds);
     write(output, clusterLod);
+    write(output, clusterQuantization);
     write(output, groupData);
     write(output, groupBounds);
     write(output, groupChildren);

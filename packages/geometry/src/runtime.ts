@@ -9,7 +9,7 @@ import {
   floor, instanceIndex, log2, max, min, mix, output, storage,
   textureLoad, uint, uniform, uniformArray, uvec2, vec2, vec4,
 } from 'three/tsl'
-import { DRAW_ARGUMENT_OFFSET, packScene, validateTransform } from './runtime-data'
+import { DRAW_ARGUMENT_OFFSET, packScene, transformScale } from './runtime-data'
 import type { MeshletSceneEntry } from './runtime-data'
 import { bindGeometryMaterial, createGeometryDepthMaterial, createGeometryMaterial } from './runtime-material'
 import { clusterReader, instanceReader } from './runtime-layout'
@@ -326,9 +326,8 @@ export class MeshletScene {
   prepareShadow(renderer: WebGPURenderer, camera: OrthographicCamera, mapSize: Readonly<Vector2>) {
     if (!this.shadowEnabled) return
     this.object.updateWorldMatrix(true, true)
-    validateTransform(this.object.matrixWorld)
     this.world.value.copy(this.object.matrixWorld)
-    this.worldScale.value = this.object.matrixWorld.getMaxScaleOnAxis()
+    this.worldScale.value = transformScale(this.object.matrixWorld)
     this.shadows.prepare(renderer, camera, mapSize, this.shadowPixelError)
     this.shadowPasses++
   }
@@ -352,9 +351,8 @@ export class MeshletScene {
     }
     camera.updateMatrixWorld()
     this.object.updateWorldMatrix(true, true)
-    validateTransform(this.object.matrixWorld)
     this.world.value.copy(this.object.matrixWorld)
-    this.worldScale.value = this.object.matrixWorld.getMaxScaleOnAxis()
+    this.worldScale.value = transformScale(this.object.matrixWorld)
     this.eye.value.setFromMatrixPosition(camera.matrixWorld)
     this.threshold.value = this.pixelError
     if (finalTarget) this.viewport.set(finalTarget.width, finalTarget.height)

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { Frustum, Matrix4, Mesh, type Object3D } from 'three'
+import { CompressedTexture, Frustum, Matrix4, Mesh, type Object3D, type Texture } from 'three'
 import { sampleView } from '@blacksite/check'
 import type { Inspector, Technique, InspectView } from '@blacksite/inspect'
 import type { WebGPULook } from '@blacksite/look/webgpu'
@@ -19,6 +19,7 @@ export type InspectionContent = {
   techniques: Technique[]
   setView(view: InspectView): void
   details(): unknown
+  textures?(): readonly { texture: Texture; reportedBytes: number }[]
 }
 
 export function SceneInspection({ name, look, warm, walker, inspector, telemetry, content }: {
@@ -98,6 +99,13 @@ export function SceneInspection({ name, look, warm, walker, inspector, telemetry
       const device = renderer.backend.device
       const adapter = device.adapterInfo
       const current = content()
+      const memory = { ...renderer.info.memory }
+      for (const { texture, reportedBytes } of current?.textures?.() ?? []) {
+        if (!(texture instanceof CompressedTexture)) continue
+        const size = texture.mipmaps.reduce((sum, mip) => sum + mip.data.byteLength, 0)
+        memory.texturesSize += size - reportedBytes
+        memory.total += size - reportedBytes
+      }
       const snapshot = {
         version: 1,
         scene: name,
@@ -120,7 +128,7 @@ export function SceneInspection({ name, look, warm, walker, inspector, telemetry
         view: stats.view,
         techniques: stats.techniques,
         content: current?.details(),
-        memory: renderer.info.memory,
+        memory,
         submissions: { triangles: renderer.info.render.triangles, drawCalls: renderer.info.render.drawCalls, passes: renderer.info.render.frameCalls },
       }
       try {

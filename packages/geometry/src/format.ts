@@ -1,19 +1,18 @@
 export const MESHLET_MAGIC = 0x4c4d5342
-export const MESHLET_VERSION = 1
+export const MESHLET_VERSION = 2
 export const CLUSTER_STRIDE = 8
 export const CLUSTER_LOD_STRIDE = 12
 export const GROUP_STRIDE = 4
 export const NO_REFINED_GROUP = 0xffffffff
 
 export const MESHLET_SECTIONS = [
-  'positions',
-  'normals',
-  'uvs',
+  'vertices',
+  'vertexReferences',
   'indices',
-  'sourceIndices',
   'clusterData',
   'clusterBounds',
   'clusterLod',
+  'clusterQuantization',
   'groupData',
   'groupBounds',
   'groupChildren',
@@ -48,7 +47,14 @@ export interface MeshletGeometryManifest {
 export interface MeshletMetadata {
   name: string
   sourceTriangles: number
-  sourceVertices: number
+  residentVertices: number
+  meshletVertices: number
+  vertexStride: number
+  positionBits: number
+  normalBits: number
+  tangentBits: number
+  uvBits: number
+  indexBits: number
   clusterCount: number
   groupCount: number
   levelCount: number
@@ -62,14 +68,13 @@ export interface MeshletMetadata {
 
 export interface MeshletAsset {
   metadata: MeshletMetadata
-  positions: Float32Array
-  normals: Float32Array
-  uvs: Float32Array
+  vertices: Uint32Array
+  vertexReferences: Uint32Array
   indices: Uint32Array
-  sourceIndices: Uint32Array
   clusterData: Uint32Array
   clusterBounds: Float32Array
   clusterLod: Float32Array
+  clusterQuantization: Float32Array
   groupData: Uint32Array
   groupBounds: Float32Array
   groupChildren: Uint32Array

@@ -25,10 +25,10 @@ export function parseMeshletAsset(buffer: ArrayBuffer): MeshletAsset {
     arrays[name] = type === 0 ? new Float32Array(buffer, offset, count) : new Uint32Array(buffer, offset, count)
   }
   const asset = { metadata, ...arrays } as MeshletAsset
-  const vertices = metadata.sourceVertices
+  const vertices = metadata.residentVertices
   const clusters = metadata.clusterCount
   const groups = metadata.groupCount
-  if (asset.positions.length !== vertices * 3 || asset.normals.length !== vertices * 3 || asset.uvs.length !== vertices * 2 || asset.sourceIndices.length !== metadata.sourceTriangles * 3 || asset.clusterData.length !== clusters * CLUSTER_STRIDE || asset.clusterBounds.length !== clusters * 4 || asset.clusterLod.length !== clusters * CLUSTER_LOD_STRIDE || asset.groupData.length !== groups * GROUP_STRIDE || asset.groupBounds.length !== groups * 8) throw new Error('Geometry section counts do not match metadata')
+  if (asset.vertices.length !== vertices * 5 || asset.vertexReferences.length !== metadata.meshletVertices || asset.clusterQuantization.length !== clusters * 12 || asset.clusterData.length !== clusters * CLUSTER_STRIDE || asset.clusterBounds.length !== clusters * 4 || asset.clusterLod.length !== clusters * CLUSTER_LOD_STRIDE || asset.groupData.length !== groups * GROUP_STRIDE || asset.groupBounds.length !== groups * 8) throw new Error('Geometry section counts do not match metadata')
   return asset
 }
 
@@ -36,4 +36,21 @@ export async function loadMeshletAsset(url: string | URL, signal?: AbortSignal):
   const response = await fetch(url, { signal })
   if (!response.ok) throw new Error(`Geometry request failed: ${response.status} ${response.statusText}`)
   return parseMeshletAsset(await response.arrayBuffer())
+}
+
+export function meshletPosition(asset: MeshletAsset, cluster: number, vertex: number): [number, number, number] {
+  const offset = asset.vertexReferences[asset.clusterData[cluster * 8 + 7]! + vertex]! * 5
+  const xy = asset.vertices[offset]!
+  const z = asset.vertices[offset + 1]! & 65535
+  const q = cluster * 12
+  return [
+    (xy & 65535) * asset.clusterQuantization[q + 4]! + asset.clusterQuantization[q]!,
+    (xy >>> 16) * asset.clusterQuantization[q + 5]! + asset.clusterQuantization[q + 1]!,
+    z * asset.clusterQuantization[q + 6]! + asset.clusterQuantization[q + 2]!,
+  ]
+}
+
+export function meshletIndex(asset: MeshletAsset, cluster: number, corner: number) {
+  const address = asset.clusterData[cluster * 8]! + corner
+  return (asset.indices[address >>> 2]! >>> ((address & 3) * 8)) & 255
 }

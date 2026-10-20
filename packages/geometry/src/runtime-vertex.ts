@@ -1,6 +1,6 @@
 import { BufferAttribute, InstancedBufferGeometry } from 'three/webgpu'
 import type { IndirectStorageBufferAttribute, Node, StorageBufferAttribute } from 'three/webgpu'
-import { Fn, cos, float, instanceIndex, min, mix, normalLocal, storage, uint, varyingProperty, vec2, vec3, vec4, vertexIndex } from 'three/tsl'
+import { Fn, cos, float, instanceIndex, min, mix, normalLocal, storage, uint, varyingProperty, vec3, vec4, vertexIndex } from 'three/tsl'
 import { DRAW_ARGUMENT_OFFSET, type packScene } from './runtime-data'
 import { clusterReader, instanceReader, vertexReader } from './runtime-layout'
 
@@ -19,6 +19,7 @@ export function clusterVertex(packed: ReturnType<typeof packScene>, visibleAttri
   const readInstance = instanceReader(packed.instances)
   const readVertex = vertexReader(packed.vertices)
   const indices = storage(packed.indices, 'uint', packed.indexCount).toReadOnly()
+  const references = storage(packed.vertexReferences, 'uint', packed.vertexReferences.count).toReadOnly()
   const candidates = storage(packed.candidates, 'uvec4', packed.candidateCount).toReadOnly()
   const visible = storage(visibleAttribute, 'uint', packed.candidateCount).toReadOnly()
   const uv = varyingProperty('vec2', 'geometryUv')
@@ -33,13 +34,14 @@ export function clusterVertex(packed: ReturnType<typeof packScene>, visibleAttri
     const mirroredCorner = corner.equal(0).select(uint(0), uint(3).sub(corner))
     const orientedCorner = instance.scale.y.lessThan(0).select(mirroredCorner, corner)
     const localIndex = min(vertexIndex.div(3).mul(3).add(orientedCorner), draw.y.sub(1))
-    const index = indices.element(draw.x.add(localIndex))
-    const vertex = readVertex(index)
-    normalLocal.assign(instance.normal.mul(vec4(vertex.normal.xyz, 0)).xyz)
-    uv.assign(vec2(vertex.position.w, vertex.normal.w))
+    const address = draw.x.add(localIndex)
+    const index = indices.element(address.div(4)).shiftRight(address.mod(4).mul(8)).bitAnd(255).add(draw.w)
+    const vertex = readVertex(references.element(index), cluster)
+    normalLocal.assign(instance.normal.mul(vec4(vertex.normal, 0)).xyz)
+    uv.assign(vertex.uv)
     const shadeId = mix(float(candidate.x), float(draw.z), float(debug.equal(2)))
     color.assign(cos(vec3(0, 2, 4).add(shadeId.mul(2.399963))).mul(0.36).add(0.58))
-    return instance.transform.mul(vec4(vertex.position.xyz, 1)).xyz
+    return instance.transform.mul(vec4(vertex.position, 1)).xyz
   })()
   return { position, uv, color }
 }

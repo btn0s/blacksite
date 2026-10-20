@@ -16,7 +16,14 @@ export function WebGPULook({ onReady, onError, debug = false, ...options }: WebG
   callbacks.current = { onReady, onError }
   useEffect(() => {
     let active = true
-    void createWebGPULook(gl as unknown as WebGPURenderer, scene, camera, options).then(created => {
+    void createWebGPULook(gl as unknown as WebGPURenderer, scene, camera, options).then(async created => {
+      if (!active) { created.dispose(); return }
+      try {
+        await (gl as unknown as WebGPURenderer).compileAsync(scene, camera)
+      } catch (error) {
+        created.dispose()
+        throw error
+      }
       if (!active) { created.dispose(); return }
       look.current = created
       created.setDebug(debug)
