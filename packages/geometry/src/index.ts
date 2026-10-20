@@ -1,5 +1,6 @@
 export * from './format'
 export * from './load'
 export * from './load-model'
+export * from './load-pages'
 export * from './runtime'
 export * from './residency'

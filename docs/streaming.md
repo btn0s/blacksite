@@ -17,7 +17,7 @@ Read-only inputs: `D:/Archive/dark-ruins-export` metadata/component geometry and
 | All 549 at maximum 2K, BC7 including mip chains | 2,352,451,552 B = 2.191 GiB |
 | Same inventory at maximum 256 | 38,801,376 B = 37.004 MiB |
 | Supported material closure, including shared noise | 479 texture identities; 2,119,883,456 B at 2K |
-| Whole-level geometry at a 5 mm world cap | **9,986,301,252 B paged payload; 6,842,130,340 B before page duplication** |
+| Whole-level geometry at a 5 mm world cap | **7,930,327,040 B decoded pages; 6,110,016,500 B unique payload; 3,844,055,478 B wire** |
 
 Triangle totals use authoritative component geometry, including spline variants. The 549-image figure includes parameters that static switches may not sample; 479 is the supported material closure. Deduplicate by built identity (source, colour space, normal processing). GPU bytes come from dimensions, not file lengths: `sum(16 * ceil(width/4) * ceil(height/4))` across resident BC7 mips.
 
@@ -25,17 +25,17 @@ The courtyard supplies exact 5 mm data for only 83/371 geometries: 1,573,639,456
 
 The completed slice-1 bake below uses **5 mm world error divided by maximum conservative placement scale**, including shear. Earlier resident builds cannot supply that answer: 62 geometries previously lacked any hierarchy, and the incomplete `level/` build covered 305/371 at 30 mm world error in an older format. Its 4,810,113,168 file bytes are historical wire bytes. The published courtyard's `0.005` cap remains mesh-local.
 
-Streaming is necessary: the full page payload is 9.300 GiB, before textures or traversal. Its certified pinned geometry closure uses 57 MiB of physical pages; the complete directory and capacity figures follow.
+Streaming is necessary: decoded page images occupy 7.386 GiB before textures or traversal. The certified pinned closure reserves 56.250 MiB of physical pages; complete directory and capacity figures follow.
 
 ## Slice 1 bake census
 
-Completed 20 October 2026 with compiler commit `c92a1c0`. Immutable owned build: `D:/dev/owned-assets/dark-ruins/build-pages-20261020-04`. Run from a Visual Studio developer command prompt with Node 22+:
+Completed 20 October 2026 with compiler commit `56a2886`. Immutable owned build: `D:/dev/owned-assets/dark-ruins/build-pages-v5-20261020-01`. Run from a Visual Studio developer command prompt with Node 22+:
 
 ```powershell
 node --max-old-space-size=12288 examples/ruins/scripts/build.mjs D:/Archive/dark-ruins-export D:/dev/owned-assets/dark-ruins/build-pages-NEW 0.005
 ```
 
-The background scheduled bake completed with exit 0. Independent source/artifact readback also completed with exit 0, confirming all geometry identities, source triangle counts/hashes, placement scale normalization, complete pack hashes, placement/material maps, outward spatial bounds and material unions. Evidence is `D:/dev/probe/ruins-pages-verified.json`; the build contains `census.json`, `surfaces.json`, `level.json`, `level.directory` and each geometry's directory/page pack. No existing published manifest was repointed. The [version-4 binary contract](../packages/geometry/scripts/README.md#page-format-version-4) remains offline; existing runtime loaders retain version 3.
+The background scheduled bake and independent source/artifact readback completed with exit 0. The latter reread and decoded all 67,461 pages with the production decoder, checked complete pack/range hashes, both group dependencies, page-DAG acyclicity, placement scale normalization, source hashes/triangle counts, placement/material maps, outward spatial bounds and material unions. All source, finest-cut, cluster/group/forest and coarse-cut counts match the previous bake. Evidence: `D:/dev/probe/ruins-pages-v5-verified.json`, `ruins-pages-v5-decode.json` and `ruins-pages-v5-verify.log`. The build contains `census.json`, `surfaces.json`, `level.json`, `level.directory` and each geometry's directory/page pack. No published manifest was repointed. The [version-5 binary contract](../packages/geometry/scripts/README.md#page-format-version-5) replaces offline version 4; the courtyard continues to load version 3.
 
 | Quantity | Exact measured value |
 | --- | ---: |
@@ -43,28 +43,56 @@ The background scheduled bake completed with exit 0. Independent source/artifact
 | Placements / visible placements | 20,430 / 20,399 |
 | Source triangles / finest resident-cut triangles | 228,267,444 / 165,804,598 |
 | Clusters / groups / traversal nodes | 3,666,653 / 225,116 / 258,658 |
-| Unique geometry payload before page duplication | 6,842,130,340 B |
-| Duplicated page vertices / duplicated vertex bytes | 152,986,925 / 3,144,170,912 B |
-| Page geometry payload including duplication | 9,986,301,252 B |
-| Page headers / section alignment | 6,029,312 B / 1,337,036 B |
-| Packed page wire bytes | 9,993,667,600 B |
-| Virtual pages / full-inventory physical-slot bytes | 94,208 / 12,348,030,976 B = 11.5 GiB |
-| Full-inventory unused slot bytes | 2,354,363,376 B |
+| Unique geometry payload before page duplication | 6,110,016,500 B |
+| Duplicated page vertices / duplicated vertex bytes | 109,297,086 / 1,815,202,928 B (29.71% of unique payload) |
+| Page geometry payload including duplication | 7,925,219,428 B |
+| Decoded resident page images | 7,930,327,040 B |
+| Resident page headers / section alignment | 4,317,504 B / 790,108 B |
+| Encoded page headers | 6,476,256 B |
+| Encoded vertex / reference streams | 2,912,513,843 B / 396,029,411 B |
+| Encoded triangle / cluster streams | 385,991,882 B / 143,044,086 B |
+| Packed page wire bytes | 3,844,055,478 B |
+| Virtual pages / full-inventory physical-slot bytes | 67,461 / 8,842,248,192 B = 8.235 GiB |
+| Full-inventory unused slot bytes | 911,921,152 B |
 | Pinned terminal groups / clusters / unique coarse triangles | 522 / 2,580 / 275,096 |
-| Pinned page payload / wire bytes | 8,123,544 B / 8,160,816 B |
-| Pinned pages / arena reservation | 456 / 59,768,832 B = 57 MiB |
-| Geometry directory sections / directory wire | 27,130,088 B / 39,785,424 B |
+| Pinned page payload / decoded resident bytes | 7,072,176 B / 7,107,472 B |
+| Pinned page wire bytes | 3,581,252 B |
+| Pinned pages / arena reservation | 450 / 58,982,400 B = 56.250 MiB |
+| Geometry directory sections / directory wire | 26,702,136 B / 36,005,712 B |
 | Placement records / material maps | 3,595,680 B / 82,348 B |
 | World spatial nodes / material bitsets | 1,307,488 B / 1,634,360 B |
 | Level directory sections / wire | 6,619,876 B / 6,619,972 B |
-| All directory sections / wire | 33,749,964 B / 46,405,396 B |
-| Level manifest / geometry bootstrap wire | 12,862,442 B / 67,428,654 B |
+| All directory sections / wire | 33,322,012 B / 42,625,684 B |
+| Level manifest / geometry bootstrap wire | 9,510,986 B / 55,717,922 B |
 
-Payload is packed vertices, u32 meshlet references, word-padded byte indices and 160-byte GPU cluster records. The identity `6,842,130,340 + 3,144,170,912 = 9,986,301,252` accounts for all duplicated boundary/level vertices. Headers and alignment add exactly `7,366,348` bytes to packed wire size. The full-inventory slot figure is a virtual capacity measurement; the runtime design allocates only its fixed 1,280 MiB arena. Pinned reservation charges entire slots. Directory section bytes count the GPU data, while wire bytes also include headers, metadata and alignment. Geometry bootstrap wire is all directories plus the level manifest and pinned page ranges; texture tails, collision, ALS and shader warmup remain separate.
+Payload is packed vertices, u32 meshlet references, word-padded byte indices and 160-byte GPU cluster records. Exact identities: `6,110,016,500 + 1,815,202,928 = 7,925,219,428` payload bytes; adding 5,107,612 B of resident headers/alignment gives 7,930,327,040 B decoded page images. The 67,461 encoded 96-byte headers and four codec streams sum to 3,844,055,478 B wire. Full-inventory slot bytes are a virtual capacity measurement; the runtime design allocates its fixed 1,280 MiB arena. Pinned reservation charges entire slots. Directory wire includes metadata, headers and alignment. Geometry bootstrap is directory wire plus the level manifest and pinned encoded ranges; texture tails, collision, ALS and warmup remain separate.
 
-The bake validated every whole group against 128 KiB: maximum 21 clusters/group, 90,800 B for a standalone group including its page header/alignment, and 128 vertices/128 triangles per cluster. Original page/cluster DAG depths are preserved. Error pruning can remove complete depth rows; the native compiler supplies only densely numbered populated rows to the unchanged eight-wide BVH builder, avoiding invalid roots for empty rows. Every retained group occurs once in the forest.
+| Previous offline v4 to v5 | Previous | New | Reduction |
+| --- | ---: | ---: | ---: |
+| Unique payload | 6,842,130,340 B | 6,110,016,500 B | 10.70% |
+| Duplicated vertex bytes | 3,144,170,912 B (45.95%) | 1,815,202,928 B (29.71%) | 42.27% |
+| Decoded page bytes | 9,993,667,600 B | 7,930,327,040 B | 20.65% |
+| Wire page bytes | 9,993,667,600 B | 3,844,055,478 B | 61.54% |
+| Full-inventory arena slots | 12,348,030,976 B | 8,842,248,192 B | 28.39% |
 
-The certified coarse cut includes all 20,430 placements, including hidden and unsupported surfaces. Its visible subset is 2,304,519 triangles, 26,009 clusters and 20,822 group-instance pairs. The stronger all-placement capacity proof is:
+The old maximum 28-byte stride comprised position 6 B, tangent handedness 2 B, normal 4 B, UV0 4 B, tangent 4 B, colour 4 B and UV1 4 B. It reserved tangent storage even when absent. Version 5 uses a 16-byte base: position 3×u16 (6 B), octahedral normal 2×snorm16 (4 B), UV0 2×unorm16 (4 B), and tangent presence/sign flags plus word alignment (2 B). Authored tangent octahedral xy, RGBA8 colour and UV1 2×unorm16 each add 4 B only where present. Normals retain 16-bit precision. Position and UV bounds are asset-wide; decode remains fixed word loads, masks/shifts, octahedral reconstruction and multiply/add. The meshoptimizer octahedral encoder fits this lattice; its expanded post-decode filter would increase stride. No additional lossy colour/float filter is applied. Identical complete quantized tuples are welded after hierarchy construction, adding no loss beyond the existing lattice.
+
+| Resident stride | Authored tangent | Colour | UV1 | Geometries | Unique vertex bytes | Page vertex bytes |
+| --- | --- | --- | --- | ---: | ---: | ---: |
+| 16 B | no | no | no | 222 | 2,521,094,720 B | 4,024,418,592 B |
+| 20 B | no | no | yes | 24 | 19,808,840 B | 36,228,080 B |
+| 20 B | no | yes | no | 28 | 465,428,620 B | 727,022,020 B |
+| 20 B | yes | no | no | 60 | 4,126,180 B | 7,439,540 B |
+| 24 B | no | yes | yes | 27 | 25,648,104 B | 45,338,928 B |
+| 24 B | yes | no | yes | 10 | 18,466,776 B | 29,329,008 B |
+
+Neighbouring/sibling groups share a local vertex table, with at most two adjacent original DAG depths and one pin class per page. Contractions preserve page-DAG acyclicity, checked independently from the written directory. The maximum observed whole group is 21 clusters / 81,184 B standalone including header/alignment; every cluster is at most 128 vertices/128 triangles. Original cluster depths remain intact. Only populated depth rows are densely numbered in the temporary input to the unchanged eight-wide BVH builder. Every retained group occurs once in the forest.
+
+Wire compression uses meshoptimizer vertex codec v0 at level 2 for final packed vertices and 160-byte cluster records, index-sequence codec v1 for page-local references and triangle-index codec v1 for concatenated meshlet-local triangles. Native roundtrips preserve packed attributes, every triangle and winding. A bounded dedicated worker fetches the exact range, checks SHA256, decodes/pads/validates it and transfers the resident image before upload staging. The page API is exported by `@blacksite/geometry`; the current renderer does not instantiate it.
+
+Chrome 155.0.8059.85 on an AMD Ryzen 7 5800X measured **699.7 MB/s decoded resident output** (340.6 MB/s encoded input) in the actual production worker: 2,408 deterministic pages spanning all 371 geometries, 269,378,480 B output / 131,127,630 B input over 385.0 ms of decode/validation/padding. Sixty-four warmup pages are excluded. Page decode p50/p95 was 0.20/0.30 ms. Timing excludes fetch and SHA256; full sequential range-fetch/hash/decode/transfer took 3.586 s (75.1 MB/s output). The bake was idle during measurement. These decimal MB/s measurements establish the worker boundary, not GPU upload or first-playable performance.
+
+The certified coarse cut includes all 20,430 placements, including hidden and unsupported surfaces. Its visible subset remains 2,304,519 triangles, 26,009 clusters and 20,822 group-instance pairs. The stronger all-placement capacity proof is:
 
 | Resource | Complete coarse requirement | Declared capacity |
 | --- | ---: | ---: |
@@ -72,11 +100,11 @@ The certified coarse cut includes all 20,430 placements, including hidden and un
 | Selected cluster slots | 26,040 | 1,048,576 |
 | Conservative frontier slots | 41,283 | 1,048,576 |
 | Reached group-instance pairs | 20,853 | 524,288 |
-| Pinned physical pages | 456 | 10,240 |
+| Pinned physical pages | 450 | 10,240 |
 
-The explicit terminal-group lists support a final coarse pass without visiting the finer forest: 40,859 world nodes + 20,853 group-instance visits + 26,040 cluster visits = **87,752 work items/pass**; view, recovery and two cascades require **351,008** such items. A runtime scheduler must reserve this final-pass work before admitting retries. This certifies capacity and a complete cut, not GPU milliseconds.
+The explicit terminal-group lists support a final coarse pass without visiting the finer forest: 40,859 world nodes + 20,853 group-instance visits + 26,040 cluster visits = **87,752 work items/pass**; view, recovery and two cascades require **351,008** such items. Reserve this final-pass work before admitting retries. This certifies capacity and a complete cut, not GPU milliseconds.
 
-Directories plus the prescribed 88 MiB scratch total **126,024,652 B**. Even reserving 16 bytes/virtual page for a mutable page table and three 4,096-entry, 16-byte feedback queues adds only **1,703,936 B**, leaving **140,706,868 B** inside the 256 MiB control ceiling. These are offline capacity calculations; no new GPU allocation or first-playable timing is claimed by this slice.
+Directories plus the prescribed 88 MiB scratch total **125,596,700 B**. Reserving 16 bytes/virtual page for a mutable page table and three 4,096-entry, 16-byte feedback queues adds **1,275,984 B**, leaving **141,562,772 B** inside the 256 MiB control ceiling. These are offline capacity calculations; no new GPU allocation or first-playable timing is claimed by this slice.
 
 ## Unsupported surface inventory
 
@@ -144,7 +172,7 @@ Initial RTX 3070 allocation, in MiB; the **2,560 MiB ceiling includes geometry a
 
 Report render targets, shaders and unchanged ALS/native assets separately, initially reserving 512 MiB. With the supplied 1.2 GiB system/browser estimate, the 8 GiB card retains headroom. CPU staging and Rapier have separate limits. Scale capacities down, respecting adapter storage-binding/buffer-size limits. The minimum supported budget is the measured pinned closure plus scratch/staging; reject an impossible tier before allocation.
 
-**Offline pages.** Extend the existing format/build. Each page contains whole meshoptimizer groups from one mesh and DAG depth: local vertices/references, packed indices and existing 160-byte cluster records. Preserve the asset-wide quantization lattice; report duplicated boundary vertices. The pinned configuration bounds a group at 21 clusters of 128 vertices/triangles: `21 * (128*28 + 128*4 + 384 + 160) = 97,440 B`, fitting 128 KiB with its header. Validate that contract during the bake.
+**Offline pages.** Each page contains whole neighbouring meshoptimizer groups from one mesh, one pin class and at most two adjacent original DAG depths. Groups share one local packed vertex table. Prefer vertex-sharing neighbours and spatially adjacent/sibling groups; preserve an acyclic page dependency graph when contracting groups into pages. Preserve the asset-wide quantization lattice and weld identical complete packed tuples; report duplicated boundary vertices. The 16-byte base vertex contains u16 position, snorm16 octahedral normal, u16 UV0 and tangent flags. Optional authored tangent, RGBA8 colour and UV1 add four bytes each. The maximum 28-byte configuration bounds a group at `21 * (128*28 + 128*4 + 384 + 160) = 97,440 B`, fitting 128 KiB with its header. Validate that contract during the bake. Wire pages use meshoptimizer vertex/index codecs; a dedicated worker fetches, hashes and decodes each bounded page before upload staging. Charge decoded resident bytes and full physical slots separately from compressed wire bytes.
 
 One shared u32 arena replaces whole-level vertex/reference/index/cluster allocations; shaders add physical page bases to local offsets. Pages add no draw objects. Each new immutable owned build directory contains the bootstrap, page packs with ranges/hashes, texture-tail descriptors and collision chunks. Never overwrite or repoint published manifests.
 

@@ -9,6 +9,7 @@
     "./format": "./src/format.ts",
     "./load": "./src/load.ts",
     "./load-model": "./src/load-model.ts",
+    "./pages": "./src/load-pages.ts",
     "./build": "./scripts/build.mjs"
   },
   "scripts": {

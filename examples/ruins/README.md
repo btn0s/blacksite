@@ -11,7 +11,7 @@ node --max-old-space-size=16384 examples/ruins/scripts/build.mjs D:/Archive/dark
 node --max-old-space-size=8192 examples/ruins/scripts/materials.mjs
 ```
 
-The geometry command requires a new owned output directory and defaults to a 5 mm world error. Every component-local geometry uses this divided by its largest conservative placement scale, including shear. It writes the [version-4 page contract](../../../packages/geometry/scripts/README.md#page-format-version-4), a whole-level placement/material/spatial directory, a complete unsupported-surface inventory, and `census.json`. Every page is read back and verified. Original source files are read-only and all generated content stays outside Git. Long-running builds on this host run as scheduled tasks.
+The geometry command requires a new owned output directory and defaults to a 5 mm world error. Every component-local geometry uses this divided by its largest conservative placement scale, including shear. It writes the [version-5 page contract](../../../packages/geometry/scripts/README.md#page-format-version-5), a whole-level placement/material/spatial directory, a complete unsupported-surface inventory, and `census.json`. Every page is read back and verified. Original source files are read-only and all generated content stays outside Git. Long-running builds on this host run as scheduled tasks.
 
 The output is an immutable offline build. Its `level.json` belongs inside that new directory. Existing previews keep their published resident manifests; no loader consumes this page format yet. See [the streaming design and measured census](../../../docs/streaming.md).
 
