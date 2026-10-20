@@ -1,13 +1,14 @@
-import { Frustum, Group, Matrix4, Mesh, Vector4, WebGPUCoordinateSystem } from 'three/webgpu'
+import { Frustum, Matrix4, Mesh, Vector4, WebGPUCoordinateSystem } from 'three/webgpu'
 import type { Node, OrthographicCamera, Vector2, WebGPURenderer } from 'three/webgpu'
 import { bool, float, vec3, uniform, uniformArray } from 'three/tsl'
 import type { PackedMeshletScene } from './runtime-data'
 import { ClusterTraversal } from './runtime-traversal'
 import { createGeometryDepthMaterial } from './runtime-material'
 import { clusterGeometry, clusterVertex } from './runtime-vertex'
+import type { MaterialSubmission } from './runtime-submission'
 
 export class ClusterShadows {
-  readonly object = new Group()
+  readonly object
   private readonly frustum = new Frustum()
   private readonly viewProjection = new Matrix4()
   private readonly planes = uniformArray(Array.from({ length: 6 }, () => new Vector4()))
@@ -18,7 +19,8 @@ export class ClusterShadows {
   private readonly materials = new Set<ReturnType<typeof createGeometryDepthMaterial>>()
   readonly residentBytes: number
 
-  constructor(packed: PackedMeshletScene, world: Node<'mat4'>, worldScale: Node<'float'>, layer: number, triangleBudget: number) {
+  constructor(packed: PackedMeshletScene, world: Node<'mat4'>, worldScale: Node<'float'>, layer: number, triangleBudget: number, private readonly submission: MaterialSubmission) {
+    this.object = submission.shadow
     if (!Number.isInteger(layer) || layer < 0 || layer > 31) throw new Error('Shadow layer must be an integer between 0 and 31')
     this.object.name = 'Cluster sun-shadow selection'
     this.hierarchyDepth = packed.hierarchyDepth
@@ -38,7 +40,7 @@ export class ClusterShadows {
       mesh.frustumCulled = false
       mesh.castShadow = true
       mesh.receiveShadow = false
-      this.object.add(mesh)
+      this.submission.add(this.object, mesh, batch.firstMaterial, batch.materialCount)
     }
   }
 
@@ -52,7 +54,7 @@ export class ClusterShadows {
     return this.traversal.indices.readStats(values)
   }
 
-  prepare(renderer: WebGPURenderer, camera: OrthographicCamera, mapSize: Readonly<Vector2>, pixelError: number) {
+  prepare(renderer: WebGPURenderer, camera: OrthographicCamera, mapSize: Readonly<Vector2>, pixelError: number, world: Matrix4, view: number) {
     if (!this.object.visible) return
     if (!camera.isOrthographicCamera) throw new Error('Cluster sun shadows require an orthographic cascade camera')
     if (!(pixelError > 0)) throw new Error('Cluster shadow pixel error must be positive')
@@ -61,6 +63,7 @@ export class ClusterShadows {
     this.threshold.value = pixelError
     this.viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
     this.frustum.setFromProjectionMatrix(this.viewProjection, WebGPUCoordinateSystem)
+    this.submission.update(this.frustum, world, view)
     for (let i = 0; i < 6; i++) {
       const plane = this.frustum.planes[i]!
       this.planes.array[i]!.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant)

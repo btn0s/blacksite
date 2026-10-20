@@ -92,12 +92,11 @@ export async function loadArchway() {
   const assets = [...assetsByGeometry.values()]
   const sourceTriangles = assets.reduce((sum, asset) => sum + asset.metadata.sourceTriangles, 0)
   const meshlets = assets.reduce((sum, asset) => sum + asset.metadata.clusterCount, 0)
-  const candidateCount = manifest.placements.reduce((sum, placement) => sum + (placement.visible ? manifest.geometries[placement.geometry]!.metadata.clusterCount : 0), 0)
   return {
     manifest, sourceTriangles, meshlets,
     uniqueMeshes: assets.length,
     levels: Math.max(...assets.map(asset => asset.metadata.levelCount)),
-    storageSize: Math.max(meshletStorageSize(assets.map(asset => asset.metadata)), candidateCount * 16, 16_000_000 * 6),
+    storageSize: Math.max(meshletStorageSize(assets.map(asset => asset.metadata)), 16_000_000 * 6),
     createColliders: (context: Pick<RapierContext, 'world' | 'rapier'>, signal: AbortSignal) => loadCourtyardColliders(root + manifest.colliderUrl, context, signal),
     async createGeometry(renderer: WebGPURenderer) {
       const materials = await loadScanMaterials(surfaceSet.surfaces, surfaceRoot, renderer)

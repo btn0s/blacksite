@@ -1,7 +1,7 @@
 import { IndirectStorageBufferAttribute, StorageBufferAttribute } from 'three/webgpu'
-import type { ComputeNode, Node, StorageBufferNode, WebGPURenderer } from 'three/webgpu'
+import type { Node, StorageBufferNode, WebGPURenderer } from 'three/webgpu'
 import { Fn, If, Loop, atomicLoad, atomicStore, float, floatBitsToUint, invocationLocalIndex, max, min, numWorkgroups, sqrt, storage, uint, uintBitsToFloat, uvec4, workgroupArray, workgroupBarrier, workgroupId } from 'three/tsl'
-import { DRAW_ARGUMENT_OFFSET, DRAW_ARGUMENT_STRIDE, INDEX_BUDGET_OFFSET, uploadAttributes, type PackedMeshletScene } from './runtime-data'
+import { DRAW_ARGUMENT_OFFSET, DRAW_ARGUMENT_STRIDE, INDEX_BUDGET_OFFSET, SELECTION_WORK_BUDGET, uploadAttributes, type PackedMeshletScene } from './runtime-data'
 import { clusterReader, instanceReader } from './runtime-layout'
 
 export class ClusterIndices {
@@ -9,15 +9,16 @@ export class ClusterIndices {
   readonly threshold: Node<'float'>
   readonly residentBytes: number
   private readonly dispatch: IndirectStorageBufferAttribute
-  private readonly retryDispatch = new IndirectStorageBufferAttribute(new Uint32Array(3), 1)
-  private readonly begin
-  private readonly activate
-  private readonly check
-  private readonly retries
+  readonly begin
+  readonly resume
+  readonly visibilityBegin
+  readonly check
+  readonly retries
   private readonly prefix
   private readonly compact
   private readonly nodes
-  private readonly fits = new WeakMap<ComputeNode, ComputeNode[]>()
+  readonly finish
+  readonly active: Node<'bool'>
 
   constructor(packed: PackedMeshletScene, counters: StorageBufferNode<'uint'>, visibleAttribute: StorageBufferAttribute,
     readonly triangleBudget: number, pixelError: Node<'float'>, lodEnabled: Node<'bool'>, coarsestError: Node<'float'>, label: string) {
@@ -29,8 +30,7 @@ export class ClusterIndices {
     const write = (field: number, value: Node<'float'> | number) => atomicStore(counters.element(INDEX_BUDGET_OFFSET + field), floatBitsToUint(float(value)))
     this.threshold = read(0)
     const dispatch = storage(this.dispatch, 'uint', this.dispatch.count)
-    const retryDispatch = storage(this.retryDispatch, 'uint', 3)
-    const visible = storage(visibleAttribute, 'uvec4', packed.candidateCount).toReadOnly()
+    const visible = storage(visibleAttribute, 'uvec4', visibleAttribute.count).toReadOnly()
     const drawArguments = storage(counters.value, 'uint', counters.value.count).toReadOnly()
     const output = storage(this.indices, 'uint', this.indices.count)
     const readCluster = clusterReader(packed.clusters)
@@ -38,39 +38,55 @@ export class ClusterIndices {
     const indices = storage(packed.indices, 'uint', packed.indices.count).toReadOnly()
     this.begin = Fn(() => {
       const floor = read(1).lessThan(triangleBudget * 0.8).select(read(4).mul(0.99), read(4)).toVar()
+      const workFloor = atomicLoad(counters.element(21)).lessThan(SELECTION_WORK_BUDGET * 0.8).select(read(6).mul(0.99), read(6)).toVar()
       write(4, floor)
-      write(0, max(lodEnabled.select(pixelError, float(0)), floor))
+      write(6, workFloor)
+      write(0, max(max(lodEnabled.select(pixelError, float(0)), floor), workFloor))
       write(1, 0)
       write(2, 0)
       write(3, 1)
+      write(7, 0)
+      atomicStore(counters.element(2), uint(0))
+      atomicStore(counters.element(3), uint(0))
+      atomicStore(counters.element(11), uint(0))
+      atomicStore(counters.element(21), uint(0))
     })().compute(1).setName(`${label} Index budget begin`)
-    this.activate = Fn(() => { write(3, 1) })().compute(1).setName(`${label} Index budget resume`)
+    this.active = read(3).greaterThan(0)
+    this.resume = Fn(() => {
+      atomicStore(counters.element(3), uint(1))
+      atomicStore(counters.element(11), atomicLoad(counters.element(0)))
+    })().compute(1).setName(`${label} Current depth visibility begin`)
+    this.visibilityBegin = Fn(() => {
+      atomicStore(counters.element(0), uint(0))
+      atomicStore(counters.element(9), uint(0))
+      Loop(packed.drawCount * DRAW_ARGUMENT_STRIDE, ({ i }) => { atomicStore(counters.element(uint(DRAW_ARGUMENT_OFFSET).add(uint(i))), uint(0)) })
+    })().compute(1).setName(`${label} Visibility ranges reset`)
     this.check = Fn(() => {
       If(read(3).greaterThan(0), () => {
         const triangles = float(atomicLoad(counters.element(9))).toVar()
         write(1, max(read(1), triangles))
-        If(triangles.greaterThan(triangleBudget), () => {
+        If(triangles.greaterThan(triangleBudget).or(atomicLoad(counters.element(20)).greaterThan(0)), () => {
           const scale = read(0).greaterThan(0).select(read(0), pixelError).mul(max(sqrt(triangles.div(triangleBudget)).mul(1.1), 1.25)).toVar()
           write(0, scale)
           write(2, read(2).add(1))
           write(5, read(5).add(1))
-          write(4, scale)
+          If(triangles.greaterThan(triangleBudget), () => { write(4, scale) })
+          If(atomicLoad(counters.element(20)).greaterThan(0), () => { write(6, scale); write(7, read(7).add(1)) })
         }).Else(() => { write(3, 0) })
       })
     })().compute(1).setName(`${label} Index budget fit`)
     this.retries = Array.from({ length: 3 }, (_, attempt) => Fn(() => {
-      const groups = uint(0).toVar()
       If(read(3).greaterThan(0), () => {
         if (attempt === 2) write(0, max(read(0), coarsestError))
-        Loop({ start: 4, end: 13 }, ({ i }) => { atomicStore(counters.element(i), uint(0)) })
-        Loop(packed.drawCount * DRAW_ARGUMENT_STRIDE, ({ i }) => { atomicStore(counters.element(uint(DRAW_ARGUMENT_OFFSET).add(uint(i))), uint(0)) })
-        groups.assign(atomicLoad(counters.element(22)).add(63).div(64))
+        atomicStore(counters.element(2), uint(attempt + 1))
       })
-      retryDispatch.element(0).assign(min(groups, uint(65535)))
-      retryDispatch.element(1).assign(max(groups.add(65534).div(65535), uint(1)))
-      retryDispatch.element(2).assign(1)
     })().compute(1).setName(`${label} Index budget retry ${attempt + 1}`))
     this.prefix = Fn(() => {
+      If(this.active, () => {
+        Loop(packed.drawCount * DRAW_ARGUMENT_STRIDE, ({ i }) => { atomicStore(counters.element(uint(DRAW_ARGUMENT_OFFSET).add(uint(i))), uint(0)) })
+        atomicStore(counters.element(10), uint(0))
+        atomicStore(counters.element(9), uint(0))
+      })
       const start = uint(0).toVar()
       for (let index = 0; index < packed.batches.length; index++) {
         const argument = DRAW_ARGUMENT_OFFSET + index * DRAW_ARGUMENT_STRIDE
@@ -104,10 +120,13 @@ export class ClusterIndices {
       const shared = workgroupArray('uvec4', 1)
       If(invocationLocalIndex.equal(0).and(slot.lessThan(drawArguments.element(10))), () => {
         const candidate = visible.element(slot).toVar()
-        const cluster = readCluster(candidate.x)
-        const instance = readInstance(candidate.y)
-        const argument = candidate.w.mul(DRAW_ARGUMENT_STRIDE).add(DRAW_ARGUMENT_OFFSET + 2)
-        shared.element(uint(0)).assign(uvec4(cluster.draw.x, cluster.draw.y, drawArguments.element(argument).add(candidate.z), instance.scale.y.lessThan(0).select(uint(1), uint(0))))
+        shared.element(uint(0)).assign(uvec4(0))
+        If(candidate.z.notEqual(0xffffffff), () => {
+          const cluster = readCluster(candidate.x)
+          const instance = readInstance(candidate.y)
+          const argument = candidate.w.mul(DRAW_ARGUMENT_STRIDE).add(DRAW_ARGUMENT_OFFSET + 2)
+          shared.element(uint(0)).assign(uvec4(cluster.draw.x, cluster.draw.y, drawArguments.element(argument).add(candidate.z), instance.scale.y.lessThan(0).select(uint(1), uint(0))))
+        })
       })
       workgroupBarrier()
       If(slot.lessThan(drawArguments.element(10)), () => {
@@ -124,25 +143,14 @@ export class ClusterIndices {
       })
     })().computeKernel([64]).setName(`${label} Index compaction`)
     this.compact.dispatchSize = this.dispatch as unknown as number[]
-    this.nodes = [this.begin, this.activate, this.check, ...this.retries, this.prefix, this.compact]
-    this.residentBytes = this.indices.array.byteLength + this.dispatch.array.byteLength + this.retryDispatch.array.byteLength
+    this.finish = [this.prefix, this.compact]
+    this.nodes = [this.begin, this.resume, this.visibilityBegin, this.check, ...this.retries, ...this.finish]
+    this.residentBytes = this.indices.array.byteLength + this.dispatch.array.byteLength
   }
 
   async upload(renderer: WebGPURenderer) {
-    await uploadAttributes(renderer, [this.indices, this.dispatch, this.retryDispatch])
+    await uploadAttributes(renderer, [this.indices, this.dispatch])
     for (const node of this.nodes) await renderer.compileComputeAsync(node)
-  }
-
-  start(renderer: WebGPURenderer) { renderer.compute(this.begin) }
-
-  fit(renderer: WebGPURenderer, evaluate: ComputeNode) {
-    let nodes = this.fits.get(evaluate)
-    if (!nodes) {
-      evaluate.dispatchSize = this.retryDispatch as unknown as number[]
-      nodes = [this.activate, this.check, ...this.retries.flatMap(retry => [retry, evaluate, this.check]), this.prefix, this.compact]
-      this.fits.set(evaluate, nodes)
-    }
-    renderer.compute(nodes)
   }
 
   readStats(values: Uint32Array) {

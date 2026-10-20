@@ -20,7 +20,7 @@ export function clusterVertex(packed: PackedMeshletScene, visibleAttribute: Stor
   const vertices = storage(packed.vertices, 'uint', packed.vertices.count).toReadOnly()
   const readVertex = vertexReader(vertices)
   const references = storage(packed.vertexReferences, 'uint', packed.vertexReferences.count).toReadOnly()
-  const visible = storage(visibleAttribute, 'uvec4', packed.candidateCount).toReadOnly()
+  const visible = storage(visibleAttribute, 'uvec4', visibleAttribute.count).toReadOnly()
   const uv = varyingProperty('vec2', 'geometryUv')
   const color = varyingProperty('vec3', 'geometryClusterColor')
   const vertexColor = varyingProperty('vec4', 'geometryVertexColor')

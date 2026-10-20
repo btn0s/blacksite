@@ -15,9 +15,13 @@ import { bindGeometryMaterial, createGeometryDepthMaterial, createGeometryMateri
 import { clusterGeometry, clusterVertex } from './runtime-vertex'
 import { ClusterShadows } from './runtime-shadows'
 import { ClusterTraversal } from './runtime-traversal'
+<<<<<<< HEAD
 import { ClusterTextureFeedback, type MeshletTextureFeedback } from './runtime-textures'
 
 export type { MeshletTextureFeedback, TextureDemandBinding } from './runtime-textures'
+=======
+import { MaterialSubmission } from './runtime-submission'
+>>>>>>> 3cf674d
 
 export type { MeshletSceneEntry } from './runtime-data'
 export { meshletStorageSize } from './runtime-data'
@@ -71,13 +75,17 @@ export interface MeshletStats {
   shadowIndexOverflows: number
   shadowIndexOverflowCount: number
   effectiveShadowPixelError: number
+  traversalScratchBytes: number
+  reachedGroups: number
+  admittedWork: number
 }
 
 export class MeshletScene {
   readonly object = new Group()
   readonly meshes: Mesh<BufferGeometry, MeshStandardNodeMaterial>[] = []
-  private readonly lit = new Group()
-  private readonly depth = new Group()
+  private readonly submission: MaterialSubmission
+  private readonly lit
+  private readonly depth
   readonly triangleBudget: number
   readonly totalTriangles: number
   readonly candidateClusters: number
@@ -96,6 +104,7 @@ export class MeshletScene {
   private readonly traversal: ClusterTraversal
   private readonly hierarchyDepth: number
   readonly residentBytes: number
+  readonly traversalScratchBytes: number
   private depthTexture: ReturnType<typeof textureLoad> | null = null
   private readonly depthSize = uniform(new Vector2(1, 1))
   private readonly frustum = new Frustum()
@@ -144,6 +153,9 @@ export class MeshletScene {
   }
 
   private constructor(packed: PackedMeshletScene, options: MeshletSceneOptions) {
+    this.submission = new MaterialSubmission(packed.coverage)
+    this.lit = this.submission.lit
+    this.depth = this.submission.depth
     this.object.name = 'Cluster scene'
     this.lit.name = 'Cluster lit materials'
     this.depth.name = 'Cluster depth buckets'
@@ -163,7 +175,7 @@ export class MeshletScene {
     this.shadowLayer = options.shadowLayer ?? 31
     this.shadowPixelError = options.shadowPixelError ?? 1
     this.hierarchyDepth = packed.hierarchyDepth
-    this.shadows = new ClusterShadows(packed, this.world, this.worldScale, this.shadowLayer, streamBudget)
+    this.shadows = new ClusterShadows(packed, this.world, this.worldScale, this.shadowLayer, streamBudget, this.submission)
     this.object.add(this.shadows.object)
     const pyramidSize = options.occlusionSize ?? 512
     if (pyramidSize < 32 || pyramidSize > 2048 || (pyramidSize & (pyramidSize - 1)) !== 0) {
@@ -219,6 +231,7 @@ export class MeshletScene {
       streamBudget, float(Math.max(packed.maximumError, 0.000001) * 1.001).mul(this.worldScale).mul(this.projectionScale).div(0.000001))
     this.counters = this.traversal.counters
     this.residentBytes = packed.residentBytes + this.traversal.residentBytes + this.shadows.residentBytes + pyramidAttribute.array.byteLength
+    this.traversalScratchBytes = this.traversal.residentBytes + this.shadows.residentBytes - this.triangleBudget * 12
     const pulled = clusterVertex(packed, this.traversal.visible, this.debug)
     for (let batchIndex = 0; batchIndex < packed.batches.length; batchIndex++) {
       const batch = packed.batches[batchIndex]!
@@ -234,7 +247,7 @@ export class MeshletScene {
       mesh.receiveShadow = true
       mesh.castShadow = false
       this.meshes.push(mesh)
-      this.lit.add(mesh)
+      this.submission.add(this.lit, mesh, batchIndex)
     }
     for (const batch of packed.depthBatches) {
       const material = createGeometryDepthMaterial(batch, pulled)
@@ -242,7 +255,7 @@ export class MeshletScene {
       const mesh = new Mesh(clusterGeometry(this.traversal.indices.indices, this.counters, batch.argument), material)
       mesh.name = `Cluster depth ${batch.material?.name || 'opaque'}`
       mesh.frustumCulled = false
-      this.depth.add(mesh)
+      this.submission.add(this.depth, mesh, batch.firstMaterial, batch.materialCount)
     }
     this.pyramidCompute = Fn(() => {
       const xy = uvec2(instanceIndex.mod(pyramidSize), instanceIndex.div(pyramidSize))
@@ -307,7 +320,7 @@ export class MeshletScene {
     this.object.updateWorldMatrix(true, true)
     this.world.value.copy(this.object.matrixWorld)
     this.worldScale.value = transformScale(this.object.matrixWorld)
-    this.shadows.prepare(renderer, camera, mapSize, this.shadowPixelError)
+    this.shadows.prepare(renderer, camera, mapSize, this.shadowPixelError, this.object.matrixWorld, this.shadowPasses + 1)
     this.shadowPasses++
   }
 
@@ -344,6 +357,7 @@ export class MeshletScene {
       const plane = this.frustum.planes[i]!
       this.frustumPlanes.array[i]!.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant)
     }
+    this.submission.update(this.frustum, this.object.matrixWorld, 0)
     this.history.value = this.historyValid && this.occlusionEnabled ? 1 : 0
     this.historyValid = false
     this.traversal.select(renderer, this.hierarchyDepth)
@@ -357,7 +371,7 @@ export class MeshletScene {
     else this.depthTexture = textureLoad(depth)
     this.depthSize.value.set(depth.image.width, depth.image.height)
     renderer.compute(this.occlusionComputes)
-    this.traversal.recover(renderer, this.hierarchyDepth)
+    this.traversal.recover(renderer)
     this.previousView.value.copy(this.currentView.value)
     this.previousProjection.value.copy(this.currentProjection.value)
     this.previousNear.value = this.currentNear.value
@@ -388,14 +402,15 @@ export class MeshletScene {
       previousOccluded: values[6]!,
       occludedClusters: values[7]!,
       recoveredClusters: values[8]!,
-      visibleClusters: values[10]!,
-      firstPassClusters: values[10]! - values[8]!,
+      visibleClusters: values[0]!,
+      firstPassClusters: values[11]!,
       drawnTriangles: values[9]!,
       sceneTriangles: values[12]!,
       submittedTriangles: values[9]!,
       totalTriangles: this.totalTriangles,
       materialBatches: this.meshes.length,
       shadowPasses: this.shadowPasses,
+      traversalScratchBytes: this.traversalScratchBytes, reachedGroups: values[22]!, admittedWork: values[21]!,
     }
   }
 

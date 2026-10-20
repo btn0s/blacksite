@@ -4,6 +4,7 @@ import { Fn, storage } from 'three/tsl'
 import type { MeshletAssetSource } from './load'
 import type { MeshletMetadata } from './format'
 import { geometryUsesCoverage } from './runtime-material'
+import { MaterialCoverage } from './runtime-submission'
 
 export interface MeshletSceneEntry {
   asset: MeshletAssetSource
@@ -22,10 +23,10 @@ export interface PackedMeshletScene {
   residentGeometryBytes: number
   residentBytes: number
   hierarchyDepth: number
-  queueCapacity: number
-  leafCapacity: number
+  coarsest: { slots: number; frontier: number; groups: number; work: number }
   rootTriangles: number
   maximumError: number
+  coverage: MaterialCoverage
   clusters: StorageBufferAttribute
   instances: StorageBufferAttribute
   nodes: StorageBufferAttribute
@@ -41,6 +42,10 @@ export const CLUSTER_RECORD_WORDS = 40
 export const DRAW_ARGUMENT_OFFSET = 32
 export const DRAW_ARGUMENT_STRIDE = 5
 export const INDEX_BUDGET_OFFSET = 24
+export const SELECTED_CAPACITY = 1_048_576
+export const FRONTIER_CAPACITY = 1_048_576
+export const GROUP_CAPACITY = 524_288
+export const SELECTION_WORK_BUDGET = 4_194_304
 
 function shadowSide(material: MeshletSceneEntry['materials'][number]) {
   return material.shadowSide ?? (material.side === FrontSide ? BackSide : material.side === BackSide ? FrontSide : DoubleSide)
@@ -99,7 +104,6 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
   let clusterCount = 0
   let instanceCount = 0
   let nodeCount = 0
-  let leafCapacity = 0
   let totalTriangles = 0
   let residentGeometryBytes = 0
   let rootTriangles = 0
@@ -114,7 +118,6 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     }
     sources.get(entry.asset)!.push(entry)
     instanceCount += entry.instances.length
-    leafCapacity += entry.asset.metadata.clusterCount * entry.instances.length
     totalTriangles += entry.asset.metadata.sourceTriangles * entry.instances.length
   }
   const layout = geometryPoolLayout([...sources.keys()].map(source => source.metadata))
@@ -129,7 +132,10 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
   const instanceInfo = new Uint32Array(instanceCount * 4)
   const instanceBounds = new Float32Array(instanceCount * 4)
   const materialMap: number[] = []
+  const instanceSlots: number[] = []
   const frontierWidths: number[] = []
+  const coarseWidths: number[] = []
+  const coarsest = { slots: 0, frontier: 0, groups: 0, work: instanceCount }
   const inverseTranspose = new Matrix4()
   const transformed = new Vector3()
   let clusterBase = 0
@@ -184,6 +190,27 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
         : [clusterBase + asset.groupData[group * 4]!, asset.groupData[group * 4 + 1]!, 0, 0], offset + 8)
     }
     const placements = sourceEntries.reduce((sum, entry) => sum + entry.instances.length, 0)
+    let coarse = Array.from({ length: asset.metadata.rootCount }, (_, index) => index)
+    for (let depth = 0; coarse.length; depth++) {
+      coarseWidths[depth] = (coarseWidths[depth] ?? 0) + coarse.length * placements
+      coarsest.work += coarse.length * placements
+      const next: number[] = []
+      for (const node of coarse) {
+        if (asset.nodeBounds[node * 8 + 4]! <= sourceError) continue
+        const group = asset.nodeData[node * 4]!
+        if (group === 0xffffffff) {
+          const first = asset.nodeData[node * 4 + 1]!
+          const count = asset.nodeData[node * 4 + 2]!
+          for (let i = 0; i < count; i++) next.push(first + i)
+        } else {
+          const count = asset.groupData[group * 4 + 1]!
+          coarsest.groups += placements
+          coarsest.slots += count * placements
+          coarsest.work += count * placements
+        }
+      }
+      coarse = next
+    }
     let frontier = Array.from({ length: asset.metadata.rootCount }, (_, index) => index)
     for (let depth = 0; frontier.length; depth++) {
       frontierWidths[depth] = (frontierWidths[depth] ?? 0) + frontier.length * placements
@@ -221,6 +248,7 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
         materialMap.push(batchIndex)
       }
       for (const matrix of entry.instances) {
+        instanceSlots.push(entry.materials.length)
         const scale = transformScale(matrix)
         maximumError = Math.max(maximumError, sourceError * scale)
         instanceData.set(matrix.elements, instanceIndex * 36)
@@ -260,7 +288,10 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
   let candidateCount = 0
   for (const batch of batches) candidateCount += batch.capacity
   if (candidateCount === 0) throw new Error('Geometry requires at least one visible cluster')
-  if (candidateCount > 0x1000000) throw new Error('Indexed geometry supports at most 16,777,216 visible cluster slots')
+  coarsest.frontier = Math.max(...coarseWidths)
+  if (coarsest.slots > SELECTED_CAPACITY || coarsest.frontier > FRONTIER_CAPACITY || coarsest.groups > GROUP_CAPACITY || coarsest.work > SELECTION_WORK_BUDGET) {
+    throw new Error(`Geometry cannot cover its certified coarsest cut within fixed traversal capacity: ${JSON.stringify(coarsest)}`)
+  }
   const attributes = {
     clusters: new StorageBufferAttribute(clusterIntegers, 4),
     instances: new StorageBufferAttribute(instanceData, 4),
@@ -277,8 +308,8 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     batches, depthBatches, drawCount,
     clusterCount, instanceCount, candidateCount, totalTriangles, residentGeometryBytes, residentBytes,
     hierarchyDepth: frontierWidths.length,
-    queueCapacity: Math.max(...frontierWidths),
-    leafCapacity, rootTriangles, maximumError,
+    coarsest, rootTriangles, maximumError,
+    coverage: new MaterialCoverage(instanceBounds, instanceData, materialMap, batches.length, instanceSlots),
     ...attributes,
   }
   await uploadAttributes(renderer, [attributes.vertices, attributes.vertexReferences, attributes.indices])
