@@ -44,7 +44,7 @@ export async function buildScanMaterialTails(sourceFile, output) {
     }
     surfaces.push({ ...surface, maps })
   }
-  await writeFile(join(output, 'surfaces.json'), JSON.stringify({ version: 2, surfaces }))
+  await writeFile(join(output, 'surfaces.json'), JSON.stringify({ ...source, version: 2, surfaces }))
   return surfaces
 }
 
@@ -56,12 +56,13 @@ export async function buildScanMaterials(sourceFile, output, textureDirectory = 
   const surfaces = []
   const images = new Map()
   for (const surface of source.surfaces) {
-    if (!['custom-general', 'smart-layers', 'simple-orm', 'candle'].includes(surface.family)) throw new Error(`Unsupported material family: ${surface.family}`)
+    if (!['custom-general', 'smart-layers', 'simple-orm', 'candle', 'foliage', 'generic-props', 'cutout', 'vertex-blend', 'solid', 'world-grid', 'steel', 'emissive'].includes(surface.family)) throw new Error(`Unsupported material family: ${surface.family}`)
     const maps = {}
     for (const [name, imageSource] of Object.entries(surface.maps)) {
       if (!imageSource?.file || typeof imageSource.srgb !== 'boolean') throw new Error(`Missing image metadata for ${surface.path}: ${name}`)
       const file = resolve(dirname(sourceFile), imageSource.file)
-      const identity = `${file}:${imageSource.srgb}:${name === 'Normal'}:uastc2`
+      const normal = name === 'Normal' || name.endsWith('| Normal') || name === 'PuddleNormal'
+      const identity = `${file}:${imageSource.srgb}:${normal}:uastc2`
       if (images.has(identity)) {
         maps[name] = { ...images.get(identity), srgb: imageSource.srgb }
         continue
@@ -83,10 +84,10 @@ export async function buildScanMaterials(sourceFile, output, textureDirectory = 
         const work = await mkdtemp(join(tmpdir(), 'blacksite-scan-image-'))
         try {
           const input = join(work, 'image.png')
-          await sharp(imageBytes).png().toFile(input)
+          await sharp(imageBytes).resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true }).png().toFile(input)
           const args = ['-uastc', '-uastc_level', '2', '-ktx2', '-mipmap', '-max_threads', '8', '-file', input, '-output_file', join(textureDirectory, destination)]
           if (!imageSource.srgb) args.push('-linear')
-          if (name === 'Normal') args.push('-normal_map')
+          if (normal) args.push('-normal_map')
           await new Promise((resolvePromise, reject) => {
             const child = spawn(process.env.BASISU ?? 'basisu', args, { stdio: 'inherit', windowsHide: true })
             child.once('error', reject)
@@ -101,9 +102,9 @@ export async function buildScanMaterials(sourceFile, output, textureDirectory = 
       images.set(identity, levels)
       maps[name] = { ...levels, srgb: imageSource.srgb }
     }
-    surfaces.push({ family: surface.family, path: surface.path, parameters: surface.parameters, channels: surface.channels, maps })
+    surfaces.push({ ...surface, maps })
   }
-  await writeFile(join(output, 'surfaces.json'), JSON.stringify({ version: 2, surfaces }, null, 2))
+  await writeFile(join(output, 'surfaces.json'), JSON.stringify({ ...source, version: 2, surfaces }, null, 2))
   return surfaces
 }
 
