@@ -17,15 +17,117 @@ Read-only inputs: `D:/Archive/dark-ruins-export` metadata/component geometry and
 | All 549 at maximum 2K, BC7 including mip chains | 2,352,451,552 B = 2.191 GiB |
 | Same inventory at maximum 256 | 38,801,376 B = 37.004 MiB |
 | Supported material closure, including shared noise | 479 texture identities; 2,119,883,456 B at 2K |
-| Whole-level geometry at a 5 mm cap | **Not available from the existing builds** |
+| Whole-level geometry at a 5 mm world cap | **9,986,301,252 B paged payload; 6,842,130,340 B before page duplication** |
 
 Triangle totals use authoritative component geometry, including spline variants. The 549-image figure includes parameters that static switches may not sample; 479 is the supported material closure. Deduplicate by built identity (source, colour space, normal processing). GPU bytes come from dimensions, not file lengths: `sum(16 * ceil(width/4) * ceil(height/4))` across resident BC7 mips.
 
 The courtyard supplies exact 5 mm data for only 83/371 geometries: 1,573,639,456 B of GPU payload plus 2,750,688 B of nodes. Its baseline textures use 835,370,064 B. Geometry arithmetic follows `runtime-data.ts`: `residentVertices * vertexStride + meshletVertices * 4 + packedIndexBytes + clusterCount * 160`.
 
-**The whole-level 5 mm total cannot be recovered from these inputs.** Across all builds, 62 geometries have no hierarchy; `level/` contains only 305/371 at 30 mm world error in an older format. Its 4,810,113,168 file bytes are not current GPU bytes. The courtyard's `0.005` cap is also mesh-local. Normalize the new bake to **5 mm world error divided by maximum conservative placement scale**, including shear. Slice 1 must measure the complete payload, pinned closure and page duplication; extrapolation would invent the answer.
+The completed slice-1 bake below uses **5 mm world error divided by maximum conservative placement scale**, including shear. Earlier resident builds cannot supply that answer: 62 geometries previously lacked any hierarchy, and the incomplete `level/` build covered 305/371 at 30 mm world error in an older format. Its 4,810,113,168 file bytes are historical wire bytes. The published courtyard's `0.005` cap remains mesh-local.
 
-Streaming is already necessary: all-source 2K textures consume 88% of 2.5 GiB; courtyard geometry alone exceeds the remainder. Courtyard coarse roots occupy only 175,192 B, but whole-level roots remain unmeasured.
+Streaming is necessary: the full page payload is 9.300 GiB, before textures or traversal. Its certified pinned geometry closure uses 57 MiB of physical pages; the complete directory and capacity figures follow.
+
+## Slice 1 bake census
+
+Completed 20 October 2026 with compiler commit `c92a1c0`. Immutable owned build: `D:/dev/owned-assets/dark-ruins/build-pages-20261020-04`. Run from a Visual Studio developer command prompt with Node 22+:
+
+```powershell
+node --max-old-space-size=12288 examples/ruins/scripts/build.mjs D:/Archive/dark-ruins-export D:/dev/owned-assets/dark-ruins/build-pages-NEW 0.005
+```
+
+The background scheduled bake completed with exit 0. Independent source/artifact readback also completed with exit 0, confirming all geometry identities, source triangle counts/hashes, placement scale normalization, complete pack hashes, placement/material maps, outward spatial bounds and material unions. Evidence is `D:/dev/probe/ruins-pages-verified.json`; the build contains `census.json`, `surfaces.json`, `level.json`, `level.directory` and each geometry's directory/page pack. No existing published manifest was repointed. The [version-4 binary contract](../packages/geometry/scripts/README.md#page-format-version-4) remains offline; existing runtime loaders retain version 3.
+
+| Quantity | Exact measured value |
+| --- | ---: |
+| Component-local geometries / source mesh assets / source glTF files | 371 / 305 / 315 |
+| Placements / visible placements | 20,430 / 20,399 |
+| Source triangles / finest resident-cut triangles | 228,267,444 / 165,804,598 |
+| Clusters / groups / traversal nodes | 3,666,653 / 225,116 / 258,658 |
+| Unique geometry payload before page duplication | 6,842,130,340 B |
+| Duplicated page vertices / duplicated vertex bytes | 152,986,925 / 3,144,170,912 B |
+| Page geometry payload including duplication | 9,986,301,252 B |
+| Page headers / section alignment | 6,029,312 B / 1,337,036 B |
+| Packed page wire bytes | 9,993,667,600 B |
+| Virtual pages / full-inventory physical-slot bytes | 94,208 / 12,348,030,976 B = 11.5 GiB |
+| Full-inventory unused slot bytes | 2,354,363,376 B |
+| Pinned terminal groups / clusters / unique coarse triangles | 522 / 2,580 / 275,096 |
+| Pinned page payload / wire bytes | 8,123,544 B / 8,160,816 B |
+| Pinned pages / arena reservation | 456 / 59,768,832 B = 57 MiB |
+| Geometry directory sections / directory wire | 27,130,088 B / 39,785,424 B |
+| Placement records / material maps | 3,595,680 B / 82,348 B |
+| World spatial nodes / material bitsets | 1,307,488 B / 1,634,360 B |
+| Level directory sections / wire | 6,619,876 B / 6,619,972 B |
+| All directory sections / wire | 33,749,964 B / 46,405,396 B |
+| Level manifest / geometry bootstrap wire | 12,862,442 B / 67,428,654 B |
+
+Payload is packed vertices, u32 meshlet references, word-padded byte indices and 160-byte GPU cluster records. The identity `6,842,130,340 + 3,144,170,912 = 9,986,301,252` accounts for all duplicated boundary/level vertices. Headers and alignment add exactly `7,366,348` bytes to packed wire size. The full-inventory slot figure is a virtual capacity measurement; the runtime design allocates only its fixed 1,280 MiB arena. Pinned reservation charges entire slots. Directory section bytes count the GPU data, while wire bytes also include headers, metadata and alignment. Geometry bootstrap wire is all directories plus the level manifest and pinned page ranges; texture tails, collision, ALS and shader warmup remain separate.
+
+The bake validated every whole group against 128 KiB: maximum 21 clusters/group, 90,800 B for a standalone group including its page header/alignment, and 128 vertices/128 triangles per cluster. Original page/cluster DAG depths are preserved. Error pruning can remove complete depth rows; the native compiler supplies only densely numbered populated rows to the unchanged eight-wide BVH builder, avoiding invalid roots for empty rows. Every retained group occurs once in the forest.
+
+The certified coarse cut includes all 20,430 placements, including hidden and unsupported surfaces. Its visible subset is 2,304,519 triangles, 26,009 clusters and 20,822 group-instance pairs. The stronger all-placement capacity proof is:
+
+| Resource | Complete coarse requirement | Declared capacity |
+| --- | ---: | ---: |
+| Coarse triangles | 2,306,171 | 16,000,000 |
+| Selected cluster slots | 26,040 | 1,048,576 |
+| Conservative frontier slots | 41,283 | 1,048,576 |
+| Reached group-instance pairs | 20,853 | 524,288 |
+| Pinned physical pages | 456 | 10,240 |
+
+The explicit terminal-group lists support a final coarse pass without visiting the finer forest: 40,859 world nodes + 20,853 group-instance visits + 26,040 cluster visits = **87,752 work items/pass**; view, recovery and two cascades require **351,008** such items. A runtime scheduler must reserve this final-pass work before admitting retries. This certifies capacity and a complete cut, not GPU milliseconds.
+
+Directories plus the prescribed 88 MiB scratch total **126,024,652 B**. Even reserving 16 bytes/virtual page for a mutable page table and three 4,096-entry, 16-byte feedback queues adds only **1,703,936 B**, leaving **140,706,868 B** inside the 256 MiB control ceiling. These are offline capacity calculations; no new GPU allocation or first-playable timing is claimed by this slice.
+
+## Unsupported surface inventory
+
+All 371 component-local geometries are baked, including unsupported surfaces and hidden placements. Material translation remains separate: 301 active primitive paths comprise 259 supported, 33 untranslated and 9 excluded FX paths. The immutable build's `surfaces.json` preserves every full material/parent path and every affected placement, geometry, primitive and source slot. Counts below overlap when a placement has several unsupported primitives.
+
+| Active unsupported surface | Missing family / exclusion | Visible placements | Visible source triangles |
+| --- | --- | ---: | ---: |
+| MI_Flame_01 | Flame FX | 664 | 5,312 |
+| MI_VolumetricFog_Beach | Volumetric fog FX | 1 | 48 |
+| MI_VolumetricFog_Lab | Volumetric fog FX | 2 | 96 |
+| MI_VolumetricFog_Outlook | Volumetric fog FX | 1 | 48 |
+| MI_FogCard__Green_01 | Fog card FX | 17 | 5,026 |
+| MI_FogCard__Green_02 | Fog card FX | 3 | 6 |
+| MI_FogCard_01 | Fog card FX | 52 | 65,000 |
+| MI_FogCard_02 | Fog card FX | 15 | 17,502 |
+| MI_FogCard_03 | Fog card FX | 24 | 30,000 |
+| BasicShapeMaterial | No parent | 3 | 144 |
+| WorldGridMaterial | No parent | 6 | 4,896 |
+| M_Bells_01 | M_GenericProps | 93 | 1,345,710 |
+| MI_Bells_02 | M_GenericProps | 3 | 46,944 |
+| MI_Bells_03 | M_GenericProps | 14 | 79,548 |
+| MI_BrassPlate_00 | M_GenericProps | 3 | 416,640 |
+| M_MagicEnergy | No parent | 44 | 1,408 |
+| MI_Lantern_00 | M_GenericProps | 7 | 319,536 |
+| MI_Lantern_01 | M_GenericProps | 5 | 228,240 |
+| MI_NetRope | M_Cutout | 3 | 144,600 |
+| MI_Hallway_Ceiling_02 | M_BlendMaterial | 16 | 176,608 |
+| MI_Hallway_Floor_01_Rotated | M_BlendMaterial | 16 | 1,812,784 |
+| MI_Hallway_Floor_01 | M_BlendMaterial | 40 | 3,147,126 |
+| MI_Hallway_Wall_01 | M_BlendMaterial | 166 | 7,997,312 |
+| MI_MS_Ocean | M_MS_Puddle | 1 | 1,800 |
+| MI_MS_Puddle_02 | M_MS_Puddle | 1 | 32 |
+| MI_MS_Puddle | M_MS_Puddle | 2 | 64 |
+| M_Emissive_Inst_Cold1 | M_Emissive | 1 | 48 |
+| M_Emissive_Inst_Cold2 | M_Emissive | 4 | 192 |
+| MI_Dry_Grass_tbbqejqr | M_MS_CustomFoliage | 14 | 19,495 |
+| MI_Massive_Nordic_Coastal_Cliff_vdssailfa | MI_Massive_Nordic_Coastal_Cliff_ullqbb1ga_Dungeon | 22 | 34,140,017 |
+| MI_Old_Roman_Coin_ueinbaiva | M_GenericProps | 61 | 4,263,864 |
+| MI_Scatter_Mushroom_Set_rlms31 | M_MS_CustomFoliage | 3 | 361,194 |
+| MI_White_Button_Mushroom_pdww2 | M_MS_CustomFoliage | 12 | 278,810 |
+| MI_D_Concrete_Crack_sezrfcg_1_N1 | M_MS_CustomDecal | 36 | 72 |
+| MI_D_Dry_Grass_sfpzh__N1 | M_MS_CustomFoliage | 45 | 82,260 |
+| MI_D_Dry_Grass_sfpzh_1_N1 | M_MS_CustomFoliage | 123 | 1,229,877 |
+| MI_D_Dry_Grass_sfpzh_2_N1 | M_MS_CustomFoliage | 123 | 1,229,877 |
+| MI_D_Rock_Patch_ui2lcaufw__HighFade_N1 | M_MS_CustomDecal | 67 | 134 |
+| MI_D_Rock_Patch_ui2lcaufw__N1 | M_MS_CustomDecal | 87 | 174 |
+| MI_Burnt_Grass_smlmnnn_ | M_MS_CustomFoliage | 82 | 204,918 |
+| MI_Burnt_Grass_smlmnnn_2 | M_MS_CustomFoliage | 123 | 1,229,877 |
+| M_Metal_Burnished_Steel1_Inst1 | M_Metal_Burnished_Steel1 | 1 | 1,812,343 |
+
+The source also omits 894 decal actors, 59 particle-system actors and 9 cable actors from static geometry. Runtime material animation, displacement/world-position offsets and other authored shader effects are unbaked. These omissions are outside the 371 exported geometries; the census does not establish whole-level visual coverage.
 
 ## GPU budget and data layout
 

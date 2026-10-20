@@ -96,3 +96,14 @@ A geometry directory starts with the resident format's 32-byte header and 16-byt
 After error pruning, only populated depth rows are passed to `clodBuildHierarchy`, with dense row numbers in that temporary input. The first `rootCount` nodes root the retained rows. Pages, clusters and DAG edges retain their original depths and ids. This satisfies the upstream builder's nonempty-row contract when pruning removes entire fine rows. Every group appears exactly once in the forest.
 
 `verifyGeometryPages(path)` reads the written directory and pack, checks hashes/ranges, whole-group coverage, pin closure, both dependency directions, eight-wide BVH coverage, every packed triangle/reference address, and exact byte totals. It is part of the bake, and can read the artifacts independently afterward.
+
+The whole-level command in `examples/ruins/scripts/build.mjs` also writes `level.directory`. Its 96-byte header starts with eight u32 words: magic `0x4c475342`, version 4, section count 4, placement count, geometry count, material count, spatial node count and material-bitset word count. Four 16-byte section records follow: id, byte offset, byte length and reserved zero. Section data is word aligned. Geometry and material ids index `level.json`'s `geometries` and `materialPaths` arrays; placements retain source order.
+
+| Section id | Contents |
+| --- | --- |
+| 0 | 176 bytes/placement: matrix and inverse transpose (sixteen f32 each); scale and determinant sign (two f32); material-map word offset and count (two u32); geometry id, forest root count, visible flag and reserved zero (four u32); world sphere (four f32) |
+| 1 | u32 global material ids, indexed by each geometry's local material slots; `0xffffffff` for unused slots |
+| 2 | 32 bytes/spatial node: minimum xyz (f32), left child (u32), maximum xyz (f32), right child (u32). Right `0xffffffff` denotes a leaf whose left field is the source placement index. Node zero is the world root. Bounds round outward. |
+| 3 | `ceil(materialCount / 32)` u32 material-bitset words per spatial node; interior nodes contain the union of both children. Hidden placements retain records and have empty material bitsets. |
+
+`surfaces.json` inventories every active primitive/material use, with complete source paths and unsupported/excluded reasons. `census.json` separates unique payload, page duplication, packed wire bytes, physical-page slack, pinned closure, directory sections/wire bytes and the full placement-weighted coarse cut. This offline geometry bootstrap leaves texture tails and regional collision to their implementation slices and never repoints a published manifest.
