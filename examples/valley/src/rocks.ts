@@ -1,4 +1,4 @@
-import { Matrix4, type Object3D, type PerspectiveCamera, type MeshStandardMaterial } from 'three'
+import { Matrix4, type DepthTexture, type PerspectiveCamera, type MeshStandardMaterial, type Vector2 } from 'three'
 import type { WebGPURenderer } from 'three/webgpu'
 import { MeshletScene, type MeshletModel, type MeshletSceneEntry } from '@blacksite/geometry'
 import type { Stonework, RuinPiece } from './stonework'
@@ -28,8 +28,9 @@ export async function createRocks(owned: Owned, stones: Stonework, renderer: Web
     setLodEnabled: (enabled: boolean) => geometry.setLodEnabled(enabled),
     setOcclusionEnabled: (enabled: boolean) => { geometry.occlusionEnabled = enabled; geometry.resetHistory() },
     setShadowEnabled: (enabled: boolean) => geometry.setShadowEnabled(enabled),
-    update(camera: PerspectiveCamera, occluders: readonly Object3D[]) {
-      geometry.prepare(renderer, camera, { occluders })
+    prepare: (camera: PerspectiveCamera, size: Readonly<Vector2>) => geometry.prepare(renderer, camera, size),
+    recover: (depth: DepthTexture) => geometry.recover(renderer, depth),
+    update() {
       const now = performance.now()
       if (!pending && now - lastRead > 300) {
         pending = true

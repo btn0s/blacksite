@@ -1,5 +1,5 @@
 import { Color, InspectorBase, Lighting, NeutralToneMapping, NoToneMapping, PCFShadowMap, RenderPipeline, Vector2, Vector3 } from 'three/webgpu'
-import type { Camera, Node, Object3D, OrthographicCamera, RenderTarget, Scene, WebGPURenderer } from 'three/webgpu'
+import type { Camera, DepthTexture, Node, Object3D, OrthographicCamera, RenderTarget, Scene, WebGPURenderer } from 'three/webgpu'
 import { builtinAOContext, float, luminance, mix, mrt, normalView, output, packNormalToRGB, pass, renderOutput, sample, screenUV, texture3D, uniform, uv, vec3, vec4, velocity } from 'three/tsl'
 import { SunLight } from 'three/addons/lights/SunLight.js'
 import { SunLightNode } from 'three/addons/lights/SunLightNode.js'
@@ -38,11 +38,15 @@ export interface WebGPULook {
   setSize(width: number, height: number): void
   setDebug(enabled: boolean): void
   timings(): Readonly<Record<string, number>> | null
+  onBeforeDepth(listener: WebGPUBeforeDepthListener): () => void
+  onAfterDepth(listener: WebGPUAfterDepthListener): () => void
   onBeforeShadow(listener: WebGPUShadowListener): () => void
   dispose(): void
 }
 
 export type WebGPUShadowListener = (renderer: WebGPURenderer, camera: OrthographicCamera, mapSize: Readonly<Vector2>, cascade: number) => void
+export type WebGPUBeforeDepthListener = (renderer: WebGPURenderer, camera: Camera, size: Readonly<Vector2>) => void
+export type WebGPUAfterDepthListener = (renderer: WebGPURenderer, camera: Camera, depth: DepthTexture) => void
 
 type TimestampBackend = WebGPURenderer['backend'] & {
   readonly isWebGPUBackend?: boolean
@@ -148,8 +152,9 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, c
   const normal = sample(coordinate => prePass.getTextureNode().sample(coordinate).rgb.mul(2).sub(1))
   const depth = prePass.getTextureNode('depth')
   const motion = prePass.getTextureNode('velocity')
-  const scenePass = pass(scene, camera)
+  const scenePass = pass(scene, camera, { depthTexture: prePass.renderTarget.depthTexture!, autoClearDepth: false })
   scenePass.name = 'Scene lighting'
+  scenePass.before(prePass)
   scenePass.setMRT(mrt({ output }))
   timings.labelTarget(scenePass.renderTarget, scenePass.name)
   disposables.push(prePass, scenePass)
@@ -203,10 +208,18 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, c
   pipeline.outputNode = graded
   renderer.inspector = timings
   const shadowListeners = new Set<WebGPUShadowListener>()
+  const beforeDepthListeners = new Set<WebGPUBeforeDepthListener>()
+  const afterDepthListeners = new Set<WebGPUAfterDepthListener>()
+  const depthSize = new Vector2()
   const previousBeforeRender = scene.onBeforeRender
+  const previousAfterRender = scene.onAfterRender
   const beforeSceneRender: Scene['onBeforeRender'] = function (...args) {
     previousBeforeRender.apply(this, args)
-    const [renderer, , activeCamera] = args
+    const [renderer, , activeCamera, target] = args
+    if (target === prePass.renderTarget) {
+      depthSize.set(target.width, target.height)
+      for (const listener of beforeDepthListeners) listener(renderer as unknown as WebGPURenderer, activeCamera, depthSize)
+    }
     for (let cascade = 0; cascade < sun.shadow.getViewportCount(); cascade++) {
       const shadowCamera = sun.shadow.getCamera(cascade)
       if (activeCamera !== shadowCamera) continue
@@ -214,7 +227,15 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, c
       break
     }
   }
+  const afterSceneRender: Scene['onAfterRender'] = function (...args) {
+    previousAfterRender.apply(this, args)
+    const [renderer, , activeCamera, target] = args
+    if (target === prePass.renderTarget) {
+      for (const listener of afterDepthListeners) listener(renderer as unknown as WebGPURenderer, activeCamera, prePass.renderTarget.depthTexture!)
+    }
+  }
   scene.onBeforeRender = beforeSceneRender
+  scene.onAfterRender = afterSceneRender
   let disposed = false
   return {
     sun,
@@ -244,6 +265,14 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, c
       pipeline.needsUpdate = true
     },
     timings() { return timings.snapshot() },
+    onBeforeDepth(listener) {
+      beforeDepthListeners.add(listener)
+      return () => { beforeDepthListeners.delete(listener) }
+    },
+    onAfterDepth(listener) {
+      afterDepthListeners.add(listener)
+      return () => { afterDepthListeners.delete(listener) }
+    },
     onBeforeShadow(listener) {
       shadowListeners.add(listener)
       return () => { shadowListeners.delete(listener) }
@@ -251,7 +280,10 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, c
     dispose() {
       disposed = true
       shadowListeners.clear()
+      beforeDepthListeners.clear()
+      afterDepthListeners.clear()
       if (scene.onBeforeRender === beforeSceneRender) scene.onBeforeRender = previousBeforeRender
+      if (scene.onAfterRender === afterSceneRender) scene.onAfterRender = previousAfterRender
       renderer.inspector = previous.inspector
       timings.dispose()
       pipeline.dispose()

@@ -1,6 +1,6 @@
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, StandardNodeLibrary, TangentSpaceNormalMap, Texture, Vector2 } from 'three/webgpu'
 import { Fn, bumpMap, context, float, max, normalView, positionView, texture, uniform, vec2, vec3, vec4 } from 'three/tsl'
-import type { MeshStandardMaterial, Node, NodeMaterial } from 'three/webgpu'
+import type { MeshStandardMaterial, Node } from 'three/webgpu'
 
 const materialLibrary = new StandardNodeLibrary()
 
@@ -63,32 +63,6 @@ export function bindGeometryMaterial(material: MeshStandardNodeMaterial, pulledU
     if (material.clearcoatNormalNode) material.clearcoatNormalNode = material.clearcoatNormalNode.context({ getUV: () => pulledUv })
     else if (material.clearcoatNormalMap) material.clearcoatNormalNode = normalMapWithUV(material.clearcoatNormalMap, pulledUv, material.clearcoatNormalScale)
   }
-}
-
-export function createGeometryDepthMaterial(material: MeshStandardMaterial & Partial<NodeMaterial>) {
-  const coverageUsesAlpha = material.alphaTest > 0 || Boolean(material.alphaTestNode) || material.alphaHash
-  const depth = new MeshBasicNodeMaterial({
-    colorWrite: false,
-    side: material.side,
-    map: coverageUsesAlpha ? material.map : null,
-    alphaMap: coverageUsesAlpha ? material.alphaMap : null,
-    alphaTest: material.alphaTest,
-    alphaHash: material.alphaHash,
-    opacity: coverageUsesAlpha ? material.opacity : 1,
-    depthWrite: material.depthWrite,
-    depthTest: material.depthTest,
-  })
-  depth.positionNode = material.positionNode ?? null
-  depth.contextNode = material.contextNode ?? null
-  depth.colorNode = coverageUsesAlpha ? material.colorNode ?? null : null
-  depth.opacityNode = coverageUsesAlpha ? material.opacityNode ?? null : null
-  depth.alphaTestNode = material.alphaTestNode ?? null
-  depth.maskNode = material.maskNode ?? null
-  depth.depthNode = material.depthNode ?? null
-  depth.displacementMap = material.displacementMap
-  depth.displacementScale = material.displacementScale
-  depth.displacementBias = material.displacementBias
-  return depth
 }
 
 export function createGeometryShadowMaterial(source: MeshStandardMaterial | MeshStandardNodeMaterial, pulledUv: ReturnType<typeof vec2>, position: ReturnType<typeof vec3>) {

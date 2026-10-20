@@ -92,15 +92,17 @@ export function Landscape({ world, tier, wind, look, owned, stones, handle }: { 
     })
     let cancelled = false
     let rocks: Rocks | null = null
-    let unsubscribe: (() => void) | null = null
+    const subscriptions: Array<() => void> = []
     void createRocks(owned, stones, renderer).then(value => {
       if (cancelled) { value.dispose(); return }
       rocks = value
-      unsubscribe = look.onBeforeShadow((shadowRenderer, shadowCamera, mapSize) => {
+      subscriptions.push(look.onBeforeShadow((shadowRenderer, shadowCamera, mapSize) => {
         forest.prepareShadow(shadowRenderer, shadowCamera)
         cover.prepareShadow(shadowRenderer, shadowCamera)
         value.geometry.prepareShadow(shadowRenderer, shadowCamera, mapSize)
-      })
+      }))
+      subscriptions.push(look.onBeforeDepth((_, activeCamera, size) => value.prepare(activeCamera as PerspectiveCamera, size)))
+      subscriptions.push(look.onAfterDepth((_, __, depth) => value.recover(depth)))
       scene.add(terrain.object, cover.object, forest.object, value.object)
       const result = { terrain, cover, forest, rocks: value }
       handle.current = result
@@ -108,7 +110,7 @@ export function Landscape({ world, tier, wind, look, owned, stones, handle }: { 
     }).catch(value => { if (!cancelled) setError(value instanceof Error ? value : new Error(String(value))) })
     return () => {
       cancelled = true
-      unsubscribe?.()
+      for (const unsubscribe of subscriptions) unsubscribe()
       scene.remove(terrain.object, cover.object, forest.object)
       if (rocks) scene.remove(rocks.object)
       handle.current = null
@@ -128,7 +130,7 @@ export function Landscape({ world, tier, wind, look, owned, stones, handle }: { 
     terrain.update(camera)
     cover.update(camera)
     forest.update(camera)
-    rocks.update(camera as PerspectiveCamera, [terrain.object, forest.object])
+    rocks.update()
   }, 0.5)
 
   if (error) throw error

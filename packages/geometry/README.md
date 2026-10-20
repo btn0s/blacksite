@@ -4,6 +4,8 @@ Static cluster geometry for three.js `WebGPURenderer`. The offline tool uses mes
 
 ```ts
 import { loadMeshletSource, MeshletScene } from '@blacksite/geometry'
+import { createWebGPULook } from '@blacksite/look/webgpu'
+import type { PerspectiveCamera } from 'three/webgpu'
 
 const asset = await loadMeshletSource('/assets/scene.meshlets')
 await renderer.init()
@@ -11,9 +13,16 @@ const geometry = await MeshletScene.create(renderer, [
   { asset, instances: matrices, materials: [material] },
 ], { pixelError: 2, occlusion: true })
 scene.add(geometry.object)
+const look = await createWebGPULook(renderer, scene, camera)
+const removeBeforeDepth = look.onBeforeDepth((renderer, camera, size) => {
+  geometry.prepare(renderer, camera as PerspectiveCamera, size)
+})
+const removeAfterDepth = look.onAfterDepth((renderer, camera, depth) => {
+  geometry.recover(renderer, depth)
+})
 renderer.setAnimationLoop(() => {
-  geometry.prepare(renderer, camera, { occluders: [terrain.object, forest.object] })
-  renderer.render(scene, camera)
+  look.beginFrame()
+  look.render()
 })
 ```
 
@@ -23,11 +32,11 @@ Entries combine a repeatable asset source, immutable instance transforms and sou
 
 Every entry contributes to a single depth pyramid and visibility pipeline. Source `Material.visible` is respected when building immutable batches; invisible surfaces retain their resident geometry but contribute no draw records. `loadMeshletModel(manifestUrl)` loads unique geometry source descriptors, scene transforms and the manifest's material library. The library contains materials and embedded textures without the original model geometry. `residentGeometryBytes` reports uploaded vertices, references, indices and cluster metadata without retaining CPU data.
 
-Standard and physical materials, primary-UV textures, normal maps, alpha-tested foliage and custom surface nodes are supported. Batches share material graphs by source material; public per-object node updates select each draw's resident storage buffers and visible-list offset. Opaque depth and shadow graphs omit surface colour and alpha calculations. Finite invertible affine transforms support rotation, reflection, nonuniform scale and shear. Sphere and error scaling use a conservative bound from the linear transform's Gram matrix; normals use its inverse transpose. The camera must be perspective with standard depth. Occlusion requires single-sample rendering for both the depth target and final camera view; logarithmic and reversed depth are unsupported. Call `prepare` before drawing the camera view and `dispose` when removing the geometry.
+Standard and physical materials, primary-UV textures, normal maps, alpha-tested foliage and custom surface nodes are supported. Batches share material graphs by source material; public per-object node updates select each draw's resident storage buffers and visible-list offset. Opaque shadow graphs omit surface colour and alpha calculations. Finite invertible affine transforms support rotation, reflection, nonuniform scale and shear. Sphere and error scaling use a conservative bound from the linear transform's Gram matrix; normals use its inverse transpose. The camera must be perspective with standard depth. Occlusion consumes a single-sample depth texture; logarithmic and reversed depth are unsupported. Call `prepare(renderer, camera, viewportSize)` before the shared depth prepass and `recover(renderer, depthTexture)` immediately afterward, before drawing the lit view. Dispose both listeners and the geometry when removing it.
 
 Custom surface nodes retain their world-position and geometric-normal inputs. For explicit UV mappings, `normalMapWithUV(texture, uvNode, scale?)` derives the normal-map tangent frame from those UVs. `tangentNormalWithUV(signedNormalNode, uvNode)` uses the same frame for authored tangent-normal adjustments. This avoids relying on the draw tile's placeholder UV attribute. Ordinary material `normalMap`, `bumpMap` and physical `clearcoatNormalMap` properties use the pulled primary UVs automatically; custom normal nodes retain that UV context too.
 
-`pixelError` controls projected geometric error. `setDebugView('normal' | 'meshlets' | 'lod')` changes the visualization. `setLodEnabled(false)` selects the finest resident clusters inside `fallbackDistance` (default 120 m), through the same indirect renderer. With a zero build budget this retains source detail. The cap uses each cluster's bounding sphere. `occlusionEnabled` controls two-pass occlusion. `readStats(renderer)` asynchronously reads GPU counters for occasional HUD updates; selection and drawing never require CPU readback. `sceneTriangles` counts the LOD-cut triangles reached by hierarchy traversal before leaf frustum and occlusion rejection, `drawnTriangles` counts useful visible triangles, and `submittedTriangles` includes degenerate tile padding. `resetHistory()` invalidates temporal depth after a discontinuous camera or scene change.
+`pixelError` controls projected geometric error. `setDebugView('normal' | 'meshlets' | 'lod')` changes the visualization. `setLodEnabled(false)` selects the finest resident clusters inside `fallbackDistance` (default 120 m), through the same indirect renderer. With a zero build budget this retains source detail. The cap uses each cluster's bounding sphere. `occlusionEnabled` controls temporal occlusion and current-depth recovery. `readStats(renderer)` asynchronously reads GPU counters for occasional HUD updates; selection and drawing never require CPU readback. `sceneTriangles` counts the LOD-cut triangles reached by hierarchy traversal before leaf frustum and occlusion rejection, `drawnTriangles` counts useful visible triangles, and `submittedTriangles` includes degenerate tile padding. `resetHistory()` invalidates temporal depth after a discontinuous camera or scene change.
 
 ## Sun shadows
 
@@ -56,11 +65,13 @@ The `@blacksite/geometry/build` export also provides `buildMeshletGeometry` for 
 
 1. Test placement spheres against the frustum and previous depth pyramid. Only surviving placements seed traversal roots. Defer hidden placements without visiting their clusters.
 2. Traverse meshoptimizer's eight-wide group BVH forest with ping-pong queues and indirect dispatch. Nodes whose conservative projected error meets the threshold are pruned. Accumulate reached group leaves, then evaluate their cluster lists once using the DAG's self/parent error rule and precise cluster frustum bounds. Test survivors against previous depth and defer hidden clusters. Append each visible cluster-instance pair directly to its source/material batch's range, incrementing that batch's indirect draw count. No cluster-instance candidate table is stored or scanned.
-3. Draw the first visible lists into a full-resolution depth target, preserving material alpha cutouts. Render the optional `occluders` roots into that same depth attachment with native depth materials, retaining their displaced positions, wind, masks and alpha tests. Maximum-reduce all covered samples into the pyramid base, then reduce the mip hierarchy.
+3. The look draws the scene's shared depth, normal and motion prepass, including the first visible lists and native terrain, foliage and characters through their existing materials. Geometry owns no depth render target or duplicate depth meshes. `recover` maximum-reduces the supplied depth texture into the pyramid base, then reduces the mip hierarchy.
 4. Indirectly recover deferred placements against current depth, traversing newly visible instances through the same hierarchy. Recover deferred clusters against current depth and append survivors to the same batch ranges. Dispatches are bounded by the build's BVH depth. Queue capacity is derived from the maximum combined forest frontier across all placements; leaf capacity covers every resident cluster across those placements. No dispatch spins waiting on other workgroups.
 5. Draw each batch's populated range through `InstancedBufferGeometry.setIndirect`, pulling vertices from shared storage. Each cluster occupies a fixed triangle tile; short clusters use degenerate padding. Counters distinguish useful triangles from submitted triangles.
 
-Depth history contains first-pass geometry and the supplied occluder roots. Omitting recovered geometry from history reduces culling efficiency without making rejection more aggressive. External occluders render their existing geometry directly through the public render-object callback; they are never reparented or copied. Blended transparent materials and materials that do not write depth are excluded from occlusion. Supply terrain and trees as separate roots, without including the cluster scene itself.
+Depth history contains the shared prepass, including first-pass cluster geometry and native opaque scene objects. Omitting recovered geometry from history reduces culling efficiency without making rejection more aggressive. Newly recovered geometry also lacks prepass normal and motion samples for that frame. The lit pass loads the same depth attachment and retains normal material depth writes with less-equal testing so recovered surfaces resolve their overlap. Making lit depth read-only would leave those surfaces without depth ordering.
+
+`prepare` receives the prepass's physical pixel dimensions and captures the actual view and projection matrices, including temporal jitter. `recover` uses those captured matrices for current-depth rejection and saves them with the new pyramid for the next frame. Both callbacks run every frame, including a stationary view. History is renewed only when the shared prepass is consumed. The look owns the depth texture and its lifetime; geometry only retains a sampling binding and its reduced pyramid.
 
 ## Current boundary
 
@@ -70,7 +81,7 @@ Geometry and hierarchy are fully resident. Shared vertices use 16-bit position a
 
 Stats include placement broad-phase counts, hierarchy nodes and clusters visited, and the buffer allocation budget in bytes. Pass the existing look's `timings()` snapshot as `readStats(renderer, timings)` to report view traversal GPU milliseconds, including recovery and batch appends. This excludes depth rendering, HiZ reduction and shadow traversal; those remain separate named GPU passes. Buffer bytes exclude textures, render targets, driver allocations and the browser.
 
-Surfaces use three's lighting/output path, receive shadows and cast through independent orthographic light-view selection. Perspective light-view selection is not implemented. Skinning, morphs, displacement, blended transparency, secondary UVs, vertex colours, transmission and anisotropy are unsupported for cluster assets. The constructor rejects incompatible material features it can identify. External occluders may use displaced native node materials. Instances are static after construction.
+Surfaces use three's lighting/output path, receive shadows and cast through independent orthographic light-view selection. Perspective light-view selection is not implemented. Skinning, morphs, displacement, blended transparency, secondary UVs, vertex colours, transmission and anisotropy are unsupported for cluster assets. The constructor rejects incompatible material features it can identify. Native scene objects retain their own material and geometry features in the shared prepass. Cluster instances are static after construction.
 
 The implementation uses public three storage, compute, texture and indirect-draw APIs, without renderer patches or private GPU resource access.
 

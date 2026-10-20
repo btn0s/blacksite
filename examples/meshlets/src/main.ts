@@ -103,7 +103,10 @@ async function start() {
   resize()
   ui.text('source-total', `${compact(meshlets.totalTriangles)} source triangles`)
   ui.text('source-meta', `${world.entries.reduce((sum, entry) => sum + entry.instances.length, 0).toLocaleString()} placements · terrain, stonework, plants and water`)
-  const post = createPost(renderer, world.scene, camera)
+  const post = createPost(renderer, world.scene, camera, {
+    beforeDepth: size => meshlets.prepare(renderer, camera, size),
+    afterDepth: depth => meshlets.recover(renderer, depth),
+  })
   const renderFrame = (time: number) => {
     const interval = lastTime ? time - lastTime : 0
     lastTime = time
@@ -115,7 +118,6 @@ async function start() {
       if (frameIntervals.length > 180) frameIntervals.shift()
     }
     camera.updateMatrixWorld()
-    meshlets.prepare(renderer, camera)
     post.render()
     if (timestamps && !gpuPending) {
       gpuPending = true

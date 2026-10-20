@@ -65,11 +65,17 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     return () => { shared.geometry.current = null; scene.remove(geometry.object); geometry.dispose() }
   }, [geometry, scene, shared])
   useEffect(() => geometry.resetHistory(), [camera, geometry])
-  useEffect(() => look?.onBeforeShadow((gl, camera, size) => geometry.prepareShadow(gl, camera, size)), [geometry, look])
+  useEffect(() => {
+    if (!look) return
+    const remove = [
+      look.onBeforeDepth((gl, camera, size) => geometry.prepare(gl, camera as PerspectiveCamera, size)),
+      look.onAfterDepth((gl, _camera, depth) => geometry.recover(gl, depth)),
+      look.onBeforeShadow((gl, camera, size) => geometry.prepareShadow(gl, camera, size)),
+    ]
+    return () => { for (const dispose of remove) dispose() }
+  }, [geometry, look])
   useFrame(() => {
     if (!look) return
-    camera.updateMatrixWorld()
-    geometry.prepare(renderer, camera as PerspectiveCamera)
     shared.warm.current++
     if (shared.warm.current === 10) onReady()
   }, 0.5)

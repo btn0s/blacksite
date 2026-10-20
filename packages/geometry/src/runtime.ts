@@ -1,9 +1,9 @@
 import {
-  DepthTexture, Frustum, Group, IndirectStorageBufferAttribute, InstancedBufferGeometry,
-  Matrix4, Mesh, MeshBasicNodeMaterial, MeshStandardNodeMaterial, RenderTarget, Scene,
+  Frustum, Group, IndirectStorageBufferAttribute, InstancedBufferGeometry,
+  Matrix4, Mesh, MeshStandardNodeMaterial,
   StorageBufferAttribute, Vector2, Vector3, Vector4, WebGPUCoordinateSystem,
 } from 'three/webgpu'
-import type { Object3D, OrthographicCamera, PerspectiveCamera, WebGPURenderer } from 'three/webgpu'
+import type { DepthTexture, OrthographicCamera, PerspectiveCamera, WebGPURenderer } from 'three/webgpu'
 import {
   Fn, If, Loop, bool, ceil, clamp, float,
   floor, instanceIndex, log2, max, min, mix, output, storage,
@@ -11,11 +11,10 @@ import {
 } from 'three/tsl'
 import { packScene, transformScale, uploadAttributes } from './runtime-data'
 import type { MeshletSceneEntry, PackedMeshletScene } from './runtime-data'
-import { bindGeometryMaterial, createGeometryDepthMaterial, createGeometryMaterial } from './runtime-material'
+import { bindGeometryMaterial, createGeometryMaterial } from './runtime-material'
 import { clusterGeometry, clusterVertex } from './runtime-vertex'
 import { ClusterShadows } from './runtime-shadows'
 import { ClusterTraversal } from './runtime-traversal'
-import { DepthOccluders } from './runtime-occluders'
 
 export type { MeshletSceneEntry } from './runtime-data'
 export { normalMapWithUV, tangentNormalWithUV } from './runtime-material'
@@ -28,10 +27,6 @@ export interface MeshletSceneOptions {
   fallbackDistance?: number
   shadowLayer?: number
   shadowPixelError?: number
-}
-
-export interface MeshletPrepareOptions {
-  occluders?: readonly Object3D[]
 }
 
 export interface MeshletStats {
@@ -72,19 +67,15 @@ export class MeshletScene {
   readonly shadowLayer: number
   shadowPixelError: number
   private readonly shadows: ClusterShadows
-  private readonly externalDepth = new DepthOccluders()
   private readonly lodEnabled = uniform(true)
   private readonly fallbackReach = uniform(120)
   private shadowPasses = 0
-  private readonly depthScene = new Scene()
-  private readonly depthMeshes: Mesh<InstancedBufferGeometry, MeshBasicNodeMaterial>[] = []
-  private readonly materials = new Set<MeshStandardNodeMaterial | MeshBasicNodeMaterial>()
-  private readonly target: RenderTarget
+  private readonly materials = new Set<MeshStandardNodeMaterial>()
   private readonly counters: IndirectStorageBufferAttribute
   private readonly traversal: ClusterTraversal
   private readonly hierarchyDepth: number
   readonly residentBytes: number
-  private readonly viewport = new Vector2()
+  private depthTexture: ReturnType<typeof textureLoad> | null = null
   private readonly depthSize = uniform(new Vector2(1, 1))
   private readonly frustum = new Frustum()
   private readonly viewProjection = new Matrix4()
@@ -192,23 +183,19 @@ export class MeshletScene {
     this.counters = this.traversal.counters
     this.residentBytes = packed.residentBytes + this.traversal.residentBytes + this.shadows.residentBytes + pyramidAttribute.array.byteLength
     const pulled = clusterVertex(packed, this.traversal.visible, this.debug)
-    const materials = new Map<PackedMeshletScene['batches'][number]['material'], { material: MeshStandardNodeMaterial; depth: MeshBasicNodeMaterial }>()
+    const materials = new Map<PackedMeshletScene['batches'][number]['material'], MeshStandardNodeMaterial>()
     for (let batchIndex = 0; batchIndex < packed.batches.length; batchIndex++) {
       const batch = packed.batches[batchIndex]!
       const geometry = clusterGeometry(batch.triangles, batch.capacity, this.counters, batchIndex)
-      let pair = materials.get(batch.material)
-      if (!pair) {
-        const material = createGeometryMaterial(batch.material)
+      let material = materials.get(batch.material)
+      if (!material) {
+        material = createGeometryMaterial(batch.material)
         bindGeometryMaterial(material, pulled.uv, pulled.position)
-        const depth = createGeometryDepthMaterial(material)
         const standardOutput = material.outputNode ?? output
         material.outputNode = vec4(mix(standardOutput.rgb, pulled.color, float(this.debug.greaterThan(0))), standardOutput.a)
-        pair = { material, depth }
-        materials.set(batch.material, pair)
+        materials.set(batch.material, material)
         this.materials.add(material)
-        this.materials.add(depth)
       }
-      const { material, depth } = pair
       const mesh = new Mesh(geometry, material)
       pulled.bind(mesh, batch)
       mesh.name = batch.material.name || `Cluster material ${batchIndex}`
@@ -217,17 +204,7 @@ export class MeshletScene {
       mesh.castShadow = false
       this.meshes.push(mesh)
       this.object.add(mesh)
-      const depthMesh = new Mesh(geometry, depth)
-      pulled.bind(depthMesh, batch)
-      depthMesh.frustumCulled = false
-      depthMesh.matrixAutoUpdate = false
-      this.depthMeshes.push(depthMesh)
-      this.depthScene.add(depthMesh)
     }
-    this.target = new RenderTarget(pyramidSize, pyramidSize, { depthBuffer: true, samples: 0 })
-    this.target.depthTexture = new DepthTexture(pyramidSize, pyramidSize)
-    this.target.texture.name = 'Geometry occlusion depth attachment'
-    this.target.depthTexture.name = 'Geometry occlusion depth'
     this.pyramidCompute = Fn(() => {
       const xy = uvec2(instanceIndex.mod(pyramidSize), instanceIndex.div(pyramidSize))
       const low = uvec2(floor(vec2(xy).mul(this.depthSize).div(pyramidSize))).toVar()
@@ -235,7 +212,7 @@ export class MeshletScene {
       const farthest = float(0).toVar()
       Loop({ name: 'sourceY', start: low.y, end: high.y, type: 'uint', condition: '<' }, ({ sourceY: y }) => {
         Loop({ name: 'sourceX', start: low.x, end: high.x, type: 'uint', condition: '<' }, ({ sourceX: x }) => {
-          farthest.assign(max(farthest, textureLoad(this.target.depthTexture!, uvec2(x, y)).r))
+          farthest.assign(max(farthest, this.depthTexture!.load(uvec2(x, y)).r))
         })
       })
       pyramidWrite.element(instanceIndex).assign(farthest)
@@ -294,15 +271,12 @@ export class MeshletScene {
     this.historyValid = false
   }
 
-  prepare(renderer: WebGPURenderer, camera: PerspectiveCamera, options: MeshletPrepareOptions = {}) {
+  prepare(renderer: WebGPURenderer, camera: PerspectiveCamera, viewport: Readonly<Vector2>) {
     this.shadowPasses = 0
     if (!camera.isPerspectiveCamera) throw new Error('Geometry currently requires a perspective camera')
     if (!(this.pixelError > 0)) throw new Error('Geometry pixel error must be positive')
-    const finalTarget = renderer.getRenderTarget()
     if (renderer.reversedDepthBuffer) throw new Error('Geometry currently requires standard depth')
-    if (this.occlusionEnabled && ((finalTarget?.samples ?? renderer.samples) > 1 || renderer.logarithmicDepthBuffer)) {
-      throw new Error('Geometry occlusion requires single-sample standard depth')
-    }
+    if (renderer.logarithmicDepthBuffer) throw new Error('Geometry currently requires standard depth')
     if (camera.coordinateSystem !== WebGPUCoordinateSystem) {
       camera.coordinateSystem = WebGPUCoordinateSystem
       camera.updateProjectionMatrix()
@@ -313,9 +287,7 @@ export class MeshletScene {
     this.worldScale.value = transformScale(this.object.matrixWorld)
     this.eye.value.setFromMatrixPosition(camera.matrixWorld)
     this.threshold.value = this.pixelError
-    if (finalTarget) this.viewport.set(finalTarget.width, finalTarget.height)
-    else renderer.getDrawingBufferSize(this.viewport)
-    this.projectionScale.value = this.viewport.y * camera.projectionMatrix.elements[5]! * 0.5
+    this.projectionScale.value = viewport.y * camera.projectionMatrix.elements[5]! * 0.5
     this.currentView.value.copy(camera.matrixWorldInverse)
     this.currentProjection.value.copy(camera.projectionMatrix)
     this.currentNear.value = camera.near
@@ -326,35 +298,21 @@ export class MeshletScene {
       this.frustumPlanes.array[i]!.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant)
     }
     this.history.value = this.historyValid && this.occlusionEnabled ? 1 : 0
+    this.historyValid = false
     this.traversal.select(renderer, this.hierarchyDepth)
-    if (this.occlusionEnabled) {
-      this.target.setSize(this.viewport.x, this.viewport.y)
-      this.depthSize.value.copy(this.viewport)
-      const previousTarget = renderer.getRenderTarget()
-      const previousAutoClear = renderer.autoClear
-      const previousMrt = renderer.getMRT()
-      for (const depthMesh of this.depthMeshes) depthMesh.matrix.copy(this.object.matrixWorld)
-      try {
-        renderer.setMRT(null)
-        renderer.setRenderTarget(this.target)
-        renderer.autoClear = true
-        renderer.render(this.depthScene, camera)
-        renderer.autoClear = false
-        this.externalDepth.render(renderer, camera, options.occluders ?? [])
-      } finally {
-        renderer.setRenderTarget(previousTarget)
-        renderer.setMRT(previousMrt)
-        renderer.autoClear = previousAutoClear
-      }
-      renderer.compute(this.occlusionComputes)
-      this.traversal.recover(renderer, this.hierarchyDepth)
-      this.previousView.value.copy(camera.matrixWorldInverse)
-      this.previousProjection.value.copy(camera.projectionMatrix)
-      this.previousNear.value = camera.near
-      this.historyValid = true
-    } else {
-      this.historyValid = false
-    }
+  }
+
+  recover(renderer: WebGPURenderer, depth: DepthTexture) {
+    if (!this.occlusionEnabled) return
+    if (this.depthTexture) this.depthTexture.value = depth
+    else this.depthTexture = textureLoad(depth)
+    this.depthSize.value.set(depth.image.width, depth.image.height)
+    renderer.compute(this.occlusionComputes)
+    this.traversal.recover(renderer, this.hierarchyDepth)
+    this.previousView.value.copy(this.currentView.value)
+    this.previousProjection.value.copy(this.currentProjection.value)
+    this.previousNear.value = this.currentNear.value
+    this.historyValid = true
   }
 
   async readStats(renderer: WebGPURenderer, timings?: Readonly<Record<string, number>>): Promise<MeshletStats> {
@@ -387,8 +345,6 @@ export class MeshletScene {
     for (const material of this.materials) material.dispose()
     this.shadows.dispose()
     this.traversal.dispose()
-    this.externalDepth.dispose()
-    this.target.dispose()
     for (const node of this.computeNodes) node.dispose()
   }
 }
