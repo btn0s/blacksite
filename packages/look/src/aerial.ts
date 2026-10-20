@@ -15,6 +15,7 @@ const AERIAL_FRAGMENT = `
   uniform vec3 atFogAlbedo;
   uniform vec3 atFogEmissive;
   uniform float atFogPhase;
+  uniform float atFogStart;
 
   float atLayer(float h0, float h1, float span, float scale) {
     float a = exp(-h0 / scale);
@@ -47,7 +48,9 @@ const AERIAL_FRAGMENT = `
     float h1 = max(y1 + atElevation, 0.0) * 0.001;
     vec3 tauAir = (atRayleigh * atLayer(h0, h1, km, 8.0) + atMieExtinction * atLayer(h0, h1, km, 1.2)) * atAerial;
     float tauFog = atFog.x > 0.0 ? atFog.x * atLayer(max(y0 - atFog.y, 0.0), max(y1 - atFog.y, 0.0), span, atFog.z) : 0.0;
-    vec3 tau = (tauAir + tauFog) * clamp(1.0 - atClear / max(span, 1.0), 0.0, 1.0);
+    vec3 airTau = tauAir * clamp(1.0 - atClear / max(span, 1.0), 0.0, 1.0);
+    float fogTau = tauFog * clamp(1.0 - atFogStart / max(span, 1.0), 0.0, 1.0);
+    vec3 tau = airTau + fogTau;
     vec3 transmittance = exp(-tau);
     vec3 horizon = normalize(vec3(direction.x, max(direction.y, 0.0), direction.z));
     vec3 air = atSky(horizon);
@@ -57,7 +60,7 @@ const AERIAL_FRAGMENT = `
       vec3 sunlight = atSunlight(r, atSun.y) * atPhaseHg(dot(direction, atSun), atFogPhase);
       fog = atFogAlbedo * (atSky(vec3(0.0, 1.0, 0.0)) * 0.55 + air * 0.45 + sunlight) + atFogEmissive * atIlluminance;
     }
-    vec3 weight = vec3(tauFog) / max(tauAir + tauFog, vec3(1e-6));
+    vec3 weight = vec3(fogTau) / max(airTau + fogTau, vec3(1e-6));
     vec3 inscatter = mix(air, fog, weight) * (1.0 - transmittance);
     outputColor = vec4(inputColor.rgb * transmittance + inscatter, inputColor.a);
   }
@@ -81,6 +84,7 @@ export class AerialEffect extends Effect {
         ['atFogAlbedo', new Uniform(new Vector3(1, 1, 1))],
         ['atFogEmissive', new Uniform(new Vector3())],
         ['atFogPhase', new Uniform(0.55)],
+        ['atFogStart', new Uniform(0)],
       ]),
     });
     this.camera = camera;
@@ -103,6 +107,7 @@ export class AerialEffect extends Effect {
     (this.uniforms.get('atFogAlbedo')!.value as Vector3).set(...(fog?.albedo ?? [1, 1, 1]));
     (this.uniforms.get('atFogEmissive')!.value as Vector3).set(...(fog?.emissive ?? [0, 0, 0]));
     this.uniforms.get('atFogPhase')!.value = fog?.phase ?? 0.55;
+    this.uniforms.get('atFogStart')!.value = fog?.start ?? 0;
   }
 
   override update(_renderer: WebGLRenderer, _input: WebGLRenderTarget, _dt?: number): void {

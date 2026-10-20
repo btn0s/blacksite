@@ -56,7 +56,7 @@ export const NATURE: Atmosphere = {
     sky: 2.2,
     clear: 1500,
     disk: 1,
-    heightFog: { extinction: 0.00028, base: 120, scaleHeight: 60, albedo: [1, 0.97, 0.9], phase: 0.55, emissive: [0, 0, 0] },
+    heightFog: { extinction: 0.00028, base: 120, scaleHeight: 60, start: 1500, albedo: [1, 0.97, 0.9], phase: 0.55, emissive: [0, 0, 0] },
     clouds: { coverage: 0.37, altitude: 2.2, density: 1.05, scale: 1.4, wind: 1 },
   },
 };

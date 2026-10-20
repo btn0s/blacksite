@@ -14,7 +14,7 @@ const GOLDEN_HOUR: Atmosphere = {
     aerial: 5,
     sky: 1.15,
     clear: 70,
-    heightFog: { extinction: 0.0008, base: 110, scaleHeight: 90, albedo: [0.68, 0.78, 0.94], phase: 0.55, emissive: [0, 0, 0] },
+    heightFog: { extinction: 0.0008, base: 110, scaleHeight: 90, start: 70, albedo: [0.68, 0.78, 0.94], phase: 0.55, emissive: [0, 0, 0] },
     clouds: NATURE.physical.clouds && { ...NATURE.physical.clouds, coverage: 0.5, density: 1.15 },
   },
 }

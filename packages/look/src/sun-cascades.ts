@@ -1,11 +1,13 @@
 import { MeshBasicNodeMaterial, NoBlending, QuadMesh, Vector2 } from 'three/webgpu'
 import type { Camera, NodeFrame, Scene, Vector4 } from 'three/webgpu'
-import { float, vec4 } from 'three/tsl'
+import { If, float, mix, normalWorld, positionView, reference, renderGroup, shadowPositionWorld, smoothstep, uniform, vec4 } from 'three/tsl'
 import type { SunLight } from 'three/addons/lights/SunLight.js'
 import { SunLightShadow } from 'three/addons/lights/SunLightShadow.js'
 import { SunShadowNode } from 'three/addons/lights/SunShadowNode.js'
 
 type CascadeShadow = SunLightShadow & { _cascadeData: Vector4[] }
+
+const NORMAL_OFFSET_TEXELS = 1.5
 
 export class StaggeredSunShadowNode extends SunShadowNode {
   private readonly fit = new SunLightShadow() as CascadeShadow
@@ -22,6 +24,32 @@ export class StaggeredSunShadowNode extends SunShadowNode {
     this.clearMaterial.depthNode = float(1)
     this.clearTile.name = 'Sun cascade clear'
     this.clearTile.castShadow = true
+  }
+
+  _setupCascades(builder: { observer: { hasNode: boolean } }, filterFn: unknown) {
+    builder.observer.hasNode = true
+    const shadow = this.shadow as CascadeShadow
+    const depthTexture = this.shadowMap!.depthTexture
+    const intensity = reference('intensity', 'float', shadow).setGroup(renderGroup)
+    const viewDepth = positionView.z.negate().toVar()
+    const value = float(1).toVar('shadowValue')
+    const offsets = Array.from({ length: shadow.getViewportCount() }, (_, index) => {
+      const offset = uniform(0).setGroup(renderGroup).onRenderUpdate(() => {
+        const camera = shadow.getCamera(index)
+        return Math.max(shadow.normalBias, NORMAL_OFFSET_TEXELS * (camera.right - camera.left) / shadow.mapSize.x)
+      })
+      return vec4(shadowPositionWorld.add(normalWorld.mul(offset)), 1).toVar()
+    })
+    for (let index = shadow.getViewportCount() - 1; index >= 0; index--) {
+      const matrix = uniform('mat4').setGroup(renderGroup).onRenderUpdate(() => shadow.getMatrix(index))
+      const cascade = uniform('vec4').setGroup(renderGroup).onRenderUpdate(() => shadow._cascadeData[index])
+      If(viewDepth.greaterThanEqual(cascade.x).and(viewDepth.lessThan(cascade.y)), () => {
+        const coordinate = this.setupShadowCoord(builder, matrix.mul(offsets[index]!))
+        const filtered = this.setupShadowFilter(builder, { filterFn, shadowTexture: this.shadowMap!.texture, depthTexture, shadowCoord: coordinate, shadow: this._filterShadow, depthLayer: this.depthLayer })
+        value.assign(mix(filtered, value, smoothstep(cascade.z, cascade.y, viewDepth)))
+      })
+    }
+    return mix(1, value, intensity)
   }
 
   override updateBefore(frame: NodeFrame) {

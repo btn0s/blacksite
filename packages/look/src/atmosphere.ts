@@ -41,6 +41,7 @@ export interface HeightFogSpec {
   readonly extinction: number;
   readonly base: number;
   readonly scaleHeight: number;
+  readonly start: number;
   readonly albedo: Rgb;
   readonly phase: number;
   readonly emissive: Rgb;

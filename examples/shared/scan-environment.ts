@@ -1,4 +1,4 @@
-import { NATURE, type Atmosphere, type FilmOptions } from '@blacksite/look'
+import { NATURE, atmosphereTransmittance, type Atmosphere, type FilmOptions } from '@blacksite/look'
 
 type EnvironmentComponent = { class: string; transform: { matrix: number[]; position: number[] }; properties: Record<string, unknown> }
 type Rgb = readonly [number, number, number]
@@ -84,12 +84,8 @@ export function scanEnvironment(components: readonly EnvironmentComponent[]) {
   const length = Math.hypot(m[0]!, m[1]!, m[2]!)
   const sunLux = Number(sun.properties.intensity)
   const metres = 0.1
-  const atmosphere: Atmosphere = {
-    ...NATURE,
-    exposure: 1,
-    sun: { ...NATURE.sun, direction: [-m[0]! / length, -m[1]! / length, -m[2]! / length], color: [1, 1, 1] },
-    grade: { ...NATURE.grade, lut: null, saturation: 1, bloom: 0, vignette: 0, grain: 0 },
-    physical: {
+  const direction = [-m[0]! / length, -m[1]! / length, -m[2]! / length] as const
+  const physical = {
       ...NATURE.physical!,
       rayleigh: Number(sky.rayleigh_scattering_scale) / 0.0331,
       mieScattering: Number(sky.mie_scattering_scale),
@@ -100,17 +96,25 @@ export function scanEnvironment(components: readonly EnvironmentComponent[]) {
       elevation: 0,
       aerial: Number(sky.aerial_pespective_view_distance_scale),
       sky: Number((sky.sky_luminance_factor as number[])[0]),
-      clear: 0,
+      clear: Number(sky.aerial_perspective_start_depth) * 1000,
+      illuminance: 1,
       clouds: null,
       heightFog: {
         extinction: Number(fog.properties.fog_density) * metres * Math.LN2 ** 2,
         base: fog.transform.position[1]!,
         scaleHeight: 1 / (Number(fog.properties.fog_height_falloff) * metres * Math.LN2),
+        start: Number(fog.properties.start_distance) * 0.01,
         albedo: colour(fog.properties.volumetric_fog_albedo),
         phase: Number(fog.properties.volumetric_fog_scattering_distribution),
         emissive: (fog.properties.fog_inscattering_luminance as number[]).slice(0, 3).map(value => value / sunLux) as unknown as Rgb,
       },
-    },
+    }
+  const atmosphere: Atmosphere = {
+    ...NATURE,
+    exposure: 1,
+    sun: { ...NATURE.sun, direction, color: atmosphereTransmittance(physical, Math.asin(direction[1])) },
+    grade: { ...NATURE.grade, lut: null, saturation: 1, bloom: 0, vignette: 0, grain: 0 },
+    physical,
   }
   return { atmosphere, sunlight: { sunLux, ev100: 13, sunSize: Number(sun.properties.light_source_angle) }, film: scanFilm(components) }
 }

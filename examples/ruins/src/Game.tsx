@@ -126,7 +126,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   } }), [geometry, home, onError, shared, walker])
   if (error) throw error
   return <>
-    <WebGPULook atmosphere={atmosphere} sunlight={sunlight} film={film} quality="high" shadowDistance={80} shadowMap={2048} shadowLayers={shadowLayers} onReady={onLook} onError={onError} />
+    <WebGPULook atmosphere={atmosphere} sunlight={sunlight} film={film} quality="high" shadowDistance={200} shadowMap={4096} shadowLayers={shadowLayers} onReady={onLook} onError={onError} />
     <Physics gravity={[0, -9.8, 0]} paused timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <AlsPhysicsStepper />
       {collisionReady && createPortal(<CharacterController controller={walker} events={events} />, scene, { camera: gameplayCamera })}

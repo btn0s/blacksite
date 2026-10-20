@@ -1,5 +1,5 @@
 import { Color, FloatType, InspectorBase, Lighting, NearestFilter, NeutralToneMapping, NoToneMapping, NodeMaterial, PCFShadowMap, QuadMesh, RenderPipeline, RenderTarget, Vector2, Vector3 } from 'three/webgpu'
-import type { Camera, DepthTexture, Node, Object3D, OrthographicCamera, RenderTarget, Scene, WebGPURenderer } from 'three/webgpu'
+import type { Camera, DepthTexture, Node, Object3D, OrthographicCamera, Scene, WebGPURenderer } from 'three/webgpu'
 import { builtinAOContext, context, faceDirection, float, log2, luminance, mix, mrt, normalViewGeometry, output, packNormalToRGB, pass, renderGroup, renderOutput, sample, screenUV, texture3D, uniform, uv, vec2, vec3, vec4, velocity } from 'three/tsl'
 import { SunLight } from 'three/addons/lights/SunLight.js'
 import { SunLightNode } from 'three/addons/lights/SunLightNode.js'
@@ -23,6 +23,7 @@ import { createFilm, type FilmOptions } from './film'
 import { EyeAdaptation } from './exposure'
 
 const METER = [64, 36] as const
+const METER_INTERVAL = 66
 
 export interface WebGPULookOptions {
   readonly atmosphere?: Atmosphere | PresetName
@@ -373,7 +374,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
       updateCamera()
       atmosphereGPU.tick(dt)
       pipeline.render()
-      if (meter && adaptation && !metering) {
+      if (meter && adaptation && !metering && performance.now() - meterTime > METER_INTERVAL) {
         metering = true
         meter.jitter.value.set(Math.random(), Math.random())
         const previous = renderer.getRenderTarget()

@@ -6,9 +6,8 @@ import type { DirectionalLight, Texture, WebGLRenderer } from 'three';
 import type { Atmosphere, PhysicalSkySpec } from './atmosphere';
 import type { QualitySettings } from './quality';
 import type { Sky } from './sky';
+import { OZONE, RAYLEIGH } from './coefficients';
 
-const RAYLEIGH = [5.802e-3, 13.558e-3, 33.1e-3] as const;
-const OZONE = [0.65e-3, 1.881e-3, 0.085e-3] as const;
 const TRANSMITTANCE_SIZE = [256, 64] as const;
 const MULTI_SIZE = 32;
 const SUN_RADIUS = 0.004675;
