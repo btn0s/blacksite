@@ -124,6 +124,7 @@ export class MeshletScene {
   private readonly history = uniform(0, 'uint')
   private readonly debug = uniform(0, 'uint')
   private historyValid = false
+  private shadowsEnabled = true
   private readonly pyramidCompute
   private readonly reductionCompute
   private readonly occlusionComputes
@@ -149,9 +150,7 @@ export class MeshletScene {
       scene = new MeshletScene(packed, options)
       scene.submission.initialize(renderer)
       await uploadAttributes(renderer, scene.uploadBuffers)
-      await scene.traversal.upload(renderer)
-      await scene.shadows.upload(renderer)
-      await scene.streaming.upload(renderer)
+      await Promise.all([scene.traversal.upload(renderer), scene.shadows.upload(renderer), scene.streaming.upload(renderer), ...scene.reductionCompute.map(node => renderer.compileComputeAsync(node))])
       await scene.arena.initialize(renderer)
       return scene
     } catch (error) {
@@ -327,12 +326,17 @@ export class MeshletScene {
     this.resetHistory()
   }
 
-  get shadowEnabled() { return this.shadows.object.visible }
+  get shadowEnabled() { return this.shadowsEnabled }
 
-  setShadowEnabled(enabled: boolean) { this.shadows.object.visible = enabled }
+  setShadowEnabled(enabled: boolean) { this.shadowsEnabled = enabled; if (!enabled) this.shadows.object.visible = false }
+
+  prepareLit() { this.lit.visible = true; this.depth.visible = false; this.shadows.object.visible = false }
 
   prepareShadow(renderer: WebGPURenderer, camera: OrthographicCamera, mapSize: Readonly<Vector2>, cascade: number) {
     if (!this.shadowEnabled) return
+    this.lit.visible = false
+    this.depth.visible = false
+    this.shadows.object.visible = true
     this.object.updateWorldMatrix(true, true)
     this.world.value.copy(this.object.matrixWorld)
     this.worldScale.value = transformScale(this.object.matrixWorld)
@@ -367,6 +371,7 @@ export class MeshletScene {
   prepare(renderer: WebGPURenderer, camera: PerspectiveCamera, viewport: Readonly<Vector2>) {
     this.lit.visible = false
     this.depth.visible = true
+    this.shadows.object.visible = false
     this.shadowPasses = 0
     if (!camera.isPerspectiveCamera) throw new Error('Geometry currently requires a perspective camera')
     if (!(this.pixelError > 0)) throw new Error('Geometry pixel error must be positive')

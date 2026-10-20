@@ -266,7 +266,7 @@ export class ClusterTraversal {
   async upload(renderer: WebGPURenderer) {
     await uploadAttributes(renderer, this.buffers)
     await this.indices.upload(renderer)
-    for (const node of this.nodes) await renderer.compileComputeAsync(node)
+    await Promise.all(this.nodes.map(node => renderer.compileComputeAsync(node)))
   }
 
   select(renderer: WebGPURenderer, depth: number) { renderer.compute(this.sequence(depth)) }

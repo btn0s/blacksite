@@ -88,15 +88,15 @@ export class ClusterIndices {
         atomicStore(counters.element(9), uint(0))
       })
       const start = uint(0).toVar()
-      for (let index = 0; index < packed.batches.length; index++) {
-        const argument = DRAW_ARGUMENT_OFFSET + index * DRAW_ARGUMENT_STRIDE
+      Loop(packed.batches.length, ({ i }) => {
+        const argument = uint(i).mul(DRAW_ARGUMENT_STRIDE).add(DRAW_ARGUMENT_OFFSET)
         const count = atomicLoad(counters.element(argument))
-        atomicStore(counters.element(argument + 1), uint(1))
-        atomicStore(counters.element(argument + 2), start)
-        atomicStore(counters.element(argument + 3), uint(0))
-        atomicStore(counters.element(argument + 4), uint(0))
+        atomicStore(counters.element(argument.add(1)), uint(1))
+        atomicStore(counters.element(argument.add(2)), start)
+        atomicStore(counters.element(argument.add(3)), uint(0))
+        atomicStore(counters.element(argument.add(4)), uint(0))
         start.addAssign(count)
-      }
+      })
       for (const batch of packed.depthBatches) {
         if (batch.material) continue
         const first = DRAW_ARGUMENT_OFFSET + batch.firstMaterial * DRAW_ARGUMENT_STRIDE
@@ -150,7 +150,7 @@ export class ClusterIndices {
 
   async upload(renderer: WebGPURenderer) {
     await uploadAttributes(renderer, [this.indices, this.dispatch])
-    for (const node of this.nodes) await renderer.compileComputeAsync(node)
+    await Promise.all(this.nodes.map(node => renderer.compileComputeAsync(node)))
   }
 
   readStats(values: Uint32Array) {

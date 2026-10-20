@@ -1,24 +1,28 @@
 # Dark Ruins
 
-Status: blocked before full-level playback. The uncompressed 3 cm build exceeded Chrome's storage-buffer binding limit before all referenced geometry had been built. The source also requires material families and vertex attributes absent from the current shared translator. See [the milestone report](REPORT.md). The queued selection implementation has not been validated on the full level's GPU workload.
+The whole-level work uses the same paged geometry renderer, look and ALS character as the courtyard. Its intended preview route is `?level=full&view=walk`; it remains unpublished while staged bootstrap is blocked. Wide, Close and Walk use the courtyard's bookmarks so performance comparisons retain the same cameras. All 20,430 exported placement records enter the shared runtime; invisible placements and explicitly excluded FX surfaces retain non-rendering material slots.
 
-The complete exported level: all 20,430 placements, using authoritative component-local geometry and column-major matrices. This example has no replacement ground plane or placement visibility filter. ALS assets stay in their existing package.
+The runtime reads `/owned/dark-ruins/full.json`. This version 5 manifest references the immutable whole-level placement directory, 371 geometry directories, complete version 2 material descriptors, environment and regional collision directory. Owned content stays outside Git. ALS remains in its existing package.
 
-Build on Windows from a Visual Studio developer command prompt with Node 22:
+Build geometry into a new owned directory from a Visual Studio developer command prompt:
 
 ```powershell
 node --max-old-space-size=16384 examples/ruins/scripts/build.mjs D:/Archive/dark-ruins-export D:/dev/owned-assets/dark-ruins/build-pages-NEW 0.005
-node --max-old-space-size=8192 examples/ruins/scripts/materials.mjs
 ```
 
-The geometry command requires a new owned output directory and defaults to a 5 mm world error. Every component-local geometry uses this divided by its largest conservative placement scale, including shear. It writes the [version-5 page contract](../../../packages/geometry/scripts/README.md#page-format-version-5), a whole-level placement/material/spatial directory, a complete unsupported-surface inventory, and `census.json`. Every page is read back and verified. Original source files are read-only and all generated content stays outside Git. Long-running builds on this host run as scheduled tasks.
+The compiler preserves component-local geometry, authoritative column-major placement matrices, authored vertex attributes and primitive material mappings. The world error cap is divided by each geometry's largest conservative placement scale, including shear. It writes the [version 5 page contract](../../../packages/geometry/scripts/README.md#page-format-version-5), page hashes, census and complete material-use inventory.
 
-The output is an immutable offline build. Its `level.json` belongs inside that new directory. Existing previews keep their published resident manifests; no loader consumes this page format yet. See [the streaming design and measured census](../../../docs/streaming.md).
+Use the complete immutable material bake, including translated surfaces and explicit FX exclusions, to cook collision and assemble the playable manifest:
 
-Materials use `examples/shared/scan-material.ts`. The material preparation command accepts optional export, output, and authored custom-general source descriptor paths. Its defaults use the paths above and `D:/dev/owned-assets/dark-ruins-source/materials.json`, which supplies the authored shader's fixed RGB-noise texture. Images share one 1024-pixel maximum dimension. Preparation preserves source parameters for unimplemented surface families, and the example explicitly refuses to render those families. It never substitutes a material for an unsupported shader. Additional authored translations and required vertex attributes are a separate prerequisite for the complete level.
+```powershell
+node --max-old-space-size=8192 examples/ruins/scripts/build-collision.mjs D:/dev/owned-assets/dark-ruins/build-pages-NEW D:/dev/owned-assets/dark-ruins/build-playable-NEW D:/dev/owned-assets/dark-ruins/build-materials-COMPLETE/surfaces.json
+node examples/ruins/scripts/build-playable.mjs D:/dev/owned-assets/dark-ruins D:/dev/owned-assets/dark-ruins/build-pages-NEW D:/dev/owned-assets/dark-ruins/build-playable-NEW D:/dev/owned-assets/dark-ruins/build-materials-COMPLETE
+```
 
-Collision chunk cooking and texture tails belong to later streaming slices. Existing previews retain their previously published collision and texture assets. The sun direction and intensity, sky intensity, and height-fog data come from the environment export; the atmosphere translates those values into the existing look's physical controls. This does not reproduce the source's full volumetric lighting model.
+Collision uses 32 m index regions and 8 m spatial chunks with at most 4,096 triangles. A 0.375 m world-space hierarchy cut and at most 0.375 m additional simplification share the 0.75 m error allowance. Transformed triangles have unique ownership, mirrored placements reverse winding, and actual chunk bounds index every crossed region. Excluded surfaces contribute no collision. Four workers fetch and verify bounded chunks; the runtime inserts standalone static colliders between physics steps. Critical movement tiles, a prefetch ring and trailing retention share a separate 128 MiB conservative native/staging reservation. Resident boundary planes hold movement until neighboring collision is ready. Destination collision becomes ready before a teleport activates.
 
-Run `pnpm --dir examples/ruins dev --port 5248`. On this machine the persistent server is scheduled task `blacksite-ruins-dev`, with `D:/dev/meshlets-m2-dev.cmd`. Ports 5246 and 5247 belong to the other previews. Expose this server with `bb connect expose 5248`.
+Bootstrap currently awaits directories, minimum texture tails, pinned coarse geometry, spawn collision, ALS and compilation of every cluster material under the actual depth, lit and shadow states. The required staged bootstrap remains unmet: r186 async compilation reads mutable renderer MRT state after yielding, so concurrent rendering can invalidate background depth pipeline compilation. The unsafe background path is deleted. GPU geometry and texture residency share the 2,560 MiB ledger; geometry occupies a fixed 1,280 MiB arena. Missing detail retains the resident coarse cut. Material bitsets independently restrict depth/lit submission and the active shadow cascade.
 
-The existing inspector provides overview, courtyard and ALS walk cameras, LOD and meshlet views, and telemetry capture with T. The selection panel shows tested and culled instances, hierarchy nodes, clusters visited, view selection GPU time, useful drawn triangles, and the geometry buffer allocation budget. It excludes textures and targets. Overflow in the bounded queues is a reported failure.
+Merge the loader before publishing its owned manifest. Only then atomically copy the new build's `full.json` to the owned root and verify the real preview. Never overwrite an existing immutable build or repoint a published manifest ahead of its reader. Persistent servers and offline builds on this host run as interactive scheduled tasks. Leave other preview ports untouched.
+
+The inspector exposes paging epochs, requests, fallbacks, retirement safety, texture residency, collision insertions and byte reservations. T saves telemetry. See [the streaming design](../../../docs/streaming.md) and [the original resident-limit investigation](REPORT.md) for historical context.

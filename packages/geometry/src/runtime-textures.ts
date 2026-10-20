@@ -174,7 +174,7 @@ export class ClusterFeedback {
 
   async upload(renderer: WebGPURenderer) {
     await uploadAttributes(renderer, this.buffers)
-    for (const node of [this.reset, this.pages, this.gather]) await renderer.compileComputeAsync(node)
+    await Promise.all([this.reset, this.pages, this.gather].map(node => renderer.compileComputeAsync(node)))
   }
 
   sample(renderer: WebGPURenderer, force = false) {

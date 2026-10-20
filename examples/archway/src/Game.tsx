@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Canvas, createPortal, useFrame, useThree } from '@react-three/fiber'
 import { Physics, useRapier } from '@react-three/rapier'
 import { PerspectiveCamera, Vector3 } from 'three'
@@ -80,6 +80,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   }), [geometry, inspector, owned, renderer, shared, stats, textures])
   useEffect(() => {
     shared.geometry.current = geometry
+    geometry.object.visible = false
     scene.add(geometry.object)
     return () => { shared.geometry.current = null; scene.remove(geometry.object); geometry.dispose() }
   }, [geometry, scene, shared])
@@ -88,6 +89,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     if (!look) return
     const remove = [
       look.onBeforeDepth((gl, camera, size) => geometry.prepare(gl, camera as PerspectiveCamera, size)),
+      look.onBeforeLit(() => geometry.prepareLit()),
       look.onAfterDepth((gl, _camera, depth) => geometry.recover(gl, depth)),
       look.onBeforeShadow((gl, camera, size, cascade) => geometry.prepareShadow(gl, camera, size, cascade)),
     ]
@@ -103,7 +105,8 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   useEffect(() => {
     if (!look || !collidersReady) return
     let active = true
-    void look.compile((gl, camera, scene, pass) => geometry.compile(gl, camera, scene, pass)).then(() => geometry.completeFrame(renderer)).then(() => geometry.readStats(renderer, look.timings())).then(() => {
+    geometry.object.visible = true
+    void look.compile((gl, camera, scene, pass) => geometry.compile(gl, camera, scene, pass), [geometry.object]).then(() => geometry.completeFrame(renderer)).then(() => geometry.readStats(renderer, look.timings())).then(() => {
       if (!active) return
       shared.warm.current = 10
       onReady()
@@ -187,7 +190,7 @@ function Archway({ owned, runtime, onReady }: { owned: ArchwayAsset; runtime: Re
   </>
 }
 
-export function Game() {
+function CourtyardGame() {
   const runtime = useMemo(makeInputDevices, [])
   const [owned, setOwned] = useState<ArchwayAsset | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -208,4 +211,12 @@ class RenderBoundary extends Component<{ children: ReactNode }, { error: string 
   state = { error: null as string | null }
   static getDerivedStateFromError(error: Error) { return { error: error.message } }
   render() { return this.state.error ? <div className="hud-menu" role="alert"><strong>Archway could not start</strong><span>{this.state.error}</span></div> : this.props.children }
+}
+
+const FullLevel = lazy(() => import('../../ruins/src/Game').then(module => ({ default: module.Game })))
+
+export function Game() {
+  return new URLSearchParams(location.search).get('level') === 'full'
+    ? <Suspense fallback={<Loading title="Dark Ruins" detail="Opening the level" progress={0.05} />}><FullLevel /></Suspense>
+    : <CourtyardGame />
 }

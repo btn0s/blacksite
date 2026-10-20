@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "vite --host 0.0.0.0", "build:asset": "node scripts/build.mjs", "build:materials": "node scripts/materials.mjs" },
+  "scripts": { "dev": "vite --host 0.0.0.0", "build:asset": "node scripts/build.mjs", "build:collision": "node scripts/build-collision.mjs", "build:playable": "node scripts/build-playable.mjs" },
   "dependencies": {
     "@blacksite/geometry": "workspace:*",
     "@blacksite/input": "workspace:*",
