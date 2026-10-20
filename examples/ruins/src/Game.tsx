@@ -204,7 +204,7 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
   }, [owned])
   if (viewError) throw viewError
   return <>
-    <Canvas frameloop={session.frameloop} shadows dpr={1} camera={cameras[view]} gl={renderer}>
+    <Canvas frameloop="always" shadows dpr={1} camera={cameras[view]} gl={renderer}>
       {geometry && <Scene owned={owned} geometry={geometry} walker={walker} gameplayCamera={cameras.spawn} inspector={inspector} telemetry={telemetry} shared={shared} onStats={setSelection} onReady={onReady} />}
     </Canvas>
     <SelectionDisplay selection={selection} sourceTriangles={owned.sourceTriangles} cappedTriangles={owned.cappedTriangles} />
