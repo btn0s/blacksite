@@ -15,6 +15,9 @@ import { bindGeometryMaterial, createGeometryDepthMaterial, createGeometryMateri
 import { clusterGeometry, clusterVertex } from './runtime-vertex'
 import { ClusterShadows } from './runtime-shadows'
 import { ClusterTraversal } from './runtime-traversal'
+import { ClusterTextureFeedback, type MeshletTextureFeedback } from './runtime-textures'
+
+export type { MeshletTextureFeedback, TextureDemandBinding } from './runtime-textures'
 
 export type { MeshletSceneEntry } from './runtime-data'
 export { meshletStorageSize } from './runtime-data'
@@ -22,6 +25,7 @@ export { geometryScaleX, geometrySecondaryUV, geometryVertexColor, normalMapWith
 export type MeshletDebugView = 'normal' | 'meshlets' | 'lod'
 
 export interface MeshletSceneOptions {
+  textureFeedback?: MeshletTextureFeedback
   pixelError?: number
   occlusion?: boolean
   occlusionSize?: number
@@ -116,6 +120,7 @@ export class MeshletScene {
   private readonly occlusionComputes
   private readonly computeNodes
   private readonly uploadBuffers: StorageBufferAttribute[]
+  private readonly textureFeedback: ClusterTextureFeedback | null
 
   static async create(renderer: WebGPURenderer, entries: readonly MeshletSceneEntry[], options: MeshletSceneOptions = {}) {
     const packed = await packScene(renderer, entries)
@@ -130,6 +135,7 @@ export class MeshletScene {
       await uploadAttributes(renderer, scene.uploadBuffers)
       await scene.traversal.upload(renderer)
       await scene.shadows.upload(renderer)
+      await scene.textureFeedback?.upload(renderer)
       return scene
     } catch (error) {
       scene.dispose()
@@ -276,6 +282,11 @@ export class MeshletScene {
     }
     this.occlusionComputes = [this.pyramidCompute, ...this.reductionCompute]
     this.computeNodes = [this.pyramidCompute, ...this.reductionCompute]
+    this.textureFeedback = options.textureFeedback ? new ClusterTextureFeedback(packed, this.traversal.visible, this.counters,
+      this.world, this.worldScale, this.eye, this.projectionScale, options.textureFeedback) : null
+    if (options.textureFeedback && !options.textureFeedback.ledger.reserve(this, 'geometry', this.residentBytes + this.textureFeedback!.residentBytes)) {
+      throw new Error('Resident geometry and minimum texture tails exceed the shared byte budget')
+    }
   }
   setDebugView(view: MeshletDebugView) {
     this.debug.value = view === 'meshlets' ? 1 : view === 'lod' ? 2 : 0
@@ -305,6 +316,7 @@ export class MeshletScene {
   }
 
   prepare(renderer: WebGPURenderer, camera: PerspectiveCamera, viewport: Readonly<Vector2>) {
+    if (this.textureFeedback) this.textureFeedback.feedback.frame++
     this.lit.visible = false
     this.depth.visible = true
     this.shadowPasses = 0
@@ -353,7 +365,7 @@ export class MeshletScene {
   }
 
   async readStats(renderer: WebGPURenderer, timings?: Readonly<Record<string, number>>): Promise<MeshletStats> {
-    const values = new Uint32Array(await renderer.getArrayBufferAsync(this.counters))
+    const values = this.textureFeedback ? await this.textureFeedback.read(renderer) : new Uint32Array(await renderer.getArrayBufferAsync(this.counters))
     if (values[20]) throw new Error(`Geometry selection budget exhausted: ${values[20]} queue or visible records exceeded capacity`)
     const selectionTimings = timings ? Object.entries(timings).filter(([name]) => name.startsWith('Compute \u00b7 View ')) : []
     const selectionMs = selectionTimings.length ? selectionTimings.reduce((sum, [, value]) => sum + value, 0) : null
@@ -388,6 +400,8 @@ export class MeshletScene {
   }
 
   dispose() {
+    this.textureFeedback?.feedback.ledger.release(this)
+    this.textureFeedback?.dispose()
     for (const mesh of this.meshes) mesh.geometry.dispose()
     for (const mesh of this.depth.children) (mesh as Mesh).geometry.dispose()
     for (const material of this.materials) material.dispose()

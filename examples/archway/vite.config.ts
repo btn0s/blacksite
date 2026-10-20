@@ -13,6 +13,8 @@ export default defineConfig({
   root: import.meta.dirname,
   resolve: {
     alias: {
+      '@blacksite/geometry': resolve(root, 'packages/geometry/src/index.ts'),
+      'als-ue5-r3f': resolve(root, 'vendor/als-web/src'),
       '@react-three/fiber': resolve(root, 'node_modules/@react-three/fiber'),
       '@react-three/rapier': resolve(root, 'node_modules/@react-three/rapier'),
     },

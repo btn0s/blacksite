@@ -1,5 +1,5 @@
 import { access, readFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { dirname, resolve, join, relative } from 'node:path'
+import { dirname, resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createHash } from 'node:crypto'
 import sharp from 'sharp'
@@ -9,18 +9,43 @@ import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { read, write } from 'three/addons/libs/ktx-parse.module.js'
 
-async function textureLevels(output, file) {
-  const image = read(await readFile(join(output, file)))
-  let levels = 0
-  while (Math.max(image.pixelWidth >> levels, image.pixelHeight >> levels) > 2048) levels++
-  if (!levels) return { file }
-  const baseline = file.replace(/\.ktx2$/, '.2k.ktx2')
-  image.pixelWidth = Math.max(1, image.pixelWidth >> levels)
-  image.pixelHeight = Math.max(1, image.pixelHeight >> levels)
-  image.levels = image.levels.slice(levels)
-  image.levelCount = image.levels.length
-  await writeFile(join(output, baseline), write(image))
-  return { file: baseline, detailFile: file }
+export async function textureLevels(input, output) {
+  const source = read(await readFile(input))
+  await mkdir(output, { recursive: true })
+  const identity = createHash('sha256').update(await readFile(input)).digest('hex').slice(0, 16)
+  const tails = []
+  for (const size of [256, 512, 1024, 2048]) {
+    let first = 0
+    while (Math.max(source.pixelWidth >> first, source.pixelHeight >> first) > size) first++
+    const width = Math.max(1, source.pixelWidth >> first)
+    const height = Math.max(1, source.pixelHeight >> first)
+    if (tails.some(tail => tail.width === width && tail.height === height)) continue
+    const image = { ...source, pixelWidth: width, pixelHeight: height, levels: source.levels.slice(first) }
+    image.levelCount = image.levels.length
+    const file = `${identity}.${size}.ktx2`
+    const bytes = write(image)
+    await writeFile(join(output, file), bytes)
+    tails.push({ file, size: Math.max(width, height), width, height, levels: image.levelCount, wireBytes: bytes.byteLength })
+  }
+  return { file: tails[0].file, tails }
+}
+
+export async function buildScanMaterialTails(sourceFile, output) {
+  const source = JSON.parse(await readFile(sourceFile, 'utf8'))
+  const images = new Map()
+  const surfaces = []
+  for (const surface of source.surfaces) {
+    const maps = {}
+    for (const [name, image] of Object.entries(surface.maps)) {
+      const input = resolve(dirname(sourceFile), image.detailFile ?? image.file)
+      if (!images.has(input)) images.set(input, await textureLevels(input, join(output, 'textures')))
+      const encoded = images.get(input)
+      maps[name] = { file: `textures/${encoded.file}`, srgb: image.srgb, tails: encoded.tails.map(tail => ({ ...tail, file: `textures/${tail.file}` })) }
+    }
+    surfaces.push({ ...surface, maps })
+  }
+  await writeFile(join(output, 'surfaces.json'), JSON.stringify({ version: 2, surfaces }))
+  return surfaces
 }
 
 export async function buildScanMaterials(sourceFile, output, textureDirectory = output) {
@@ -71,14 +96,14 @@ export async function buildScanMaterials(sourceFile, output, textureDirectory = 
           await rm(work, { recursive: true, force: true })
         }
       }
-      const encoded = await textureLevels(textureDirectory, destination)
-      const levels = Object.fromEntries(Object.entries(encoded).map(([name, file]) => [name, relative(output, join(textureDirectory, file)).replaceAll('\\', '/')]))
+      const encoded = await textureLevels(join(textureDirectory, destination), join(output, 'textures'))
+      const levels = { file: `textures/${encoded.file}`, tails: encoded.tails.map(tail => ({ ...tail, file: `textures/${tail.file}` })) }
       images.set(identity, levels)
       maps[name] = { ...levels, srgb: imageSource.srgb }
     }
     surfaces.push({ family: surface.family, path: surface.path, parameters: surface.parameters, channels: surface.channels, maps })
   }
-  await writeFile(join(output, 'surfaces.json'), JSON.stringify({ version: 1, surfaces }, null, 2))
+  await writeFile(join(output, 'surfaces.json'), JSON.stringify({ version: 2, surfaces }, null, 2))
   return surfaces
 }
 

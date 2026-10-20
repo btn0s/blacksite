@@ -1,7 +1,7 @@
 import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Canvas, createPortal, useFrame, useThree } from '@react-three/fiber'
 import { Physics, useRapier } from '@react-three/rapier'
-import { Box3, Matrix4, PerspectiveCamera, Vector3 } from 'three'
+import { PerspectiveCamera, Vector3 } from 'three'
 import { WebGPURenderer } from 'three/webgpu'
 import { InputProvider, makeInputDevices } from '@blacksite/input'
 import { BODY_LAYER, CharacterController, CharacterOverlay, CharacterPause, useCharacterStatus, useLocalSession, type CharacterEvents, type CharacterHandle } from '@blacksite/subject'
@@ -53,10 +53,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
 }) {
   const { gl, camera, scene } = useThree()
   const renderer = gl as unknown as WebGPURenderer
-  const textures = useMemo(() => createScanMaterialStreaming(renderer, owned.manifest.placements.filter(placement => placement.visible).map(placement => {
-    const bounds = owned.manifest.geometries[placement.geometry]!.metadata.bounds
-    return { materials: placement.materials, bounds: new Box3(new Vector3(...bounds.min), new Vector3(...bounds.max)).applyMatrix4(new Matrix4().fromArray(placement.matrix)) }
-  })), [owned, renderer])
+  const textures = useMemo(() => createScanMaterialStreaming(renderer), [renderer])
   useEffect(() => () => textures.dispose(), [textures])
   const home = useMemo(() => createArchwayHome(owned.manifest.centre), [owned])
   const [look, setLook] = useState<Look | null>(null)
@@ -79,8 +76,8 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     ],
     setView: view => { geometry.setDebugView(view === 'lod' ? 'lod' : 'normal'); shared.look.current?.setDebug(view === 'lod') },
     textures: () => residentScanTextures(renderer),
-    details: () => ({ placements: owned.manifest.placements.length, uniqueMeshes: owned.uniqueMeshes, sourceTriangles: owned.sourceTriangles, meshletCount: owned.meshlets, levels: owned.levels, residentGeometryBytes: geometry.residentGeometryBytes, untranslated: owned.manifest.untranslated, excluded: owned.manifest.excluded, ...stats }),
-  }), [geometry, inspector, owned, renderer, shared, stats])
+    details: () => ({ placements: owned.manifest.placements.length, uniqueMeshes: owned.uniqueMeshes, sourceTriangles: owned.sourceTriangles, meshletCount: owned.meshlets, levels: owned.levels, residentGeometryBytes: geometry.residentGeometryBytes, untranslated: owned.manifest.untranslated, excluded: owned.manifest.excluded, textureStreaming: textures.snapshot(), ...stats }),
+  }), [geometry, inspector, owned, renderer, shared, stats, textures])
   useEffect(() => {
     shared.geometry.current = geometry
     scene.add(geometry.object)
@@ -96,9 +93,9 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     ]
     return () => { for (const dispose of remove) dispose() }
   }, [geometry, look])
-  useFrame(({ size }) => {
+  useFrame(() => {
     if (!look) return
-    if (shared.warm.current >= 10) textures.update(camera, size.height * renderer.getPixelRatio())
+    if (shared.warm.current >= 10) textures.update()
     if (collidersReady) {
       shared.warm.current++
       if (shared.warm.current === 10) onReady()
