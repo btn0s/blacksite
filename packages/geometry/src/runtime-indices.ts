@@ -31,6 +31,7 @@ export class ClusterIndices {
     const dispatch = storage(this.dispatch, 'uint', this.dispatch.count)
     const retryDispatch = storage(this.retryDispatch, 'uint', 3)
     const visible = storage(visibleAttribute, 'uvec4', packed.candidateCount).toReadOnly()
+    const drawArguments = storage(counters.value, 'uint', counters.value.count).toReadOnly()
     const output = storage(this.indices, 'uint', this.indices.count)
     const readCluster = clusterReader(packed.clusters)
     const readInstance = instanceReader(packed.instances)
@@ -102,7 +103,7 @@ export class ClusterIndices {
       const compact = Fn(() => {
         const localSlot = instanceIndex.div(corners)
         const corner = instanceIndex.mod(corners)
-        If(localSlot.lessThan(atomicLoad(counters.element(argument + 5))), () => {
+        If(localSlot.lessThan(drawArguments.element(argument + 5)), () => {
           const slot = localSlot.add(batch.offset)
           const candidate = visible.element(slot).toVar()
           If(corner.lessThan(candidate.w), () => {
@@ -113,7 +114,7 @@ export class ClusterIndices {
             const oriented = instance.scale.y.lessThan(0).select(mirrored, triangleCorner)
             const address = cluster.draw.x.add(corner.div(3).mul(3)).add(oriented)
             const localVertex = indices.element(address.div(4)).shiftRight(address.mod(4).mul(8)).bitAnd(255)
-            const destination = atomicLoad(counters.element(argument + 2)).add(candidate.z).add(corner)
+            const destination = drawArguments.element(argument + 2).add(candidate.z).add(corner)
             output.element(destination).assign(slot.shiftLeft(8).bitOr(localVertex))
           })
         })
