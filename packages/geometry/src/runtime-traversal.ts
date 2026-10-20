@@ -1,8 +1,9 @@
 import { IndirectStorageBufferAttribute, StorageBufferAttribute } from 'three/webgpu'
 import type { Node, WebGPURenderer } from 'three/webgpu'
-import { Fn, If, Loop, atomicAdd, atomicLoad, atomicStore, bool, dot, instanceIndex, max, min, storage, uint, uintBitsToFloat, uvec2, vec4 } from 'three/tsl'
-import { DRAW_ARGUMENT_OFFSET, uploadAttributes, type PackedMeshletScene } from './runtime-data'
+import { Fn, If, Loop, atomicAdd, atomicLoad, atomicStore, bool, dot, instanceIndex, max, min, storage, uint, uintBitsToFloat, uvec2, uvec4, vec4 } from 'three/tsl'
+import { DRAW_ARGUMENT_OFFSET, DRAW_ARGUMENT_STRIDE, INDEX_BUDGET_OFFSET, uploadAttributes, type PackedMeshletScene } from './runtime-data'
 import { clusterReader, instanceReader } from './runtime-layout'
+import { ClusterIndices } from './runtime-indices'
 
 type SphereTest = (sphere: Node<'vec4'>) => Node<'bool'>
 
@@ -10,6 +11,7 @@ export class ClusterTraversal {
   readonly counters: IndirectStorageBufferAttribute
   readonly visible: StorageBufferAttribute
   readonly residentBytes: number
+  readonly indices: ClusterIndices
   private readonly dispatch = new IndirectStorageBufferAttribute(new Uint32Array(3), 1)
   private readonly reset
   private readonly seed
@@ -17,6 +19,7 @@ export class ClusterTraversal {
   private readonly recoverDispatch
   private readonly evaluate
   private readonly recoverEvaluate
+  private readonly retryEvaluate
   private readonly evaluateDispatch
   private readonly rejectedDispatch
   private readonly evaluateRejected
@@ -28,18 +31,21 @@ export class ClusterTraversal {
     planes: ReturnType<typeof import('three/tsl').uniformArray>,
     projectedError: (sphere: Node<'vec4'>, error: Node<'float'>, scale: Node<'float'>) => Node<'float'>,
     threshold: Node<'float'>, lodEnabled: Node<'bool'>, reach: Node<'float'>, eye: Node<'vec3'>,
-    previousHidden: SphereTest, currentHidden: SphereTest, label = 'View') {
+    previousHidden: SphereTest, currentHidden: SphereTest, triangleBudget: number, coarsestError: Node<'float'>, label = 'View') {
     const capacity = packed.candidateCount
     const queueCapacity = packed.queueCapacity
     const leafCapacity = packed.leafCapacity
-    const count = DRAW_ARGUMENT_OFFSET + packed.batches.length * 4
+    const count = DRAW_ARGUMENT_OFFSET + packed.batches.length * DRAW_ARGUMENT_STRIDE
     this.counters = new IndirectStorageBufferAttribute(new Uint32Array(count), 1)
-    this.visible = new StorageBufferAttribute(capacity, 2, Uint32Array)
+    this.visible = new StorageBufferAttribute(capacity, 4, Uint32Array)
     const rejectedAttribute = new StorageBufferAttribute(capacity, 2, Uint32Array)
     const rejectedInstancesAttribute = new StorageBufferAttribute(packed.instanceCount, 1, Uint32Array)
     const leafAttribute = new StorageBufferAttribute(leafCapacity, 2, Uint32Array)
     const queues = [new StorageBufferAttribute(queueCapacity, 2, Uint32Array), new StorageBufferAttribute(queueCapacity, 2, Uint32Array)]
     const counters = storage(this.counters, 'uint', count).toAtomic()
+    this.indices = new ClusterIndices(packed, counters, this.visible, triangleBudget, threshold, lodEnabled, coarsestError, label)
+    const effectiveThreshold = this.indices.threshold
+    const effectiveLod = lodEnabled.or(effectiveThreshold.greaterThan(0))
     const rejected = storage(rejectedAttribute, 'uvec2', capacity)
     const rejectedInstances = storage(rejectedInstancesAttribute, 'uint', packed.instanceCount)
     const leaves = storage(leafAttribute, 'uvec2', leafCapacity)
@@ -51,7 +57,7 @@ export class ClusterTraversal {
     const readInstance = instanceReader(packed.instances)
     const readCluster = clusterReader(packed.clusters)
     const dispatch = storage(this.dispatch, 'uint', 3)
-    const visible = storage(this.visible, 'uvec2', capacity)
+    const visible = storage(this.visible, 'uvec4', capacity)
     const sphereWorld = Fn(([sphere, transform, scale]) => vec4(world.mul(transform).mul(vec4(sphere.xyz, 1)).xyz, sphere.w.mul(scale).mul(worldScale)))
     const inside = Fn(([sphere]) => {
       const result = bool(true).toVar()
@@ -70,9 +76,8 @@ export class ClusterTraversal {
       })
     }
     this.reset = Fn(() => {
-      Loop(count, ({ i }) => { atomicStore(counters.element(i), uint(0)) })
-      Loop(packed.batches.length, ({ i }) => {
-        atomicStore(counters.element(uint(DRAW_ARGUMENT_OFFSET).add(uint(i).mul(4))), materials.element(uint(i).mul(4).add(1)))
+      Loop(count, ({ i }) => {
+        If(i.lessThan(INDEX_BUDGET_OFFSET).or(i.greaterThanEqual(DRAW_ARGUMENT_OFFSET)), () => { atomicStore(counters.element(i), uint(0)) })
       })
     })().compute(1).setName(`${label} Traversal reset`)
     this.seed = Fn(() => {
@@ -98,7 +103,7 @@ export class ClusterTraversal {
     this.recoverDispatch = Fn(() => {
       atomicStore(counters.element(0), uint(0))
       atomicStore(counters.element(1), uint(0))
-      atomicStore(counters.element(22), uint(0))
+      atomicStore(counters.element(23), atomicLoad(counters.element(22)))
       writeDispatch(3, packed.instanceCount)
     })().compute(1).setName(`${label} Instance recovery dispatch`)
     this.recoverSeed = Fn(() => {
@@ -123,7 +128,7 @@ export class ClusterTraversal {
           const node = task.x.mul(3)
           const sphere = sphereWorld(uintBitsToFloat(nodes.element(node)), instance.transform, instance.scale.x).toVar()
           const error = uintBitsToFloat(nodes.element(node.add(1))).x
-          const refine = lodEnabled.not().or(projectedError(sphere, error, instance.scale.x).greaterThan(threshold))
+          const refine = effectiveLod.not().or(projectedError(sphere, error, instance.scale.x).greaterThan(effectiveThreshold))
           const withinReach = lodEnabled.or(eye.sub(sphere.xyz).length().sub(sphere.w).lessThanEqual(reach))
           If(inside(sphere).and(refine).and(withinReach), () => {
             const record = nodes.element(node.add(2)).toVar()
@@ -143,29 +148,31 @@ export class ClusterTraversal {
       })().compute(queueCapacity, [64]).setName(`${label} Group hierarchy traversal`)
       return { prepare, visit }
     })
-    const append = (task: Node<'uvec2'>, triangles: Node<'uint'>, batch: Node<'uint'>) => {
-      const argument = uint(DRAW_ARGUMENT_OFFSET).add(batch.mul(4))
-      const slot = atomicAdd(counters.element(argument.add(1)), uint(1))
-      If(slot.lessThan(materials.element(batch.mul(4).add(2))), () => {
-        visible.element(materials.element(batch.mul(4)).add(slot)).assign(task)
-        atomicAdd(counters.element(9), triangles)
-        atomicAdd(counters.element(10), uint(1))
-        atomicAdd(counters.element(11), atomicLoad(counters.element(argument)).div(3))
+    const append = (task: Node<'uvec2'>, corners: Node<'uint'>, batch: Node<'uint'>) => {
+      const argument = uint(DRAW_ARGUMENT_OFFSET).add(batch.mul(DRAW_ARGUMENT_STRIDE))
+      const slot = atomicAdd(counters.element(10), uint(1))
+      If(slot.lessThan(capacity), () => {
+        const first = atomicAdd(counters.element(argument), corners)
+        visible.element(slot).assign(uvec4(task, first, batch))
+        atomicAdd(counters.element(9), corners.div(3))
+        atomicAdd(counters.element(11), corners.div(3))
       }).Else(overflow)
     }
-    const evaluate = (recover: boolean) => Fn(() => {
-      If(instanceIndex.lessThan(min(atomicLoad(counters.element(22)), uint(leafCapacity))), () => {
+    const evaluate = (recover: boolean, start: Node<'uint'> = uint(0)) => Fn(() => {
+      const id = instanceIndex.add(start)
+      If(id.lessThan(min(atomicLoad(counters.element(22)), uint(leafCapacity))), () => {
         atomicAdd(counters.element(19), uint(1))
-        const task = leaves.element(instanceIndex).toVar()
+        const task = leaves.element(id).toVar()
         const cluster = readCluster(task.x)
         const instance = readInstance(task.y)
         const own = sphereWorld(cluster.selfSphere, instance.transform, instance.scale.x)
         const parent = sphereWorld(cluster.parentSphere, instance.transform, instance.scale.x)
         const sphere = sphereWorld(cluster.bounds, instance.transform, instance.scale.x).toVar()
         const batch = materials.element(uint(instance.scale.z).add(cluster.material)).toVar()
-        const cut = projectedError(own, cluster.errors.x, instance.scale.x).lessThanEqual(threshold).and(projectedError(parent, cluster.errors.y, instance.scale.x).greaterThan(threshold))
-        const finest = cluster.refinedGroup.equal(0xffffffff).and(eye.sub(sphere.xyz).length().sub(sphere.w).lessThanEqual(reach))
-        If(batch.notEqual(0xffffffff).and(lodEnabled.select(cut, finest)), () => {
+        const cut = projectedError(own, cluster.errors.x, instance.scale.x).lessThanEqual(effectiveThreshold).and(projectedError(parent, cluster.errors.y, instance.scale.x).greaterThan(effectiveThreshold))
+        const finest = cluster.refinedGroup.equal(0xffffffff)
+        const withinReach = lodEnabled.or(eye.sub(sphere.xyz).length().sub(sphere.w).lessThanEqual(reach))
+        If(batch.notEqual(0xffffffff).and(withinReach).and(effectiveLod.select(cut, finest)), () => {
           atomicAdd(counters.element(4), uint(1))
           atomicAdd(counters.element(12), cluster.draw.y.div(3))
           If(inside(sphere), () => {
@@ -176,7 +183,7 @@ export class ClusterTraversal {
                 If(slot.lessThan(capacity), () => { rejected.element(slot).assign(task) }).Else(overflow)
               }
             }).Else(() => {
-              append(task, cluster.draw.y.div(3), batch)
+              append(task, cluster.draw.y, batch)
               if (recover) atomicAdd(counters.element(8), uint(1))
             })
           }).Else(() => { atomicAdd(counters.element(5), uint(1)) })
@@ -184,7 +191,8 @@ export class ClusterTraversal {
       })
     })().compute(leafCapacity, [64]).setName(`${label} ${recover ? 'Recovered group cut' : 'Group cut'}`)
     this.evaluate = evaluate(false)
-    this.recoverEvaluate = evaluate(true)
+    this.recoverEvaluate = evaluate(true, atomicLoad(counters.element(23)))
+    this.retryEvaluate = evaluate(true)
     this.evaluateDispatch = Fn(() => { writeDispatch(22, leafCapacity) })().compute(1).setName(`${label} Group cut dispatch`)
     this.rejectedDispatch = Fn(() => { writeDispatch(6, capacity) })().compute(1).setName(`${label} Cluster recovery dispatch`)
     this.evaluateRejected = Fn(() => {
@@ -195,24 +203,27 @@ export class ClusterTraversal {
         const batch = materials.element(uint(instance.scale.z).add(cluster.material)).toVar()
         const sphere = sphereWorld(cluster.bounds, instance.transform, instance.scale.x)
         If(currentHidden(sphere), () => { atomicAdd(counters.element(7), uint(1)) }).Else(() => {
-          append(task, cluster.draw.y.div(3), batch)
+          append(task, cluster.draw.y, batch)
           atomicAdd(counters.element(8), uint(1))
         })
       })
     })().compute(capacity, [64]).setName(`${label} Cluster recovery`)
-    this.nodes = [this.reset, this.seed, this.recoverSeed, this.recoverDispatch, this.evaluate, this.recoverEvaluate, this.evaluateDispatch, this.rejectedDispatch, this.evaluateRejected, ...this.steps.flatMap(step => [step.prepare, step.visit])]
+    this.nodes = [this.reset, this.seed, this.recoverSeed, this.recoverDispatch, this.evaluate, this.recoverEvaluate, this.retryEvaluate, this.evaluateDispatch, this.rejectedDispatch, this.evaluateRejected, ...this.steps.flatMap(step => [step.prepare, step.visit])]
     this.buffers = [this.counters, this.visible, rejectedAttribute, rejectedInstancesAttribute, leafAttribute, ...queues, this.dispatch]
-    this.residentBytes = this.buffers.reduce((sum, attribute) => sum + attribute.array.byteLength, 0)
+    this.residentBytes = this.indices.residentBytes + this.buffers.reduce((sum, attribute) => sum + attribute.array.byteLength, 0)
   }
 
   async upload(renderer: WebGPURenderer) {
     await uploadAttributes(renderer, this.buffers)
+    await this.indices.upload(renderer)
     for (const node of this.nodes) await renderer.compileComputeAsync(node)
   }
 
   select(renderer: WebGPURenderer, depth: number) {
+    this.indices.start(renderer)
     renderer.compute([this.reset, this.seed])
     this.traverse(renderer, depth, false)
+    this.indices.fit(renderer, this.evaluate)
   }
 
   recover(renderer: WebGPURenderer, depth: number) {
@@ -221,6 +232,7 @@ export class ClusterTraversal {
     this.traverse(renderer, depth, true)
     renderer.compute(this.rejectedDispatch)
     renderer.compute(this.evaluateRejected, this.dispatch)
+    this.indices.fit(renderer, this.retryEvaluate)
   }
 
   private traverse(renderer: WebGPURenderer, depth: number, recover: boolean) {
@@ -233,5 +245,8 @@ export class ClusterTraversal {
     renderer.compute(recover ? this.recoverEvaluate : this.evaluate, this.dispatch)
   }
 
-  dispose() { for (const node of this.nodes) node.dispose() }
+  dispose() {
+    for (const node of this.nodes) node.dispose()
+    this.indices.dispose()
+  }
 }

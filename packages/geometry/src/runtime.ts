@@ -1,9 +1,9 @@
 import {
-  Frustum, Group, IndirectStorageBufferAttribute, InstancedBufferGeometry,
-  Matrix4, Mesh, MeshStandardNodeMaterial,
+  BufferGeometry, Frustum, Group, IndirectStorageBufferAttribute,
+  Matrix4, Mesh, MeshStandardNodeMaterial, PerspectiveCamera, Scene,
   StorageBufferAttribute, Vector2, Vector3, Vector4, WebGPUCoordinateSystem,
 } from 'three/webgpu'
-import type { DepthTexture, OrthographicCamera, PerspectiveCamera, WebGPURenderer } from 'three/webgpu'
+import type { DepthTexture, OrthographicCamera, WebGPURenderer } from 'three/webgpu'
 import {
   Fn, If, Loop, bool, ceil, clamp, float,
   floor, instanceIndex, log2, max, min, mix, output, storage,
@@ -27,6 +27,7 @@ export interface MeshletSceneOptions {
   fallbackDistance?: number
   shadowLayer?: number
   shadowPixelError?: number
+  triangleBudget?: number
 }
 
 export interface MeshletStats {
@@ -53,11 +54,24 @@ export interface MeshletStats {
   totalTriangles: number
   materialBatches: number
   shadowPasses: number
+  triangleBudget: number
+  viewTriangleBudget: number
+  shadowTriangleBudget: number
+  indexPoolBytes: number
+  requestedTriangles: number
+  indexOverflows: number
+  indexOverflowCount: number
+  effectivePixelError: number
+  shadowRequestedTriangles: number
+  shadowIndexOverflows: number
+  shadowIndexOverflowCount: number
+  effectiveShadowPixelError: number
 }
 
 export class MeshletScene {
   readonly object = new Group()
-  readonly meshes: Mesh<InstancedBufferGeometry, MeshStandardNodeMaterial>[] = []
+  readonly meshes: Mesh<BufferGeometry, MeshStandardNodeMaterial>[] = []
+  readonly triangleBudget: number
   readonly totalTriangles: number
   readonly candidateClusters: number
   readonly residentGeometryBytes: number
@@ -104,6 +118,12 @@ export class MeshletScene {
     const packed = await packScene(renderer, entries)
     const scene = new MeshletScene(packed, options)
     try {
+      const camera = new PerspectiveCamera()
+      camera.layers.enableAll()
+      const warmup = new Scene()
+      warmup.add(scene.object)
+      await renderer.compileAsync(warmup, camera)
+      warmup.remove(scene.object)
       await uploadAttributes(renderer, scene.uploadBuffers)
       await scene.traversal.upload(renderer)
       await scene.shadows.upload(renderer)
@@ -117,6 +137,9 @@ export class MeshletScene {
   private constructor(packed: PackedMeshletScene, options: MeshletSceneOptions) {
     this.object.name = 'Cluster scene'
     this.pixelError = options.pixelError ?? 2
+    this.triangleBudget = options.triangleBudget ?? 16_000_000
+    if (!Number.isSafeInteger(this.triangleBudget) || this.triangleBudget < 2 || this.triangleBudget % 2) throw new Error('Geometry triangle budget must be a positive even integer')
+    const streamBudget = this.triangleBudget / 2
     this.occlusionEnabled = options.occlusion ?? true
     this.candidateClusters = packed.candidateCount
     this.totalTriangles = packed.totalTriangles
@@ -127,7 +150,7 @@ export class MeshletScene {
     this.shadowLayer = options.shadowLayer ?? 31
     this.shadowPixelError = options.shadowPixelError ?? 1
     this.hierarchyDepth = packed.hierarchyDepth
-    this.shadows = new ClusterShadows(packed, this.world, this.worldScale, this.shadowLayer)
+    this.shadows = new ClusterShadows(packed, this.world, this.worldScale, this.shadowLayer, streamBudget)
     this.object.add(this.shadows.object)
     const pyramidSize = options.occlusionSize ?? 512
     if (pyramidSize < 32 || pyramidSize > 2048 || (pyramidSize & (pyramidSize - 1)) !== 0) {
@@ -179,14 +202,15 @@ export class MeshletScene {
     this.traversal = new ClusterTraversal(packed, this.world, this.worldScale, this.frustumPlanes, projectedError,
       this.threshold, this.lodEnabled, this.fallbackReach, this.eye,
       sphere => this.history.greaterThan(0).and(isOccluded(sphere, this.previousView, this.previousProjection, this.previousNear)),
-      sphere => isOccluded(sphere, this.currentView, this.currentProjection, this.currentNear))
+      sphere => isOccluded(sphere, this.currentView, this.currentProjection, this.currentNear),
+      streamBudget, float(Math.max(packed.maximumError, 0.000001) * 1.001).mul(this.worldScale).mul(this.projectionScale).div(0.000001))
     this.counters = this.traversal.counters
     this.residentBytes = packed.residentBytes + this.traversal.residentBytes + this.shadows.residentBytes + pyramidAttribute.array.byteLength
     const pulled = clusterVertex(packed, this.traversal.visible, this.debug)
     const materials = new Map<PackedMeshletScene['batches'][number]['material'], MeshStandardNodeMaterial>()
     for (let batchIndex = 0; batchIndex < packed.batches.length; batchIndex++) {
       const batch = packed.batches[batchIndex]!
-      const geometry = clusterGeometry(batch.triangles, batch.capacity, this.counters, batchIndex)
+      const geometry = clusterGeometry(this.traversal.indices.indices, this.counters, batchIndex)
       let material = materials.get(batch.material)
       if (!material) {
         material = createGeometryMaterial(batch.material)
@@ -320,7 +344,17 @@ export class MeshletScene {
     if (values[20]) throw new Error(`Geometry selection budget exhausted: ${values[20]} queue or visible records exceeded capacity`)
     const selectionTimings = timings ? Object.entries(timings).filter(([name]) => name.startsWith('Compute \u00b7 View ')) : []
     const selectionMs = selectionTimings.length ? selectionTimings.reduce((sum, [, value]) => sum + value, 0) : null
+    const [indices, shadows] = await Promise.all([
+      this.traversal.indices.readStats(values),
+      this.shadows.readStats(renderer),
+    ])
     return {
+      triangleBudget: this.triangleBudget, indexPoolBytes: this.triangleBudget * 12,
+      viewTriangleBudget: indices.triangleBudget, shadowTriangleBudget: shadows.triangleBudget,
+      requestedTriangles: indices.requestedTriangles, indexOverflows: indices.indexOverflows, indexOverflowCount: indices.indexOverflowCount,
+      effectivePixelError: indices.effectivePixelError,
+      shadowRequestedTriangles: shadows.requestedTriangles, shadowIndexOverflows: shadows.indexOverflows,
+      shadowIndexOverflowCount: shadows.indexOverflowCount, effectiveShadowPixelError: shadows.effectivePixelError,
       instancesTested: values[13]!, instancesFrustumCulled: values[14]!, instancesPreviousOccluded: values[15]!, instancesOccluded: values[16]!, instancesRecovered: values[17]!,
       nodesVisited: values[18]!, clustersVisited: values[19]!, selectionMs, residentBytes: this.residentBytes,
       candidateClusters: this.candidateClusters,
