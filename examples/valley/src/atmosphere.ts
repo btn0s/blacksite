@@ -9,11 +9,12 @@ const GOLDEN_HOUR: Atmosphere = {
   physical: NATURE.physical && {
     ...NATURE.physical,
     rayleigh: 1.1,
-    mie: 9,
+    mieScattering: 9 * 3.996e-3,
+    mieAbsorption: 9 * 0.404e-3,
     aerial: 5,
     sky: 1.15,
     clear: 70,
-    heightFog: { density: 0.0008, base: 110, falloff: 90, tint: [0.68, 0.78, 0.94] },
+    heightFog: { extinction: 0.0008, base: 110, scaleHeight: 90, albedo: [0.68, 0.78, 0.94], phase: 0.55, emissive: [0, 0, 0] },
     clouds: NATURE.physical.clouds && { ...NATURE.physical.clouds, coverage: 0.5, density: 1.15 },
   },
 }

@@ -38,10 +38,12 @@ export interface GradeSpec {
 }
 
 export interface HeightFogSpec {
-  readonly density: number;
+  readonly extinction: number;
   readonly base: number;
-  readonly falloff: number;
-  readonly tint: Rgb;
+  readonly scaleHeight: number;
+  readonly albedo: Rgb;
+  readonly phase: number;
+  readonly emissive: Rgb;
 }
 
 export interface CloudSpec {
@@ -54,9 +56,11 @@ export interface CloudSpec {
 
 export interface PhysicalSkySpec {
   readonly rayleigh: number;
-  readonly mie: number;
+  readonly mieScattering: number;
+  readonly mieAbsorption: number;
   readonly mieAnisotropy: number;
   readonly ozone: number;
+  readonly groundAlbedo: number;
   readonly illuminance: number;
   readonly elevation: number;
   readonly aerial: number;

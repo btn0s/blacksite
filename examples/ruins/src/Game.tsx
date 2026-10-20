@@ -23,7 +23,6 @@ import { RuinsCollision, type RegionalCollision } from './collision'
 import { scanEnvironment } from '../../shared/scan-environment'
 import { ruinsViews, createRuinsCameras, type RuinsView } from './views'
 
-const cameraGrade = { contrast: 1, toe: 0 }
 const shadowLayers = [2]
 const glyphs = { home: { label: 'Spawn', keyboard: 'R', touch: 'Home', gamepad: { xbox: 'View', playstation: 'Create', generic: 'Back' } } }
 const lodLegend = [{ color: '#ffc1aa', label: 'Source · 0' }, { color: '#adc4ef', label: 'Level 1' }, { color: '#e3ffa3', label: 'Level 2' }]
@@ -47,7 +46,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   const [collisionReady, setCollisionReady] = useState(false)
   const onCollisionReady = useCallback(() => setCollisionReady(true), [])
   const [error, setError] = useState<Error | null>(null)
-  const { atmosphere, sunlight } = useMemo(() => scanEnvironment(owned.environment.components), [owned])
+  const { atmosphere, sunlight, film } = useMemo(() => scanEnvironment(owned.environment.components), [owned])
   const home = owned.home
   const stats = useMemo(() => ({ sceneTriangles: 0, drawnTriangles: 0 }), [])
   const onLook = useCallback((value: Look | null) => { shared.look.current = value; shared.warm.current = 0; setLook(value) }, [shared])
@@ -127,7 +126,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   } }), [geometry, home, onError, shared, walker])
   if (error) throw error
   return <>
-    <WebGPULook atmosphere={atmosphere} sunlight={sunlight} camera={cameraGrade} quality="high" shadowDistance={80} shadowMap={2048} shadowLayers={shadowLayers} onReady={onLook} onError={onError} />
+    <WebGPULook atmosphere={atmosphere} sunlight={sunlight} film={film} quality="high" shadowDistance={80} shadowMap={2048} shadowLayers={shadowLayers} onReady={onLook} onError={onError} />
     <Physics gravity={[0, -9.8, 0]} paused timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <AlsPhysicsStepper />
       {collisionReady && createPortal(<CharacterController controller={walker} events={events} />, scene, { camera: gameplayCamera })}

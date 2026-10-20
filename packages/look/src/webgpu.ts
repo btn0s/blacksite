@@ -1,6 +1,6 @@
-import { Color, InspectorBase, Lighting, NeutralToneMapping, NoToneMapping, PCFShadowMap, RenderPipeline, Vector2, Vector3 } from 'three/webgpu'
+import { Color, FloatType, InspectorBase, Lighting, NearestFilter, NeutralToneMapping, NoToneMapping, NodeMaterial, PCFShadowMap, QuadMesh, RenderPipeline, RenderTarget, Vector2, Vector3 } from 'three/webgpu'
 import type { Camera, DepthTexture, Node, Object3D, OrthographicCamera, RenderTarget, Scene, WebGPURenderer } from 'three/webgpu'
-import { builtinAOContext, context, faceDirection, float, luminance, mix, mrt, normalViewGeometry, output, packNormalToRGB, pass, renderGroup, renderOutput, sample, screenUV, texture3D, uniform, uv, vec3, vec4, velocity } from 'three/tsl'
+import { builtinAOContext, context, faceDirection, float, log2, luminance, mix, mrt, normalViewGeometry, output, packNormalToRGB, pass, renderGroup, renderOutput, sample, screenUV, texture3D, uniform, uv, vec2, vec3, vec4, velocity } from 'three/tsl'
 import { SunLight } from 'three/addons/lights/SunLight.js'
 import { SunLightNode } from 'three/addons/lights/SunLightNode.js'
 import { LightProbeGrid } from 'three/addons/lighting/LightProbeGrid.js'
@@ -19,6 +19,10 @@ import { type QualityTier } from './quality'
 import { createWebGPUAtmosphere } from './webgpu-physical'
 import { sunPenumbra } from './sun-penumbra'
 import { StaggeredSunShadowNode } from './sun-cascades'
+import { createFilm, type FilmOptions } from './film'
+import { EyeAdaptation } from './exposure'
+
+const METER = [64, 36] as const
 
 export interface WebGPULookOptions {
   readonly atmosphere?: Atmosphere | PresetName
@@ -26,7 +30,8 @@ export interface WebGPULookOptions {
   readonly shadowDistance?: number
   readonly shadowMap?: number
   readonly shadowLayers?: readonly number[]
-  readonly sunlight?: { readonly sunLux: number; readonly skyLux: number; readonly ev100: number; readonly sunSize?: number }
+  readonly sunlight?: { readonly sunLux: number; readonly skyLux?: number; readonly ev100: number; readonly sunSize?: number }
+  readonly film?: FilmOptions
   readonly camera?: { readonly temperature?: number; readonly tint?: number; readonly contrast?: number; readonly toe?: number; readonly shoulder?: number; readonly lensSoftness?: number }
 }
 
@@ -153,7 +158,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   scene.background = null
   scene.backgroundNode = atmosphereGPU.backgroundNode
   scene.environment = atmosphereGPU.environment.texture
-  const skyScale = sunlight.skyLux * exposure / atmosphereGPU.irradiance
+  const skyScale = (sunlight.skyLux === undefined ? sunlight.sunLux / atmosphere.physical!.illuminance : sunlight.skyLux / atmosphereGPU.irradiance) * exposure
   scene.environmentIntensity = skyScale
   scene.backgroundIntensity = skyScale
   scene.fog = null
@@ -205,22 +210,39 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     color = vec4(color.rgb.add(glow.rgb), color.a)
   }
   const cameraGrade = options.camera ?? {}
+  const film = options.film ? createFilm(options.film) : null
   if (quality !== 'low' && (cameraGrade.lensSoftness ?? 0) > 0) {
     const soft = gaussianBlur(color, null, 3)
     disposables.push(soft)
     color = mix(color, soft, float(1).sub(circle(float(1.5), float(0.75), uv())).mul(cameraGrade.lensSoftness ?? 0))
   }
-  const temperature = cameraGrade.temperature ?? 0
-  const tint = cameraGrade.tint ?? 0
-  const balance = new Vector3(1 + 0.25 * temperature, 1 + 0.12 * tint, 1 - 0.25 * temperature)
-  balance.multiplyScalar(1 / (0.2126 * balance.x + 0.7152 * balance.y + 0.0722 * balance.z))
-  const balanced = color.rgb.mul(uniform(balance).setGroup(renderGroup)).mul(atmosphere.exposure)
-  const saturated = mix(vec3(luminance(balanced)), balanced, atmosphere.grade.saturation ?? 1)
-  const display = renderOutput(vec4(saturated, 1)).rgb
-  const rolled = display.sub(display.pow(3).mul(cameraGrade.shoulder ?? 0))
-  const toe = cameraGrade.toe ?? 0
-  const lifted = rolled.mul(1 - toe).add(toe)
-  const shaped = lifted.sub(0.5).mul(cameraGrade.contrast ?? 1).add(0.5).clamp(0, 1)
+  const adaptation = film ? new EyeAdaptation(film.exposure, 2 ** sunlight.ev100) : null
+  const filmScale = uniform(adaptation ? adaptation.scale / exposure : 1).setGroup(renderGroup)
+  const meter = film ? (() => {
+    const target = new RenderTarget(METER[0], METER[1], { type: FloatType, depthBuffer: false, minFilter: NearestFilter, magFilter: NearestFilter, generateMipmaps: false })
+    target.texture.name = 'Exposure metering'
+    const jitter = uniform(new Vector2()).setGroup(renderGroup)
+    const material = new NodeMaterial({ depthTest: false, depthWrite: false })
+    const sampled = resolved.getTextureNode().sample(screenUV.add(jitter.sub(0.5).div(vec2(METER[0], METER[1])))).rgb
+    material.fragmentNode = vec4(log2(sampled.dot(vec3(1 / 3)).div(exposure).max(2 ** film.exposure.histogram[0])), 0, 0, 1)
+    timings.labelTarget(target, 'Exposure metering')
+    return { target, jitter, material, quad: new QuadMesh(material) }
+  })() : null
+  let shaped: Node<'vec3'>
+  if (film) shaped = renderOutput(vec4(film.output(color.rgb, filmScale), 1), NoToneMapping).rgb
+  else {
+    const temperature = cameraGrade.temperature ?? 0
+    const tint = cameraGrade.tint ?? 0
+    const balance = new Vector3(1 + 0.25 * temperature, 1 + 0.12 * tint, 1 - 0.25 * temperature)
+    balance.multiplyScalar(1 / (0.2126 * balance.x + 0.7152 * balance.y + 0.0722 * balance.z))
+    const balanced = color.rgb.mul(uniform(balance).setGroup(renderGroup)).mul(atmosphere.exposure)
+    const saturated = mix(vec3(luminance(balanced)), balanced, atmosphere.grade.saturation ?? 1)
+    const display = renderOutput(vec4(saturated, 1)).rgb
+    const rolled = display.sub(display.pow(3).mul(cameraGrade.shoulder ?? 0))
+    const toe = cameraGrade.toe ?? 0
+    const lifted = rolled.mul(1 - toe).add(toe)
+    shaped = lifted.sub(0.5).mul(cameraGrade.contrast ?? 1).add(0.5).clamp(0, 1)
+  }
   let graded: Node<'vec4'> = vec4(shaped, 1)
   if (atmosphere.grade.lut) {
     const lut = await loadLut(atmosphere.grade.lut)
@@ -298,6 +320,8 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     }
   }
   let disposed = false
+  let metering = false
+  let meterTime = performance.now()
   return {
     sun,
     pipeline,
@@ -349,6 +373,20 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
       updateCamera()
       atmosphereGPU.tick(dt)
       pipeline.render()
+      if (meter && adaptation && !metering) {
+        metering = true
+        meter.jitter.value.set(Math.random(), Math.random())
+        const previous = renderer.getRenderTarget()
+        renderer.setRenderTarget(meter.target)
+        meter.quad.render(renderer)
+        renderer.setRenderTarget(previous)
+        void renderer.readRenderTargetPixelsAsync(meter.target, 0, 0, METER[0], METER[1]).then(data => {
+          const now = performance.now()
+          adaptation.update(data as Float32Array, 4, Math.min((now - meterTime) / 1000, 0.25))
+          meterTime = now
+          filmScale.value = adaptation.scale / exposure
+        }).catch(() => {}).finally(() => { metering = false })
+      }
       timings.resolve(renderer)
     },
     setSize(width, height) {
@@ -389,6 +427,8 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
       pipeline.dispose()
       for (const resource of disposables) resource.dispose()
       atmosphereGPU.dispose()
+      meter?.target.dispose()
+      meter?.material.dispose()
       sun.removeFromParent()
       sun.dispose()
       scene.background = previous.background
