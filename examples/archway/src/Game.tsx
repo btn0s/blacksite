@@ -1,7 +1,7 @@
 import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Canvas, createPortal, useFrame, useThree } from '@react-three/fiber'
 import { Physics, useRapier } from '@react-three/rapier'
-import { PerspectiveCamera, Vector3 } from 'three'
+import { Box3, Matrix4, PerspectiveCamera, Vector3 } from 'three'
 import { WebGPURenderer } from 'three/webgpu'
 import { InputProvider, makeInputDevices } from '@blacksite/input'
 import { BODY_LAYER, CharacterController, CharacterOverlay, CharacterPause, useCharacterStatus, useLocalSession, type CharacterEvents, type CharacterHandle } from '@blacksite/subject'
@@ -17,7 +17,7 @@ import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { createWalker } from '../../valley/src/walker'
 import { outfit } from '../../valley/src/outfit'
 import { SceneInspection, type InspectionContent, type TelemetryAction } from '../../shared/Inspection'
-import { residentScanTextures } from '../../shared/scan-material'
+import { createScanMaterialStreaming, residentScanTextures } from '../../shared/scan-material'
 import { loadArchway, type ArchwayAsset } from './asset'
 import { courtyardEnvironment } from './environment'
 import { archwayViews, createArchwayCameras, createArchwayHome, type ArchwayView } from './views'
@@ -53,6 +53,11 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
 }) {
   const { gl, camera, scene } = useThree()
   const renderer = gl as unknown as WebGPURenderer
+  const textures = useMemo(() => createScanMaterialStreaming(renderer, owned.manifest.placements.filter(placement => placement.visible).map(placement => {
+    const bounds = owned.manifest.geometries[placement.geometry]!.metadata.bounds
+    return { materials: placement.materials, bounds: new Box3(new Vector3(...bounds.min), new Vector3(...bounds.max)).applyMatrix4(new Matrix4().fromArray(placement.matrix)) }
+  })), [owned, renderer])
+  useEffect(() => () => textures.dispose(), [textures])
   const home = useMemo(() => createArchwayHome(owned.manifest.centre), [owned])
   const [look, setLook] = useState<Look | null>(null)
   const [collidersReady, setCollidersReady] = useState(false)
@@ -91,8 +96,9 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     ]
     return () => { for (const dispose of remove) dispose() }
   }, [geometry, look])
-  useFrame(() => {
+  useFrame(({ size }) => {
     if (!look) return
+    if (shared.warm.current >= 10) textures.update(camera, size.height * renderer.getPixelRatio())
     if (collidersReady) {
       shared.warm.current++
       if (shared.warm.current === 10) onReady()

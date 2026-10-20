@@ -16,6 +16,7 @@ import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { createWalker } from '../../valley/src/walker'
 import { outfit } from '../../valley/src/outfit'
 import { SceneInspection, type InspectionContent, type TelemetryAction } from '../../shared/Inspection'
+import { createScanMaterialStreaming, residentScanTextures } from '../../shared/scan-material'
 import { loadRuins, type RuinsAsset } from './asset'
 import { RuinsCollision } from './collision'
 import { levelAtmosphere } from './environment'
@@ -39,6 +40,8 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
 }) {
   const { gl, camera, scene } = useThree()
   const renderer = gl as unknown as WebGPURenderer
+  const textures = useMemo(() => createScanMaterialStreaming(renderer, owned.placements.map((placement, index) => ({ materials: owned.manifest.instances[index]!.materials, bounds: placement.bounds }))), [owned, renderer])
+  useEffect(() => () => textures.dispose(), [textures])
   const [look, setLook] = useState<Look | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const { atmosphere, sunlight } = useMemo(() => levelAtmosphere(owned.environment), [owned])
@@ -57,8 +60,9 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
       { id: 'meshlet-debug', label: 'Meshlet colours', enabled: false, setEnabled: enabled => geometry.setDebugView(enabled ? 'meshlets' : inspector.getSnapshot().view === 'lod' ? 'lod' : 'normal') },
     ],
     setView: view => { geometry.setDebugView(view === 'lod' ? 'lod' : 'normal'); shared.look.current?.setDebug(view === 'lod') },
+    textures: () => residentScanTextures(renderer),
     details: () => ({ placements: owned.placements.length, minimumWorldError: owned.manifest.minimumWorldError, residentTriangles: owned.manifest.residentTriangles, sourceTriangles: owned.manifest.sourceTriangles, ...stats }),
-  }), [geometry, inspector, owned, shared, stats])
+  }), [geometry, inspector, owned, renderer, shared, stats])
   useEffect(() => {
     shared.geometry.current = geometry
     scene.add(geometry.object)
@@ -74,8 +78,9 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     ]
     return () => { for (const dispose of remove) dispose() }
   }, [geometry, look])
-  useFrame(() => {
+  useFrame(({ size }) => {
     if (!look) return
+    if (shared.warm.current >= 10) textures.update(camera, size.height * renderer.getPixelRatio())
     shared.warm.current++
     if (shared.warm.current === 10) onReady()
   }, 0.5)

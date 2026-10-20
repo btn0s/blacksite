@@ -7,6 +7,21 @@ import { FloatType } from 'three'
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js'
 import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
+import { read, write } from 'three/addons/libs/ktx-parse.module.js'
+
+async function textureLevels(output, file) {
+  const image = read(await readFile(join(output, file)))
+  let levels = 0
+  while (Math.max(image.pixelWidth >> levels, image.pixelHeight >> levels) > 2048) levels++
+  if (!levels) return { file }
+  const baseline = file.replace(/\.ktx2$/, '.2k.ktx2')
+  image.pixelWidth = Math.max(1, image.pixelWidth >> levels)
+  image.pixelHeight = Math.max(1, image.pixelHeight >> levels)
+  image.levels = image.levels.slice(levels)
+  image.levelCount = image.levels.length
+  await writeFile(join(output, baseline), write(image))
+  return { file: baseline, detailFile: file }
+}
 
 export async function buildScanMaterials(sourceFile, output) {
   const source = JSON.parse(await readFile(sourceFile, 'utf8'))
@@ -22,6 +37,10 @@ export async function buildScanMaterials(sourceFile, output) {
       if (!imageSource?.file || typeof imageSource.srgb !== 'boolean') throw new Error(`Missing image metadata for ${surface.path}: ${name}`)
       const file = resolve(dirname(sourceFile), imageSource.file)
       const identity = `${file}:${imageSource.srgb}:${name === 'Normal'}:uastc2`
+      if (images.has(identity)) {
+        maps[name] = { ...images.get(identity), srgb: imageSource.srgb }
+        continue
+      }
       const destination = `${createHash('sha256').update(identity).digest('hex').slice(0, 16)}.ktx2`
       const exists = await access(join(output, destination)).then(() => true, () => false)
       let imageBytes
@@ -52,8 +71,9 @@ export async function buildScanMaterials(sourceFile, output) {
           await rm(work, { recursive: true, force: true })
         }
       }
-      images.set(identity, destination)
-      maps[name] = { file: destination, srgb: imageSource.srgb }
+      const levels = await textureLevels(output, destination)
+      images.set(identity, levels)
+      maps[name] = { ...levels, srgb: imageSource.srgb }
     }
     surfaces.push({ family: surface.family, path: surface.path, parameters: surface.parameters, channels: surface.channels, maps })
   }
