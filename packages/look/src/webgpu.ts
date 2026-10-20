@@ -127,7 +127,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, c
   sun.shadow.normalBias = 0.03
   sun.shadow.bias = -0.0002
   const sunAngle = uniform((sunlight.sunSize ?? 0.53) * Math.PI / 180)
-  sun.shadow.filterNode = sunPenumbra(sun, sunAngle, quality === 'low' ? 8 : 16, quality === 'low' ? 12 : 24)
+  sun.shadow.filterNode = sunPenumbra(sun, sunAngle, 8, 12)
   scene.add(sun)
   const atmosphereGPU = await createWebGPUAtmosphere(renderer, atmosphere, quality)
   scene.background = null
