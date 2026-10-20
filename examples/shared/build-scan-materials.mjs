@@ -56,7 +56,7 @@ export async function buildScanMaterials(sourceFile, output, textureDirectory = 
   const surfaces = []
   const images = new Map()
   for (const surface of source.surfaces) {
-    if (!['custom-general', 'smart-layers', 'simple-orm', 'candle', 'foliage', 'generic-props', 'cutout', 'vertex-blend', 'solid', 'world-grid', 'steel', 'emissive'].includes(surface.family)) throw new Error(`Unsupported material family: ${surface.family}`)
+    if (!['custom-general', 'smart-layers', 'simple-orm', 'candle', 'foliage', 'generic-props', 'cutout', 'vertex-blend', 'solid', 'world-grid', 'steel', 'emissive', 'flame'].includes(surface.family)) throw new Error(`Unsupported material family: ${surface.family}`)
     const maps = {}
     for (const [name, imageSource] of Object.entries(surface.maps)) {
       if (!imageSource?.file || typeof imageSource.srgb !== 'boolean') throw new Error(`Missing image metadata for ${surface.path}: ${name}`)

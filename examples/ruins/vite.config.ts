@@ -18,7 +18,7 @@ export default defineConfig({
     },
     dedupe: ['react', 'react-dom', 'three', '@react-three/fiber', '@react-three/rapier', '@dimforge/rapier3d-compat'],
   },
-  plugins: [react(), tsconfigPaths({ root }), blacksiteAssets({ blacksiteRoot: root }), ownedAssets(resolve(root, '../owned-assets')), sceneTelemetry(resolve(root, 'artifacts/ruins'))],
+  plugins: [react(), tsconfigPaths({ root }), blacksiteAssets({ blacksiteRoot: root }), ownedAssets(process.env.BLACKSITE_OWNED_ASSETS ?? resolve(root, '../owned-assets')), sceneTelemetry(resolve(root, 'artifacts/ruins'))],
   server: { port: 5248, strictPort: true, host: '0.0.0.0', allowedHosts: true, fs: { allow: [root] } },
   optimizeDeps: { entries: ['index.html'], include: ['@react-three/rapier > @dimforge/rapier3d-compat'] },
 })
