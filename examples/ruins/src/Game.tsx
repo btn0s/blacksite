@@ -12,15 +12,16 @@ import { WebGPULook } from '@blacksite/look/webgpu-r3f'
 import type { WebGPULook as Look } from '@blacksite/look/webgpu'
 import { Loading, TitleCard } from '@blacksite/ui/hud'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
+import { AlsPhysicsStepper } from 'als-ue5-r3f/app/AlsPhysicsStepper'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { createWalker } from '../../valley/src/walker'
 import { outfit } from '../../valley/src/outfit'
 import { SceneInspection, type InspectionContent, type TelemetryAction } from '../../shared/Inspection'
 import { createScanMaterialStreaming, residentScanTextures } from '../../shared/scan-material'
 import { loadRuins, type RuinsAsset } from './asset'
-import { RuinsCollision } from './collision'
+import { RuinsCollision, type RegionalCollision } from './collision'
 import { levelAtmosphere } from './environment'
-import { ruinsViews, createRuinsCameras, type RuinsView } from './views'
+import { archwayViews as ruinsViews, createArchwayCameras, type ArchwayView as RuinsView } from '../../archway/src/views'
 
 const cameraGrade = { contrast: 1, toe: 0 }
 const shadowLayers = [2]
@@ -36,13 +37,15 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   gameplayCamera: PerspectiveCamera
   inspector: ReturnType<typeof createInspector>
   telemetry: TelemetryAction
-  shared: { look: { current: Look | null }; warm: { current: number }; geometry: { current: MeshletScene | null } }
+  shared: { look: { current: Look | null }; warm: { current: number }; geometry: { current: MeshletScene | null }; collision: { current: RegionalCollision | null } }
 }) {
   const { gl, camera, scene } = useThree()
   const renderer = gl as unknown as WebGPURenderer
   const textures = useMemo(() => createScanMaterialStreaming(renderer), [renderer])
   useEffect(() => () => textures.dispose(), [textures])
   const [look, setLook] = useState<Look | null>(null)
+  const [collisionReady, setCollisionReady] = useState(false)
+  const onCollisionReady = useCallback(() => setCollisionReady(true), [])
   const [error, setError] = useState<Error | null>(null)
   const { atmosphere, sunlight } = useMemo(() => levelAtmosphere(owned.environment), [owned])
   const home = owned.home
@@ -61,10 +64,11 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     ],
     setView: view => { geometry.setDebugView(view === 'lod' ? 'lod' : 'normal'); shared.look.current?.setDebug(view === 'lod') },
     textures: () => residentScanTextures(renderer),
-    details: () => ({ placements: owned.placements.length, minimumWorldError: owned.manifest.minimumWorldError, residentTriangles: owned.manifest.residentTriangles, sourceTriangles: owned.manifest.sourceTriangles, ...stats }),
-  }), [geometry, inspector, owned, renderer, shared, stats])
+    details: () => ({ placements: owned.placements.length, minimumWorldError: owned.manifest.minimumWorldError, sourceTriangles: owned.sourceTriangles, untranslated: owned.manifest.untranslated, excluded: owned.manifest.excluded, geometryPaging: geometry.pagingStats(), textureStreaming: textures.snapshot(), regionalCollision: shared.collision.current?.stats(), ...stats }),
+  }), [geometry, inspector, owned, renderer, shared, stats, textures])
   useEffect(() => {
     shared.geometry.current = geometry
+    geometry.object.visible = false
     scene.add(geometry.object)
     return () => { shared.geometry.current = null; scene.remove(geometry.object); geometry.dispose() }
   }, [geometry, scene, shared])
@@ -73,20 +77,40 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     if (!look) return
     const remove = [
       look.onBeforeDepth((gl, camera, size) => geometry.prepare(gl, camera as PerspectiveCamera, size)),
+      look.onBeforeLit(() => geometry.prepareLit()),
       look.onAfterDepth((gl, _camera, depth) => geometry.recover(gl, depth)),
       look.onBeforeShadow((gl, camera, size, cascade) => geometry.prepareShadow(gl, camera, size, cascade)),
     ]
     return () => { for (const dispose of remove) dispose() }
-  }, [geometry, look])
+  }, [geometry, look, shared])
   useFrame(() => {
     if (!look) return
     const deadline = performance.now() + 0.5
     const uploaded = shared.warm.current >= 10 ? textures.update(deadline) : 0
     geometry.update(renderer, deadline, 8 * 1048576 - uploaded)
-    shared.warm.current++
-    if (shared.warm.current === 10) onReady()
   }, 0.5)
   useFrame(() => { if (look) geometry.endFrame(renderer) }, 2)
+  useEffect(() => {
+    if (!look || !collisionReady) return
+    let active = true
+    void (async () => {
+      performance.mark('ruins-character-start')
+      while (active && !walker.als.pose.current.ready) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+      if (!active) return
+      performance.measure('ruins-character', 'ruins-character-start')
+      geometry.object.visible = true
+      performance.mark('ruins-warmup-start')
+      await look.compile((gl, camera, scene, pass) => geometry.compile(gl, camera, scene, pass), [geometry.object])
+      await geometry.completeFrame(renderer)
+      if (!active) return
+      performance.measure('ruins-warmup', 'ruins-warmup-start')
+      performance.mark('ruins-first-playable')
+      shared.warm.current = 10
+      onReady()
+    })().catch(error => { if (active) onError(error) })
+    return () => { active = false }
+  }, [collisionReady, geometry, look, onError, onReady, renderer, shared, walker])
   useEffect(() => {
     let pending = false
     const interval = setInterval(() => {
@@ -97,14 +121,15 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     return () => clearInterval(interval)
   }, [geometry, onError, renderer, shared, stats])
   const events = useMemo<CharacterEvents>(() => ({ onAction: action => {
-    if (action === 'home') { walker.respawn(undefined, [...home.position]); walker.face(new Vector3(...home.target)); geometry.resetHistory() }
-  } }), [geometry, walker])
+    if (action === 'home') void shared.collision.current?.prepare(new Vector3(...home.position)).then(() => { walker.respawn(undefined, [...home.position]); walker.face(new Vector3(...home.target)); geometry.resetHistory() }).catch(onError)
+  } }), [geometry, home, onError, shared, walker])
   if (error) throw error
   return <>
     <WebGPULook atmosphere={atmosphere} sunlight={sunlight} camera={cameraGrade} quality="high" shadowDistance={80} shadowMap={2048} shadowLayers={shadowLayers} onReady={onLook} onError={onError} />
-    <Physics gravity={[0, -9.8, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
-      {createPortal(<CharacterController controller={walker} events={events} />, scene, { camera: gameplayCamera })}
-      <RuinsCollision owned={owned} walker={walker} />
+    <Physics gravity={[0, -9.8, 0]} paused timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
+      <AlsPhysicsStepper />
+      {collisionReady && createPortal(<CharacterController controller={walker} events={events} />, scene, { camera: gameplayCamera })}
+      <RuinsCollision directory={owned.collision} root={owned.collisionRoot} walker={walker} onReady={onCollisionReady} onError={onError} handle={shared.collision} />
     </Physics>
     <SceneInspection name="ruins" look={shared.look} warm={shared.warm} walker={walker} inspector={inspector} telemetry={telemetry} content={content} />
   </>
@@ -115,7 +140,7 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
   const [selection, setSelection] = useState<MeshletStats | null>(null)
   const home = owned.home
   const walker = useMemo(() => createWalker(home, runtime), [home, runtime])
-  const cameras = useMemo(() => createRuinsCameras(owned.bounds), [owned])
+  const cameras = useMemo(() => createArchwayCameras(owned.manifest.centre), [owned])
   const [view, setView] = useState<RuinsView>(() => {
     const requested = new URLSearchParams(location.search).get('view')
     return requested === 'wide' || requested === 'close' ? requested : 'walk'
@@ -133,7 +158,7 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
   }
   const status = useCharacterStatus(walker)
   const session = useLocalSession(walker)
-  const shared = useMemo(() => ({ look: { current: null as Look | null }, warm: { current: 0 }, geometry: { current: null as MeshletScene | null } }), [])
+  const shared = useMemo(() => ({ look: { current: null as Look | null }, warm: { current: 0 }, geometry: { current: null as MeshletScene | null }, collision: { current: null as RegionalCollision | null } }), [])
   const inspector = useMemo(() => createInspector({ renderer: 'WebGPU', tier: 'high', windowFrames: 600, onViewChange: view => { shared.geometry.current?.setDebugView(view === 'lod' ? 'lod' : 'normal'); shared.look.current?.setDebug(view === 'lod') } }), [shared])
   const [dumpStatus, setDumpStatus] = useState<'idle' | 'sending' | 'saved' | 'error'>('idle')
   const telemetry = useMemo<TelemetryAction>(() => ({ current: null, status: setDumpStatus }), [])
@@ -161,7 +186,7 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
     </section>
     <InspectHud inspector={inspector} lodLegend={lodLegend} dump={{ onDump: () => { void telemetry.current?.() }, status: dumpStatus, message: `${owned.placements.length.toLocaleString()} placements | ${(owned.manifest.minimumWorldError * 100).toFixed(0)} cm resident error` }} />
     <CharacterOverlay controller={walker} visible={view === 'walk'} glyphs={glyphs} hints={['move', 'sprint', 'jump', 'roll', 'home']} prompt="Click to look around · T saves telemetry" buttons={[{ id: 'jump', label: 'Jump' }, { id: 'roll', label: 'Roll' }, { id: 'crouch', label: 'Crouch' }, { id: 'home', label: 'Home' }]} />
-    {status.paused && view === 'walk' && <CharacterPause controller={walker} items={[{ id: 'home', label: 'Return to the archway', onPress: () => { walker.respawn(undefined, [...home.position]); walker.face(new Vector3(...home.target)) } }]} />}
+    {status.paused && view === 'walk' && <CharacterPause controller={walker} items={[{ id: 'home', label: 'Return to the archway', onPress: () => { walker.setPaused(false); void shared.collision.current?.prepare(new Vector3(...home.position)).then(() => { walker.respawn(undefined, [...home.position]); walker.face(new Vector3(...home.target)) }) } }]} />}
   </>
 }
 

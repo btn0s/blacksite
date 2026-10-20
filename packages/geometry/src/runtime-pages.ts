@@ -93,7 +93,7 @@ export class GeometryPageArena {
       const initialize = Fn(() => { node.element(0).assign(node.element(0)) })().compute(1)
       try { await renderer.compileComputeAsync(initialize) } finally { initialize.dispose() }
     }
-    for (const node of [this.copy, this.density, this.publish]) if (node) await renderer.compileComputeAsync(node)
+    await Promise.all([this.copy, this.density, this.publish].filter((node): node is ComputeNode => node !== null).map(node => renderer.compileComputeAsync(node)))
     await Promise.all(this.residency.decoders.map(worker => worker.decoder.ready))
     const target = new ReadbackBuffer(16)
     try {

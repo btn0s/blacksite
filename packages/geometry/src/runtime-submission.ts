@@ -22,10 +22,9 @@ export class MaterialCoverage {
       const box = new Box3()
       const bits = new Uint32Array(this.words)
       for (const id of ids) {
-        const offset = id * 4
-        const radius = bounds[offset + 3]!
-        box.expandByPoint(new Vector3(bounds[offset]! - radius, bounds[offset + 1]! - radius, bounds[offset + 2]! - radius))
-        box.expandByPoint(new Vector3(bounds[offset]! + radius, bounds[offset + 1]! + radius, bounds[offset + 2]! + radius))
+        const offset = id * 6
+        box.expandByPoint(new Vector3(bounds[offset]!, bounds[offset + 1]!, bounds[offset + 2]!))
+        box.expandByPoint(new Vector3(bounds[offset + 3]!, bounds[offset + 4]!, bounds[offset + 5]!))
         const first = instances[id * 36 + 34]!
         for (let slot = 0; slot < slots[id]!; slot++) {
           const material = materialMap[first + slot]!
@@ -38,14 +37,14 @@ export class MaterialCoverage {
       if (ids.length > 8) {
         const size = box.getSize(new Vector3())
         const axis = size.x >= size.y && size.x >= size.z ? 0 : size.y >= size.z ? 1 : 2
-        ids.sort((a, b) => bounds[a * 4 + axis]! - bounds[b * 4 + axis]!)
+        ids.sort((a, b) => bounds[a * 6 + axis]! - bounds[b * 6 + axis]!)
         const middle = ids.length >>> 1
         node.left = build(ids.slice(0, middle))
         node.right = build(ids.slice(middle))
       } else { node.first = placements.length; node.count = ids.length; placements.push(...ids) }
       return index
     }
-    build(Array.from({ length: bounds.length / 4 }, (_, i) => i))
+    build(Array.from({ length: bounds.length / 6 }, (_, i) => i))
     const spatial = new Uint32Array(this.nodes.length * 8), floats = new Float32Array(spatial.buffer)
     const center = new Vector3(), size = new Vector3(), rounding = new Float32Array(1), bits = new Uint32Array(rounding.buffer)
     for (const [index, node] of this.nodes.entries()) {
@@ -88,12 +87,14 @@ export class MaterialSubmission {
   readonly shadow = new Group()
   private readonly records: { pass: Group; bundle: BundleGroup; mesh: Mesh; first: number; count: number; material: object | null; bindingVersion: number }[] = []
   private readonly masks: Uint32Array[]
-  private readonly union: Uint32Array
+  private readonly queried: Uint32Array
   private readonly viewport = new Vector2()
+  private readonly compiled = new WeakMap<Camera, Set<Mesh>>()
+  private readonly pending = new WeakMap<Camera, Map<Mesh, Promise<void>>>()
 
   constructor(private readonly coverage: MaterialCoverage) {
-    this.masks = Array.from({ length: 3 }, () => new Uint32Array(coverage.words))
-    this.union = new Uint32Array(coverage.words).fill(0xffffffff)
+    this.masks = Array.from({ length: 2 }, () => new Uint32Array(coverage.words).fill(0xffffffff))
+    this.queried = new Uint32Array(coverage.words)
     this.lit.name = 'Cluster lit materials'
     this.depth.name = 'Cluster depth buckets'
     this.shadow.name = 'Cluster sun-shadow selection'
@@ -116,14 +117,18 @@ export class MaterialSubmission {
   }
 
   async compile(renderer: WebGPURenderer, camera: Camera, scene: Scene, pass: GeometryPass) {
-    for (const record of this.records) {
-      if (record.pass !== this[pass]) continue
-      const visible = record.mesh.visible
-      record.mesh.visible = true
-      try { await renderer.compileAsync(record.mesh, camera, scene) }
-      finally { record.mesh.visible = visible }
-      record.bundle.needsUpdate = true
-    }
+    if (!this.compiled.has(camera)) this.compiled.set(camera, new Set())
+    if (!this.pending.has(camera)) this.pending.set(camera, new Map())
+    const compiled = this.compiled.get(camera)!, pending = this.pending.get(camera)!
+    await Promise.all(this.records.map(async record => {
+      if (record.pass !== this[pass] || compiled.has(record.mesh)) return
+      if (!pending.has(record.mesh)) {
+        const visible = record.mesh.visible
+        record.mesh.visible = true
+        pending.set(record.mesh, renderer.compileAsync(record.mesh, camera, scene).then(() => { compiled.add(record.mesh); record.bundle.needsUpdate = true }).finally(() => { record.mesh.visible = visible; pending.delete(record.mesh) }))
+      }
+      await pending.get(record.mesh)
+    }))
   }
 
   updateBindings(versions: ReadonlyMap<object, number> | undefined, viewport: Readonly<Vector2>) {
@@ -141,17 +146,18 @@ export class MaterialSubmission {
   }
 
   update(frustum: Frustum, world: Matrix4, view: number) {
-    if (view < 0 || view >= this.masks.length) throw new Error('Cluster submission supports one view and two shadow cascades')
-    this.coverage.query(frustum, world, this.masks[view]!)
+    if (view < 0 || view > 2) throw new Error('Cluster submission supports one view and two shadow cascades')
+    const mask = this.masks[view === 0 ? 0 : 1]!
+    this.coverage.query(frustum, world, this.queried)
     let changed = false
-    for (let word = 0; word < this.union.length; word++) {
-      const value = (this.masks[0]![word]! | this.masks[1]![word]! | this.masks[2]![word]!) >>> 0
-      if (this.union[word] !== value) { this.union[word] = value; changed = true }
+    for (let word = 0; word < mask.length; word++) {
+      if (mask[word] !== this.queried[word]) { mask[word] = this.queried[word]!; changed = true }
     }
     if (!changed) return
     for (const record of this.records) {
+      if ((record.pass === this.shadow) !== (view !== 0)) continue
       let visible = false
-      for (let material = record.first; material < record.first + record.count; material++) if (this.union[material >>> 5]! & (1 << (material & 31))) { visible = true; break }
+      for (let material = record.first; material < record.first + record.count; material++) if (mask[material >>> 5]! & (1 << (material & 31))) { visible = true; break }
       record.bundle.visible = visible
     }
   }

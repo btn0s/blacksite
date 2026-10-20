@@ -1,4 +1,4 @@
-import { BackSide, DoubleSide, FrontSide, Matrix4, StorageBufferAttribute, Vector3 } from 'three/webgpu'
+import { BackSide, Box3, DoubleSide, FrontSide, Matrix4, StorageBufferAttribute, Vector3 } from 'three/webgpu'
 import type { MeshStandardMaterial, MeshStandardNodeMaterial, Side, WebGPURenderer } from 'three/webgpu'
 import { Fn, storage } from 'three/tsl'
 import type { GeometryPageSource } from './load-pages'
@@ -102,6 +102,7 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
   const nodes = new Uint32Array(nodeCount * 12), nodeFloats = new Float32Array(nodes.buffer)
   const instances = new Float32Array(instanceCount * 36)
   const instanceInfo = new Uint32Array(instanceCount * 4), instanceBounds = new Float32Array(instanceCount * 4)
+  const coverageBounds = new Float32Array(instanceCount * 6)
   const materialMap: number[] = [], slots: number[] = [], coarseWidths: number[] = [], widths: number[] = []
   const batches: PackedMeshletScene['batches'] = [], materialIndices = new Map<MeshletSceneEntry['materials'][number], number>()
   const ranges: PageSourceRange[] = []
@@ -153,6 +154,7 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     coarsest.work += m.coarseClusters * count
     const low = new Vector3(...m.bounds.min), high = new Vector3(...m.bounds.max)
     const localCenter = low.clone().add(high).multiplyScalar(0.5), radius = low.distanceTo(high) * 0.5
+    const localBox = new Box3(low, high), placementBox = new Box3()
     for (const entry of placements) {
       const materialOffset = materialMap.length
       for (const material of entry.materials) {
@@ -173,6 +175,9 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
         instanceInfo.set([nodeBase, m.rootCount, groupBase, 0], instanceIndex * 4)
         center.copy(localCenter).applyMatrix4(matrix)
         instanceBounds.set([center.x, center.y, center.z, radius * scale], instanceIndex * 4)
+        placementBox.copy(localBox).applyMatrix4(matrix)
+        placementBox.min.toArray(coverageBounds, instanceIndex * 6)
+        placementBox.max.toArray(coverageBounds, instanceIndex * 6 + 3)
         instanceIndex++
       }
     }
@@ -193,7 +198,7 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
   }
   coarsest.frontier = Math.max(...coarseWidths)
   if (!batches.length) throw new Error('Geometry requires at least one visible material')
-  const coverage = new MaterialCoverage(instanceBounds, instances, materialMap, batches.length, slots)
+  const coverage = new MaterialCoverage(coverageBounds, instances, materialMap, batches.length, slots)
   coarsest.work += coverage.spatial.count / 2
   if (coarsest.slots > SELECTED_CAPACITY || coarsest.frontier > FRONTIER_CAPACITY || coarsest.groups > GROUP_CAPACITY || coarsest.work > SELECTION_WORK_BUDGET) throw new Error('Geometry pinned cut exceeds fixed traversal capacity')
   const attributes = {

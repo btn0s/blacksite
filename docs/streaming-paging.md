@@ -1,6 +1,6 @@
 # Courtyard geometry paging
 
-20 October 2026. Implemented on `btn0s/ruins-cpu`, rebased onto preview `3f8b243`. **Not merged or published: the production Walk CPU comparison does not meet the no-regression acceptance condition.** The shared published courtyard manifest and the preview checkout remain unchanged.
+20 October 2026. Implemented as `e2f4242` and merged into the preview as `8df5b08`. The owner accepted the measured 0.31 ms paging allowance and waived the strict CPU comparison for this run. The paged courtyard manifest is published; fresh Wide and Walk loads on 5247 completed without runtime errors.
 
 ## Runtime
 
@@ -14,7 +14,7 @@ LRU eviction considers only unpinned pages without resident dependants. Admissio
 
 The shared rendering API now takes version 5 page sources only. Other source callers use that API and frame lifecycle; their existing owned version 3 demo builds require rebaking and were not playtested here. Version 3 CPU parsing remains for collision/terrain consumers. ALS is untouched.
 
-## Owned build, awaiting publication
+## Published owned build
 
 The sealed build is `D:/dev/owned-assets/dark-ruins/build-courtyard-pages-9PEDo9`. Its assembler links the verified version 5 geometry pages into a new directory, verifies source hashes and triangle counts, and preserves placement, material, environment and collider ownership. It never rewrites the published manifest.
 
@@ -26,7 +26,7 @@ The sealed build is `D:/dev/owned-assets/dark-ruins/build-courtyard-pages-9PEDo9
 | All decoded page images | 2,744,626,160 |
 | Directory wire bytes | 11,920,400 |
 
-Production probes intercepted only the courtyard manifest URL to read that sealed build. The runtime has one canonical manifest URL and no staging switch. Publication must follow the loader merge: back up the old owned manifest, merge this branch into preview, then atomically replace `D:/dev/owned-assets/dark-ruins/courtyard.json` with the sealed manifest and verify fresh Wide/Walk on 5247. None of those publication steps has happened.
+Production probes intercepted only the courtyard manifest URL to read that sealed build. The runtime has one canonical manifest URL and no staging switch. Publication followed the loader merge, with the previous manifest backed up in `D:/dev/probe/courtyard-before-paging.json`. Fresh Wide/Walk evidence from 5247 is in `D:/dev/probe/ruins-paging-merged-preview.json` and its screenshots.
 
 ## Production evidence
 
