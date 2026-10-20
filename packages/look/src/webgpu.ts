@@ -31,6 +31,7 @@ export interface WebGPULookOptions {
   readonly shadowDistance?: number
   readonly shadowMap?: number
   readonly shadowLayers?: readonly number[]
+  readonly shadowCascades?: number
   readonly sunlight?: { readonly sunLux: number; readonly skyLux?: number; readonly ev100: number; readonly sunSize?: number }
   readonly film?: FilmOptions
   readonly camera?: { readonly temperature?: number; readonly tint?: number; readonly contrast?: number; readonly toe?: number; readonly shoulder?: number; readonly lensSoftness?: number }
@@ -142,7 +143,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   renderer.info.autoReset = false
   const sunlight = options.sunlight ?? { sunLux: 63000, skyLux: 16000, ev100: 14 }
   const exposure = 1 / (1.2 * 2 ** sunlight.ev100)
-  const sun = new SunLight(new Color().setRGB(...atmosphere.sun.color), sunlight.sunLux * exposure)
+  const sun = new SunLight(new Color().setRGB(...atmosphere.sun.color), sunlight.sunLux * exposure, options.shadowCascades ?? 2)
   sun.name = 'Sun cascades'
   sun.position.set(...atmosphere.sun.direction)
   sun.castShadow = true

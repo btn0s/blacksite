@@ -10,7 +10,7 @@ type CascadeShadow = SunLightShadow & { _cascadeData: Vector4[] }
 const NORMAL_OFFSET_TEXELS = 1.5
 
 export class StaggeredSunShadowNode extends SunShadowNode {
-  private readonly fit = new SunLightShadow() as CascadeShadow
+  private readonly fit: CascadeShadow
   private readonly clearMaterial = new MeshBasicNodeMaterial({ depthTest: false, depthWrite: true, blending: NoBlending, fog: false })
   private readonly clearTile = new QuadMesh(this.clearMaterial)
   private camera: Camera | null = null
@@ -19,6 +19,7 @@ export class StaggeredSunShadowNode extends SunShadowNode {
 
   constructor(light: SunLight, private readonly scene: Scene, private readonly view: Camera) {
     super(light)
+    this.fit = new SunLightShadow(light.shadow.cascadeCount) as CascadeShadow
     this.clearMaterial.allowOverride = false
     this.clearMaterial.colorNode = vec4(0)
     this.clearMaterial.depthNode = float(1)
@@ -58,6 +59,11 @@ export class StaggeredSunShadowNode extends SunShadowNode {
 
   reset() { this.camera = null }
 
+  private due(cascade: number) {
+    const period = cascade < 2 ? 2 : 4
+    return this.frame % period === (cascade % 2) + (cascade < 2 ? 0 : 2)
+  }
+
   override renderShadow(frame: NodeFrame) {
     const { renderer, scene, camera } = frame
     const shadow = this.shadow as CascadeShadow
@@ -77,7 +83,7 @@ export class StaggeredSunShadowNode extends SunShadowNode {
     const previousName = scene.name
     scene.name = `Shadow Map [ ${this.light.name} ]`
     for (let index = 0; index < shadow.getViewportCount(); index++) {
-      if (!initialize && index !== this.frame % 2) continue
+      if (!initialize && !this.due(index)) continue
       const cascadeCamera = shadow.getCamera(index)
       const layers = cascadeCamera.layers.mask
       cascadeCamera.copy(this.fit.getCamera(index))
