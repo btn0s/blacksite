@@ -1,6 +1,6 @@
 import { Vector3 } from 'three/webgpu'
 import type { DepthTexture, LightShadow, Node, OrthographicCamera, UniformNode } from 'three/webgpu'
-import { Fn, float, int, interleavedGradientNoise, ivec2, max, reference, renderGroup, screenCoordinate, select, texture, textureLoad, uniform, vec2, vogelDiskSample } from 'three/tsl'
+import { Fn, float, frameId, int, interleavedGradientNoise, ivec2, max, reference, renderGroup, screenCoordinate, select, texture, textureLoad, uniform, vec2, vogelDiskSample } from 'three/tsl'
 import type { SunLight } from 'three/addons/lights/SunLight.js'
 
 type ShadowInputs = { depthTexture: DepthTexture; shadowCoord: Node<'vec3'>; shadow: LightShadow }
@@ -23,7 +23,7 @@ export function sunPenumbra(sun: SunLight, angle: UniformNode<'float', number>, 
     for (let index = 1; index < cascades; index++) scale = select(tile.equal(index), scales[index]!, scale)
     const low = vec2(tile.div(cascades), 0).add(texel.mul(2))
     const high = low.add(vec2(1 / cascades, 1)).sub(texel.mul(4))
-    const phi = interleavedGradientNoise(screenCoordinate.xy).mul(Math.PI * 2)
+    const phi = interleavedGradientNoise(screenCoordinate.xy.add(frameId.mod(64).toFloat().mul(5.588238))).mul(Math.PI * 2)
     const z = shadowCoord.z
     const search = scale.xy.mul(angle.mul(25))
     let total: Node<'float'> = float(0)

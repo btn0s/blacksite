@@ -9,7 +9,7 @@ import { MeshletScene, type MeshletStats } from '@blacksite/geometry'
 import { createInspector } from '@blacksite/inspect'
 import { InspectHud } from '@blacksite/inspect/react'
 import { WebGPULook } from '@blacksite/look/webgpu-r3f'
-import type { WebGPULook as Look } from '@blacksite/look/webgpu'
+import type { WebGPULook as Look, WebGPULookStage } from '@blacksite/look/webgpu'
 import { Loading, TitleCard } from '@blacksite/ui/hud'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import { AlsPhysicsStepper } from 'als-ue5-r3f/app/AlsPhysicsStepper'
@@ -26,6 +26,7 @@ import type { ScanFlames } from '../../shared/scan-flames'
 import { ruinsViews, ruinsNearRadius, createRuinsCameras, type RuinsView } from './views'
 
 const shadowLayers = [2]
+const disabledStages = (new URLSearchParams(location.search).get('off') ?? '').split(',').filter(Boolean) as WebGPULookStage[]
 const glyphs = { home: { label: 'Spawn', keyboard: 'R', touch: 'Home', gamepad: { xbox: 'View', playstation: 'Create', generic: 'Back' } } }
 const outwardReach = 1e30
 const nearTimeoutMs = 20000
@@ -154,7 +155,7 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
   } }), [geometry, home, onError, shared, walker])
   if (error) throw error
   return <>
-    <WebGPULook atmosphere={atmosphere} sunlight={sunlight} film={film} quality="high" shadowDistance={400} shadowMap={2048} shadowCascades={4} shadowLayers={shadowLayers} onReady={onLook} onError={onError} />
+    <WebGPULook atmosphere={atmosphere} sunlight={sunlight} film={film} quality="high" shadowDistance={400} shadowMap={2048} shadowCascades={4} shadowLayers={shadowLayers} disable={disabledStages} onReady={onLook} onError={onError} />
     <Physics gravity={[0, -9.8, 0]} paused timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <AlsPhysicsStepper />
       {collisionReady && createPortal(<CharacterController controller={walker} events={events} />, scene, { camera: gameplayCamera })}

@@ -1,6 +1,6 @@
 import { Color, FloatType, InspectorBase, Lighting, NearestFilter, NeutralToneMapping, NoToneMapping, NodeMaterial, PCFShadowMap, QuadMesh, RenderPipeline, RenderTarget, Vector2, Vector3 } from 'three/webgpu'
 import type { Camera, DepthTexture, Node, Object3D, OrthographicCamera, Scene, WebGPURenderer } from 'three/webgpu'
-import { builtinAOContext, context, faceDirection, float, log2, luminance, mix, mrt, normalViewGeometry, output, packNormalToRGB, pass, renderGroup, renderOutput, sample, screenUV, texture3D, uniform, uv, vec2, vec3, vec4, velocity } from 'three/tsl'
+import { builtinAOContext, context, convertToTexture, faceDirection, float, log2, luminance, mix, mrt, normalViewGeometry, output, packNormalToRGB, pass, renderGroup, renderOutput, sample, screenUV, texture3D, uniform, uv, vec2, vec3, vec4, velocity } from 'three/tsl'
 import { SunLight } from 'three/addons/lights/SunLight.js'
 import { SunLightNode } from 'three/addons/lights/SunLightNode.js'
 import { LightProbeGrid } from 'three/addons/lighting/LightProbeGrid.js'
@@ -25,7 +25,10 @@ import { EyeAdaptation } from './exposure'
 const METER = [64, 36] as const
 const METER_INTERVAL = 66
 
+export type WebGPULookStage = 'traa' | 'ao' | 'penumbra'
+
 export interface WebGPULookOptions {
+  readonly disable?: readonly WebGPULookStage[]
   readonly atmosphere?: Atmosphere | PresetName
   readonly quality?: QualityTier
   readonly shadowDistance?: number
@@ -135,6 +138,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   registerWebGPULighting(renderer)
   const atmosphere = atmosphereOf(options.atmosphere ?? 'nature')
   const quality = options.quality ?? 'high'
+  const disabled = new Set(options.disable ?? [])
   const previous = { background: scene.background, backgroundNode: scene.backgroundNode, backgroundIntensity: scene.backgroundIntensity, environment: scene.environment, environmentIntensity: scene.environmentIntensity, fog: scene.fog, toneMapping: renderer.toneMapping, exposure: renderer.toneMappingExposure, autoReset: renderer.info.autoReset, inspector: renderer.inspector }
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = PCFShadowMap
@@ -152,7 +156,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   sun.shadow.normalBias = 0.03
   sun.shadow.bias = -0.0002
   const sunAngle = uniform((sunlight.sunSize ?? 0.53) * Math.PI / 180).setGroup(renderGroup)
-  sun.shadow.filterNode = sunPenumbra(sun, sunAngle, 8, 12)
+  if (!disabled.has('penumbra')) sun.shadow.filterNode = sunPenumbra(sun, sunAngle, 8, 12)
   const shadows = new StaggeredSunShadowNode(sun, scene, camera)
   sun.shadow.shadowNode = shadows
   scene.add(sun)
@@ -188,7 +192,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   scenePass.contextNode = context(litContext)
   timings.labelTarget(scenePass.renderTarget, scenePass.name)
   disposables.push(prePass, scenePass)
-  if (quality !== 'low') {
+  if (quality !== 'low' && !disabled.has('ao')) {
     const gtao = ao(depth, normal, camera)
     gtao.resolutionScale = 0.5
     gtao.samples.value = quality === 'high' ? 16 : 8
@@ -202,9 +206,10 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   }
   const beauty = scenePass.getTextureNode('output')
   let color: Node<'vec4'> = atmosphereGPU.aerial(beauty, depth, camera, skyScale)
-  const resolved = traa(color, depth, motion, camera)
-  disposables.push(resolved)
-  color = resolved
+  const resolved = disabled.has('traa') ? null : traa(color, depth, motion, camera)
+  const stable = resolved ? resolved.getTextureNode() : convertToTexture(color)
+  disposables.push(resolved ?? stable)
+  color = resolved ?? stable
   if (quality !== 'low' && (atmosphere.grade.bloom ?? 0) > 0) {
     const glow = bloom(color, atmosphere.grade.bloom ?? 0, 0.6, 1.35)
     glow.smoothWidth.value = 0.5
@@ -225,7 +230,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     target.texture.name = 'Exposure metering'
     const jitter = uniform(new Vector2()).setGroup(renderGroup)
     const material = new NodeMaterial({ depthTest: false, depthWrite: false })
-    const sampled = resolved.getTextureNode().sample(screenUV.add(jitter.sub(0.5).div(vec2(METER[0], METER[1])))).rgb
+    const sampled = stable.sample(screenUV.add(jitter.sub(0.5).div(vec2(METER[0], METER[1])))).rgb
     material.fragmentNode = vec4(log2(sampled.dot(vec3(1 / 3)).div(exposure).max(2 ** film.exposure.histogram[0])), 0, 0, 1)
     timings.labelTarget(target, 'Exposure metering')
     return { target, jitter, material, quad: new QuadMesh(material) }
@@ -338,7 +343,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
       viewCamera = next
       syncCamera()
       shadows.reset()
-      resolved.setSize(1, 1)
+      resolved?.setSize(1, 1)
     },
     async compile(compiler, ownedRoots = []) {
       if (disposed) return
