@@ -46,7 +46,7 @@ const geometries = []
 for (const file of geometrySources) {
   const id = geometries.length
   const directory = join(output, 'geometry', String(id))
-  const manifest = await buildGltfMeshes(join(source, file), directory)
+  const manifest = await buildGltfMeshes(join(source, file), directory, { minimumError: 0.005 })
   for (const geometry of manifest.geometries) {
     if (!placements.some(entry => entry.geometry.file === file && entry.geometry.mesh_index === geometry.meshIndex)) continue
     const url = `geometry/${id}/${geometry.url}`
