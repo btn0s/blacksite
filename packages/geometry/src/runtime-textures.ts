@@ -33,6 +33,7 @@ export class ClusterFeedback {
   private disposed = false
   private failure: unknown
   private latest: { view: Uint32Array; shadow: Uint32Array } | null = null
+  lastSample: { epoch: number; requests: number; overflows: number } | null = null
   private requests = 0
   private overflows = 0
   private samples = 0
@@ -49,7 +50,7 @@ export class ClusterFeedback {
   private readonly pageCount: number
 
   constructor(private readonly packed: PackedMeshletScene, visibleAttribute: StorageBufferAttribute, countersAttribute: StorageBufferAttribute,
-    shadowCounters: StorageBufferAttribute, world: Node<'mat4'>, worldScale: Node<'float'>, eye: Node<'vec3'>, projection: Node<'float'>, readonly feedback?: MeshletTextureFeedback) {
+    shadowCounters: StorageBufferAttribute, world: Node<'mat4'>, worldScale: Node<'float'>, eye: Node<'vec3'>, projection: Node<'float'>, reach: Node<'float'>, readonly feedback?: MeshletTextureFeedback) {
     this.viewCount = countersAttribute.count
     this.shadowCount = shadowCounters.count
     this.pageCount = packed.arena.table.count
@@ -158,7 +159,7 @@ export class ClusterFeedback {
           const center = world.mul(instance.transform).mul(vec4(cluster.bounds.xyz, 1)).xyz
           const scale = instance.scale.x.mul(worldScale), distance = max(eye.sub(center).length().sub(cluster.bounds.w.mul(scale)), 0.01)
           const pixelsPerWorld = projection.div(distance), range = materialRanges.element(selected.w).toVar()
-          Loop({ start: uint(0), end: range.y, type: 'uint', condition: '<' }, ({ i }) => {
+          Loop({ start: uint(0), end: distance.lessThanEqual(reach).select(range.y, uint(0)), type: 'uint', condition: '<' }, ({ i }) => {
             const binding = bindings.element(range.x.add(i)).toVar(), uv = uint(binding.y), extent = float(1).toVar()
             If(uv.lessThan(2), () => { extent.assign(localDensity.element(uv).mul(scale)) })
             If(binding.w.greaterThan(0), () => { extent.divAssign(clamp(instance.transform.element(0).xyz.length(), 0.5, 10)) })
@@ -217,6 +218,7 @@ export class ClusterFeedback {
       this.feedback?.consume(values.subarray(this.mipOffset), slot.serial)
       this.latest = { view: values.slice(8, 8 + this.viewCount), shadow: values.slice(8 + this.viewCount, this.useOffset) }
       this.requests += values[2]!; this.overflows += values[3]!; this.samples++
+      this.lastSample = { epoch: slot.epoch, requests: values[2]!, overflows: values[3]! }
       slot.values = null; slot.residentIds.length = 0; slot.busy = false; slot.pending = null; slot.target.release()
     }
   }

@@ -114,6 +114,7 @@ export class MeshletScene {
   private readonly world = uniform(new Matrix4())
   private readonly worldScale = uniform(1)
   private readonly eye = uniform(new Vector3())
+  private readonly requestReach = uniform(1e30)
   private readonly projectionScale = uniform(1)
   private readonly threshold = uniform(1)
   private readonly frustumPlanes = uniformArray(Array.from({ length: 6 }, () => new Vector4()))
@@ -184,7 +185,7 @@ export class MeshletScene {
     this.shadowLayer = options.shadowLayer ?? 31
     this.shadowPixelError = options.shadowPixelError ?? 1
     this.hierarchyDepth = packed.hierarchyDepth
-    this.shadows = new ClusterShadows(packed, this.world, this.worldScale, this.shadowLayer, streamBudget, this.submission)
+    this.shadows = new ClusterShadows(packed, this.world, this.worldScale, this.shadowLayer, streamBudget, this.eye, this.requestReach, this.submission)
     this.object.add(this.shadows.object)
     const pyramidSize = options.occlusionSize ?? 512
     if (pyramidSize < 32 || pyramidSize > 2048 || (pyramidSize & (pyramidSize - 1)) !== 0) {
@@ -237,7 +238,7 @@ export class MeshletScene {
       this.threshold, this.lodEnabled, this.fallbackReach, this.eye,
       sphere => this.history.greaterThan(0).and(isOccluded(sphere, this.previousView, this.previousProjection, this.previousNear)),
       sphere => isOccluded(sphere, this.currentView, this.currentProjection, this.currentNear),
-      streamBudget, float(Math.max(packed.maximumError, 0.000001) * 1.001).mul(this.worldScale).mul(this.projectionScale).div(0.000001))
+      streamBudget, float(Math.max(packed.maximumError, 0.000001) * 1.001).mul(this.worldScale).mul(this.projectionScale).div(0.000001), this.eye, this.requestReach)
     this.counters = this.traversal.counters
     this.residentBytes = packed.residentBytes + this.traversal.residentBytes + this.shadows.residentBytes + pyramidAttribute.array.byteLength
     this.traversalScratchBytes = this.traversal.residentBytes + this.shadows.residentBytes - this.triangleBudget * 12
@@ -307,7 +308,7 @@ export class MeshletScene {
     this.occlusionComputes = [this.pyramidCompute, ...this.reductionCompute]
     this.computeNodes = [this.pyramidCompute, ...this.reductionCompute]
     this.streaming = new ClusterFeedback(packed, this.traversal.visible, this.counters, this.shadows.counters,
-      this.world, this.worldScale, this.eye, this.projectionScale, options.textureFeedback)
+      this.world, this.worldScale, this.eye, this.projectionScale, this.requestReach, options.textureFeedback)
     this.residentBytes += this.streaming.residentBytes
     if (options.textureFeedback) {
       const stagingBytes = 3 * GEOMETRY_STAGING_BYTES
@@ -353,6 +354,13 @@ export class MeshletScene {
 
   setGeometryLimit(bytes: number) { this.arena.residency.setLimit(bytes) }
 
+  setRequestReach(meters: number) { this.requestReach.value = meters }
+
+  get settled() {
+    const sample = this.streaming.lastSample
+    return sample !== null && sample.requests === 0 && sample.epoch === this.arena.epoch.value && this.arena.residency.idle()
+  }
+
   update(renderer: WebGPURenderer, deadline = performance.now() + 0.5, allowance = FRAME_UPLOAD_BYTES) {
     const start = performance.now()
     this.streaming.consume(start + Math.max(0, deadline - start) * 0.5)
@@ -365,7 +373,7 @@ export class MeshletScene {
     return uploaded
   }
 
-  endFrame(renderer: WebGPURenderer) { this.streaming.sample(renderer) }
+  endFrame(renderer: WebGPURenderer, eager = false) { this.streaming.sample(renderer, eager) }
 
   completeFrame(renderer: WebGPURenderer) { return this.streaming.completeFrame(renderer) }
 

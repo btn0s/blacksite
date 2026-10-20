@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Canvas, createPortal, useFrame, useThree } from '@react-three/fiber'
 import { Physics } from '@react-three/rapier'
 import { PerspectiveCamera, Vector3 } from 'three'
@@ -21,10 +21,15 @@ import { createScanMaterialStreaming, residentScanTextures } from '../../shared/
 import { loadRuins, type RuinsAsset } from './asset'
 import { RuinsCollision, type RegionalCollision } from './collision'
 import { scanEnvironment } from '../../shared/scan-environment'
-import { ruinsViews, createRuinsCameras, type RuinsView } from './views'
+import { ruinsViews, ruinsNearRadius, createRuinsCameras, type RuinsView } from './views'
 
 const shadowLayers = [2]
 const glyphs = { home: { label: 'Spawn', keyboard: 'R', touch: 'Home', gamepad: { xbox: 'View', playstation: 'Create', generic: 'Back' } } }
+const outwardReach = 1e30
+const nearTimeoutMs = 20000
+const loadingFrameMs = 6
+const loadingUploadBytes = 32 * 1048576
+const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
 const lodLegend = [{ color: '#ffc1aa', label: 'Source · 0' }, { color: '#adc4ef', label: 'Level 1' }, { color: '#e3ffa3', label: 'Level 2' }]
 
 function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, shared, onStats, onReady }: {
@@ -49,7 +54,9 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   const { atmosphere, sunlight, film } = useMemo(() => scanEnvironment(owned.environment.components), [owned])
   const home = owned.home
   const stats = useMemo(() => ({ sceneTriangles: 0, drawnTriangles: 0 }), [])
-  const onLook = useCallback((value: Look | null) => { shared.look.current = value; shared.warm.current = 0; setLook(value) }, [shared])
+  const startsAtSpawn = useRef(camera === gameplayCamera)
+  const compiling = useRef(false)
+  const onLook = useCallback((value: Look | null) => { shared.look.current = value; shared.warm.current = 0; if (value) performance.mark('ruins-look-ready'); setLook(value) }, [shared])
   const onError = useCallback((value: unknown) => setError(value instanceof Error ? value : new Error(String(value))), [])
   const content = useCallback((): InspectionContent => ({
     identity: geometry,
@@ -72,6 +79,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     return () => { shared.geometry.current = null; scene.remove(geometry.object); geometry.dispose() }
   }, [geometry, scene, shared])
   useEffect(() => geometry.resetHistory(), [camera, geometry])
+  useEffect(() => geometry.setRequestReach(startsAtSpawn.current ? ruinsNearRadius : outwardReach), [geometry])
   useEffect(() => {
     if (!look) return
     const remove = [
@@ -84,11 +92,13 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   }, [geometry, look, shared])
   useFrame(() => {
     if (!look) return
-    const deadline = performance.now() + 0.5
-    const uploaded = shared.warm.current >= 10 ? textures.update(deadline) : 0
-    geometry.update(renderer, deadline, 8 * 1048576 - uploaded)
+    const loading = shared.warm.current < 10
+    const deadline = performance.now() + (loading ? loadingFrameMs : 0.5)
+    const allowance = loading ? loadingUploadBytes : 8 * 1048576
+    const uploaded = compiling.current ? 0 : textures.update(deadline, allowance)
+    geometry.update(renderer, deadline, allowance - uploaded)
   }, 0.5)
-  useFrame(() => { if (look) geometry.endFrame(renderer) }, 2)
+  useFrame(() => { if (look) geometry.endFrame(renderer, shared.warm.current < 10) }, 2)
   useEffect(() => {
     if (!look || !collisionReady) return
     let active = true
@@ -98,8 +108,16 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
       if (!active) return
       performance.measure('ruins-character', 'ruins-character-start')
+      if (startsAtSpawn.current) {
+        const start = performance.now()
+        while (!(geometry.settled && textures.settled) && performance.now() - start < nearTimeoutMs) await nextFrame()
+        performance.mark(geometry.settled && textures.settled ? 'ruins-near-settled' : 'ruins-near-timeout', { detail: { geometry: geometry.pagingStats(), textures: textures.snapshot() } })
+        geometry.setRequestReach(outwardReach)
+      }
+      if (!active) return
       performance.mark('ruins-warmup-start')
-      await look.compile(passes => geometry.compile(passes), [geometry.object])
+      compiling.current = true
+      try { await look.compile(passes => geometry.compile(passes), [geometry.object]) } finally { compiling.current = false }
       if (!active) return
       geometry.object.visible = true
       look.render()

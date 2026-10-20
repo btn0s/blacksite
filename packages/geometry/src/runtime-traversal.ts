@@ -29,7 +29,7 @@ export class ClusterTraversal {
     planes: ReturnType<typeof import('three/tsl').uniformArray>,
     projectedError: (sphere: Node<'vec4'>, error: Node<'float'>, scale: Node<'float'>) => Node<'float'>,
     threshold: Node<'float'>, lodEnabled: Node<'bool'>, reach: Node<'float'>, eye: Node<'vec3'>,
-    previousHidden: SphereTest, currentHidden: SphereTest, triangleBudget: number, coarsestError: Node<'float'>, label = 'View') {
+    previousHidden: SphereTest, currentHidden: SphereTest, triangleBudget: number, coarsestError: Node<'float'>, requestEye: Node<'vec3'>, requestReach: Node<'float'>, label = 'View') {
     const count = DRAW_ARGUMENT_OFFSET + packed.drawCount * DRAW_ARGUMENT_STRIDE
     this.counters = new IndirectStorageBufferAttribute(new Uint32Array(count), 1)
     this.visible = new StorageBufferAttribute(SELECTED_CAPACITY, 4, Uint32Array)
@@ -53,6 +53,7 @@ export class ClusterTraversal {
     const spatialRoots = storage(packed.coverage.spatialRoots, 'uint', packed.coverage.spatialRoots.count).toReadOnly()
     const placements = storage(packed.coverage.placements, 'uint', packed.coverage.placements.count).toReadOnly()
     const request = (page: Node<'uint'>, importance: Node<'float'>) => { atomicMax(activity.element(page.mul(2).add(1)), floatBitsToUint(max(importance, 0.000001))) }
+    const reachable = (sphere: Node<'vec4'>) => requestEye.sub(sphere.xyz).length().sub(sphere.w).lessThanEqual(requestReach)
     const dispatch = storage(this.dispatch, 'uint', 3)
     const visible = storage(this.visible, 'uvec4', SELECTED_CAPACITY)
     const sphereWorld = Fn(([sphere, transform, scale]) => vec4(world.mul(transform).mul(vec4(sphere.xyz, 1)).xyz, sphere.w.mul(scale).mul(worldScale)))
@@ -206,7 +207,7 @@ export class ClusterTraversal {
               const refined = groups.element(groupBase.add(cluster.refinedGroup).mul(2).add(1))
               refinedMissing.assign(pages.element(refined.y).x.equal(0xffffffff))
               const importance = projectedError(own, cluster.errors.x, instance.scale.x).toVar()
-              If(batch.notEqual(0xffffffff).and(inside(sphere)).and(refinedMissing).and(effectiveLod.not().or(importance.greaterThan(effectiveThreshold))), () => { request(refined.y, importance) })
+              If(batch.notEqual(0xffffffff).and(inside(sphere)).and(refinedMissing).and(reachable(sphere)).and(effectiveLod.not().or(importance.greaterThan(effectiveThreshold))), () => { request(refined.y, importance) })
             })
             const cut = projectedError(parent, cluster.errors.y, instance.scale.x).greaterThan(effectiveThreshold).and(finest.or(refinedMissing).or(projectedError(own, cluster.errors.x, instance.scale.x).lessThanEqual(effectiveThreshold)))
             const withinReach = lodEnabled.or(eye.sub(sphere.xyz).length().sub(sphere.w).lessThanEqual(reach))
@@ -227,7 +228,7 @@ export class ClusterTraversal {
           If(pages.element(group.y).w.bitAnd(1).notEqual(0), () => { atomicAdd(activity.element(audit + 3), uint(1)) })
           const instance = readInstance(leaf.y)
           const sphere = sphereWorld(uintBitsToFloat(groups.element(groupId.mul(2))), instance.transform, instance.scale.x)
-          request(group.y, projectedError(sphere, uintBitsToFloat(group.x), instance.scale.x))
+          If(reachable(sphere), () => { request(group.y, projectedError(sphere, uintBitsToFloat(group.x), instance.scale.x)) })
         })
       })
     })().computeKernel([64]).setName(`${label} Group cut`)

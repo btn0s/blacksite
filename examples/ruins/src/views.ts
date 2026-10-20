@@ -15,6 +15,8 @@ export type RuinsViewGeometry = {
 }
 export type RuinsViews = Record<Exclude<RuinsView, 'spawn'>, RuinsViewGeometry>
 
+export const ruinsNearRadius = 12
+
 export function createRuinsHome(archway: Box3) {
   const base = archway.getCenter(new Vector3()).setY(archway.min.y)
   return {

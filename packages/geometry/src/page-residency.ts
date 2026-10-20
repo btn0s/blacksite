@@ -6,6 +6,8 @@ export const GEOMETRY_PAGE_BYTES = 131072
 export const GEOMETRY_ARENA_BYTES = 1280 * 1048576
 export const FRAME_UPLOAD_BYTES = 8 * 1048576
 export const GEOMETRY_STAGING_BYTES = 2 * 1048576
+const DECODED_QUEUE_BYTES = 4 * 1048576
+const PAGE_DECODE_BYTES = 262144 + GEOMETRY_PAGE_BYTES
 
 class PageHeap {
   private readonly ids: number[] = []
@@ -72,7 +74,7 @@ export class PageResidency {
   readonly ready: ResidentPage[] = []
   readonly residentIds: number[] = []
   private readonly residentPositions: Int32Array
-  readonly decoders = Array.from({ length: 4 }, () => ({ decoder: new GeometryPageDecoder(), pending: null as Promise<void> | null }))
+  readonly decoders = Array.from({ length: 8 }, () => ({ decoder: new GeometryPageDecoder(), pending: null as Promise<void> | null }))
   private readonly requests: PageHeap
   private readonly lru: PageHeap
   private readonly controllers = new Map<number, AbortController>()
@@ -94,6 +96,7 @@ export class PageResidency {
   peakDecodedBytes = 0
   wireBytes = 0
   decodeMilliseconds = 0
+  fetchMilliseconds = 0
 
   constructor(sources: readonly PageSourceRange[], readonly capacity: number, readonly cpuStaging: ResidencyLedger) {
     this.limit = capacity
@@ -235,39 +238,7 @@ export class PageResidency {
       const page = this.pages[id]!
       if (!page.pinned && this.frame - page.demanded > 120) controller.abort()
     }
-    for (const worker of this.decoders) {
-      if (worker.pending || this.decodedBytes >= 2 * 1048576 || performance.now() >= deadline) continue
-      let examined = 0
-      while (this.requests.first !== undefined && examined++ < 32 && performance.now() < deadline) {
-        const page = this.pages[this.requests.first]!
-        this.requests.remove(page.id)
-        if (!page.pinned && this.frame - page.demanded > 120) { page.state = 'absent'; page.importance = 0; continue }
-        if (page.parents.some(id => this.pages[id]!.state !== 'resident')) {
-          if (!this.queued[page.id]) { this.dependencyWork.push(page.id); this.queued[page.id] = 1 }
-          continue
-        }
-        if (!this.cpuStaging.reserve(page, 'decoded', 1048576)) { this.requests.update(page.id); break }
-        page.state = 'loading'
-        const controller = new AbortController()
-        this.controllers.set(page.id, controller)
-        worker.pending = worker.decoder.fetch(page.source.source.packUrl, page.local, page.source.source.metadata.pages[page.local]!, controller.signal).then(result => {
-          if (this.disposed) return
-          controller.signal.throwIfAborted()
-          page.bytes = result.bytes
-          page.state = 'ready'
-          this.ready.push(page)
-          this.decodedBytes += result.bytes.byteLength
-          this.peakDecodedBytes = Math.max(this.peakDecodedBytes, this.decodedBytes)
-          this.wireBytes += result.wireBytes
-          this.decodeMilliseconds += result.decodeMilliseconds
-        }).catch(error => {
-          this.cpuStaging.release(page)
-          if (controller.signal.aborted) { page.state = 'absent'; page.importance = 0; this.cancellations++ }
-          else if (!this.disposed) this.failure = error
-        }).finally(() => { worker.pending = null; this.controllers.delete(page.id) })
-        break
-      }
-    }
+    for (const worker of this.decoders) this.launch(worker, deadline)
     while (this.dependencyWork.length && performance.now() < deadline) {
       const id = this.dependencyWork.pop()!
       this.queued[id] = 0
@@ -280,6 +251,49 @@ export class PageResidency {
         this.demand(parent, page.importance, page.demanded)
       }
       if (available) this.requests.update(id)
+    }
+  }
+
+  idle() {
+    return this.requests.first === undefined && this.ready.length === 0 && this.dependencyWork.length === 0 && this.decoders.every(worker => !worker.pending)
+  }
+
+  private launch(worker: PageResidency['decoders'][number], deadline: number) {
+    if (worker.pending || this.decodedBytes >= DECODED_QUEUE_BYTES || performance.now() >= deadline) return
+    let examined = 0
+    while (this.requests.first !== undefined && examined++ < 32 && performance.now() < deadline) {
+      const page = this.pages[this.requests.first]!
+      this.requests.remove(page.id)
+      if (!page.pinned && this.frame - page.demanded > 120) { page.state = 'absent'; page.importance = 0; continue }
+      if (page.parents.some(id => this.pages[id]!.state !== 'resident')) {
+        if (!this.queued[page.id]) { this.dependencyWork.push(page.id); this.queued[page.id] = 1 }
+        continue
+      }
+      if (!this.cpuStaging.reserve(page, 'decoded', PAGE_DECODE_BYTES)) { this.requests.update(page.id); break }
+      page.state = 'loading'
+      const controller = new AbortController()
+      this.controllers.set(page.id, controller)
+      worker.pending = worker.decoder.fetch(page.source.source.packUrl, page.local, page.source.source.metadata.pages[page.local]!, controller.signal).then(result => {
+        if (this.disposed) return
+        controller.signal.throwIfAborted()
+        page.bytes = result.bytes
+        page.state = 'ready'
+        this.ready.push(page)
+        this.decodedBytes += result.bytes.byteLength
+        this.peakDecodedBytes = Math.max(this.peakDecodedBytes, this.decodedBytes)
+        this.wireBytes += result.wireBytes
+        this.decodeMilliseconds += result.decodeMilliseconds
+        this.fetchMilliseconds += result.fetchMilliseconds
+      }).catch(error => {
+        this.cpuStaging.release(page)
+        if (controller.signal.aborted) { page.state = 'absent'; page.importance = 0; this.cancellations++ }
+        else if (!this.disposed) this.failure = error
+      }).finally(() => {
+        worker.pending = null
+        this.controllers.delete(page.id)
+        if (!this.disposed && !this.failure) this.launch(worker, Infinity)
+      })
+      return
     }
   }
 

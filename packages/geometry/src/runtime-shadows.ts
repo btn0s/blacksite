@@ -19,7 +19,7 @@ export class ClusterShadows {
   private readonly materials = new Set<ReturnType<typeof createGeometryDepthMaterial>>()
   readonly residentBytes: number
 
-  constructor(packed: PackedMeshletScene, world: Node<'mat4'>, worldScale: Node<'float'>, layer: number, triangleBudget: number, private readonly submission: MaterialSubmission) {
+  constructor(packed: PackedMeshletScene, world: Node<'mat4'>, worldScale: Node<'float'>, layer: number, triangleBudget: number, eye: Node<'vec3'>, reach: Node<'float'>, private readonly submission: MaterialSubmission) {
     this.object = submission.shadow
     if (!Number.isInteger(layer) || layer < 0 || layer > 31) throw new Error('Shadow layer must be an integer between 0 and 31')
     this.object.name = 'Cluster sun-shadow selection'
@@ -27,7 +27,7 @@ export class ClusterShadows {
     this.traversal = new ClusterTraversal(packed, world, worldScale, this.planes,
       (_sphere, error, scale) => error.mul(scale).mul(worldScale).mul(this.projectionScale),
       this.threshold, bool(true), float(0), vec3(0), () => bool(false), () => bool(false),
-      triangleBudget, float(Math.max(packed.maximumError, 0.000001) * 1.001).mul(worldScale).mul(this.projectionScale), 'Shadow')
+      triangleBudget, float(Math.max(packed.maximumError, 0.000001) * 1.001).mul(worldScale).mul(this.projectionScale), eye, reach, 'Shadow')
     this.residentBytes = this.traversal.residentBytes
     const pulled = clusterVertex(packed, this.traversal.visible)
     for (const batch of packed.depthBatches) {

@@ -186,7 +186,7 @@ export class GeometryPageArena {
       cancelledRequests: state.cancellations,
       uploadBytes: this.uploaded, peakUploadBytes: this.peakUpload, stagingBytes: this.staging.length * GEOMETRY_STAGING_BYTES,
       cpuStaging: state.cpuStaging.snapshot(),
-      decodedBytes: state.decodedBytes, peakDecodedBytes: state.peakDecodedBytes, wireBytes: state.wireBytes, decodeMilliseconds: state.decodeMilliseconds,
+      decodedBytes: state.decodedBytes, peakDecodedBytes: state.peakDecodedBytes, wireBytes: state.wireBytes, decodeMilliseconds: state.decodeMilliseconds, fetchMilliseconds: state.fetchMilliseconds,
       schedulingMs: this.lastSchedulingMs, peakSchedulingMs: this.peakSchedulingMs,
       submissionMs: this.submissionMs, peakSubmissionMs: this.peakSubmissionMs,
     }
