@@ -17,6 +17,7 @@ export interface MeshletTextureFeedback {
   materials: ReadonlyMap<object, readonly TextureDemandBinding[]>
   ledger: ResidencyLedger
   frame: number
+  bindingVersion: number
   consume(mips: Uint32Array, serial: number): void
 }
 

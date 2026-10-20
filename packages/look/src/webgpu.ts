@@ -18,6 +18,7 @@ import { atmosphereOf, type PresetName } from './presets'
 import { type QualityTier } from './quality'
 import { createWebGPUAtmosphere } from './webgpu-physical'
 import { sunPenumbra } from './sun-penumbra'
+import { StaggeredSunShadowNode } from './sun-cascades'
 
 export interface WebGPULookOptions {
   readonly atmosphere?: Atmosphere | PresetName
@@ -34,6 +35,8 @@ export interface WebGPULook {
   readonly pipeline: RenderPipeline
   readonly quality: QualityTier
   beginFrame(): void
+  setCamera(camera: Camera): void
+  compile(compiler: WebGPUCompiler): Promise<void>
   render(dt?: number): void
   setSize(width: number, height: number): void
   setDebug(enabled: boolean): void
@@ -47,6 +50,7 @@ export interface WebGPULook {
 export type WebGPUShadowListener = (renderer: WebGPURenderer, camera: OrthographicCamera, mapSize: Readonly<Vector2>, cascade: number) => void
 export type WebGPUBeforeDepthListener = (renderer: WebGPURenderer, camera: Camera, size: Readonly<Vector2>) => void
 export type WebGPUAfterDepthListener = (renderer: WebGPURenderer, camera: Camera, depth: DepthTexture) => void
+export type WebGPUCompiler = (renderer: WebGPURenderer, camera: Camera, scene: Scene, pass: 'depth' | 'lit' | 'shadow') => Promise<void>
 
 type TimestampBackend = WebGPURenderer['backend'] & {
   readonly isWebGPUBackend?: boolean
@@ -104,8 +108,16 @@ export function registerWebGPULighting(renderer: WebGPURenderer) {
   renderer.library.addLight(LightProbeGridNode, LightProbeGrid)
 }
 
-export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, camera: Camera, options: WebGPULookOptions = {}): Promise<WebGPULook> {
+export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, viewCamera: Camera, options: WebGPULookOptions = {}): Promise<WebGPULook> {
   await renderer.init()
+  const camera = viewCamera.clone()
+  const syncCamera = () => {
+    viewCamera.updateWorldMatrix(true, false)
+    camera.copy(viewCamera, false)
+    camera.matrixAutoUpdate = false
+    camera.matrixWorldAutoUpdate = false
+  }
+  syncCamera()
   if (!(renderer.backend as TimestampBackend).isWebGPUBackend) throw new Error('This scene requires WebGPU')
   registerWebGPULighting(renderer)
   const atmosphere = atmosphereOf(options.atmosphere ?? 'nature')
@@ -128,6 +140,8 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, c
   sun.shadow.bias = -0.0002
   const sunAngle = uniform((sunlight.sunSize ?? 0.53) * Math.PI / 180)
   sun.shadow.filterNode = sunPenumbra(sun, sunAngle, 8, 12)
+  const shadows = new StaggeredSunShadowNode(sun, scene, camera)
+  sun.shadow.shadowNode = shadows
   scene.add(sun)
   const atmosphereGPU = await createWebGPUAtmosphere(renderer, atmosphere, quality)
   scene.background = null
@@ -155,6 +169,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, c
   const scenePass = pass(scene, camera, { depthTexture: prePass.renderTarget.depthTexture!, autoClearDepth: false })
   scenePass.name = 'Scene lighting'
   scenePass.before(prePass)
+  scenePass.before(shadows)
   scenePass.setMRT(mrt({ output }))
   timings.labelTarget(scenePass.renderTarget, scenePass.name)
   disposables.push(prePass, scenePass)
@@ -166,6 +181,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, c
     gtao.scale.value = 1.8
     gtao.thickness.value = 0.5
     gtao.useTemporalFiltering = true
+    scenePass.before(gtao)
     scenePass.contextNode = builtinAOContext(gtao.getTextureNode().sample(screenUV).r)
     disposables.push(gtao)
   }
@@ -211,24 +227,35 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, c
   const beforeDepthListeners = new Set<WebGPUBeforeDepthListener>()
   const afterDepthListeners = new Set<WebGPUAfterDepthListener>()
   const depthSize = new Vector2()
+  let compiling = false
+  const captureState = (camera: Camera, pass: 'depth' | 'lit' | 'shadow') => ({
+    camera, pass, target: renderer.getRenderTarget(), mrt: renderer.getMRT(), lighting: renderer.lighting,
+    context: renderer.contextNode, override: scene.overrideMaterial, toneMapping: renderer.toneMapping, outputColorSpace: renderer.outputColorSpace,
+  })
+  const states = new Map<string, ReturnType<typeof captureState>>()
   const previousBeforeRender = scene.onBeforeRender
   const previousAfterRender = scene.onAfterRender
   const beforeSceneRender: Scene['onBeforeRender'] = function (...args) {
     previousBeforeRender.apply(this, args)
+    if (compiling) return
     const [renderer, , activeCamera, target] = args
     if (target === prePass.renderTarget) {
+      states.set('depth', captureState(activeCamera, 'depth'))
       depthSize.set(target.width, target.height)
       for (const listener of beforeDepthListeners) listener(renderer as unknown as WebGPURenderer, activeCamera, depthSize)
     }
+    if (target === scenePass.renderTarget) states.set('lit', captureState(activeCamera, 'lit'))
     for (let cascade = 0; cascade < sun.shadow.getViewportCount(); cascade++) {
       const shadowCamera = sun.shadow.getCamera(cascade)
       if (activeCamera !== shadowCamera) continue
+      states.set(`shadow${cascade}`, captureState(shadowCamera, 'shadow'))
       for (const listener of shadowListeners) listener(renderer as unknown as WebGPURenderer, shadowCamera, sun.shadow.mapSize, cascade)
       break
     }
   }
   const afterSceneRender: Scene['onAfterRender'] = function (...args) {
     previousAfterRender.apply(this, args)
+    if (compiling) return
     const [renderer, , activeCamera, target] = args
     if (target === prePass.renderTarget) {
       for (const listener of afterDepthListeners) listener(renderer as unknown as WebGPURenderer, activeCamera, prePass.renderTarget.depthTexture!)
@@ -236,23 +263,66 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, c
   }
   scene.onBeforeRender = beforeSceneRender
   scene.onAfterRender = afterSceneRender
+  const updateCamera = () => {
+    syncCamera()
+    for (let index = 0; index < sun.shadow.getViewportCount(); index++) {
+      const layers = sun.shadow.getCamera(index).layers
+      layers.mask = camera.layers.mask
+      for (const layer of options.shadowLayers ?? []) layers.enable(layer)
+    }
+  }
   let disposed = false
   return {
     sun,
     pipeline,
     quality,
     beginFrame() {
+      if (disposed || compiling) return
       renderer.info.reset()
       timings.startFrame()
     },
-    render(dt = 0) {
-      if (disposed) return
-      atmosphereGPU.tick(dt)
-      for (let index = 0; index < sun.shadow.getViewportCount(); index++) {
-        const layers = sun.shadow.getCamera(index).layers
-        layers.mask = camera.layers.mask
-        for (const layer of options.shadowLayers ?? []) layers.enable(layer)
+    setCamera(next) {
+      if (viewCamera === next) return
+      viewCamera = next
+      syncCamera()
+      shadows.reset()
+      resolved.setSize(1, 1)
+    },
+    async compile(compiler) {
+      if (compiling || disposed) return
+      updateCamera()
+      pipeline.render()
+      const previous = captureState(camera, 'lit')
+      compiling = true
+      try {
+        for (const state of states.values()) {
+          renderer.setRenderTarget(state.target)
+          renderer.setMRT(state.mrt)
+          renderer.lighting = state.lighting
+          renderer.contextNode = state.context
+          renderer.toneMapping = state.toneMapping
+          renderer.outputColorSpace = state.outputColorSpace
+          scene.overrideMaterial = state.override
+          if (state.pass !== 'shadow') await renderer.compileAsync(scene, state.camera)
+          await compiler(renderer, state.camera, scene, state.pass)
+        }
+      } finally {
+        renderer.setRenderTarget(previous.target)
+        renderer.setMRT(previous.mrt)
+        renderer.lighting = previous.lighting
+        renderer.contextNode = previous.context
+        renderer.toneMapping = previous.toneMapping
+        renderer.outputColorSpace = previous.outputColorSpace
+        scene.overrideMaterial = previous.override
+        compiling = false
       }
+      updateCamera()
+      pipeline.render()
+    },
+    render(dt = 0) {
+      if (disposed || compiling) return
+      updateCamera()
+      atmosphereGPU.tick(dt)
       pipeline.render()
       timings.resolve(renderer)
     },

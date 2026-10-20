@@ -13,12 +13,15 @@ export function WebGPULook({ onReady, onError, debug = false, ...options }: WebG
   const { gl, scene, camera, size } = useThree()
   const look = useRef<WebGPULookHandle | null>(null)
   const callbacks = useRef({ onReady, onError })
+  const activeCamera = useRef(camera)
+  activeCamera.current = camera
   callbacks.current = { onReady, onError }
   useEffect(() => {
     let active = true
     void createWebGPULook(gl as unknown as WebGPURenderer, scene, camera, options).then(created => {
       if (!active) { created.dispose(); return }
       look.current = created
+      created.setCamera(activeCamera.current)
       created.setDebug(debug)
       callbacks.current.onReady?.(created)
     }).catch(error => {
@@ -30,7 +33,8 @@ export function WebGPULook({ onReady, onError, debug = false, ...options }: WebG
       look.current = null
       callbacks.current.onReady?.(null)
     }
-  }, [gl, scene, camera, options.atmosphere, options.quality, options.shadowDistance, options.shadowMap, options.shadowLayers, options.sunlight, options.camera])
+  }, [gl, scene, options.atmosphere, options.quality, options.shadowDistance, options.shadowMap, options.shadowLayers, options.sunlight, options.camera])
+  useEffect(() => { look.current?.setCamera(camera) }, [camera])
   useEffect(() => { look.current?.setSize(size.width, size.height) }, [size.width, size.height])
   useEffect(() => { look.current?.setDebug(debug) }, [debug])
   useFrame(() => { look.current?.beginFrame() }, -1000)

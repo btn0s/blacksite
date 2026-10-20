@@ -74,7 +74,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     const remove = [
       look.onBeforeDepth((gl, camera, size) => geometry.prepare(gl, camera as PerspectiveCamera, size)),
       look.onAfterDepth((gl, _camera, depth) => geometry.recover(gl, depth)),
-      look.onBeforeShadow((gl, camera, size) => geometry.prepareShadow(gl, camera, size)),
+      look.onBeforeShadow((gl, camera, size, cascade) => geometry.prepareShadow(gl, camera, size, cascade)),
     ]
     return () => { for (const dispose of remove) dispose() }
   }, [geometry, look])

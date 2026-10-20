@@ -42,7 +42,7 @@ Custom surface nodes retain their world-position and geometric-normal inputs. `g
 
 Each stream has 1,048,576 selected slots, two 1,048,576-entry frontier buffers and 524,288 reached group-instance pairs. Groups expand during cut evaluation, without cluster-count times placement-count scratch. The complete frustum cut fits before depth or occlusion; recovery changes visibility within that accepted cut. Scratch, triangle or work overflow invalidates the whole attempt and restarts from roots at a coarser error. Three retries end at the certified coarsest resident cut. Creation verifies its full-placement triangles, selected slots, reached groups, frontier width and node/cluster work. Each selection admits at most 4,194,304 instance/node/cluster operations, reserving the final cut before admitting ordinary attempts. View and two shadow selections plus four visibility passes therefore admit at most 16,777,216 operations together. Invalid cuts never produce draw arguments. Triangle and work pressure have separate GPU hysteresis. Stats include `traversalScratchBytes`, `reachedGroups` and `admittedWork`, alongside triangle budget and effective pixel errors.
 
-One submission owner keeps the view/shadow material union using an immutable spatial tree of conservative material bitsets. Its frame query has a fixed node quota; remaining subtrees contribute their complete material sets. Newly visible materials activate immediately. Per-frame bookkeeping visits spatial nodes, without placement scans. Material buckets retain ordinary three submission: r186 bundle replay fails while updating sampler bindings for the overridden depth/shadow materials. No renderer patch or separate material path is used.
+One submission owner keeps the view/shadow material union using an immutable spatial tree of conservative material bitsets. Its frame query has a fixed node quota; remaining subtrees contribute their complete material sets. Newly visible materials activate immediately. Per-frame bookkeeping visits spatial nodes, without placement scans. Lit, depth and shadow buckets use `BundleGroup` replay with owned materials and override disabled. Depth buckets write their actual normal/motion MRT outputs; shadow buckets own their cull state and coverage. Each bucket compiles through the per-object API before uploading its compacted index storage. Coverage, texture binding publication and viewport changes invalidate the bundles. The look orders depth, shadows and AO before lighting, so nested pass draws cannot enter a cluster bundle.
 
 ## Sun shadows
 
@@ -52,12 +52,12 @@ Set `shadowLayer` (default 31) to a layer excluded by the view camera and enable
 
 ```ts
 const geometry = await MeshletScene.create(renderer, entries, { shadowLayer: 2, shadowPixelError: 1 })
-const removeShadowListener = look.onBeforeShadow((renderer, cascadeCamera, mapSize) => {
-  geometry.prepareShadow(renderer, cascadeCamera, mapSize)
+const removeShadowListener = look.onBeforeShadow((renderer, cascadeCamera, mapSize, cascade) => {
+  geometry.prepareShadow(renderer, cascadeCamera, mapSize, cascade)
 })
 ```
 
-Pass `shadowLayers: [2]` when creating the look. `setShadowEnabled(false)` disables casting; receiving shadows remains enabled. Source alpha cutouts and primary-UV transforms are preserved in the caster materials. `prepareShadow` expects the actual fitted cascade camera and its map size, before the shadow render pass begins. The look's public scene render hook supplies these after three updates the cascade matrices. Dispose the listener when removing the geometry.
+Pass `shadowLayers: [2]` when creating the look. `setShadowEnabled(false)` disables casting; receiving shadows remains enabled. Source alpha cutouts and primary-UV transforms are preserved in the caster materials. `prepareShadow` expects the actual fitted cascade camera, map size and stable cascade index before the shadow render pass begins. The look initializes both maps, then updates near and far on alternating frames. The skipped cascade retains its map and projection; only the active cascade needs selection and compaction. Dispose the listener when removing the geometry.
 
 ## Offline build
 

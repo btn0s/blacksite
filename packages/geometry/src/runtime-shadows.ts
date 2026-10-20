@@ -54,7 +54,7 @@ export class ClusterShadows {
     return this.traversal.indices.readStats(values)
   }
 
-  prepare(renderer: WebGPURenderer, camera: OrthographicCamera, mapSize: Readonly<Vector2>, pixelError: number, world: Matrix4, view: number) {
+  prepare(renderer: WebGPURenderer, camera: OrthographicCamera, mapSize: Readonly<Vector2>, pixelError: number, world: Matrix4, cascade: number) {
     if (!this.object.visible) return
     if (!camera.isOrthographicCamera) throw new Error('Cluster sun shadows require an orthographic cascade camera')
     if (!(pixelError > 0)) throw new Error('Cluster shadow pixel error must be positive')
@@ -63,7 +63,7 @@ export class ClusterShadows {
     this.threshold.value = pixelError
     this.viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
     this.frustum.setFromProjectionMatrix(this.viewProjection, WebGPUCoordinateSystem)
-    this.submission.update(this.frustum, world, view)
+    this.submission.update(this.frustum, world, cascade + 1)
     for (let i = 0; i < 6; i++) {
       const plane = this.frustum.planes[i]!
       this.planes.array[i]!.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant)

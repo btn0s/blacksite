@@ -3,7 +3,7 @@ import {
   Matrix4, Mesh, MeshStandardNodeMaterial, PerspectiveCamera, Scene,
   StorageBufferAttribute, Vector2, Vector3, Vector4, WebGPUCoordinateSystem,
 } from 'three/webgpu'
-import type { DepthTexture, MeshBasicNodeMaterial, OrthographicCamera, WebGPURenderer } from 'three/webgpu'
+import type { Camera, DepthTexture, MeshBasicNodeMaterial, OrthographicCamera, WebGPURenderer } from 'three/webgpu'
 import {
   Fn, If, Loop, bool, ceil, clamp, float,
   floor, instanceIndex, log2, max, min, mix, output, storage,
@@ -16,7 +16,7 @@ import { clusterGeometry, clusterVertex } from './runtime-vertex'
 import { ClusterShadows } from './runtime-shadows'
 import { ClusterTraversal } from './runtime-traversal'
 import { ClusterTextureFeedback, type MeshletTextureFeedback } from './runtime-textures'
-import { MaterialSubmission } from './runtime-submission'
+import { MaterialSubmission, type GeometryPass } from './runtime-submission'
 
 export type { MeshletTextureFeedback, TextureDemandBinding } from './runtime-textures'
 
@@ -132,12 +132,7 @@ export class MeshletScene {
     const packed = await packScene(renderer, entries)
     const scene = new MeshletScene(packed, options)
     try {
-      const camera = new PerspectiveCamera()
-      camera.layers.enableAll()
-      const warmup = new Scene()
-      warmup.add(scene.object)
-      await renderer.compileAsync(warmup, camera)
-      warmup.remove(scene.object)
+      scene.submission.initialize(renderer)
       await uploadAttributes(renderer, scene.uploadBuffers)
       await scene.traversal.upload(renderer)
       await scene.shadows.upload(renderer)
@@ -302,6 +297,10 @@ export class MeshletScene {
     this.debug.value = view === 'meshlets' ? 1 : view === 'lod' ? 2 : 0
   }
 
+  compile(renderer: WebGPURenderer, camera: Camera, scene: Scene, pass: GeometryPass) {
+    return this.submission.compile(renderer, camera, scene, pass)
+  }
+
   setLodEnabled(enabled: boolean) {
     if (this.lodEnabled.value === enabled) return
     this.lodEnabled.value = enabled
@@ -312,12 +311,12 @@ export class MeshletScene {
 
   setShadowEnabled(enabled: boolean) { this.shadows.object.visible = enabled }
 
-  prepareShadow(renderer: WebGPURenderer, camera: OrthographicCamera, mapSize: Readonly<Vector2>) {
+  prepareShadow(renderer: WebGPURenderer, camera: OrthographicCamera, mapSize: Readonly<Vector2>, cascade: number) {
     if (!this.shadowEnabled) return
     this.object.updateWorldMatrix(true, true)
     this.world.value.copy(this.object.matrixWorld)
     this.worldScale.value = transformScale(this.object.matrixWorld)
-    this.shadows.prepare(renderer, camera, mapSize, this.shadowPixelError, this.object.matrixWorld, this.shadowPasses + 1)
+    this.shadows.prepare(renderer, camera, mapSize, this.shadowPixelError, this.object.matrixWorld, cascade)
     this.shadowPasses++
   }
 
@@ -326,6 +325,7 @@ export class MeshletScene {
   }
 
   prepare(renderer: WebGPURenderer, camera: PerspectiveCamera, viewport: Readonly<Vector2>) {
+    this.submission.updateBindings(this.textureFeedback?.feedback.bindingVersion ?? 0, viewport)
     if (this.textureFeedback) this.textureFeedback.feedback.frame++
     this.lit.visible = false
     this.depth.visible = true

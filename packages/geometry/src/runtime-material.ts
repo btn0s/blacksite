@@ -1,5 +1,5 @@
-import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, StandardNodeLibrary, TangentSpaceNormalMap, Texture, Vector2 } from 'three/webgpu'
-import { Fn, bumpMap, context, float, materialColor, max, modelWorldMatrix, normalView, positionView, texture, uniform, uv, vec2, vec3, vec4, vertexColor } from 'three/tsl'
+import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, NoBlending, StandardNodeLibrary, TangentSpaceNormalMap, Texture, Vector2 } from 'three/webgpu'
+import { Fn, bumpMap, context, faceDirection, float, materialColor, max, modelWorldMatrix, mrt, normalView, normalViewGeometry, packNormalToRGB, positionView, texture, uniform, uv, vec2, vec3, vec4, velocity, vertexColor } from 'three/tsl'
 import type { MeshStandardMaterial, Node } from 'three/webgpu'
 import type { clusterVertex } from './runtime-vertex'
 import type { PackedMeshletScene } from './runtime-data'
@@ -12,6 +12,7 @@ export function createGeometryMaterial(source: MeshStandardMaterial | MeshStanda
     : materialLibrary.fromMaterial(source.clone())
   if (!(material instanceof MeshStandardNodeMaterial)) throw new Error('Cluster surfaces require standard or physical materials')
   material.alphaTest = source.alphaTest
+  material.allowOverride = false
   if (material.transparent || material.displacementMap || material.positionNode || material.vertexNode || material.fragmentNode || material.depthNode) {
     throw new Error('Cluster materials require opaque or alpha-tested surfaces with static geometry and standard depth')
   }
@@ -91,16 +92,21 @@ export function geometryUsesCoverage(source: MeshStandardMaterial | MeshStandard
 
 export function createGeometryDepthMaterial(batch: PackedMeshletScene['depthBatches'][number], pulled: PulledVertex, shadow = false) {
   const source = batch.material
+  const material = new MeshBasicNodeMaterial({ blending: NoBlending, fog: false })
+  material.allowOverride = false
+  material.positionNode = pulled.position
+  material.side = shadow ? batch.shadowSide : batch.side
+  material.colorNode = vec4(0, 0, 0, 1)
+  if (!shadow) material.mrtNode = mrt({ output: packNormalToRGB(normalViewGeometry.mul(faceDirection)), velocity })
   if (!source) {
-    const material = new MeshBasicNodeMaterial({ side: batch.side, shadowSide: batch.shadowSide })
     material.name = shadow ? 'Opaque cluster shadows' : 'Opaque cluster depth'
-    material.positionNode = pulled.position
-    material.colorNode = vec4(0, 0, 0, 1)
     return material
   }
   const node = source as MeshStandardNodeMaterial
   const coverageUsesAlpha = source.alphaTest > 0 || Boolean(node.alphaTestNode) || source.alphaHash
-  const material = new MeshBasicNodeMaterial({ side: source.side, alphaTest: node.alphaTestNode ? 0 : source.alphaTest, alphaHash: source.alphaHash, depthWrite: true })
+  material.name = `${source.name} cluster ${shadow ? 'shadows' : 'depth'}`
+  material.alphaTest = node.alphaTestNode ? 0 : source.alphaTest
+  material.alphaHash = source.alphaHash
   const context = vertexContext(node, pulled)
   const sourceMask = shadow ? node.maskShadowNode ?? node.maskNode : node.maskNode
   let mask = sourceMask ? sourceMask.context(context) : null
@@ -115,8 +121,6 @@ export function createGeometryDepthMaterial(batch: PackedMeshletScene['depthBatc
       mask = mask ? mask.and(cutout) : cutout
     }
   }
-  material.positionNode = pulled.position
-  material.shadowSide = source.shadowSide
   material.maskNode = mask
   return material
 }

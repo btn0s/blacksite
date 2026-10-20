@@ -4,6 +4,7 @@ import type { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import { getByteLength } from 'three/src/extras/TextureUtils.js'
 import { ResidencyLedger, type MeshletTextureFeedback, type TextureDemandBinding } from '@blacksite/geometry'
 import type { texture } from 'three/tsl'
+import { TextureTailReader } from './scan-texture-fetch'
 
 export type ScanTail = { file: string; size: number; width: number; height: number; levels: number; wireBytes: number }
 export type ScanImageSource = { file: string; srgb: boolean; tails: ScanTail[] }
@@ -29,13 +30,14 @@ const textureBytes = (tail: Pick<ScanTail, 'width' | 'height' | 'levels'>, map: 
 }
 
 export class ScanTextureStreaming {
+  private readonly reader = new TextureTailReader()
   readonly ledger = new ResidencyLedger(2560 * MiB, { textures: 768 * MiB, staging: 64 * MiB })
   private readonly decoding = new ResidencyLedger(64 * MiB, {})
   readonly resident: Allocation[] = []
   readonly images: ScanTexture[] = []
   readonly bindings = new Map<object, readonly TextureDemandBinding[]>()
   readonly feedback: MeshletTextureFeedback = {
-    imageCount: 0, materials: this.bindings, ledger: this.ledger, frame: 0,
+    imageCount: 0, materials: this.bindings, ledger: this.ledger, frame: 0, bindingVersion: 0,
     consume: (mips, serial) => {
       if (serial <= this.completed || this.disposed) return
       this.completed = serial
@@ -67,10 +69,7 @@ export class ScanTextureStreaming {
   constructor(private readonly renderer: WebGPURenderer, private readonly loader: KTX2Loader, private readonly root: string) {}
 
   private async decode(tail: ScanTail, signal?: AbortSignal) {
-    const response = await fetch(this.root + tail.file, { signal })
-    if (!response.ok) throw new Error(`Texture tail unavailable: ${tail.file}`)
-    const buffer = await response.arrayBuffer()
-    if (buffer.byteLength !== tail.wireBytes) throw new Error(`Texture tail size changed: ${tail.file}`)
+    const buffer = await this.reader.read(new URL(this.root + tail.file, location.href).href, tail.wireBytes, signal)
     signal?.throwIfAborted()
     return new Promise<Texture>((resolve, reject) => { this.loader.parse(buffer, resolve, reject) })
   }
@@ -189,6 +188,7 @@ export class ScanTextureStreaming {
           image.allocation = allocation
           image.tail = tail
           for (const node of image.nodes) node.value = texture
+          this.feedback.bindingVersion++
         } finally { this.decoding.release(pending.staging) }
         return
       }
@@ -245,6 +245,7 @@ export class ScanTextureStreaming {
 
   dispose() {
     this.disposed = true
+    this.reader.dispose()
     if (this.pending) this.cancel(this.pending)
     for (const allocation of [...this.resident]) this.release(allocation)
     this.retiring.length = 0

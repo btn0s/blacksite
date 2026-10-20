@@ -96,10 +96,10 @@ export function Landscape({ world, tier, wind, look, owned, stones, handle }: { 
     void createRocks(owned, stones, renderer).then(value => {
       if (cancelled) { value.dispose(); return }
       rocks = value
-      subscriptions.push(look.onBeforeShadow((shadowRenderer, shadowCamera, mapSize) => {
+      subscriptions.push(look.onBeforeShadow((shadowRenderer, shadowCamera, mapSize, cascade) => {
         forest.prepareShadow(shadowRenderer, shadowCamera)
         cover.prepareShadow(shadowRenderer, shadowCamera)
-        value.geometry.prepareShadow(shadowRenderer, shadowCamera, mapSize)
+        value.geometry.prepareShadow(shadowRenderer, shadowCamera, mapSize, cascade)
       }))
       subscriptions.push(look.onBeforeDepth((_, activeCamera, size) => value.prepare(activeCamera as PerspectiveCamera, size)))
       subscriptions.push(look.onAfterDepth((_, __, depth) => value.recover(depth)))

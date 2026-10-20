@@ -89,18 +89,24 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     const remove = [
       look.onBeforeDepth((gl, camera, size) => geometry.prepare(gl, camera as PerspectiveCamera, size)),
       look.onAfterDepth((gl, _camera, depth) => geometry.recover(gl, depth)),
-      look.onBeforeShadow((gl, camera, size) => geometry.prepareShadow(gl, camera, size)),
+      look.onBeforeShadow((gl, camera, size, cascade) => geometry.prepareShadow(gl, camera, size, cascade)),
     ]
     return () => { for (const dispose of remove) dispose() }
   }, [geometry, look])
   useFrame(() => {
     if (!look) return
     if (shared.warm.current >= 10) textures.update()
-    if (collidersReady) {
-      shared.warm.current++
-      if (shared.warm.current === 10) onReady()
-    }
   }, 0.5)
+  useEffect(() => {
+    if (!look || !collidersReady) return
+    let active = true
+    void look.compile((gl, camera, scene, pass) => geometry.compile(gl, camera, scene, pass)).then(() => geometry.readStats(renderer, look.timings())).then(() => {
+      if (!active) return
+      shared.warm.current = 10
+      onReady()
+    }).catch(onError)
+    return () => { active = false }
+  }, [collidersReady, geometry, look, onError, onReady, renderer, shared])
   useEffect(() => {
     let pending = false
     const interval = setInterval(() => {
