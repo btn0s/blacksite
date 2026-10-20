@@ -2,6 +2,7 @@ import { Box3, Matrix4, Vector3 } from 'three'
 import { MeshStandardNodeMaterial, type WebGPURenderer } from 'three/webgpu'
 import { GEOMETRY_ARENA_BYTES, loadGeometryPageSource, MeshletScene, type GeometryPageSource, type MeshletSceneEntry } from '@blacksite/geometry'
 import { loadScanMaterials, scanTextureFeedback, type ScanSurface } from '../../shared/scan-material'
+import { ScanFlames, type ScanFlameGeometry } from '../../shared/scan-flames'
 import { createRuinsHome, type RuinsViews } from './views'
 import type { CollisionDirectory } from './collision'
 
@@ -26,7 +27,7 @@ export async function loadRuins(progress: (detail: string) => void) {
   if (manifest.version !== 5 || manifest.placements !== 20430) throw new Error('Full level requires all 20,430 version 5 placements')
   const [directory, surfaces, environment, collision] = await Promise.all([
     fetchBytes(manifest.directory).then(response => response.arrayBuffer()),
-    fetchBytes(manifest.surfaces).then(response => response.json()) as Promise<{ surfaces: ScanSurface[] }>,
+    fetchBytes(manifest.surfaces).then(response => response.json()) as Promise<{ surfaces: ScanSurface[]; flameGeometry: Record<string, ScanFlameGeometry> }>,
     fetchBytes(manifest.environment).then(response => response.json()) as Promise<{ components: EnvironmentComponent[] }>,
     fetchBytes(manifest.collision).then(response => response.json()) as Promise<CollisionDirectory>,
   ])
@@ -51,7 +52,9 @@ export async function loadRuins(progress: (detail: string) => void) {
     pits: { bounds: new Box3(), placements: [] },
     cliffs: { bounds: new Box3(), placements: [] },
   }
+  const flamePaths = new Set(surfaces.surfaces.filter(surface => surface.family === 'flame').map(surface => surface.path))
   const excluded = new Set([...manifest.untranslated, ...manifest.excluded].map(surface => surface.path))
+  for (const path of flamePaths) excluded.add(path)
   const size = new Vector3()
   const volumes = { archway: 0, cliffs: 0 }
   for (const placement of placements) {
@@ -100,13 +103,22 @@ export async function loadRuins(progress: (detail: string) => void) {
       for (const surface of [...manifest.untranslated, ...manifest.excluded]) if (!materials.has(surface.path)) materials.set(surface.path, invisible)
       performance.measure('ruins-materials', 'ruins-materials-start')
       const grouped = new Map<string, MeshletSceneEntry & { instances: Matrix4[] }>()
+      const flames = new Map<string, { geometry: ScanFlameGeometry; material: NonNullable<ReturnType<typeof materials.get>>; matrices: Matrix4[] }>()
       for (const placement of placements) {
         const mapping = materialMap.subarray(placement.firstMaterial, placement.firstMaterial + placement.materials)
+        const flame = Array.from(mapping, material => manifest.materialPaths[material]!).filter(path => flamePaths.has(path))
+        if (flame.length && placement.visible) {
+          if (mapping.length !== 1) throw new Error(`Flame surfaces require single-material placements: ${flame[0]}`)
+          const geometryId = manifest.geometries[placement.geometry]!.id, key = `${geometryId}|${flame[0]}`
+          if (!flames.has(key)) flames.set(key, { geometry: surfaces.flameGeometry[geometryId]!, material: materials.get(flame[0]!)!, matrices: [] })
+          flames.get(key)!.matrices.push(placement.matrix)
+        }
         const id = `${placement.geometry}:${Number(placement.visible)}:${mapping.join(',')}`
         if (!grouped.has(id)) {
           const slots = Array.from(mapping, material => {
-            if (!placement.visible) return invisible
-            const path = manifest.materialPaths[material]!, value = materials.get(path)
+            const path = manifest.materialPaths[material]!
+            if (!placement.visible || flamePaths.has(path)) return invisible
+            const value = materials.get(path)
             if (!value) throw new Error(`Full-level surface has no authored descriptor: ${path}`)
             return value
           })
@@ -118,7 +130,7 @@ export async function loadRuins(progress: (detail: string) => void) {
       performance.mark('ruins-geometry-start')
       const geometry = await MeshletScene.create(renderer, [...grouped.values()], { materialIds: materials.materialIds, pixelError: 2, occlusion: true, shadowLayer: 2, shadowPixelError: 4, textureFeedback: scanTextureFeedback(renderer) })
       performance.measure('ruins-geometry', 'ruins-geometry-start')
-      return geometry
+      return { geometry, flames: new ScanFlames([...flames.values()]) }
     },
   }
 }

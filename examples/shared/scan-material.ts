@@ -3,18 +3,19 @@ import { type MeshStandardNodeMaterial, type Node, type WebGPURenderer } from 't
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import transcoderScript from 'three/examples/jsm/libs/basis/basis_transcoder.js?url'
 import transcoderWasm from 'three/examples/jsm/libs/basis/basis_transcoder.wasm?url'
-import { Fn, nodeObject, uv, vec4 } from 'three/tsl'
+import { Fn, context, nodeObject, uint, uv, vec4 } from 'three/tsl'
 import { type TextureDemandBinding } from '@blacksite/geometry'
 import { createGeneralMaterial } from './scan-material-general'
 import { createSurfaceMaterial } from './scan-material-surfaces'
 import { createSmartMaterial, createPropMaterial } from './scan-surface-materials'
+import { createFlameMaterial } from './scan-material-flame'
 import { ScanTextureStreaming, type ScanImageSource, type ScanTexture } from './scan-texture-streaming'
 import { ScanMaterialData, ScanMaterialTexture } from './scan-material-data'
 
 type Channel = 'r' | 'g' | 'b' | 'a'
 type Parameters = { scalar: Record<string, number>; vector: Record<string, number[]>; static_switch: Record<string, boolean> }
 export type ScanSurface = {
-  family: 'custom-general' | 'smart-layers' | 'simple-orm' | 'candle' | 'foliage' | 'generic-props' | 'cutout' | 'vertex-blend' | 'solid' | 'world-grid' | 'steel' | 'emissive'
+  family: 'custom-general' | 'smart-layers' | 'simple-orm' | 'candle' | 'foliage' | 'generic-props' | 'cutout' | 'vertex-blend' | 'solid' | 'world-grid' | 'steel' | 'emissive' | 'flame'
   path: string
   parent?: string | null
   parameters: Parameters
@@ -91,6 +92,7 @@ export async function loadScanMaterials(surfaces: readonly ScanSurface[], root: 
         const template = surface.family === 'smart-layers' ? createSmartMaterial(graph, sample, primaryUV)
           : surface.family === 'simple-orm' || surface.family === 'candle' ? createPropMaterial(graph, sample, primaryUV)
           : surface.family === 'custom-general' || surface.family === 'foliage' ? createGeneralMaterial(graph, sample, primaryUV)
+          : surface.family === 'flame' ? createFlameMaterial(graph, sample, primaryUV)
           : createSurfaceMaterial(graph, sample, primaryUV)
         families.set(surface.family, template)
       }
@@ -99,7 +101,10 @@ export async function loadScanMaterials(surfaces: readonly ScanSurface[], root: 
       Object.assign(material, { scanTextures: maps })
       materials.set(surface.path, material)
       materialIds.set(material, id)
-      streaming.bindings.set(material, Object.entries(maps).map(([name, image]) => textureBinding(surface, name, image.id)))
+      if (surface.family === 'flame') {
+        material.contextNode = context({ getMaterialId: () => uint(id) })
+        for (const image of Object.values(maps)) streaming.pin(image, 256)
+      } else streaming.bindings.set(material, Object.entries(maps).map(([name, image]) => textureBinding(surface, name, image.id)))
     }
     return materials
   } catch (error) {

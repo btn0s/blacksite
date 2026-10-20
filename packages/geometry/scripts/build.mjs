@@ -307,7 +307,7 @@ async function buildGeometry(input, outputArgument, source, budget, paged) {
   }
 }
 
-export async function buildGltfPages(inputArgument, meshIndex, outputArgument, budget = {}) {
+export async function readGltfMeshGeometry(inputArgument, meshIndex) {
   const inputPath = resolve(inputArgument)
   await MeshoptDecoder.ready
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.decoder': MeshoptDecoder })
@@ -321,9 +321,14 @@ export async function buildGltfPages(inputArgument, meshIndex, outputArgument, b
     if (!position) throw new Error('A primitive has no positions')
     return { primitive, matrix: new Matrix4(), count: position.getCount() }
   })
-  const geometry = geometryFromEntries(entries, root.listMaterials())
+  return { name: mesh.getName(), geometry: geometryFromEntries(entries, root.listMaterials()) }
+}
+
+export async function buildGltfPages(inputArgument, meshIndex, outputArgument, budget = {}) {
+  const inputPath = resolve(inputArgument)
+  const { name, geometry } = await readGltfMeshGeometry(inputPath, meshIndex)
   const source = await readFile(inputPath)
-  return buildMeshletPages({ name: mesh.getName(), ...geometry, indices: geometry.sourceIndices }, outputArgument,
+  return buildMeshletPages({ name, ...geometry, indices: geometry.sourceIndices }, outputArgument,
     { sha256: sha256(source), bytes: source.byteLength, meshIndex }, budget)
 }
 

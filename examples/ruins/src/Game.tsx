@@ -21,6 +21,7 @@ import { createScanMaterialStreaming, residentScanTextures } from '../../shared/
 import { loadRuins, type RuinsAsset } from './asset'
 import { RuinsCollision, type RegionalCollision } from './collision'
 import { scanEnvironment } from '../../shared/scan-environment'
+import type { ScanFlames } from '../../shared/scan-flames'
 import { ruinsViews, ruinsNearRadius, createRuinsCameras, type RuinsView } from './views'
 
 const shadowLayers = [2]
@@ -32,11 +33,12 @@ const loadingUploadBytes = 32 * 1048576
 const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
 const lodLegend = [{ color: '#ffc1aa', label: 'Source · 0' }, { color: '#adc4ef', label: 'Level 1' }, { color: '#e3ffa3', label: 'Level 2' }]
 
-function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, shared, onStats, onReady }: {
+function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, telemetry, shared, onStats, onReady }: {
   onStats(value: MeshletStats): void
   onReady(): void
   owned: RuinsAsset
   geometry: MeshletScene
+  flames: ScanFlames
   walker: CharacterHandle
   gameplayCamera: PerspectiveCamera
   inspector: ReturnType<typeof createInspector>
@@ -78,6 +80,10 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     scene.add(geometry.object)
     return () => { shared.geometry.current = null; scene.remove(geometry.object); geometry.dispose() }
   }, [geometry, scene, shared])
+  useEffect(() => {
+    scene.add(flames.object)
+    return () => { scene.remove(flames.object); flames.dispose() }
+  }, [flames, scene])
   useEffect(() => geometry.resetHistory(), [camera, geometry])
   useEffect(() => geometry.setRequestReach(startsAtSpawn.current ? ruinsNearRadius : outwardReach), [geometry])
   useEffect(() => {
@@ -97,6 +103,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     const allowance = loading ? loadingUploadBytes : 8 * 1048576
     const uploaded = compiling.current ? 0 : textures.update(deadline, allowance)
     geometry.update(renderer, deadline, allowance - uploaded)
+    flames.update(camera)
   }, 0.5)
   useFrame(() => { if (look) geometry.endFrame(renderer, shared.warm.current < 10) }, 2)
   useEffect(() => {
@@ -156,6 +163,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
 
 function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: ReturnType<typeof makeInputDevices>; onReady(): void }) {
   const [geometry, setGeometry] = useState<MeshletScene | null>(null)
+  const [flames, setFlames] = useState<ScanFlames | null>(null)
   const [selection, setSelection] = useState<MeshletStats | null>(null)
   const home = owned.home
   const walker = useMemo(() => createWalker(home, runtime), [home, runtime])
@@ -197,7 +205,11 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
     const gl = new WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', trackTimestamp: true, requiredLimits: { maxStorageBufferBindingSize: storageSize, maxBufferSize: storageSize, maxStorageBuffersPerShaderStage: 12 } })
     await gl.init()
     if (!gl.backend.isWebGPUBackend) throw new Error('A WebGPU adapter is required')
-    try { setGeometry(await owned.createGeometry(gl)) }
+    try {
+      const created = await owned.createGeometry(gl)
+      setGeometry(created.geometry)
+      setFlames(created.flames)
+    }
     catch (error) { gl.dispose(); throw error }
     gl.info.autoReset = false
     return gl
@@ -205,7 +217,7 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
   if (viewError) throw viewError
   return <>
     <Canvas frameloop="always" shadows dpr={1} camera={cameras[view]} gl={renderer}>
-      {geometry && <Scene owned={owned} geometry={geometry} walker={walker} gameplayCamera={cameras.spawn} inspector={inspector} telemetry={telemetry} shared={shared} onStats={setSelection} onReady={onReady} />}
+      {geometry && flames && <Scene owned={owned} geometry={geometry} flames={flames} walker={walker} gameplayCamera={cameras.spawn} inspector={inspector} telemetry={telemetry} shared={shared} onStats={setSelection} onReady={onReady} />}
     </Canvas>
     <SelectionDisplay selection={selection} sourceTriangles={owned.sourceTriangles} cappedTriangles={owned.cappedTriangles} />
     <section className="bs-inspect" aria-label="Camera views" style={{ top: 44, right: 'auto', left: 16, width: 360, maxWidth: 'calc(100vw - 32px)' }}>

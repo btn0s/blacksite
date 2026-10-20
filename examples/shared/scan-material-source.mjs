@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import { readGltfMeshGeometry } from '../../packages/geometry/scripts/build.mjs'
 
 const families = new Map([
   ['M_MS_CustomGeneral', 'custom-general'],
@@ -14,7 +15,9 @@ const families = new Map([
   ['M_Metal_Burnished_Steel1', 'steel'],
   ['BasicShapeMaterial', 'solid'],
   ['WorldGridMaterial', 'world-grid'],
+  ['M_Flame', 'flame'],
 ])
+
 
 export function scanMaterialFamily(materials, path) {
   const visited = new Set()
@@ -23,13 +26,12 @@ export function scanMaterialFamily(materials, path) {
     if (visited.has(current)) throw new Error(`Cyclic material inheritance: ${path}`)
     visited.add(current)
     const name = current.split('.').at(-1)
-    const reason = name === 'M_Flame' ? 'Flame FX: animated translucent billboard'
+    const reason = name === 'M_MS_CustomDecal' ? 'Projected decal: receiver depth and material-buffer blending'
       : name === 'M_FogCard' ? 'Fog card FX: depth-faded translucent atmosphere'
-        : name === 'M_VolumetricFog_Static' ? 'Volumetric fog FX: volume integration'
-          : name === 'M_MagicEnergy' ? 'Energy FX: animated translucency and vertex displacement'
-            : name === 'M_MS_Puddle' ? 'Water FX: single-layer water scattering, absorption and scene-depth integration'
-              : name === 'M_MS_CustomDecal' ? 'Projected decal: receiver depth and material-buffer blending'
-                : null
+      : name === 'M_VolumetricFog_Static' ? 'Volumetric fog FX: volume integration'
+        : name === 'M_MagicEnergy' ? 'Energy FX: animated translucency and vertex displacement'
+          : name === 'M_MS_Puddle' ? 'Water FX: single-layer water scattering, absorption and scene-depth integration'
+            : null
     if (reason) return { family: 'excluded', parent, reason }
     if (families.has(name)) return { family: families.get(name), parent }
   }
@@ -66,14 +68,15 @@ export async function describeScanMaterials(source, approvedSource, uses, graphT
         : family === 'simple-orm' ? ['Map_Colour', 'Map_Normals', 'Map_ORM']
           : family === 'generic-props' ? ['Map_Colour', 'Map_Normals', 'Map_ORM', ...(parameters.static_switch['Use Standalone Metalness'] ? ['Map_Metalness'] : [])]
             : family === 'cutout' ? ['Albedo', 'Normal', 'Opacity', ...(parameters.static_switch['Use Unique Roughness'] ? ['Roughness'] : [])]
-              : family === 'vertex-blend' ? Object.keys(parameters.texture).filter(name => !name.endsWith('Metalness'))
+              : family === 'flame' ? ['Flame TX', 'Distortion']
+                : family === 'vertex-blend' ? Object.keys(parameters.texture).filter(name => !name.endsWith('Metalness'))
                 : family === 'smart-layers' ? ['Unique_BaseColor', 'Unique_Normal', 'Unique_Mask', '0 - Detail Texture', ...[1, 2, 3, 4].filter(index => parameters.static_switch[`${index} - Detail Textures`]).map(index => `${index} - Detail Texture`), ...(parameters.static_switch['1 - Large Scale Rock'] ? ['Large Scale Rock Texture Sample 01'] : []), ...(parameters.static_switch['2 - Large Scale Rock'] ? ['Large Scale Rock Texture Sample 02'] : []), ...(!parameters.static_switch['RGB Blend - Disable'] ? ['RGBNoise'] : [])]
                   : []
     for (const name of names) {
       if (name === 'RGBNoise') {
         maps[name] = { ...approved.maps.RGBNoise, file: resolve(dirname(approvedSource), approved.maps.RGBNoise.file) }
       } else {
-        const target = { Map_Colour: 'Albedo', Map_Normals: 'Normal', Map_ORM: 'Packed', Map_Metalness: 'Metalness' }[name] ?? name
+        const target = { Map_Colour: 'Albedo', Map_Normals: 'Normal', Map_ORM: 'Packed', Map_Metalness: 'Metalness', 'Flame TX': 'Flame' }[name] ?? name
         maps[target] = image(parameters.texture[name], name)
       }
     }
@@ -93,8 +96,19 @@ export async function describeScanMaterials(source, approvedSource, uses, graphT
     entry.paths.push(surface.path)
     for (const placement of placements(uses.find(use => use.path === surface.path))) entry.placements.add(placement)
   }
+  const flameGeometry = {}
+  for (const surface of surfaces) {
+    if (surface.family !== 'flame') continue
+    for (const id of new Set(uses.find(use => use.path === surface.path).uses.map(item => item.geometry))) {
+      if (flameGeometry[id]) continue
+      const [file, index] = id.split(':')
+      const { geometry } = await readGltfMeshGeometry(join(source, file), Number(index))
+      const round = array => Array.from(array, value => Math.round(value * 1e6) / 1e6)
+      flameGeometry[id] = { position: round(geometry.positions), normal: round(geometry.normals), uv: round(geometry.uvs), index: Array.from(geometry.sourceIndices) }
+    }
+  }
   const translations = [...groups.values()].map(group => ({ ...group, placements: group.placements.size }))
-  return { version: 1, surfaces, excluded, untranslated, coverage: { active: uses.length, supported: surfaces.length, untranslated: untranslated.length, excluded: excluded.length }, translations }
+  return { version: 1, surfaces, excluded, untranslated, flameGeometry, coverage: { active: uses.length, supported: surfaces.length, untranslated: untranslated.length, excluded: excluded.length }, translations }
 }
 
 export async function writeScanMaterialSource(source, approvedSource, uses, output, graphTextures = {}) {
