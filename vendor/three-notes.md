@@ -102,3 +102,10 @@ Custom depth/shadow materials remain: their pulled geometry, UV context,
 coverage and opaque batching are required rendering behavior. The explicit
 depth/shadow/AO dependency ordering also remains because nested render-pass
 recording is a separate concern.
+
+## Sun shadow cascades
+
+`SunLight` and `SunLightShadow` take a cascade count (default 2) and keep their
+cascades side by side in one atlas, `cascades * mapSize.x` wide. `setCascadeCount`
+rebuilds the cameras, matrices and viewports, and `copy` carries the count. The
+shader chunks already iterate the viewport count, so nothing else depends on it.

@@ -190,7 +190,7 @@ export class MaterialSubmission {
   warmupStats() { return { compiled: this.compiled, total: this.total, required: this.required } }
 
   update(frustum: Frustum, world: Matrix4, view: number) {
-    if (view < 0 || view > 2) throw new Error('Cluster submission supports one view and two shadow cascades')
+    if (view < 0 || !Number.isInteger(view)) throw new Error('Cluster submission needs a view index of zero or a shadow cascade index plus one')
     const mask = this.masks[view === 0 ? 0 : 1]!
     this.coverage.query(frustum, world, this.queried)
     let changed = false
