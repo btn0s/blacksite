@@ -1,5 +1,5 @@
 export const MESHLET_MAGIC = 0x4c4d5342
-export const MESHLET_VERSION = 2
+export const MESHLET_VERSION = 3
 export const CLUSTER_STRIDE = 8
 export const CLUSTER_LOD_STRIDE = 12
 export const GROUP_STRIDE = 4
@@ -16,6 +16,8 @@ export const MESHLET_SECTIONS = [
   'groupData',
   'groupBounds',
   'groupChildren',
+  'nodeData',
+  'nodeBounds',
 ] as const
 
 export interface GeometryMaterial {
@@ -47,8 +49,13 @@ export interface MeshletGeometryManifest {
 export interface MeshletMetadata {
   name: string
   sourceTriangles: number
+  sourceVertices: number
   residentVertices: number
   meshletVertices: number
+  residentTriangles: number
+  minimumError: number
+  nodeCount: number
+  rootCount: number
   vertexStride: number
   positionBits: number
   normalBits: number
@@ -78,4 +85,6 @@ export interface MeshletAsset {
   groupData: Uint32Array
   groupBounds: Float32Array
   groupChildren: Uint32Array
+  nodeData: Uint32Array
+  nodeBounds: Float32Array
 }

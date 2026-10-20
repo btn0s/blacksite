@@ -39,7 +39,7 @@ export function parseMeshletAsset(buffer: ArrayBuffer): MeshletAsset {
   const vertices = metadata.residentVertices
   const clusters = metadata.clusterCount
   const groups = metadata.groupCount
-  if (asset.vertices.length !== vertices * 5 || asset.vertexReferences.length !== metadata.meshletVertices || asset.clusterQuantization.length !== clusters * 12 || asset.clusterData.length !== clusters * CLUSTER_STRIDE || asset.clusterBounds.length !== clusters * 4 || asset.clusterLod.length !== clusters * CLUSTER_LOD_STRIDE || asset.groupData.length !== groups * GROUP_STRIDE || asset.groupBounds.length !== groups * 8) throw new Error('Geometry section counts do not match metadata')
+  if (asset.vertices.length !== vertices * 5 || asset.vertexReferences.length !== metadata.meshletVertices || asset.clusterQuantization.length !== clusters * 12 || asset.clusterData.length !== clusters * CLUSTER_STRIDE || asset.clusterBounds.length !== clusters * 4 || asset.clusterLod.length !== clusters * CLUSTER_LOD_STRIDE || asset.groupData.length !== groups * GROUP_STRIDE || asset.groupBounds.length !== groups * 8 || asset.nodeData.length !== metadata.nodeCount * 4 || asset.nodeBounds.length !== metadata.nodeCount * 8) throw new Error('Geometry section counts do not match metadata')
   return asset
 }
 

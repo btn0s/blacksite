@@ -67,7 +67,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     roots: [geometry.object],
     sources: [stats],
     techniques: [
-      { id: 'meshlet-lod', label: 'Meshlet LOD', description: 'Select source detail within 120 m when disabled.', enabled: true, setEnabled: enabled => geometry.setLodEnabled(enabled) },
+      { id: 'meshlet-lod', label: 'Meshlet LOD', description: 'Select finest resident detail within 120 m when disabled.', enabled: true, setEnabled: enabled => geometry.setLodEnabled(enabled) },
       { id: 'meshlet-occlusion', label: 'HiZ occlusion', description: 'GPU cluster visibility and recovery.', enabled: true, setEnabled: enabled => { geometry.occlusionEnabled = enabled; geometry.resetHistory() } },
       { id: 'meshlet-shadows', label: 'Cascade shadows', description: 'Independent light-view cluster selection.', enabled: true, setEnabled: enabled => geometry.setShadowEnabled(enabled) },
       { id: 'meshlet-debug', label: 'Meshlet colours', enabled: false, setEnabled: enabled => geometry.setDebugView(enabled ? 'meshlets' : inspector.getSnapshot().view === 'lod' ? 'lod' : 'normal') },
@@ -97,7 +97,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     const interval = setInterval(() => {
       if (pending || shared.warm.current < 10) return
       pending = true
-      void geometry.readStats(renderer).then(value => Object.assign(stats, value)).catch(onError).finally(() => { pending = false })
+      void geometry.readStats(renderer, shared.look.current?.timings()).then(value => Object.assign(stats, value)).catch(onError).finally(() => { pending = false })
     }, 300)
     return () => clearInterval(interval)
   }, [geometry, onError, renderer, shared, stats])

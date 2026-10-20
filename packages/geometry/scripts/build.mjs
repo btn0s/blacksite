@@ -147,7 +147,7 @@ function geometryFromEntries(entries, materials) {
 }
 
 function pack(metadata, arrays) {
-  const names = ['vertices', 'vertexReferences', 'indices', 'clusterData', 'clusterBounds', 'clusterLod', 'clusterQuantization', 'groupData', 'groupBounds', 'groupChildren']
+  const names = ['vertices', 'vertexReferences', 'indices', 'clusterData', 'clusterBounds', 'clusterLod', 'clusterQuantization', 'groupData', 'groupBounds', 'groupChildren', 'nodeData', 'nodeBounds']
   const json = Buffer.from(JSON.stringify(metadata))
   const metadataOffset = 32 + names.length * 16
   let offset = (metadataOffset + json.length + 15) & ~15
@@ -159,7 +159,7 @@ function pack(metadata, arrays) {
     return entry
   })
   const output = Buffer.alloc(offset)
-  ;[0x4c4d5342, 2, names.length, json.length, output.length, 0, 0, 0].forEach((value, i) => output.writeUInt32LE(value, i * 4))
+  ;[0x4c4d5342, 3, names.length, json.length, output.length, 0, 0, 0].forEach((value, i) => output.writeUInt32LE(value, i * 4))
   json.copy(output, metadataOffset)
   for (const { id, offset: start, count, type, array } of entries) {
     ;[id, start, count, type].forEach((value, i) => output.writeUInt32LE(value, 32 + id * 16 + i * 4))
@@ -205,7 +205,7 @@ function prepareGeometry(input) {
   return { positions, normals, uvs, sourceIndices, vertices, primitives, materials, bounds }
 }
 
-export async function buildMeshletGeometry(input, outputArgument, source) {
+export async function buildMeshletGeometry(input, outputArgument, source, budget = {}) {
   const outputPath = resolve(outputArgument)
   const started = performance.now()
   const executable = await getNativeBuilder()
@@ -216,12 +216,14 @@ export async function buildMeshletGeometry(input, outputArgument, source) {
     const primitiveData = new Uint32Array(geometry.primitives.flatMap((primitive) => [primitive.indexOffset, primitive.indexCount, primitive.materialIndex]))
     const sourceData = Buffer.concat([header, geometry.vertices, geometry.sourceIndices, primitiveData].map((array) => Buffer.from(array.buffer, array.byteOffset, array.byteLength)))
     await writeFile(join(work, 'input.bin'), sourceData)
-    await run(executable, [join(work, 'input.bin'), join(work, 'output.bin')])
+    const minimumError = budget.minimumError ?? 0
+    if (!Number.isFinite(minimumError) || minimumError < 0) throw new Error('Minimum resident error must be finite and nonnegative')
+    await run(executable, [join(work, 'input.bin'), join(work, 'output.bin'), String(minimumError)])
     const nativeOutput = await readFile(join(work, 'output.bin'))
     const buffer = nativeOutput.buffer.slice(nativeOutput.byteOffset, nativeOutput.byteOffset + nativeOutput.byteLength)
     const data = new Uint32Array(buffer, 0, 12)
     if (data[0] !== 0x4f475342) throw new Error('Native builder output signature is invalid')
-    const [, clusterCount, groupCount, indexCount, edgeCount, levelCount, vertexCount, sourceIndexCount, meshletVertices] = data
+    const [, clusterCount, groupCount, indexCount, edgeCount, levelCount, vertexCount, residentIndexCount, meshletVertices, nodeCount] = data
     let offset = 48
     const section = (Type, count) => { const value = new Type(buffer, offset, count); offset += count * 4; return value }
     const arrays = {
@@ -229,9 +231,12 @@ export async function buildMeshletGeometry(input, outputArgument, source) {
       clusterData: section(Uint32Array, clusterCount * 8), clusterBounds: section(Float32Array, clusterCount * 4), clusterLod: section(Float32Array, clusterCount * 12),
       clusterQuantization: section(Float32Array, clusterCount * 12),
       groupData: section(Uint32Array, groupCount * 4), groupBounds: section(Float32Array, groupCount * 8), groupChildren: section(Uint32Array, edgeCount),
+      nodeData: section(Uint32Array, nodeCount * 4), nodeBounds: section(Float32Array, nodeCount * 8),
     }
     const metadata = {
-      name: input.name ?? basename(outputPath, '.meshlets'), sourceTriangles: sourceIndexCount / 3, residentVertices: vertexCount, meshletVertices,
+      name: input.name ?? basename(outputPath, '.meshlets'), sourceTriangles: geometry.sourceIndices.length / 3,
+      sourceVertices: geometry.positions.length / 3, residentVertices: vertexCount, meshletVertices,
+      residentTriangles: residentIndexCount / 3, minimumError, nodeCount, rootCount: levelCount,
       vertexStride: 20, positionBits: 16, normalBits: 16, tangentBits: 16, uvBits: 16, indexBits: 8,
       clusterCount, groupCount, levelCount, maxClusterTriangles: 128, bounds: geometry.bounds,
       primitives: geometry.primitives, materials: geometry.materials,
@@ -272,7 +277,7 @@ export async function writeMaterialLibrary(inputArgument, outputArgument) {
   return writeDocumentMaterials(await io.read(resolve(inputArgument)), resolve(outputArgument))
 }
 
-export async function buildGltfMeshes(inputArgument, outputArgument) {
+export async function buildGltfMeshes(inputArgument, outputArgument, budget = {}) {
   const inputPath = resolve(inputArgument)
   const outputDirectory = resolve(outputArgument)
   await MeshoptDecoder.ready
@@ -307,7 +312,7 @@ export async function buildGltfMeshes(inputArgument, outputArgument) {
     const geometry = geometryFromEntries(entries, materials)
     const name = mesh.getName() || `geometry-${meshIndex}`
     const filename = `${meshIndex}-${name.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase()}.meshlets`
-    const { metadata } = await buildMeshletGeometry({ name, ...geometry, indices: geometry.sourceIndices }, join(outputDirectory, filename), source)
+    const { metadata } = await buildMeshletGeometry({ name, ...geometry, indices: geometry.sourceIndices }, join(outputDirectory, filename), source, budget)
     geometries.push({ meshIndex, name, url: filename, primitives: metadata.primitives, sourceTriangles: metadata.sourceTriangles, bounds: metadata.bounds })
   }
   if (!geometries.length) throw new Error('The source contains no mesh geometry')

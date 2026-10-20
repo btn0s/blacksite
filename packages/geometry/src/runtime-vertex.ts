@@ -33,13 +33,11 @@ export function clusterVertex(packed: PackedMeshletScene, visibleAttribute: Stor
   const references = storage(geometry.vertexReferences, 'uint', geometry.vertexReferences.count).toReadOnly()
     .onObjectUpdate(({ object }) => drawFor(object).geometry.vertexReferences)
   const offset = uniform(0, 'uint').onObjectUpdate(({ object }) => drawFor(object).offset)
-  const candidates = storage(packed.candidates, 'uvec4', packed.candidateCount).toReadOnly()
-  const visible = storage(visibleAttribute, 'uint', packed.candidateCount).toReadOnly()
+  const visible = storage(visibleAttribute, 'uvec2', packed.candidateCount).toReadOnly()
   const uv = varyingProperty('vec2', 'geometryUv')
   const color = varyingProperty('vec3', 'geometryClusterColor')
   const position = Fn(() => {
-    const candidateId = visible.element(instanceIndex.add(offset)).toVar()
-    const candidate = candidates.element(candidateId)
+    const candidate = visible.element(instanceIndex.add(offset)).toVar()
     const cluster = readCluster(candidate.x)
     const instance = readInstance(candidate.y)
     const draw = cluster.draw
