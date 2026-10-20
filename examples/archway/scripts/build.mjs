@@ -2,7 +2,7 @@ import { readFile, mkdir, mkdtemp, rename, writeFile } from 'node:fs/promises'
 import { basename, resolve, join } from 'node:path'
 import { Box3, Matrix4, Vector3 } from 'three'
 import { buildGltfMeshes } from '../../../packages/geometry/scripts/build.mjs'
-import { buildScanMaterials } from '../../shared/build-scan-materials.mjs'
+import { buildCourtyardSurfaces } from './build-surfaces.mjs'
 import { buildCourtyardCollision } from './build-collision.mjs'
 import { tsImport } from 'tsx/esm/api'
 
@@ -55,32 +55,12 @@ for (const file of geometrySources) {
     geometries.push({ file, meshIndex: geometry.meshIndex, url, metadata: asset.metadata, bytes: bytes.byteLength })
   }
 }
-const materialExport = (await json('materials.json')).materials
-const textures = (await json('textures.json')).textures
-const approved = JSON.parse(await readFile(materialSource, 'utf8')).surfaces[0]
 const materialPaths = [...new Set(placements.flatMap(entry => entry.materials))]
-const surfaces = [], untranslated = []
-for (const path of materialPaths) {
-  const material = materialExport[path]
-  if (material.properties.parent !== approved.parent) {
-    untranslated.push({ path, parent: material.properties.parent ?? null, placements: placements.filter(entry => entry.materials.includes(path)).map(entry => entry.actor_label) })
-    continue
-  }
-  const maps = {}
-  for (const name of ['Albedo', 'Normal', 'Packed', 'Metalness', 'RGBNoise']) {
-    if (name === 'RGBNoise') { maps[name] = { ...approved.maps[name], file: resolve(materialSource, '..', approved.maps[name].file) }; continue }
-    const texture = textures[material.parameters.texture[name]]
-    if (!texture?.success || texture.files.length !== 1) throw new Error(`Missing source image for ${path}: ${name}`)
-    maps[name] = { file: join(source, texture.files[0]), srgb: texture.srgb }
-  }
-  surfaces.push({ family: approved.family, path, parent: material.properties.parent, parameters: material.parameters, channels: approved.channels, maps })
-}
-const descriptor = join(output, 'material-source.json')
-await writeFile(descriptor, JSON.stringify({ version: 1, surfaces }))
-await buildScanMaterials(descriptor, output)
+const uses = materialPaths.map(path => ({ path, placements: placements.filter(entry => entry.materials.includes(path)).map(entry => entry.actor_label) }))
+const { untranslated, excluded } = await buildCourtyardSurfaces(source, materialSource, uses, output, join(outputRoot, 'textures'))
 const environment = await json('environment.json')
 const manifest = {
-  radius: 10, centre: centre.toArray(), geometries: geometries.map(geometry => ({ ...geometry, url: `${generation}/${geometry.url}` })), materialPaths, untranslated,
+  radius: 10, centre: centre.toArray(), geometries: geometries.map(geometry => ({ ...geometry, url: `${generation}/${geometry.url}` })), materialPaths, untranslated, excluded,
   surfacesUrl: `${generation}/surfaces.json`, colliderUrl: `${generation}/colliders.bin`,
   placements: placements.map(entry => ({ name: entry.actor_label, visible: entry.visible && !entry.hidden_in_game && !entry.actor_hidden_in_game && !entry.actor_editor_only && !entry.component_editor_only, componentClass: entry.component_class, geometry: geometries.findIndex(geometry => geometry.file === entry.geometry.file && geometry.meshIndex === entry.geometry.mesh_index), materials: meshes[entry.mesh].primitive_material_slots.map(slot => entry.materials[slot] ?? meshes[entry.mesh].materials[slot]), matrix: entry.transform.matrix })),
   environment: environment.components.filter(entry => ['DirectionalLightComponent', 'SkyAtmosphereComponent', 'SkyLightComponent', 'ExponentialHeightFogComponent'].includes(entry.class)),

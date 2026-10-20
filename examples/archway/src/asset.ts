@@ -14,6 +14,7 @@ type CourtyardManifest = {
   placements: { name: string; visible: boolean; geometry: number; materials: string[]; matrix: number[]; componentClass: string }[]
   environment: EnvironmentComponent[]
   untranslated: { path: string; parent: string | null; placements: string[] }[]
+  excluded: { path: string; reason: string; placements: string[] }[]
 }
 
 async function loadCourtyardColliders(url: string, count: number, { world, rapier }: Pick<RapierContext, 'world' | 'rapier'>, signal: AbortSignal) {
@@ -104,6 +105,7 @@ export async function loadArchway() {
     async createGeometry(renderer: WebGPURenderer) {
       const materials = await loadScanMaterials(surfaceSet.surfaces, surfaceRoot, renderer)
       for (const missing of manifest.untranslated) materials.set(missing.path, new MeshStandardNodeMaterial({ name: `Untranslated: ${missing.path}`, visible: false }))
+      for (const excluded of manifest.excluded) materials.set(excluded.path, new MeshStandardNodeMaterial({ name: excluded.reason, visible: false }))
       const materialFor = (path: string | undefined) => {
         const material = path ? materials.get(path) : undefined
         if (!material) throw new Error(`Missing surface: ${path}`)

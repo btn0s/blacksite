@@ -10,6 +10,10 @@ export interface MeshletSceneEntry {
 }
 
 export interface ResidentMeshletGeometry {
+  vertexWords: number
+  colorOffset: number
+  secondaryUvOffset: number
+  secondaryUvBounds: [number, number, number, number]
   vertices: StorageBufferAttribute
   vertexReferences: StorageBufferAttribute
   indices: StorageBufferAttribute
@@ -106,6 +110,10 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     const asset = await source.load()
     if (asset.metadata.clusterCount !== source.metadata.clusterCount || asset.metadata.nodeCount !== source.metadata.nodeCount || asset.metadata.rootCount !== source.metadata.rootCount || asset.metadata.residentVertices !== source.metadata.residentVertices || asset.metadata.source.sha256 !== source.metadata.source.sha256) throw new Error('Geometry source changed after metadata was loaded')
     const geometry: ResidentMeshletGeometry = {
+      vertexWords: asset.metadata.vertexStride / 4,
+      colorOffset: asset.metadata.vertexAttributes?.color ?? 0,
+      secondaryUvOffset: asset.metadata.vertexAttributes?.uv1 ?? 0,
+      secondaryUvBounds: asset.metadata.secondaryUvBounds ?? [0, 0, 0, 0],
       vertices: new StorageBufferAttribute(asset.vertices, 1),
       vertexReferences: new StorageBufferAttribute(asset.vertexReferences, 1),
       indices: new StorageBufferAttribute(asset.indices, 1),

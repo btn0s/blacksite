@@ -11,7 +11,7 @@
 #define CLUSTERLOD_IMPLEMENTATION
 #include "clusterlod.h"
 
-struct Vertex { float position[3]; float normal[3]; float uv[2]; float tangent[4]; };
+struct Vertex { float position[3]; float normal[3]; float uv[2]; float tangent[4]; float color[4]; float uv1[2]; };
 struct Primitive { uint32_t offset; uint32_t count; uint32_t material; };
 struct Cluster { uint32_t offset; uint32_t count; uint32_t group; uint32_t refined; uint32_t level; uint32_t material; uint32_t vertices; clodBounds bounds; };
 struct Group { uint32_t offset; uint32_t count; clodGroup value; };
@@ -44,9 +44,12 @@ int main(int argc, char** argv) {
     const float minimumError = std::stof(argv[3]);
     if (!std::isfinite(minimumError) || minimumError < 0) throw std::runtime_error("Invalid minimum resident error");
     std::ifstream input(argv[1], std::ios::binary);
-    uint32_t header[4];
-    read(input, header, 4);
+    uint32_t header[6];
+    read(input, header, 6);
     if (header[0] != 0x49475342 || !header[1] || !header[2] || !header[3]) throw std::runtime_error("Invalid geometry input");
+    if (header[4] > 1 || header[5] > 1) throw std::runtime_error("Invalid vertex layout");
+    const bool hasColor = header[4] != 0, hasUv1 = header[5] != 0;
+    const uint32_t vertexWords = 5 + header[4] + header[5];
     std::vector<Vertex> vertices(header[1]);
     std::vector<uint32_t> indices(header[2]);
     std::vector<Primitive> primitives(header[3]);
@@ -81,7 +84,7 @@ int main(int argc, char** argv) {
     config.optimize_bounds = true;
     config.simplify_error_merge_additive = 1.f;
     config.simplify_fallback_sloppy = true;
-    const float weights[5] = {0.5f, 0.5f, 0.5f, 0.f, 0.f};
+    const float weights[15] = {0.5f, 0.5f, 0.5f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 1.f, 1.f, 1.f, 1.f, 0.f, 0.f};
     for (const Primitive& primitive : primitives) {
       if (size_t(primitive.offset) + primitive.count > indices.size() || primitive.count % 3) throw std::runtime_error("Invalid primitive range");
       out.material = primitive.material;
@@ -95,8 +98,8 @@ int main(int argc, char** argv) {
       mesh.vertex_attributes_stride = sizeof(Vertex);
       mesh.vertex_lock = locks.data();
       mesh.attribute_weights = weights;
-      mesh.attribute_count = 5;
-      mesh.attribute_protect_mask = (1 << 3) | (1 << 4);
+      mesh.attribute_count = hasUv1 ? 15 : hasColor ? 13 : 5;
+      mesh.attribute_protect_mask = (1 << 3) | (1 << 4) | (hasUv1 ? (1 << 13) | (1 << 14) : 0);
       clodBuild(config, mesh, &out, emitGroup);
     }
     if (minimumError > 0) {
@@ -140,6 +143,11 @@ int main(int argc, char** argv) {
     }
     float step[5];
     for (int axis = 0; axis < 5; axis++) step[axis] = (upper[axis] - lower[axis]) / 65535.f;
+    float uv1Lower[2] = {FLT_MAX, FLT_MAX}, uv1Upper[2] = {-FLT_MAX, -FLT_MAX};
+    for (const Vertex& vertex : vertices) for (int axis = 0; axis < 2; axis++) {
+      uv1Lower[axis] = std::min(uv1Lower[axis], vertex.uv1[axis]);
+      uv1Upper[axis] = std::max(uv1Upper[axis], vertex.uv1[axis]);
+    }
     for (const Vertex& vertex : vertices) {
       uint16_t quantized[5];
       for (int axis = 0; axis < 5; axis++) {
@@ -157,6 +165,16 @@ int main(int argc, char** argv) {
         uint32_t(quantized[3]) | (uint32_t(quantized[4]) << 16),
         uint32_t(uint16_t(octTangent[0])) | (uint32_t(uint16_t(octTangent[1])) << 16)
       });
+      if (hasColor) {
+        uint32_t color = 0;
+        for (int channel = 0; channel < 4; channel++) color |= uint32_t(meshopt_quantizeUnorm(vertex.color[channel], 8)) << (channel * 8);
+        packedVertices.push_back(color);
+      }
+      if (hasUv1) {
+        uint32_t uv1 = 0;
+        for (int axis = 0; axis < 2; axis++) uv1 |= uint32_t(meshopt_quantizeUnorm(uv1Upper[axis] > uv1Lower[axis] ? (vertex.uv1[axis] - uv1Lower[axis]) / (uv1Upper[axis] - uv1Lower[axis]) : 0.f, 16)) << (axis * 16);
+        packedVertices.push_back(uv1);
+      }
     }
     uint32_t levels = 0;
     for (const Cluster& cluster : out.clusters) {
@@ -211,7 +229,8 @@ int main(int argc, char** argv) {
       nodeBounds.insert(nodeBounds.end(), {node.bounds.error, 0.f, 0.f, 0.f});
     }
     std::ofstream output(argv[2], std::ios::binary);
-    write(output, std::vector<uint32_t>{0x4f475342, uint32_t(out.clusters.size()), uint32_t(out.groups.size()), uint32_t(packedIndices.size()), uint32_t(groupChildren.size()), levels, uint32_t(packedVertices.size() / 5), uint32_t(indices.size()), uint32_t(vertexReferences.size()), uint32_t(nodes.size()), 0, 0});
+    write(output, std::vector<uint32_t>{0x4f475342, uint32_t(out.clusters.size()), uint32_t(out.groups.size()), uint32_t(packedIndices.size()), uint32_t(groupChildren.size()), levels, uint32_t(packedVertices.size() / vertexWords), uint32_t(indices.size()), uint32_t(vertexReferences.size()), uint32_t(nodes.size()), vertexWords, 0});
+    write(output, std::vector<float>{uv1Lower[0], uv1Lower[1], uv1Upper[0] - uv1Lower[0], uv1Upper[1] - uv1Lower[1]});
     write(output, packedVertices);
     write(output, vertexReferences);
     write(output, packedIndices);

@@ -17,7 +17,7 @@ import { ClusterShadows } from './runtime-shadows'
 import { ClusterTraversal } from './runtime-traversal'
 
 export type { MeshletSceneEntry } from './runtime-data'
-export { normalMapWithUV, tangentNormalWithUV } from './runtime-material'
+export { geometryScaleX, geometrySecondaryUV, geometryVertexColor, normalMapWithUV, tangentNormalWithUV } from './runtime-material'
 export type MeshletDebugView = 'normal' | 'meshlets' | 'lod'
 
 export interface MeshletSceneOptions {
@@ -190,7 +190,7 @@ export class MeshletScene {
       let material = materials.get(batch.material)
       if (!material) {
         material = createGeometryMaterial(batch.material)
-        bindGeometryMaterial(material, pulled.uv, pulled.position)
+        bindGeometryMaterial(material, pulled)
         const standardOutput = material.outputNode ?? output
         material.outputNode = vec4(mix(standardOutput.rgb, pulled.color, float(this.debug.greaterThan(0))), standardOutput.a)
         materials.set(batch.material, material)

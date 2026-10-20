@@ -33,7 +33,7 @@ export class ClusterShadows {
       const geometry = clusterGeometry(batch.triangles, batch.capacity, this.traversal.counters, index)
       let material = materials.get(batch.material)
       if (!material) {
-        material = createGeometryShadowMaterial(batch.material, pulled.uv, pulled.position)
+        material = createGeometryShadowMaterial(batch.material, pulled)
         materials.set(batch.material, material)
         this.materials.add(material)
       }

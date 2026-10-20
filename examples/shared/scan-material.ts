@@ -3,17 +3,19 @@ import { MeshPhysicalNodeMaterial, type MeshStandardNodeMaterial, type Node, typ
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import transcoderScript from 'three/examples/jsm/libs/basis/basis_transcoder.js?url'
 import transcoderWasm from 'three/examples/jsm/libs/basis/basis_transcoder.wasm?url'
-import { Fn, float, frameId, max, mix, normalWorldGeometry, positionWorld, screenCoordinate, texture, uniform, uv, varying, vec2, vec3 } from 'three/tsl'
+import { Fn, float, max, mix, positionWorld, texture, uniform, uv, vec3 } from 'three/tsl'
 import { tangentNormalWithUV } from '@blacksite/geometry'
+import { boxUV, cheapContrast, colorTransform, luma, sCurve, saturate } from './scan-material-nodes'
+import { createSmartMaterial, createPropMaterial } from './scan-surface-materials'
 
 type Channel = 'r' | 'g' | 'b' | 'a'
 type Parameters = { scalar: Record<string, number>; vector: Record<string, number[]>; static_switch: Record<string, boolean> }
 export type ScanSurface = {
-  family: 'custom-general'
+  family: 'custom-general' | 'smart-layers' | 'simple-orm' | 'candle'
   path: string
   parameters: Parameters
   channels: { roughness: Channel; metalness: Channel }
-  maps: Record<'Albedo' | 'Normal' | 'Packed' | 'Metalness' | 'RGBNoise', { file: string; detailFile?: string; srgb: boolean }>
+  maps: Record<string, { file: string; detailFile?: string; srgb: boolean }>
 }
 
 type ScanTexture = {
@@ -37,9 +39,6 @@ type ScanMaterialSet = {
   disposed: boolean
 }
 
-const luma = (value: Node<'vec3'>) => value.dot(vec3(0.212639, 0.715169, 0.072192))
-const saturate = (value: Node<'float'>) => value.clamp(0, 1)
-const cheapContrast = (value: Node<'float'>, contrast: number) => saturate(value.mul(1 + 2 * contrast).sub(contrast))
 const materialSets = new WeakMap<WebGPURenderer, ScanMaterialSet>()
 const detailLimit = 24
 
@@ -98,7 +97,7 @@ export async function loadScanMaterials(surfaces: readonly ScanSurface[], root: 
         used.add(image)
         return image
       }))
-      set.surfaces.set(surface.path, { scale: Math.abs(surface.parameters.scalar['UVs - Base  Scale']), images: [...used] })
+      set.surfaces.set(surface.path, { scale: surface.family === 'custom-general' ? Math.abs(surface.parameters.scalar['UVs - Base  Scale']) : 1, images: [...used] })
     }
     return materials
   } catch (error) {
@@ -199,58 +198,30 @@ export function createScanMaterialStreaming(renderer: WebGPURenderer, placements
   }
 }
 
-function sCurve(value: Node<'float'>, power: number) {
-  const high = float(1).sub(float(1).sub(value.sub(0.5).mul(2).clamp(0, 1)).pow(power))
-  return mix(value.mul(2).clamp(0, 1).pow(power).mul(0.5), high.mul(0.5).add(0.5), high.mul(500).clamp(0, 1))
-}
-
-function colorTransform(color: Node<'vec3'>, offset: number[]) {
-  const h = (offset[0] + 1) * Math.PI * 2
-  const v = offset[2] + 1
-  const a = v * (offset[1] + 1) * Math.cos(h)
-  const b = v * (offset[1] + 1) * Math.sin(h)
-  return vec3(
-    color.dot(vec3(0.299 * v + 0.701 * a + 0.168 * b, 0.587 * v - 0.587 * a + 0.330 * b, 0.114 * v - 0.114 * a - 0.497 * b)),
-    color.dot(vec3(0.299 * v - 0.299 * a - 0.328 * b, 0.587 * v + 0.413 * a + 0.035 * b, 0.114 * v - 0.114 * a + 0.292 * b)),
-    color.dot(vec3(0.299 * v - 0.300 * a + 1.25 * b, 0.587 * v - 0.588 * a - 1.05 * b, 0.114 * v + 0.886 * a - 0.203 * b)),
-  )
-}
-
-function boxUV() {
-  const normal = normalWorldGeometry.xzy
-  const squared = normal.mul(normal)
-  const powers = squared.mul(squared)
-  const weights = varying(powers.div(powers.x.add(powers.y).add(powers.z)).add(vec3(0, 0.000001, 0.000001))).clamp(0, 1)
-  const pixel = screenCoordinate.floor().add(float(frameId.mod(64)).mul(5.588238))
-  const dither = pixel.dot(vec2(0.06711056, 0.00583715)).fract().mul(52.9829189).fract().sub(0.5).mul(0.25)
-  const point = positionWorld.xzy.mul(100 / 128)
-  const signs = normal.sign()
-  const x = vec2(point.y.negate().mul(signs.x), point.z.negate())
-  const y = vec2(point.x.mul(signs.y), point.z.negate())
-  const z = vec2(point.x.mul(signs.z), point.y)
-  const side = max(weights.x.sub(dither), weights.z.sub(dither)).greaterThan(weights.y).select(x, y)
-  return weights.z.sub(dither).greaterThan(max(weights.x, weights.y)).select(z, side)
-}
-
 async function loadScanMaterial(surface: ScanSurface, loadTexture: (source: ScanSurface['maps'][keyof ScanSurface['maps']]) => Promise<ScanTexture>) {
-  if (surface.family !== 'custom-general') throw new Error(`Unsupported surface family: ${surface.family}`)
   const { scalar: s, vector: v, static_switch: switches } = surface.parameters
-  for (const feature of ['Use Pure Metallic Base?', 'Switch - Use UV Random Offset?', 'Use Reconstructed Normal?']) {
-    if (switches[feature]) throw new Error(`${surface.path}: unsupported surface feature ${feature}`)
-  }
-  if (s['Base - Metallic Intensity'] !== 0) throw new Error(`${surface.path}: metallic color response is unsupported`)
-  const used = Object.entries(surface.maps).filter(([name]) => name !== 'Metalness' && (name !== 'Packed' || !switches['Use Dedrived Roughness from Albedo?']) && (name !== 'RGBNoise' || !switches['RGB Blend - Disable']))
+  const used = Object.entries(surface.maps).filter(([name]) => surface.family !== 'custom-general' || (name !== 'Metalness' && (name !== 'Packed' || !switches['Use Dedrived Roughness from Albedo?']) && (name !== 'RGBNoise' || !switches['RGB Blend - Disable'])))
   const entries = await Promise.all(used.map(async ([name, source]) => {
     return [name, await loadTexture(source)] as const
   }))
   const maps = Object.fromEntries(entries) as Record<keyof ScanSurface['maps'], ScanTexture>
   const primaryUV = Fn(builder => builder.context.getUV?.() ?? uv())()
-  const transform = new Matrix3().setUvTransform(s['UVs - Base  Offset X'], s['UVs - Base  Offset  Y'], s['UVs - Base  Scale'], s['UVs - Base  Scale'], s['UVs - Base  Rotation'], s['UVs - Base  Pivot X'], s['UVs - Base  Pivot Y'])
-  const coordinates = uniform(transform).mul(vec3(primaryUV, 1)).xy
-  const sample = (image: ScanTexture, coordinatesNode = coordinates) => {
+  const sampleImage = (image: ScanTexture, coordinatesNode: Node<'vec2'>) => {
     const node = texture(image.baseline, coordinatesNode).setUpdateMatrix(false)
     image.nodes.push(node)
     return node
+  }
+  const sampleSurface = (name: string, coordinates = primaryUV) => sampleImage(maps[name]!, coordinates)
+  if (surface.family === 'smart-layers') return createSmartMaterial(surface, sampleSurface, primaryUV)
+  if (surface.family === 'simple-orm' || surface.family === 'candle') return createPropMaterial(surface, sampleSurface, primaryUV)
+  for (const feature of ['Use Pure Metallic Base?', 'Switch - Use UV Random Offset?', 'Use Reconstructed Normal?']) {
+    if (switches[feature]) throw new Error(`${surface.path}: unsupported surface feature ${feature}`)
+  }
+  if (s['Base - Metallic Intensity'] !== 0) throw new Error(`${surface.path}: metallic color response is unsupported`)
+  const transform = new Matrix3().setUvTransform(s['UVs - Base  Offset X'], s['UVs - Base  Offset  Y'], s['UVs - Base  Scale'], s['UVs - Base  Scale'], s['UVs - Base  Rotation'], s['UVs - Base  Pivot X'], s['UVs - Base  Pivot Y'])
+  const coordinates = uniform(transform).mul(vec3(primaryUV, 1)).xy
+  const sample = (image: ScanTexture, coordinatesNode = coordinates) => {
+    return sampleImage(image, coordinatesNode)
   }
   const albedo = sample(maps.Albedo).rgb
   const controls = v['Base - Albedo Controls']

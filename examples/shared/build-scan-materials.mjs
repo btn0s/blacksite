@@ -1,5 +1,5 @@
 import { access, readFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { dirname, resolve, join } from 'node:path'
+import { dirname, resolve, join, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createHash } from 'node:crypto'
 import sharp from 'sharp'
@@ -23,17 +23,17 @@ async function textureLevels(output, file) {
   return { file: baseline, detailFile: file }
 }
 
-export async function buildScanMaterials(sourceFile, output) {
+export async function buildScanMaterials(sourceFile, output, textureDirectory = output) {
   const source = JSON.parse(await readFile(sourceFile, 'utf8'))
   if (source.version !== 1 || !source.surfaces?.length) throw new Error('A complete material source descriptor is required')
   await mkdir(output, { recursive: true })
+  await mkdir(textureDirectory, { recursive: true })
   const surfaces = []
   const images = new Map()
   for (const surface of source.surfaces) {
-    if (surface.family !== 'custom-general') throw new Error(`Unsupported material family: ${surface.family}`)
+    if (!['custom-general', 'smart-layers', 'simple-orm', 'candle'].includes(surface.family)) throw new Error(`Unsupported material family: ${surface.family}`)
     const maps = {}
-    for (const name of ['Albedo', 'Normal', 'Packed', 'Metalness', 'RGBNoise']) {
-      const imageSource = surface.maps[name]
+    for (const [name, imageSource] of Object.entries(surface.maps)) {
       if (!imageSource?.file || typeof imageSource.srgb !== 'boolean') throw new Error(`Missing image metadata for ${surface.path}: ${name}`)
       const file = resolve(dirname(sourceFile), imageSource.file)
       const identity = `${file}:${imageSource.srgb}:${name === 'Normal'}:uastc2`
@@ -42,7 +42,7 @@ export async function buildScanMaterials(sourceFile, output) {
         continue
       }
       const destination = `${createHash('sha256').update(identity).digest('hex').slice(0, 16)}.ktx2`
-      const exists = await access(join(output, destination)).then(() => true, () => false)
+      const exists = await access(join(textureDirectory, destination)).then(() => true, () => false)
       let imageBytes
       if (!images.has(identity) && !exists && file.toLowerCase().endsWith('.exr')) {
         const bytes = await readFile(file)
@@ -59,7 +59,7 @@ export async function buildScanMaterials(sourceFile, output) {
         try {
           const input = join(work, 'image.png')
           await sharp(imageBytes).png().toFile(input)
-          const args = ['-uastc', '-uastc_level', '2', '-ktx2', '-mipmap', '-max_threads', '8', '-file', input, '-output_file', join(output, destination)]
+          const args = ['-uastc', '-uastc_level', '2', '-ktx2', '-mipmap', '-max_threads', '8', '-file', input, '-output_file', join(textureDirectory, destination)]
           if (!imageSource.srgb) args.push('-linear')
           if (name === 'Normal') args.push('-normal_map')
           await new Promise((resolvePromise, reject) => {
@@ -71,7 +71,8 @@ export async function buildScanMaterials(sourceFile, output) {
           await rm(work, { recursive: true, force: true })
         }
       }
-      const levels = await textureLevels(output, destination)
+      const encoded = await textureLevels(textureDirectory, destination)
+      const levels = Object.fromEntries(Object.entries(encoded).map(([name, file]) => [name, relative(output, join(textureDirectory, file)).replaceAll('\\', '/')]))
       images.set(identity, levels)
       maps[name] = { ...levels, srgb: imageSource.srgb }
     }

@@ -57,6 +57,9 @@ export interface MeshletMetadata {
   nodeCount: number
   rootCount: number
   vertexStride: number
+  colorBits?: number
+  vertexAttributes?: { color?: number; uv1?: number }
+  secondaryUvBounds?: [number, number, number, number]
   positionBits: number
   normalBits: number
   tangentBits: number

@@ -39,7 +39,7 @@ export function parseMeshletAsset(buffer: ArrayBuffer): MeshletAsset {
   const vertices = metadata.residentVertices
   const clusters = metadata.clusterCount
   const groups = metadata.groupCount
-  if (asset.vertices.length !== vertices * 5 || asset.vertexReferences.length !== metadata.meshletVertices || asset.clusterQuantization.length !== clusters * 12 || asset.clusterData.length !== clusters * CLUSTER_STRIDE || asset.clusterBounds.length !== clusters * 4 || asset.clusterLod.length !== clusters * CLUSTER_LOD_STRIDE || asset.groupData.length !== groups * GROUP_STRIDE || asset.groupBounds.length !== groups * 8 || asset.nodeData.length !== metadata.nodeCount * 4 || asset.nodeBounds.length !== metadata.nodeCount * 8) throw new Error('Geometry section counts do not match metadata')
+  if (![20, 24, 28].includes(metadata.vertexStride) || asset.vertices.length !== vertices * metadata.vertexStride / 4 || asset.vertexReferences.length !== metadata.meshletVertices || asset.clusterQuantization.length !== clusters * 12 || asset.clusterData.length !== clusters * CLUSTER_STRIDE || asset.clusterBounds.length !== clusters * 4 || asset.clusterLod.length !== clusters * CLUSTER_LOD_STRIDE || asset.groupData.length !== groups * GROUP_STRIDE || asset.groupBounds.length !== groups * 8 || asset.nodeData.length !== metadata.nodeCount * 4 || asset.nodeBounds.length !== metadata.nodeCount * 8) throw new Error('Geometry section counts do not match metadata')
   return asset
 }
 
@@ -79,7 +79,7 @@ export async function loadMeshletSource(url: string | URL, signal?: AbortSignal)
 }
 
 export function meshletPosition(asset: MeshletAsset, cluster: number, vertex: number): [number, number, number] {
-  const offset = asset.vertexReferences[asset.clusterData[cluster * 8 + 7]! + vertex]! * 5
+  const offset = asset.vertexReferences[asset.clusterData[cluster * 8 + 7]! + vertex]! * asset.metadata.vertexStride / 4
   const xy = asset.vertices[offset]!
   const z = asset.vertices[offset + 1]! & 65535
   const q = cluster * 12

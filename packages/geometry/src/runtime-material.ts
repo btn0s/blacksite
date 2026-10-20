@@ -1,6 +1,7 @@
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, StandardNodeLibrary, TangentSpaceNormalMap, Texture, Vector2 } from 'three/webgpu'
-import { Fn, bumpMap, context, float, max, normalView, positionView, texture, uniform, vec2, vec3, vec4 } from 'three/tsl'
+import { Fn, bumpMap, context, float, materialColor, max, modelWorldMatrix, normalView, positionView, texture, uniform, uv, vec2, vec3, vec4, vertexColor } from 'three/tsl'
 import type { MeshStandardMaterial, Node } from 'three/webgpu'
+import type { clusterVertex } from './runtime-vertex'
 
 const materialLibrary = new StandardNodeLibrary()
 
@@ -13,9 +14,8 @@ export function createGeometryMaterial(source: MeshStandardMaterial | MeshStanda
   if (material.transparent || material.displacementMap || material.positionNode || material.vertexNode || material.fragmentNode || material.depthNode) {
     throw new Error('Cluster materials require opaque or alpha-tested surfaces with static geometry and standard depth')
   }
-  if (material.vertexColors) throw new Error('Cluster geometry currently supports position, normal and one UV set')
   for (const value of Object.values(material)) {
-    if (value instanceof Texture && value.channel !== 0) throw new Error('Cluster material maps require the primary UV set')
+    if (value instanceof Texture && value.channel !== 0 && value.channel !== 1) throw new Error('Cluster material maps require UV set zero or one')
   }
   if (material instanceof MeshPhysicalNodeMaterial && (material.transmission > 0 || material.anisotropy > 0)) {
     throw new Error('Cluster physical materials currently require zero transmission and anisotropy')
@@ -47,43 +47,61 @@ export function tangentNormalWithUV(sample: Node<'vec3'>, coordinates: Node<'vec
   })()
 }
 
-export function bindGeometryMaterial(material: MeshStandardNodeMaterial, pulledUv: ReturnType<typeof vec2>, position: ReturnType<typeof vec3>) {
-  material.positionNode = position
-  material.contextNode = context({ ...material.contextNode?.value, getUV: () => pulledUv })
+export const geometryVertexColor = Fn(builder => builder.context.getVertexColor?.() ?? vertexColor())
+export const geometrySecondaryUV = Fn(builder => builder.context.getSecondaryUV?.() ?? uv(1))
+export const geometryScaleX = Fn(builder => builder.context.getScaleX?.() ?? modelWorldMatrix.element(0).xyz.length())
+
+type PulledVertex = ReturnType<typeof clusterVertex>
+
+function vertexContext(source: MeshStandardNodeMaterial, pulled: PulledVertex) {
+  return { ...source.contextNode?.value, getUV: (map?: { value: Texture }) => map?.value.channel === 1 ? pulled.secondaryUv : pulled.uv, getVertexColor: () => pulled.vertexColor, getSecondaryUV: () => pulled.secondaryUv, getScaleX: () => pulled.scaleX }
+}
+
+function coordinatesFor(map: Texture, pulled: PulledVertex) {
+  return map.channel === 1 ? pulled.secondaryUv : pulled.uv
+}
+
+export function bindGeometryMaterial(material: MeshStandardNodeMaterial, pulled: PulledVertex) {
+  material.positionNode = pulled.position
+  material.contextNode = context(vertexContext(material, pulled))
+  if (material.vertexColors) {
+    material.colorNode = vec4(material.colorNode ?? materialColor).mul(pulled.vertexColor)
+    material.vertexColors = false
+  }
 
   if (material.normalNode) {
-    material.normalNode = material.normalNode.context({ getUV: () => pulledUv })
+    material.normalNode = material.normalNode.context(vertexContext(material, pulled))
   } else if (material.normalMap) {
     if (material.normalMapType !== TangentSpaceNormalMap) throw new Error('Cluster normal maps must use tangent space')
-    material.normalNode = normalMapWithUV(material.normalMap, pulledUv, material.normalScale)
+    material.normalNode = normalMapWithUV(material.normalMap, coordinatesFor(material.normalMap, pulled), material.normalScale)
   } else if (material.bumpMap) {
-    material.normalNode = bumpMap(texture(material.bumpMap, pulledUv).setUpdateMatrix(true).r, uniform(material.bumpScale))
+    material.normalNode = bumpMap(texture(material.bumpMap, coordinatesFor(material.bumpMap, pulled)).setUpdateMatrix(true).r, uniform(material.bumpScale))
   }
   if (material instanceof MeshPhysicalNodeMaterial) {
-    if (material.clearcoatNormalNode) material.clearcoatNormalNode = material.clearcoatNormalNode.context({ getUV: () => pulledUv })
-    else if (material.clearcoatNormalMap) material.clearcoatNormalNode = normalMapWithUV(material.clearcoatNormalMap, pulledUv, material.clearcoatNormalScale)
+    if (material.clearcoatNormalNode) material.clearcoatNormalNode = material.clearcoatNormalNode.context(vertexContext(material, pulled))
+    else if (material.clearcoatNormalMap) material.clearcoatNormalNode = normalMapWithUV(material.clearcoatNormalMap, coordinatesFor(material.clearcoatNormalMap, pulled), material.clearcoatNormalScale)
   }
 }
 
-export function createGeometryShadowMaterial(source: MeshStandardMaterial | MeshStandardNodeMaterial, pulledUv: ReturnType<typeof vec2>, position: ReturnType<typeof vec3>) {
+export function createGeometryShadowMaterial(source: MeshStandardMaterial | MeshStandardNodeMaterial, pulled: PulledVertex) {
   const node = source as MeshStandardNodeMaterial
   const coverageUsesAlpha = source.alphaTest > 0 || Boolean(node.alphaTestNode) || source.alphaHash
   const material = new MeshBasicNodeMaterial({ side: source.side, alphaTest: node.alphaTestNode ? 0 : source.alphaTest, alphaHash: source.alphaHash, depthWrite: true })
-  const context = { ...node.contextNode?.value, getUV: () => pulledUv }
+  const context = vertexContext(node, pulled)
   const sourceMask = node.maskShadowNode ?? node.maskNode
   let mask = sourceMask ? sourceMask.context(context) : null
   material.colorNode = vec4(0, 0, 0, 1)
   if (coverageUsesAlpha) {
-    const colorAlpha = node.colorNode ? vec4(node.colorNode).a : source.map ? texture(source.map, pulledUv).setUpdateMatrix(true).a : float(1)
-    const opacity = node.opacityNode ?? float(source.opacity).mul(source.alphaMap ? texture(source.alphaMap, pulledUv).setUpdateMatrix(true).g : 1)
-    const alpha = colorAlpha.mul(opacity).context(context)
+    const colorAlpha = node.colorNode ? vec4(node.colorNode).a : source.map ? texture(source.map, coordinatesFor(source.map, pulled)).setUpdateMatrix(true).a : float(1)
+    const opacity = node.opacityNode ?? float(source.opacity).mul(source.alphaMap ? texture(source.alphaMap, coordinatesFor(source.alphaMap, pulled)).setUpdateMatrix(true).g : 1)
+    const alpha = colorAlpha.mul(source.vertexColors ? pulled.vertexColor.a : 1).mul(opacity).context(context)
     material.colorNode = vec4(0, 0, 0, alpha)
     if (node.alphaTestNode) {
       const cutout = alpha.greaterThan(node.alphaTestNode.context(context))
       mask = mask ? mask.and(cutout) : cutout
     }
   }
-  material.positionNode = position
+  material.positionNode = pulled.position
   material.shadowSide = source.shadowSide
   material.maskNode = mask
   return material

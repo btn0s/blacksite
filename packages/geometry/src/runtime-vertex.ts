@@ -1,4 +1,4 @@
-import { BufferAttribute, InstancedBufferGeometry } from 'three/webgpu'
+import { BufferAttribute, InstancedBufferGeometry, Vector4 } from 'three/webgpu'
 import type { IndirectStorageBufferAttribute, Node, Object3D, StorageBufferAttribute } from 'three/webgpu'
 import { Fn, cos, float, instanceIndex, min, mix, normalLocal, storage, uint, uniform, varyingProperty, vec3, vec4, vertexIndex } from 'three/tsl'
 import { DRAW_ARGUMENT_OFFSET, type PackedMeshletScene } from './runtime-data'
@@ -27,7 +27,12 @@ export function clusterVertex(packed: PackedMeshletScene, visibleAttribute: Stor
   const readInstance = instanceReader(packed.instances)
   const vertices = storage(geometry.vertices, 'uint', geometry.vertices.count).toReadOnly()
     .onObjectUpdate(({ object }) => drawFor(object).geometry.vertices)
-  const readVertex = vertexReader(vertices)
+  const words = uniform(geometry.vertexWords, 'uint').onObjectUpdate(({ object }) => drawFor(object).geometry.vertexWords)
+  const colorOffset = uniform(geometry.colorOffset, 'uint').onObjectUpdate(({ object }) => drawFor(object).geometry.colorOffset)
+  const secondaryUvOffset = uniform(geometry.secondaryUvOffset, 'uint').onObjectUpdate(({ object }) => drawFor(object).geometry.secondaryUvOffset)
+  const uvBounds = new Vector4()
+  const secondaryUvBounds = uniform(uvBounds).onObjectUpdate(({ object }) => uvBounds.fromArray(drawFor(object).geometry.secondaryUvBounds))
+  const readVertex = vertexReader(vertices, words, colorOffset, secondaryUvOffset, secondaryUvBounds)
   const indices = storage(geometry.indices, 'uint', geometry.indices.count).toReadOnly()
     .onObjectUpdate(({ object }) => drawFor(object).geometry.indices)
   const references = storage(geometry.vertexReferences, 'uint', geometry.vertexReferences.count).toReadOnly()
@@ -36,6 +41,9 @@ export function clusterVertex(packed: PackedMeshletScene, visibleAttribute: Stor
   const visible = storage(visibleAttribute, 'uvec2', packed.candidateCount).toReadOnly()
   const uv = varyingProperty('vec2', 'geometryUv')
   const color = varyingProperty('vec3', 'geometryClusterColor')
+  const vertexColor = varyingProperty('vec4', 'geometryVertexColor')
+  const secondaryUv = varyingProperty('vec2', 'geometrySecondaryUv')
+  const scaleX = varyingProperty('float', 'geometryScaleX')
   const position = Fn(() => {
     const candidate = visible.element(instanceIndex.add(offset)).toVar()
     const cluster = readCluster(candidate.x)
@@ -50,9 +58,12 @@ export function clusterVertex(packed: PackedMeshletScene, visibleAttribute: Stor
     const vertex = readVertex(references.element(index), cluster)
     normalLocal.assign(instance.normal.mul(vec4(vertex.normal, 0)).xyz)
     uv.assign(vertex.uv)
+    vertexColor.assign(vertex.color)
+    secondaryUv.assign(vertex.secondaryUv)
+    scaleX.assign(instance.transform.element(0).xyz.length())
     const shadeId = mix(float(candidate.x), float(draw.z), float(debug.equal(2)))
     color.assign(cos(vec3(0, 2, 4).add(shadeId.mul(2.399963))).mul(0.36).add(0.58))
     return instance.transform.mul(vec4(vertex.position, 1)).xyz
   })()
-  return { position, uv, color, bind: (object: Object3D, draw: Draw) => { draws.set(object, draw) } }
+  return { position, uv, color, vertexColor, secondaryUv, scaleX, bind: (object: Object3D, draw: Draw) => { draws.set(object, draw) } }
 }
