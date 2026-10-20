@@ -1,5 +1,5 @@
 import { DoubleSide, FrontSide, MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, StandardNodeLibrary, TangentSpaceNormalMap, Texture, Vector2 } from 'three/webgpu'
-import { Fn, bumpMap, context, float, frontFacing, materialColor, max, modelWorldMatrix, normalView, positionView, storage, texture, uniform, uv, vec2, vec3, vec4, vertexColor } from 'three/tsl'
+import { Fn, bumpMap, context, float, frontFacing, materialColor, max, modelWorldMatrix, normalView, positionView, storage, texture, uniform, uv, varying, vec2, vec3, vec4, vertexColor } from 'three/tsl'
 import type { MeshStandardMaterial, Node } from 'three/webgpu'
 import type { clusterVertex } from './runtime-vertex'
 import type { PackedMeshletScene } from './runtime-data'
@@ -92,7 +92,7 @@ export function geometryUsesCoverage(source: MeshStandardMaterial | MeshStandard
 export function createGeometryDepthMaterial(source: MeshStandardMaterial | MeshStandardNodeMaterial | null, pulled: PulledVertex, packed: PackedMeshletScene, shadow = false) {
   if (!source) {
     const sides = storage(packed.materialSides, 'uvec2', packed.materialSides.count).toReadOnly().element(pulled.materialIndex)
-    const side = shadow ? sides.y : sides.x
+    const side = varying(shadow ? sides.y : sides.x, 'geometryCullSide')
     const material = new MeshBasicNodeMaterial({ side: DoubleSide })
     material.name = shadow ? 'Opaque cluster shadows' : 'Opaque cluster depth'
     material.positionNode = pulled.position

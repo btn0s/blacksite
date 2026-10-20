@@ -26,7 +26,7 @@ export function clusterVertex(packed: PackedMeshletScene, visibleAttribute: Stor
   const vertexColor = varyingProperty('vec4', 'geometryVertexColor')
   const secondaryUv = varyingProperty('vec2', 'geometrySecondaryUv')
   const scaleX = varyingProperty('float', 'geometryScaleX')
-  const materialIndex = varyingProperty('uint', 'geometryMaterialIndex')
+  const materialIndex = visible.element(vertexIndex.shiftRight(8)).w
   const position = Fn(() => {
     const candidate = visible.element(vertexIndex.shiftRight(8)).toVar()
     const cluster = readCluster(candidate.x)
@@ -34,7 +34,6 @@ export function clusterVertex(packed: PackedMeshletScene, visibleAttribute: Stor
     const draw = cluster.draw
     const index = vertexIndex.bitAnd(255).add(draw.w)
     const vertex = readVertex(references.element(index), cluster)
-    materialIndex.assign(candidate.w)
     normalLocal.assign(instance.normal.mul(vec4(vertex.normal, 0)).xyz)
     uv.assign(vertex.uv)
     vertexColor.assign(vertex.color)
