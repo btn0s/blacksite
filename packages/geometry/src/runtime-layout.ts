@@ -40,7 +40,7 @@ export function vertexReader(data: StorageBufferNode<'uint'>, words: Node<'uint'
     return vec3(xy.x.add(xy.x.greaterThanEqual(0).select(fold.negate(), fold)), xy.y.add(xy.y.greaterThanEqual(0).select(fold.negate(), fold)), z).normalize()
   }
   return (index: Node<'uint'>, cluster: ReturnType<ReturnType<typeof clusterReader>>) => {
-    const offset = index.mul(words)
+    const offset = index.mul(words).toVar()
     const xy = data.element(offset)
     const zw = data.element(offset.add(1))
     const uv = data.element(offset.add(3))
