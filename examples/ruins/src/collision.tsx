@@ -1,17 +1,43 @@
 import { useEffect, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useRapier, type RapierContext } from '@react-three/rapier'
-import { Box3, Vector3 } from 'three'
+import { BufferAttribute, BufferGeometry, Box3, DoubleSide, Group, Mesh, Vector3 } from 'three'
+import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { cameraPosition, positionLocal, uniform } from 'three/tsl'
 import { ResidencyLedger } from '@blacksite/geometry'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import type { CharacterHandle } from '@blacksite/subject'
+import { ContactProbe, type ContactBody, type ContactDescriber } from './contacts'
 
-type Chunk = { file: string; bytes: number; triangles: number; sha256: string; bounds: { min: number[]; max: number[] } }
+type Chunk = { file: string; source?: string; bytes: number; triangles: number; sha256: string; bounds: { min: number[]; max: number[] } }
 export type CollisionDirectory = { version: number; cellSize: number; chunks: Chunk[]; cells: Record<string, number[]>; bounds: { min: number[]; max: number[] } }
 type Collider = ReturnType<RapierContext['world']['createCollider']>
 type Entry = { id: number; charge: object; state: 'loading' | 'ready' | 'resident'; used: number; collider: Collider | null; buffer: ArrayBuffer | null }
 const intersects = (chunk: Chunk, box: Box3) => chunk.bounds.min.every((value, axis) => value <= box.max.getComponent(axis) && chunk.bounds.max[axis]! >= box.min.getComponent(axis))
 const tileSize = 8
+const overlayColors = { floor: [0.25, 0.9, 0.4], wall: [0.95, 0.25, 0.2], ceiling: [0.3, 0.45, 0.95] }
+
+function overlayGeometry(vertices: Float32Array, indices: Uint32Array) {
+  const positions = new Float32Array(indices.length * 3), colors = new Float32Array(indices.length * 3)
+  for (let corner = 0; corner < indices.length; corner += 3) {
+    const corners = [indices[corner]! * 3, indices[corner + 1]! * 3, indices[corner + 2]! * 3]
+    const [a, b, c] = corners as [number, number, number]
+    const ux = vertices[b]! - vertices[a]!, uz = vertices[b + 2]! - vertices[a + 2]!, vx = vertices[c]! - vertices[a]!, vz = vertices[c + 2]! - vertices[a + 2]!
+    const nx = (vertices[b + 1]! - vertices[a + 1]!) * (vertices[c + 2]! - vertices[a + 2]!) - (vertices[b + 2]! - vertices[a + 2]!) * (vertices[c + 1]! - vertices[a + 1]!)
+    const ny = uz * vx - ux * vz
+    const nz = (vertices[b]! - vertices[a]!) * (vertices[c + 1]! - vertices[a + 1]!) - (vertices[b + 1]! - vertices[a + 1]!) * (vertices[c]! - vertices[a]!)
+    const length = Math.hypot(nx, ny, nz) || 1, up = ny / length, shade = 0.7 + 0.3 * Math.abs((nx * 0.35 + ny * 0.8 + nz * 0.5) / length)
+    const color = up > 0.64 ? overlayColors.floor : up < -0.64 ? overlayColors.ceiling : overlayColors.wall
+    for (let slot = 0; slot < 3; slot++) for (let axis = 0; axis < 3; axis++) {
+      positions[(corner + slot) * 3 + axis] = vertices[corners[slot]! + axis]!
+      colors[(corner + slot) * 3 + axis] = color[axis]! * shade
+    }
+  }
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new BufferAttribute(colors, 3))
+  return geometry
+}
 
 export class RegionalCollision {
   readonly ledger = new ResidencyLedger(128 * 1048576, {})
@@ -22,6 +48,12 @@ export class RegionalCollision {
   private critical = new Set<number>()
   private wanted = new Set<number>()
   private readonly guards: Collider[] = []
+  private readonly chunkOf = new Map<number, number>()
+  private readonly contactProbe: ContactProbe
+  readonly overlay = new Group()
+  private readonly overlayMeshes = new Map<number, Mesh>()
+  private readonly overlayClearance = uniform(0)
+  private readonly overlayMaterial = new MeshBasicNodeMaterial({ vertexColors: true, side: DoubleSide })
   private guardCells: { cell: number[]; chunks: Set<number> }[] = []
   private guardTile = ''
   private guardSignature = ''
@@ -46,6 +78,9 @@ export class RegionalCollision {
   constructor(readonly directory: CollisionDirectory, private readonly root: string, private readonly context: Pick<RapierContext, 'world' | 'rapier'>) {
     if (directory.version !== 1 || directory.cellSize !== 32) throw new Error('Regional collision directory is incompatible')
     this.ledger.reserve(this, 'native', 2 * 1048576)
+    this.contactProbe = new ContactProbe(directory.chunks, root)
+    this.overlay.visible = false
+    this.overlayMaterial.positionNode = positionLocal.add(positionLocal.sub(cameraPosition).normalize().mul(this.overlayClearance))
     for (const slot of this.workers) {
       slot.worker.onmessage = ({ data }) => {
         const entry = slot.entry
@@ -122,7 +157,8 @@ export class RegionalCollision {
   private remove(entry: Entry) {
     const slot = this.workers.find(slot => slot.entry === entry)
     if (slot) { slot.worker.postMessage({ cancel: true }); return }
-    if (entry.collider) { this.context.world.removeCollider(entry.collider, false); this.resident--; this.residentTriangles -= this.directory.chunks[entry.id]!.triangles; this.removals++ }
+    this.hideOverlay(entry.id)
+    if (entry.collider) { this.chunkOf.delete(entry.collider.handle); this.context.world.removeCollider(entry.collider, false); this.resident--; this.residentTriangles -= this.directory.chunks[entry.id]!.triangles; this.removals++ }
     const index = this.ready.indexOf(entry)
     if (index >= 0) this.ready.splice(index, 1)
     this.entries.delete(entry.id); this.ledger.release(entry.charge); entry.buffer = null; this.dirty = true
@@ -140,8 +176,10 @@ export class RegionalCollision {
       const start = performance.now()
       entry.collider = world.createCollider(rapier.ColliderDesc.trimesh(vertices, indices, rapier.TriMeshFlags.FIX_INTERNAL_EDGES))
       entry.collider.clearShapeCache()
+      this.chunkOf.set(entry.collider.handle, entry.id)
       this.insertionMs += performance.now() - start; this.peakInsertionMs = Math.max(this.peakInsertionMs, this.insertionMs)
       entry.buffer!.transfer(0); entry.buffer = null; entry.state = 'resident'
+      this.showOverlay(entry)
       this.resident++; this.residentTriangles += this.directory.chunks[entry.id]!.triangles
       this.peakResidentTriangles = Math.max(this.peakResidentTriangles, this.residentTriangles)
       this.insertions++; this.dirty = true
@@ -171,6 +209,44 @@ export class RegionalCollision {
     }
     if (this.dirty) { this.rebuildGuards(); this.dirty = false }
     if (this.destination && this.loaded(this.critical)) { this.destination.resolve(); this.destination = null; this.tile = '' }
+  }
+
+  describeContacts(describe: ContactDescriber) { this.contactProbe.describe = describe }
+
+  probeContacts(body: ContactBody | null, time: number) {
+    const { world, rapier } = this.context
+    this.contactProbe.update(body, time, world, rapier, handle => {
+      const id = this.chunkOf.get(handle)
+      if (id !== undefined) return { chunk: id }
+      return this.guards.some(guard => guard.handle === handle) ? { guard: true } : null
+    })
+  }
+
+  contacts() { return this.contactProbe.current }
+
+  contactReport() { return this.contactProbe.report() }
+
+  setOverlay(clearance: number | null) {
+    const enabled = clearance !== null
+    this.overlay.visible = enabled
+    this.overlayClearance.value = clearance ?? 0
+    if (enabled) for (const entry of this.entries.values()) this.showOverlay(entry)
+    else for (const id of [...this.overlayMeshes.keys()]) this.hideOverlay(id)
+  }
+
+  private showOverlay(entry: Entry) {
+    if (!this.overlay.visible || !entry.collider || this.overlayMeshes.has(entry.id)) return
+    const shape = entry.collider.shape as unknown as { vertices: Float32Array; indices: Uint32Array }
+    const mesh = new Mesh(overlayGeometry(shape.vertices, shape.indices), this.overlayMaterial)
+    mesh.frustumCulled = false
+    entry.collider.clearShapeCache()
+    this.overlay.add(mesh); this.overlayMeshes.set(entry.id, mesh)
+  }
+
+  private hideOverlay(id: number) {
+    const mesh = this.overlayMeshes.get(id)
+    if (!mesh) return
+    this.overlay.remove(mesh); mesh.geometry.dispose(); this.overlayMeshes.delete(id)
   }
 
   private rebuildGuards() {
@@ -204,20 +280,26 @@ export class RegionalCollision {
       this.ledger.release(entry.charge)
     }
     for (const collider of this.guards) this.context.world.removeCollider(collider, false)
+    for (const id of [...this.overlayMeshes.keys()]) this.hideOverlay(id)
+    this.overlayMaterial.dispose()
     this.ledger.release(this); this.entries.clear(); this.ready.length = 0
   }
 }
 
-export function RuinsCollision({ directory, root, walker, onReady, onError, handle }: {
-  directory: CollisionDirectory; root: string; walker: CharacterHandle; onReady(): void; onError(error: unknown): void; handle: { current: RegionalCollision | null }
+export function RuinsCollision({ directory, root, describe, walker, onReady, onError, handle }: {
+  directory: CollisionDirectory; root: string; describe: ContactDescriber; walker: CharacterHandle; onReady(): void; onError(error: unknown): void; handle: { current: RegionalCollision | null }
 }) {
   const { world, rapier } = useRapier()
+  const scene = useThree(state => state.scene)
   const residency = useMemo(() => new RegionalCollision(directory, root, { world, rapier }), [directory, rapier, root, world])
   useEffect(() => {
     handle.current = residency
+    residency.describeContacts(describe)
+    scene.add(residency.overlay)
     void residency.prepare(walker.position).then(onReady).catch(onError)
-    return () => { handle.current = null; residency.dispose() }
-  }, [handle, onError, onReady, residency, walker])
+    return () => { handle.current = null; scene.remove(residency.overlay); residency.dispose() }
+  }, [describe, handle, onError, onReady, residency, scene, walker])
   useFrame(() => { residency.update(walker.position); residency.step() }, ALS_FRAME_PRIORITY.Physics - 0.1)
+  useFrame(({ clock }) => { residency.probeContacts(walker.als.pose.current.ownerRigidBody as ContactBody | null, clock.elapsedTime) }, ALS_FRAME_PRIORITY.MeshBase)
   return null
 }

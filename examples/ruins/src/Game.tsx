@@ -20,6 +20,7 @@ import { SceneInspection, type InspectionContent, type TelemetryAction } from '.
 import { createScanMaterialStreaming, residentScanTextures } from '../../shared/scan-material'
 import { loadRuins, type RuinsAsset } from './asset'
 import { RuinsCollision, type RegionalCollision } from './collision'
+import type { Contact } from './contacts'
 import { scanEnvironment } from '../../shared/scan-environment'
 import type { ScanFlames } from '../../shared/scan-flames'
 import { ruinsViews, ruinsNearRadius, createRuinsCameras, type RuinsView } from './views'
@@ -68,11 +69,13 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
       { id: 'meshlet-lod', label: 'Meshlet LOD', description: 'Select the finest resident cut within 120 m when disabled.', enabled: true, setEnabled: enabled => geometry.setLodEnabled(enabled) },
       { id: 'meshlet-occlusion', label: 'HiZ occlusion', description: 'GPU cluster visibility and recovery.', enabled: true, setEnabled: enabled => { geometry.occlusionEnabled = enabled; geometry.resetHistory() } },
       { id: 'meshlet-shadows', label: 'Cascade shadows', description: 'Independent light-view cluster selection.', enabled: true, setEnabled: enabled => geometry.setShadowEnabled(enabled) },
+      { id: 'collision-overlay', label: 'Collision', description: 'Resident collision: green walkable, red steep, blue overhang.', enabled: false, setEnabled: enabled => shared.collision.current?.setOverlay(enabled ? 0 : null) },
+      { id: 'collision-hidden', label: 'Invisible collision', description: 'Only collision standing 0.5 m or more in front of the drawn surface.', enabled: false, setEnabled: enabled => shared.collision.current?.setOverlay(enabled ? 0.5 : null) },
       { id: 'meshlet-debug', label: 'Meshlet colours', enabled: false, setEnabled: enabled => geometry.setDebugView(enabled ? 'meshlets' : inspector.getSnapshot().view === 'lod' ? 'lod' : 'normal') },
     ],
     setView: view => { geometry.setDebugView(view === 'lod' ? 'lod' : 'normal'); shared.look.current?.setDebug(view === 'lod') },
     textures: () => residentScanTextures(renderer),
-    details: () => ({ placements: owned.placements.length, minimumWorldError: owned.manifest.minimumWorldError, sourceTriangles: owned.sourceTriangles, cappedTriangles: owned.cappedTriangles, bounds: { min: owned.bounds.min.toArray(), max: owned.bounds.max.toArray() }, untranslated: owned.manifest.untranslated, excluded: owned.manifest.excluded, geometryPaging: geometry.pagingStats(), textureStreaming: textures.snapshot(), regionalCollision: shared.collision.current?.stats(), ...stats }),
+    details: () => ({ collisionContacts: shared.collision.current?.contactReport(), placements: owned.placements.length, minimumWorldError: owned.manifest.minimumWorldError, sourceTriangles: owned.sourceTriangles, cappedTriangles: owned.cappedTriangles, bounds: { min: owned.bounds.min.toArray(), max: owned.bounds.max.toArray() }, untranslated: owned.manifest.untranslated, excluded: owned.manifest.excluded, geometryPaging: geometry.pagingStats(), textureStreaming: textures.snapshot(), regionalCollision: shared.collision.current?.stats(), ...stats }),
   }), [geometry, inspector, owned, renderer, shared, stats, textures])
   useEffect(() => {
     shared.geometry.current = geometry
@@ -155,10 +158,29 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
     <Physics gravity={[0, -9.8, 0]} paused timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <AlsPhysicsStepper />
       {collisionReady && createPortal(<CharacterController controller={walker} events={events} />, scene, { camera: gameplayCamera })}
-      <RuinsCollision directory={owned.collision} root={owned.collisionRoot} walker={walker} onReady={onCollisionReady} onError={onError} handle={shared.collision} />
+      <RuinsCollision directory={owned.collision} describe={owned.describe} root={owned.collisionRoot} walker={walker} onReady={onCollisionReady} onError={onError} handle={shared.collision} />
     </Physics>
     <SceneInspection name="ruins" look={shared.look} warm={shared.warm} walker={walker} inspector={inspector} telemetry={telemetry} content={content} />
   </>
+}
+
+function ContactDisplay({ shared }: { shared: { collision: { current: RegionalCollision | null } } }) {
+  const [contacts, setContacts] = useState<Contact[]>([])
+  useEffect(() => {
+    const interval = setInterval(() => setContacts(current => { const next = shared.collision.current?.contacts() ?? []; return next.length === 0 && current.length === 0 ? current : [...next] }), 150)
+    return () => clearInterval(interval)
+  }, [shared])
+  if (!contacts.length) return null
+  const shown = [...contacts].sort((a, b) => Number(b.blocking) - Number(a.blocking)).slice(0, 3)
+  return <aside className="bs-inspect" style={{ left: 16, bottom: 16, top: 'auto', right: 'auto', width: 460, fontFamily: 'monospace', fontSize: 11 }} aria-label="Collision contacts">
+    <div>Contacts {contacts.length} · T saves them</div>
+    {shown.map((contact, index) => {
+      const owner = contact.owners?.[0]
+      const surface = owner?.surface as { mesh?: string; drawn?: boolean; material?: string } | undefined
+      const what = contact.kind === 'residency-guard' ? 'residency guard (not level geometry)' : owner ? `#${owner.placement} ${surface?.mesh?.split('/').at(-2)?.slice(0, 34)} · ${surface?.drawn ? 'drawn' : 'NOT DRAWN'}` : contact.note ?? 'resolving'
+      return <div key={index}>{contact.blocking ? 'WALL ' : 'floor'} {contact.directions.join(' ')} n({contact.normal.join(', ')}) · {what}</div>
+    })}
+  </aside>
 }
 
 function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: ReturnType<typeof makeInputDevices>; onReady(): void }) {
@@ -219,6 +241,7 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
     <Canvas frameloop="always" shadows dpr={1} camera={cameras[view]} gl={renderer}>
       {geometry && flames && <Scene owned={owned} geometry={geometry} flames={flames} walker={walker} gameplayCamera={cameras.spawn} inspector={inspector} telemetry={telemetry} shared={shared} onStats={setSelection} onReady={onReady} />}
     </Canvas>
+    <ContactDisplay shared={shared} />
     <SelectionDisplay selection={selection} sourceTriangles={owned.sourceTriangles} cappedTriangles={owned.cappedTriangles} />
     <section className="bs-inspect" aria-label="Camera views" style={{ top: 44, right: 'auto', left: 16, width: 360, maxWidth: 'calc(100vw - 32px)' }}>
       <div className="bs-inspect-view" role="group" aria-label="View bookmarks" style={{ marginTop: 0 }}>

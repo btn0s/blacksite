@@ -55,6 +55,23 @@ export async function loadRuins(progress: (detail: string) => void) {
   const flamePaths = new Set(surfaces.surfaces.filter(surface => surface.family === 'flame').map(surface => surface.path))
   const excluded = new Set([...manifest.untranslated, ...manifest.excluded].map(surface => surface.path))
   for (const path of flamePaths) excluded.add(path)
+  const reasons = new Map([...manifest.untranslated, ...manifest.excluded].map(surface => [surface.path, surface.reason ?? 'untranslated']))
+  const describe = (id: number, slot: number) => {
+    const placement = placements[id]
+    if (!placement) return { placement: id, slot, provenance: 'placement index is outside the level directory' }
+    const e = placement.matrix.elements
+    const columns = [0, 4, 8].map(offset => new Vector3(e[offset], e[offset + 1], e[offset + 2]))
+    const lengths = columns.map(column => column.length())
+    const shear = Math.max(Math.abs(columns[0]!.dot(columns[1]!)) / (lengths[0]! * lengths[1]!), Math.abs(columns[0]!.dot(columns[2]!)) / (lengths[0]! * lengths[2]!), Math.abs(columns[1]!.dot(columns[2]!)) / (lengths[1]! * lengths[2]!))
+    const material = manifest.materialPaths[materialMap[placement.firstMaterial + slot]!] ?? null
+    const requiresFullMatrix = { mirrored: placement.matrix.determinant() < 0, sheared: shear > 1e-3, nonUniform: Math.max(...lengths) / Math.min(...lengths) > 1.001 }
+    return {
+      placement: id, slot, mesh: manifest.geometries[placement.geometry]!.id, material,
+      drawn: placement.visible && (material === null || !excluded.has(material) || flamePaths.has(material)), placementVisible: placement.visible, materialNotDrawn: material !== null && excluded.has(material) ? reasons.get(material) : null,
+      requiresFullMatrix, scale: lengths.map(length => Math.round(length * 1000) / 1000), world: placement.matrix.elements.map(value => Math.round(value * 1000) / 1000),
+      origin: 'baked from the drawn LOD cut of the mesh at 0.75 m world error',
+    }
+  }
   const size = new Vector3()
   const volumes = { archway: 0, cliffs: 0 }
   for (const placement of placements) {
@@ -89,7 +106,7 @@ export async function loadRuins(progress: (detail: string) => void) {
   const bounds = views.overview.bounds
   const home = createRuinsHome(views.archway.bounds)
   return {
-    manifest, placements, bounds, views, home, environment, collision,
+    manifest, placements, bounds, views, home, environment, collision, describe,
     collisionRoot: new URL(root + manifest.collision.slice(0, manifest.collision.lastIndexOf('/') + 1), location.href).href,
     largestBuffer: GEOMETRY_ARENA_BYTES,
     sourceTriangles: assets.reduce((sum, asset) => sum + asset.metadata.sourceTriangles, 0),

@@ -28,20 +28,21 @@ for (let i = 0; i < 20430; i++) {
   const matrix = Array.from({ length: 16 }, (_, j) => directory.readFloatLE(offset + j * 4))
   const first = directory.readUInt32LE(offset + 136), count = directory.readUInt32LE(offset + 140)
   const slots = Array.from({ length: count }, (_, slot) => !excluded.has(level.materialPaths[directory.readUInt32LE(materialStart + (first + slot) * 4)]))
-  if (slots.some(Boolean)) byGeometry[directory.readUInt32LE(offset + 144)].push({ matrix, slots })
+  if (slots.length > 256) throw new Error('Placement has more material slots than the provenance record holds')
+  if (slots.some(Boolean)) byGeometry[directory.readUInt32LE(offset + 144)].push({ placement: i, matrix, slots })
 }
 const chunks = [], cells = new Map(), point = new Vector3()
 let triangleCount = 0, processedPlacements = 0, decodedPages = 0
 async function flush(cell) {
   if (!cell.values.length) return
-  const positions = [], indices = [], welded = new Map()
+  const positions = [], indices = [], welded = new Map(), vertexOwner = []
   const low = [Infinity, Infinity, Infinity], high = [-Infinity, -Infinity, -Infinity]
   const values = new Float32Array(cell.values)
   for (let i = 0; i < values.length; i += 3) {
     const vertex = `${values[i]},${values[i + 1]},${values[i + 2]}`
     let id = welded.get(vertex)
     if (id === undefined) {
-      id = positions.length / 3; welded.set(vertex, id)
+      id = positions.length / 3; welded.set(vertex, id); vertexOwner.push(cell.owners[Math.floor(i / 9)])
       for (let axis = 0; axis < 3; axis++) { const value = values[i + axis]; positions.push(value); low[axis] = Math.min(low[axis], value); high[axis] = Math.max(high[axis], value) }
     }
     indices.push(id)
@@ -55,19 +56,26 @@ async function flush(cell) {
     return remap.get(index)
   })
   const vertices = new Float32Array(compact)
+  const owners = new Uint32Array(triangles.length / 3)
+  for (let corner = 0; corner < simplified.length; corner += 3) {
+    const a = vertexOwner[simplified[corner]], b = vertexOwner[simplified[corner + 1]], c = vertexOwner[simplified[corner + 2]]
+    owners[corner / 3] = b === c ? b : a
+  }
   const header = new Uint32Array([0x52435342, 1, vertices.length, triangles.length, 0, 0, 0, 0])
   const bytes = Buffer.concat([Buffer.from(header.buffer), Buffer.from(vertices.buffer), Buffer.from(triangles.buffer)])
   const file = `regions/${cell.x}_${cell.y}_${cell.z}_${cell.part++}.bin`
   await writeFile(join(output, file), bytes)
-  chunks.push({ file, cell: [Math.floor(cell.x * chunkSize / cellSize), Math.floor(cell.z * chunkSize / cellSize)], bounds: { min: low, max: high }, triangles: triangles.length / 3, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') })
-  cell.values.length = 0
+  const source = file.replace(/\.bin$/, '.src')
+  await writeFile(join(output, source), Buffer.from(owners.buffer))
+  chunks.push({ file, source, cell: [Math.floor(cell.x * chunkSize / cellSize), Math.floor(cell.z * chunkSize / cellSize)], bounds: { min: low, max: high }, triangles: triangles.length / 3, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') })
+  cell.values.length = 0; cell.owners.length = 0
 }
-async function triangle(vertices) {
+async function triangle(vertices, owner) {
   const x = Math.floor((vertices[0] + vertices[3] + vertices[6]) / (3 * chunkSize)), y = Math.floor((vertices[1] + vertices[4] + vertices[7]) / (3 * chunkSize)), z = Math.floor((vertices[2] + vertices[5] + vertices[8]) / (3 * chunkSize))
   const id = `${x},${y},${z}`
-  if (!cells.has(id)) cells.set(id, { x, y, z, part: 0, values: [] })
+  if (!cells.has(id)) cells.set(id, { x, y, z, part: 0, values: [], owners: [] })
   const cell = cells.get(id)
-  cell.values.push(...vertices)
+  cell.values.push(...vertices); cell.owners.push(owner)
   triangleCount++
   if (cell.values.length === triangleLimit * 9) await flush(cell)
 }
@@ -102,7 +110,7 @@ for (const [geometryIndex, geometry] of level.geometries.entries()) {
       }
     }
   } finally { await source.close() }
-  for (const { matrix: transform, slots } of placements) {
+  for (const { placement, matrix: transform, slots } of placements) {
     const matrix = new Matrix4().fromArray(transform), threshold = worldError / (2 * conservativeScale(transform)), reverse = matrix.determinant() < 0
     for (const cluster of clusters) {
       if (!slots[cluster.material] || cluster.self > threshold || cluster.parent <= threshold) continue
@@ -111,7 +119,7 @@ for (const [geometryIndex, geometry] of level.geometries.entries()) {
       for (let corner = 0; corner < cluster.indices.length; corner += 3) {
         const vertices = []
         for (const local of [0, reverse ? 2 : 1, reverse ? 1 : 2]) { const id = cluster.indices[corner + local] * 3; vertices.push(positions[id], positions[id + 1], positions[id + 2]) }
-        await triangle(vertices)
+        await triangle(vertices, placement * 256 + cluster.material)
       }
     }
     processedPlacements++
@@ -131,6 +139,6 @@ for (const [id, chunk] of chunks.entries()) {
     }
   }
 }
-const manifest = { version: 1, cellSize, chunkSize, worldError, triangleLimit, placements: processedPlacements, inputTriangles: triangleCount, triangles: chunks.reduce((sum, chunk) => sum + chunk.triangles, 0), bytes: chunks.reduce((sum, chunk) => sum + chunk.bytes, 0), bounds: { min: low, max: high }, chunks, cells: Object.fromEntries(index) }
+const manifest = { version: 1, provenance: { owner: 'placement * 256 + material slot, one Uint32 per triangle in the chunk source file' }, cellSize, chunkSize, worldError, triangleLimit, placements: processedPlacements, inputTriangles: triangleCount, triangles: chunks.reduce((sum, chunk) => sum + chunk.triangles, 0), bytes: chunks.reduce((sum, chunk) => sum + chunk.bytes, 0), bounds: { min: low, max: high }, chunks, cells: Object.fromEntries(index) }
 await writeFile(join(output, 'collision.json'), JSON.stringify(manifest))
 console.log(JSON.stringify({ complete: true, output, placements: processedPlacements, inputTriangles: triangleCount, triangles: manifest.triangles, bytes: manifest.bytes, chunks: chunks.length, cells: index.size }))
