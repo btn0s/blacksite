@@ -12,6 +12,7 @@ import { WebGPULook } from '@blacksite/look/webgpu-r3f'
 import type { WebGPULook as Look } from '@blacksite/look/webgpu'
 import { Loading, TitleCard } from '@blacksite/ui/hud'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
+import { AlsPhysicsStepper } from 'als-ue5-r3f/app/AlsPhysicsStepper'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { createWalker } from '../../valley/src/walker'
 import { outfit } from '../../valley/src/outfit'
@@ -106,7 +107,8 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   if (error) throw error
   return <>
     <WebGPULook atmosphere={atmosphere} sunlight={sunlight} camera={cameraGrade} quality="high" shadowDistance={80} shadowMap={2048} shadowLayers={shadowLayers} onReady={onLook} onError={onError} />
-    <Physics gravity={[0, -9.8, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
+    <Physics gravity={[0, -9.8, 0]} paused timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
+      <AlsPhysicsStepper />
       <CourtyardColliders owned={owned} onReady={onCollidersReady} onError={onError} />
       {collidersReady && createPortal(<CharacterController controller={walker} events={events} />, scene, { camera: gameplayCamera })}
     </Physics>

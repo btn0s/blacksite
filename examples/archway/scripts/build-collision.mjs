@@ -4,6 +4,8 @@ import { pathToFileURL } from 'node:url'
 import { Matrix4, Vector3 } from 'three'
 import { tsImport } from 'tsx/esm/api'
 
+const collisionMaxError = 0.25
+
 export async function buildCourtyardCollision(root, manifest) {
   const { parseMeshletAsset, meshletPosition, meshletIndex } = await tsImport('../../../packages/geometry/src/load.ts', import.meta.url)
   const cache = new Map()
@@ -22,7 +24,7 @@ export async function buildCourtyardCollision(root, manifest) {
         const clusters = []
         let vertices = 0, corners = 0
         for (let cluster = 0; cluster < asset.metadata.clusterCount; cluster++) {
-          if (asset.clusterLod[cluster * 12 + 8] > 0.025 || asset.clusterLod[cluster * 12 + 9] <= 0.025) continue
+          if (asset.clusterLod[cluster * 12 + 8] > collisionMaxError || asset.clusterLod[cluster * 12 + 9] <= collisionMaxError) continue
           clusters.push(cluster)
           vertices += asset.clusterData[cluster * 8 + 6]
           corners += asset.clusterData[cluster * 8 + 1]
