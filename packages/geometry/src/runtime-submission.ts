@@ -138,30 +138,33 @@ export class MaterialSubmission {
         }
         return { pass, record, required }
       })
-    })
+    }).sort((a, b) => Number(b.required) - Number(a.required))
     this.total = jobs.length
     this.required = jobs.filter(job => job.required).length
     this.warmup = new Promise<void>((resolve, reject) => {
-      if (!this.required) resolve()
+      const compile = async (job: typeof jobs[number]) => {
+        const bundle = job.record.bundle
+        const wasVisible = bundle.visible
+        let pending: Promise<void>
+        bundle.visible = true
+        try { pending = job.pass.compile(bundle) }
+        finally { bundle.visible = wasVisible }
+        await pending
+        this.compiled++
+        bundle.needsUpdate = true
+        if (job.required) this.required--
+      }
       const run = async () => {
+        if (!this.disposed) await Promise.all(jobs.splice(0, this.required).map(compile))
+        resolve()
         while (jobs.length && !this.disposed) {
-          const urgent = jobs.findIndex(job => job.required)
-          const visible = urgent < 0 ? jobs.findIndex(job => job.record.bundle.visible) : urgent
+          await new Promise<void>(next => requestAnimationFrame(() => next()))
+          if (this.disposed) break
+          const visible = jobs.findIndex(job => job.record.bundle.visible)
           const job = jobs.splice(visible < 0 ? 0 : visible, 1)[0]!
-          const bundle = job.record.bundle
-          const wasVisible = bundle.visible
-          let pending: Promise<void>
-          bundle.visible = true
-          try { pending = job.pass.compile(bundle) }
-          finally { bundle.visible = wasVisible }
-          await pending
-          this.compiled++
-          bundle.needsUpdate = true
-          if (job.required && --this.required === 0) resolve()
-          if (!this.required) await new Promise<void>(next => requestAnimationFrame(() => next()))
+          await compile(job)
         }
         if (!this.disposed) performance.mark('geometry-materials-complete')
-        resolve()
       }
       void run().catch(error => { this.failure = error; reject(error) })
     })

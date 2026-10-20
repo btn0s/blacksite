@@ -18,8 +18,8 @@ Compilation now captures pass configuration, collects source objects, and
 prepares each object's graph and pipeline inside a synchronous state scope.
 Renderer, scene and render-context state are restored before every GPU wait
 or yield. `PassNode` restores its caller's target, MRT, cube face and mip level
-immediately after dispatch. Concurrent callers share the pending pipeline
-creation promise.
+immediately after dispatch. Concurrent callers share pending pipeline creation
+promises; independent pipelines are submitted without waiting for each other.
 
 Compilation owns its node-frame update maps. It reads the live clock without
 advancing it and does not commit after-draw history for work that did not draw.
@@ -36,6 +36,11 @@ source list through `renderObject`, using an update-only handler before
 executing the recorded GPU bundle. This preserves source callbacks and the
 temporary override-material lifecycle. Override state is restored in
 `finally`, including alpha coverage, transparency and displacement fields.
+
+Replay also refreshes the camera reference. Render objects are shared across
+cameras, so replaying the cached object directly could use the other shadow
+cascade's camera. The focused two-camera probe reproduces that error on stock
+three and confirms the corrected output without rerecording bundles.
 
 Storage-created attribute buffers include `INDEX` usage, so a buffer first
 used by compute can subsequently become a geometry index without an
@@ -74,18 +79,19 @@ normal identities.
 
 ## Fork commits
 
-- `f7846fd`: isolate asynchronous compilation state.
-- `363e20e`: preserve bundle source materials and compile indexed draws.
-- `126128b`: refresh only changed node bindings.
-- `5a6f0fe`: refresh texture references before binding initialization.
+- `1e6cd92`: isolate asynchronous compilation state.
+- `83b9a37`: preserve bundle source materials and compile indexed draws.
+- `7626fa1`: refresh only changed node bindings.
+- `521da87`: refresh texture references before binding initialization.
 
-The generated browser modules are recorded separately in `e26e5b7`.
+The generated browser modules are recorded separately in `ee4ce6e`.
 
 ## Application integration
 
 The warmup queue prioritizes materials in the initial camera and both shadow
-frusta. Readiness follows their compilation, one visible geometry frame and
-a GPU fence; remaining materials compile between rendered frames.
+frusta and submits their pipelines together. Readiness follows their
+compilation, one visible geometry frame and a GPU fence; remaining materials
+compile between rendered frames.
 
 Removed: the render-pause warmup barrier, renderer state held across awaits,
 bare-mesh compilation that bypassed bundles, and explicit backend index
