@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const archway = 'D:/dev/archway'
-const runner = 'D:/dev/bench-runner'
+const runner = 'D:/dev/bench-runner-auto'
 const ownedAssets = 'D:/dev/owned-assets'
 const benchRoot = 'D:/dev/probe/bench'
 const baseline = join(benchRoot, 'baseline')
@@ -66,6 +66,7 @@ function setupRunner(sha) {
     if (git(runner, 'status', '--porcelain', '--untracked-files=normal')) throw new Error(`${runner} has uncommitted changes`)
     git(runner, 'checkout', '--detach', sha)
   }
+  git(runner, 'submodule', 'update', '--init', 'vendor/als-web')
   linkDirectory(join(archway, 'node_modules'), join(runner, 'node_modules'))
   linkDirectory(ownedAssets, join(runner, 'owned-assets'))
   for (const group of ['packages', 'examples']) {
