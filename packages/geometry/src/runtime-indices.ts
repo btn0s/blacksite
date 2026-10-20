@@ -1,6 +1,6 @@
 import { IndirectStorageBufferAttribute, StorageBufferAttribute } from 'three/webgpu'
 import type { ComputeNode, Node, StorageBufferNode, WebGPURenderer } from 'three/webgpu'
-import { Fn, If, Loop, atomicLoad, atomicStore, float, floatBitsToUint, instanceIndex, max, min, sqrt, storage, uint, uintBitsToFloat } from 'three/tsl'
+import { Fn, If, Loop, atomicLoad, atomicStore, float, floatBitsToUint, invocationLocalIndex, max, min, numWorkgroups, sqrt, storage, uint, uintBitsToFloat, uvec4, workgroupArray, workgroupBarrier, workgroupId } from 'three/tsl'
 import { DRAW_ARGUMENT_OFFSET, DRAW_ARGUMENT_STRIDE, INDEX_BUDGET_OFFSET, uploadAttributes, type PackedMeshletScene } from './runtime-data'
 import { clusterReader, instanceReader } from './runtime-layout'
 
@@ -36,7 +36,6 @@ export class ClusterIndices {
     const readCluster = clusterReader(packed.clusters)
     const readInstance = instanceReader(packed.instances)
     const indices = storage(packed.indices, 'uint', packed.indices.count).toReadOnly()
-    const corners = Math.ceil(Math.max(...packed.batches.map(batch => batch.triangles)) * 3 / 64) * 64
     this.begin = Fn(() => {
       const floor = read(1).lessThan(triangleBudget * 0.8).select(read(4).mul(0.99), read(4)).toVar()
       write(4, floor)
@@ -48,13 +47,9 @@ export class ClusterIndices {
     this.activate = Fn(() => { write(3, 1) })().compute(1).setName(`${label} Index budget resume`)
     this.check = Fn(() => {
       If(read(3).greaterThan(0), () => {
-        const corners = uint(0).toVar()
-        Loop(packed.batches.length, ({ i }) => {
-          corners.addAssign(atomicLoad(counters.element(uint(DRAW_ARGUMENT_OFFSET).add(uint(i).mul(DRAW_ARGUMENT_STRIDE)))))
-        })
-        const triangles = float(corners).div(3)
+        const triangles = float(atomicLoad(counters.element(9))).toVar()
         write(1, max(read(1), triangles))
-        If(corners.greaterThan(triangleBudget * 3), () => {
+        If(triangles.greaterThan(triangleBudget), () => {
           const scale = read(0).greaterThan(0).select(read(0), pixelError).mul(max(sqrt(triangles.div(triangleBudget)).mul(1.1), 1.25)).toVar()
           write(0, scale)
           write(2, read(2).add(1))
@@ -86,26 +81,31 @@ export class ClusterIndices {
         atomicStore(counters.element(argument + 4), uint(0))
         start.addAssign(count)
       }
-      const groups = atomicLoad(counters.element(10)).mul(corners / 64)
-      dispatch.element(0).assign(min(groups, uint(65535)))
-      dispatch.element(1).assign(max(groups.add(65534).div(65535), uint(1)))
+      const groups = atomicLoad(counters.element(10))
+      dispatch.element(0).assign(min(groups, uint(512)))
+      dispatch.element(1).assign(max(groups.add(511).div(512), uint(1)))
       dispatch.element(2).assign(1)
     })().compute(1).setName(`${label} Index material ranges`)
     this.compact = Fn(() => {
-      const slot = instanceIndex.div(corners)
-      const corner = instanceIndex.mod(corners)
-      If(slot.lessThan(drawArguments.element(10)), () => {
+      const slot = workgroupId.x.add(workgroupId.y.mul(numWorkgroups.x))
+      const shared = workgroupArray('uvec4', 1)
+      If(invocationLocalIndex.equal(0).and(slot.lessThan(drawArguments.element(10))), () => {
         const candidate = visible.element(slot).toVar()
         const cluster = readCluster(candidate.x)
-        If(corner.lessThan(cluster.draw.y), () => {
-          const instance = readInstance(candidate.y)
+        const instance = readInstance(candidate.y)
+        const argument = candidate.w.mul(DRAW_ARGUMENT_STRIDE).add(DRAW_ARGUMENT_OFFSET + 2)
+        shared.element(uint(0)).assign(uvec4(cluster.draw.x, cluster.draw.y, drawArguments.element(argument).add(candidate.z), instance.scale.y.lessThan(0).select(uint(1), uint(0))))
+      })
+      workgroupBarrier()
+      If(slot.lessThan(drawArguments.element(10)), () => {
+        const cluster = shared.element(uint(0)).toVar()
+        Loop({ start: invocationLocalIndex, end: cluster.y, type: 'uint', condition: '<', update: 64 }, ({ i: corner }) => {
           const triangleCorner = corner.mod(3)
           const mirrored = triangleCorner.equal(0).select(uint(0), uint(3).sub(triangleCorner))
-          const oriented = instance.scale.y.lessThan(0).select(mirrored, triangleCorner)
-          const address = cluster.draw.x.add(corner.div(3).mul(3)).add(oriented)
+          const oriented = cluster.w.notEqual(0).select(mirrored, triangleCorner)
+          const address = cluster.x.add(corner.div(3).mul(3)).add(oriented)
           const localVertex = indices.element(address.div(4)).shiftRight(address.mod(4).mul(8)).bitAnd(255)
-          const argument = candidate.w.mul(DRAW_ARGUMENT_STRIDE).add(DRAW_ARGUMENT_OFFSET + 2)
-          const destination = drawArguments.element(argument).add(candidate.z).add(corner)
+          const destination = cluster.z.add(corner)
           output.element(destination).assign(slot.shiftLeft(8).bitOr(localVertex))
         })
       })

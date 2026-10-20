@@ -367,7 +367,7 @@ export class MeshletScene {
       firstPassClusters: values[10]! - values[8]!,
       drawnTriangles: values[9]!,
       sceneTriangles: values[12]!,
-      submittedTriangles: values[11]!,
+      submittedTriangles: values[9]!,
       totalTriangles: this.totalTriangles,
       materialBatches: this.meshes.length,
       shadowPasses: this.shadowPasses,

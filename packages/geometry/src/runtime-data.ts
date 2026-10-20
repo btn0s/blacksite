@@ -19,7 +19,7 @@ export interface ResidentMeshletGeometry {
 }
 
 export interface PackedMeshletScene {
-  batches: { material: MeshletSceneEntry['materials'][number]; geometry: ResidentMeshletGeometry; capacity: number; triangles: number }[]
+  batches: { material: MeshletSceneEntry['materials'][number]; geometry: ResidentMeshletGeometry; capacity: number }[]
   clusterCount: number
   instanceCount: number
   candidateCount: number
@@ -129,7 +129,6 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     residentGeometryBytes += asset.vertices.byteLength + asset.vertexReferences.byteLength + asset.indices.byteLength + asset.metadata.clusterCount * 128
     const materialIndices = new Map<MeshletSceneEntry['materials'][number], number>()
     const materialCounts = new Uint32Array(asset.metadata.materials.length)
-    const materialTriangles = new Uint32Array(asset.metadata.materials.length)
     const materialRoots = new Uint32Array(asset.metadata.materials.length)
     const refinedGroups = new Set<number>()
     for (let i = 0; i < asset.metadata.clusterCount; i++) refinedGroups.add(asset.clusterData[i * 8 + 3]!)
@@ -140,7 +139,6 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
       const material = asset.clusterData[i * 8 + 5]!
       if (material >= materialCounts.length) throw new Error('Geometry cluster references a missing material slot')
       materialCounts[material] = materialCounts[material]! + 1
-      materialTriangles[material] = Math.max(materialTriangles[material]!, asset.clusterData[i * 8 + 1]! / 3)
       if (!refinedGroups.has(asset.clusterData[i * 8 + 2]!)) materialRoots[material] = materialRoots[material]! + asset.clusterData[i * 8 + 1]! / 3
       sourceError = Math.max(sourceError, asset.clusterLod[i * 12 + 8]!)
       clusterFloats.set(asset.clusterBounds.subarray(i * 4, i * 4 + 4), offset)
@@ -194,12 +192,11 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
         }
         if (!materialIndices.has(material)) {
           materialIndices.set(material, batches.length)
-          batches.push({ material, geometry, capacity: 0, triangles: 0 })
+          batches.push({ material, geometry, capacity: 0 })
         }
         const batchIndex = materialIndices.get(material)!
         const batch = batches[batchIndex]!
         batch.capacity += materialCounts[slot]! * entry.instances.length
-        batch.triangles = Math.max(batch.triangles, materialTriangles[slot]!)
         rootTriangles += materialRoots[slot]! * entry.instances.length
         materialMap.push(batchIndex)
       }

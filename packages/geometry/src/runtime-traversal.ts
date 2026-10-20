@@ -1,6 +1,6 @@
 import { IndirectStorageBufferAttribute, StorageBufferAttribute } from 'three/webgpu'
 import type { Node, WebGPURenderer } from 'three/webgpu'
-import { Fn, If, Loop, atomicAdd, atomicLoad, atomicStore, bool, dot, instanceIndex, max, min, storage, uint, uintBitsToFloat, uvec2, uvec4, vec4 } from 'three/tsl'
+import { Fn, If, Loop, atomicAdd, atomicLoad, atomicStore, bool, dot, floatBitsToUint, instanceIndex, invocationLocalIndex, max, min, storage, uint, uintBitsToFloat, uvec2, uvec4, vec4, workgroupArray, workgroupBarrier } from 'three/tsl'
 import { DRAW_ARGUMENT_OFFSET, DRAW_ARGUMENT_STRIDE, INDEX_BUDGET_OFFSET, uploadAttributes, type PackedMeshletScene } from './runtime-data'
 import { clusterReader, instanceReader } from './runtime-layout'
 import { ClusterIndices } from './runtime-indices'
@@ -21,6 +21,7 @@ export class ClusterTraversal {
   private readonly recoverEvaluate
   private readonly retryEvaluate
   private readonly evaluateDispatch
+  private readonly recoverEvaluateDispatch
   private readonly rejectedDispatch
   private readonly evaluateRejected
   private readonly steps
@@ -44,8 +45,14 @@ export class ClusterTraversal {
     const queues = [new StorageBufferAttribute(queueCapacity, 2, Uint32Array), new StorageBufferAttribute(queueCapacity, 2, Uint32Array)]
     const counters = storage(this.counters, 'uint', count).toAtomic()
     this.indices = new ClusterIndices(packed, counters, this.visible, triangleBudget, threshold, lodEnabled, coarsestError, label)
-    const effectiveThreshold = this.indices.threshold
-    const effectiveLod = lodEnabled.or(effectiveThreshold.greaterThan(0))
+    const groupParameters = (size: Node<'uint'>, start: Node<'uint'> = uint(0)) => {
+      const shared = workgroupArray('uvec4', 1)
+      If(invocationLocalIndex.equal(0), () => {
+        shared.element(uint(0)).assign(uvec4(size, start, floatBitsToUint(this.indices.threshold), 0))
+      })
+      workgroupBarrier()
+      return shared.element(uint(0)).toVar()
+    }
     const rejected = storage(rejectedAttribute, 'uvec2', capacity)
     const rejectedInstances = storage(rejectedInstancesAttribute, 'uint', packed.instanceCount)
     const leaves = storage(leafAttribute, 'uvec2', leafCapacity)
@@ -93,8 +100,8 @@ export class ClusterTraversal {
         }).Else(() => { seedInstance(id) })
       }).Else(() => { atomicAdd(counters.element(14), uint(1)) })
     })().compute(packed.instanceCount, [64]).setName(`${label} Instance broad phase`)
-    const writeDispatch = (counter: number, limit: number) => {
-      const size = min(atomicLoad(counters.element(counter)), uint(limit))
+    const writeDispatch = (counter: number, limit: number, start: Node<'uint'> = uint(0)) => {
+      const size = min(atomicLoad(counters.element(counter)), uint(limit)).sub(start)
       const groups = size.add(63).div(64)
       dispatch.element(0).assign(min(groups, uint(65535)))
       dispatch.element(1).assign(max(groups.add(65534).div(65535), uint(1)))
@@ -121,7 +128,10 @@ export class ClusterTraversal {
       const output = 1 - input
       const prepare = Fn(() => { writeDispatch(input, queueCapacity); atomicStore(counters.element(output), uint(0)) })().compute(1).setName(`${label} Traversal dispatch`)
       const visit = Fn(() => {
-        If(instanceIndex.lessThan(min(atomicLoad(counters.element(input)), uint(queueCapacity))), () => {
+        const parameters = groupParameters(min(atomicLoad(counters.element(input)), uint(queueCapacity)))
+        const effectiveThreshold = uintBitsToFloat(parameters.z)
+        const effectiveLod = lodEnabled.or(effectiveThreshold.greaterThan(0))
+        If(instanceIndex.lessThan(parameters.x), () => {
           atomicAdd(counters.element(18), uint(1))
           const task = queue[input]!.element(instanceIndex).toVar()
           const instance = readInstance(task.y)
@@ -145,7 +155,7 @@ export class ClusterTraversal {
             })
           })
         })
-      })().compute(queueCapacity, [64]).setName(`${label} Group hierarchy traversal`)
+      })().computeKernel([64]).setName(`${label} Group hierarchy traversal`)
       return { prepare, visit }
     })
     const append = (task: Node<'uvec2'>, corners: Node<'uint'>, batch: Node<'uint'>) => {
@@ -155,12 +165,14 @@ export class ClusterTraversal {
         const first = atomicAdd(counters.element(argument), corners)
         visible.element(slot).assign(uvec4(task, first, batch))
         atomicAdd(counters.element(9), corners.div(3))
-        atomicAdd(counters.element(11), corners.div(3))
       }).Else(overflow)
     }
     const evaluate = (recover: boolean, start: Node<'uint'> = uint(0)) => Fn(() => {
-      const id = instanceIndex.add(start)
-      If(id.lessThan(min(atomicLoad(counters.element(22)), uint(leafCapacity))), () => {
+      const parameters = groupParameters(min(atomicLoad(counters.element(22)), uint(leafCapacity)), start)
+      const effectiveThreshold = uintBitsToFloat(parameters.z)
+      const effectiveLod = lodEnabled.or(effectiveThreshold.greaterThan(0))
+      const id = instanceIndex.add(parameters.y)
+      If(id.lessThan(parameters.x), () => {
         atomicAdd(counters.element(19), uint(1))
         const task = leaves.element(id).toVar()
         const cluster = readCluster(task.x)
@@ -189,11 +201,12 @@ export class ClusterTraversal {
           }).Else(() => { atomicAdd(counters.element(5), uint(1)) })
         })
       })
-    })().compute(leafCapacity, [64]).setName(`${label} ${recover ? 'Recovered group cut' : 'Group cut'}`)
+    })().computeKernel([64]).setName(`${label} ${recover ? 'Recovered group cut' : 'Group cut'}`)
     this.evaluate = evaluate(false)
     this.recoverEvaluate = evaluate(true, atomicLoad(counters.element(23)))
     this.retryEvaluate = evaluate(true)
     this.evaluateDispatch = Fn(() => { writeDispatch(22, leafCapacity) })().compute(1).setName(`${label} Group cut dispatch`)
+    this.recoverEvaluateDispatch = Fn(() => { writeDispatch(22, leafCapacity, atomicLoad(counters.element(23))) })().compute(1).setName(`${label} Recovered group cut dispatch`)
     this.rejectedDispatch = Fn(() => { writeDispatch(6, capacity) })().compute(1).setName(`${label} Cluster recovery dispatch`)
     this.evaluateRejected = Fn(() => {
       If(instanceIndex.lessThan(min(atomicLoad(counters.element(6)), uint(capacity))), () => {
@@ -208,7 +221,7 @@ export class ClusterTraversal {
         })
       })
     })().compute(capacity, [64]).setName(`${label} Cluster recovery`)
-    this.nodes = [this.reset, this.seed, this.recoverSeed, this.recoverDispatch, this.evaluate, this.recoverEvaluate, this.retryEvaluate, this.evaluateDispatch, this.rejectedDispatch, this.evaluateRejected, ...this.steps.flatMap(step => [step.prepare, step.visit])]
+    this.nodes = [this.reset, this.seed, this.recoverSeed, this.recoverDispatch, this.evaluate, this.recoverEvaluate, this.retryEvaluate, this.evaluateDispatch, this.recoverEvaluateDispatch, this.rejectedDispatch, this.evaluateRejected, ...this.steps.flatMap(step => [step.prepare, step.visit])]
     this.buffers = [this.counters, this.visible, rejectedAttribute, rejectedInstancesAttribute, leafAttribute, ...queues, this.dispatch]
     this.residentBytes = this.indices.residentBytes + this.buffers.reduce((sum, attribute) => sum + attribute.array.byteLength, 0)
   }
@@ -241,7 +254,7 @@ export class ClusterTraversal {
       renderer.compute(step.prepare)
       renderer.compute(step.visit, this.dispatch)
     }
-    renderer.compute(this.evaluateDispatch)
+    renderer.compute(recover ? this.recoverEvaluateDispatch : this.evaluateDispatch)
     renderer.compute(recover ? this.recoverEvaluate : this.evaluate, this.dispatch)
   }
 
