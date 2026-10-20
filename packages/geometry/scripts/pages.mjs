@@ -1,16 +1,17 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { decodeGeometryPage, pageCodecReady } from '../src/page-codec.mjs'
 
 const names = ['groups', 'childOffsets', 'children', 'parentOffsets', 'parents', 'nodeData', 'nodeBounds', 'pages', 'roots']
-const fields = ['magic', 'version', 'clusterCount', 'groupCount', 'packedIndexWords', 'edgeCount', 'rootCount', 'residentVertices', 'residentIndices', 'meshletVertices', 'nodeCount', 'vertexWords', 'pageCount', 'rootGroupCount', 'pageVertices', 'referenceBytes', 'indexBytes', 'maxGroupClusters', 'maxGroupBytes', 'coarseClusters', 'coarseTriangles', 'coarseReferences', 'coarseVertices', 'coarsePayloadBytes', 'pinnedPages', 'pinnedWireBytes', 'packBytes', 'payloadBytes', 'uniquePayloadBytes', 'alignmentBytes', 'maxClusterVertices', 'maxClusterTriangles']
+const fields = ['magic', 'version', 'clusterCount', 'groupCount', 'packedIndexWords', 'edgeCount', 'rootCount', 'residentVertices', 'residentIndices', 'meshletVertices', 'nodeCount', 'vertexWords', 'pageCount', 'rootGroupCount', 'pageVertices', 'referenceBytes', 'indexBytes', 'maxGroupClusters', 'maxGroupBytes', 'coarseClusters', 'coarseTriangles', 'coarseReferences', 'coarseVertices', 'coarsePayloadBytes', 'pinnedPages', 'pinnedWireBytes', 'packBytes', 'payloadBytes', 'uniquePayloadBytes', 'alignmentBytes', 'maxClusterVertices', 'maxClusterTriangles', 'residentBytes', 'pinnedResidentBytes', 'tangentOffset', 'colorOffset', 'uv1Offset', 'vertexWireBytes', 'referenceWireBytes', 'indexWireBytes', 'clusterWireBytes']
 const align = value => Math.ceil(value / 16) * 16
 const digest = bytes => createHash('sha256').update(bytes).digest('hex')
 const requireValue = (condition, message) => { if (!condition) throw new Error(message) }
 
 export function readNativePages(data) {
   const stats = Object.fromEntries(fields.map((name, i) => [name, Number(data.readBigUInt64LE(i * 8))]))
-  requireValue(stats.magic === 0x50475342 && stats.version === 4, 'Invalid native page directory')
+  requireValue(stats.magic === 0x50475342 && stats.version === 5, 'Invalid native page directory')
   let offset = fields.length * 8
   const arrays = {}
   const counts = [stats.groupCount * 8, stats.groupCount + 1, stats.edgeCount, stats.groupCount + 1, stats.edgeCount, stats.nodeCount * 4, stats.nodeCount * 8, stats.pageCount * 4, stats.rootGroupCount]
@@ -33,7 +34,7 @@ export function packPageDirectory(metadata, arrays) {
     return entry
   })
   const output = Buffer.alloc(cursor)
-  ;[0x44475342, 4, names.length, json.length, cursor, 0, 0, 0].forEach((word, i) => output.writeUInt32LE(word, i * 4))
+  ;[0x44475342, 5, names.length, json.length, cursor, 0, 0, 0].forEach((word, i) => output.writeUInt32LE(word, i * 4))
   json.copy(output, 32 + names.length * 16)
   for (const { id, offset, array } of entries) {
     ;[id, offset, array.length, array instanceof Float32Array ? 0 : 1].forEach((word, i) => output.writeUInt32LE(word, 32 + id * 16 + i * 4))
@@ -44,7 +45,7 @@ export function packPageDirectory(metadata, arrays) {
 
 export async function readPageDirectory(path) {
   const bytes = await readFile(path)
-  requireValue(bytes.readUInt32LE(0) === 0x44475342 && bytes.readUInt32LE(4) === 4 && bytes.readUInt32LE(8) === names.length && bytes.readUInt32LE(16) === bytes.length, `Invalid page directory: ${path}`)
+  requireValue(bytes.readUInt32LE(0) === 0x44475342 && bytes.readUInt32LE(4) === 5 && bytes.readUInt32LE(8) === names.length && bytes.readUInt32LE(16) === bytes.length, `Invalid page directory: ${path}`)
   const metadata = JSON.parse(bytes.subarray(32 + names.length * 16, 32 + names.length * 16 + bytes.readUInt32LE(12)).toString())
   const arrays = {}
   let previousEnd = align(32 + names.length * 16 + bytes.readUInt32LE(12))
@@ -59,6 +60,7 @@ export async function readPageDirectory(path) {
 }
 
 export async function verifyGeometryPages(path) {
+  await pageCodecReady
   const directory = await readPageDirectory(path)
   const { metadata: m, arrays: a } = directory
   const pack = await readFile(join(dirname(path), m.pagePack))
@@ -86,14 +88,25 @@ export async function verifyGeometryPages(path) {
       requireValue(child < m.groupCount && child < group && a.parents.subarray(a.parentOffsets[child], a.parentOffsets[child + 1]).includes(group), 'Invalid reverse dependency')
     }
   }
-  let cursor = 0, payload = 0, vertices = 0, pinned = 0, pinnedWire = 0, coarseClusters = 0, coarseTriangles = 0
+  const dependants = Array.from({ length: m.pageCount }, () => new Set()), dependencies = new Uint32Array(m.pageCount)
+  for (let group = 0; group < m.groupCount; group++) for (let i = a.parentOffsets[group]; i < a.parentOffsets[group + 1]; i++) {
+    const page = a.groups[group * 8 + 5], parent = a.groups[a.parents[i] * 8 + 5]
+    if (page !== parent) dependants[parent].add(page)
+  }
+  for (const pages of dependants) for (const page of pages) dependencies[page]++
+  const ready = Array.from(dependencies, (count, i) => count === 0 ? i : -1).filter(i => i !== -1)
+  for (let i = 0; i < ready.length; i++) for (const page of dependants[ready[i]]) if (--dependencies[page] === 0) ready.push(page)
+  requireValue(ready.length === m.pageCount, 'Packed page dependency graph contains a cycle')
+  let cursor = 0, payload = 0, vertices = 0, pinned = 0, pinnedWire = 0, coarseClusters = 0, coarseTriangles = 0, residentBytes = 0, pinnedResidentBytes = 0
   for (let id = 0; id < m.pageCount; id++) {
-    const p = m.pages[id], bytes = pack.subarray(p.offset, p.offset + p.bytes), h = Array.from({ length: 16 }, (_, i) => bytes.readUInt32LE(i * 4))
+    const p = m.pages[id], encoded = pack.subarray(p.offset, p.offset + p.bytes), bytes = Buffer.from(decodeGeometryPage(encoded)), h = Array.from({ length: 16 }, (_, i) => bytes.readUInt32LE(i * 4))
     requireValue(p.offset === cursor && p.offset === a.pages[id * 4] + a.pages[id * 4 + 1] * 4294967296 && p.bytes === a.pages[id * 4 + 2] && Number(p.pinned) === a.pages[id * 4 + 3], 'Page ranges disagree')
-    requireValue(digest(bytes) === p.sha256 && h[0] === 0x504d5342 && h[1] === 4 && h[2] === id && h[3] === bytes.length && h[3] <= m.pageCapacity && h[5] === Number(p.pinned) && h[14] === m.vertexStride && h[15] === byPage[id].length, 'Page header/hash mismatch')
+    requireValue(digest(encoded) === p.sha256 && h[0] === 0x504d5342 && h[1] === 5 && h[2] === id && h[3] === bytes.length && h[3] <= m.pageCapacity && h[5] === Number(p.pinned) && h[14] === m.vertexStride && h[15] === byPage[id].length, 'Page header/hash mismatch')
     requireValue(h[10] === 64 && h[11] === align(64 + h[6] * h[14]) && h[12] === align(h[11] + h[7] * 4) && h[13] === align(h[12] + h[8]) && h[3] === h[13] + h[9] * 160, 'Page sections disagree')
     let clusterCursor = 0
-    for (const group of byPage[id]) {
+    const minDepth = h[4] & 65535, maxDepth = h[4] >>> 16
+    requireValue(maxDepth - minDepth <= 1, 'Page exceeds adjacent-depth range')
+    for (const group of byPage[id].sort((x, y) => a.groups[x * 8 + 6] - a.groups[y * 8 + 6])) {
       requireValue(a.groups[group * 8 + 6] === clusterCursor && roots.has(group) === p.pinned, 'Group split, reorder or pin mismatch')
       const count = a.groups[group * 8 + 7]
       requireValue(count <= 21, 'Group exceeds cluster contract')
@@ -102,7 +115,8 @@ export async function verifyGeometryPages(path) {
         const indexOffset = bytes.readUInt32LE(c + 64), indexCount = bytes.readUInt32LE(c + 68), referenceOffset = bytes.readUInt32LE(c + 76) * 4
         const referenceEnd = clusterCursor + 1 < h[9] ? bytes.readUInt32LE(c + 160 + 76) * 4 : h[11] + h[7] * 4
         const vertexCount = (referenceEnd - referenceOffset) / 4
-        requireValue(bytes.readUInt32LE(c + 72) === h[4] && bytes.readUInt32LE(c + 128) * 4 === h[10] && bytes.readUInt32LE(c + 132) * 4 === h[14], 'Cluster has wrong page/depth addressing')
+        const depth = bytes.readUInt32LE(c + 72)
+        requireValue(depth >= minDepth && depth <= maxDepth && bytes.readUInt32LE(c + 128) * 4 === h[10] && bytes.readUInt32LE(c + 132) * 4 === h[14], 'Cluster has wrong page/depth addressing')
         requireValue(indexCount > 0 && indexCount % 3 === 0 && indexCount <= 384 && vertexCount > 0 && vertexCount <= 128 && indexOffset >= h[12] && indexOffset + indexCount <= h[12] + h[8] && referenceOffset >= h[11] && referenceEnd <= h[11] + h[7] * 4, 'Cluster range exceeds page')
         const refined = bytes.readUInt32LE(c + 60)
         requireValue(refined === 0xffffffff || a.children.subarray(a.childOffsets[group], a.childOffsets[group + 1]).includes(refined), 'Cluster refinement is absent from directory')
@@ -112,11 +126,12 @@ export async function verifyGeometryPages(path) {
       }
     }
     requireValue(clusterCursor === h[9], 'Page has unowned clusters')
-    cursor += bytes.length
+    cursor += encoded.length
+    residentBytes += bytes.length
     payload += h[6] * h[14] + h[7] * 4 + h[8] + h[9] * 160
     vertices += h[6]
-    if (p.pinned) { pinned++; pinnedWire += bytes.length }
+    if (p.pinned) { pinned++; pinnedWire += encoded.length; pinnedResidentBytes += bytes.length }
   }
-  requireValue(cursor === pack.length && payload === m.payloadBytes && vertices === m.pageVertices && pinned === m.pinnedPages && pinnedWire === m.pinnedWireBytes && coarseClusters === m.coarseClusters && coarseTriangles === m.coarseTriangles, 'Page census disagrees with payload')
+  requireValue(cursor === pack.length && payload === m.payloadBytes && vertices === m.pageVertices && pinned === m.pinnedPages && pinnedWire === m.pinnedWireBytes && residentBytes === m.residentBytes && pinnedResidentBytes === m.pinnedResidentBytes && coarseClusters === m.coarseClusters && coarseTriangles === m.coarseTriangles, 'Page census disagrees with payload')
   return { ...directory, packSha256: digest(pack) }
 }

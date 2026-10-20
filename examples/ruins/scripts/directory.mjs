@@ -81,7 +81,7 @@ export async function buildLevelDirectory(output, geometries, instances, meshes,
   const maps = Buffer.from(Uint32Array.from(materialMap).buffer)
   const arrays = [placements, maps, spatial, bitsets]
   const header = Buffer.alloc(96)
-  ;[0x4c475342, 4, 4, instances.length, geometries.length, materialPaths.length, nodes.length, bitWords].forEach((word, i) => header.writeUInt32LE(word, i * 4))
+  ;[0x4c475342, 5, 4, instances.length, geometries.length, materialPaths.length, nodes.length, bitWords].forEach((word, i) => header.writeUInt32LE(word, i * 4))
   let cursor = header.length
   for (const [id, array] of arrays.entries()) {
     ;[id, cursor, array.length, 0].forEach((word, i) => header.writeUInt32LE(word, 32 + id * 16 + i * 4))

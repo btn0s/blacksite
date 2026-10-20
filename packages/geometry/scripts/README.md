@@ -66,44 +66,74 @@ The native builder calls upstream `clodBuildHierarchy` with node width 8. It bui
 
 The build API accepts `{minimumError}` as a residency budget (object-space metres, default zero). Convert a world-space budget with `minimumError = worldError / maximumPlacementScale`, using the largest conservative scale among the mesh's placements. For a positive budget, groups with simplified error at or below it are removed before building the traversal BVH. Remaining references are remapped, references across the resident boundary become terminal, and vertex fetch remapping drops unused vertices without changing the vertex layout. `sourceTriangles` preserves provenance; `residentTriangles` counts the finest resident cut. Primitive ranges describe source material slots. `sourceVertices` counts the input vertices and `residentVertices` counts the shared quantized pool. Zero budget retains source detail. The budget is applied before quantization and serialization.
 
-## Page format version 4
+## Page format version 5
 
-`buildMeshletPages(input, outputDirectoryFile, source, {minimumError})` uses the same native hierarchy and quantizer. `buildGltfPages(inputGltf, meshIndex, outputDirectoryFile, {minimumError})` selects authoritative component-local geometry without applying scene-node transforms. A `.directory` and sibling `.pages` pack replace a resident `.meshlets` file for this build contract. Existing resident APIs and version-3 assets keep their format; no runtime loads version 4 yet.
+`buildMeshletPages(input, directoryFile, source, {minimumError})` and `buildGltfPages(inputGltf, meshIndex, directoryFile, {minimumError})` compile the same source hierarchy into immutable `.directory` and `.pages` files. The scene command in `examples/ruins/scripts/build.mjs` requires a new owned directory. Published version-3 geometry and its runtime remain unchanged. Offline version 4 is superseded; version 5 is the page-consumer contract.
 
-All fields are little endian. Each page contains whole groups from one geometry, one original DAG depth and one pin class. Groups are packed deterministically by depth, pin class and group id. Every terminal group is pinned, including early terminals. A mesh-wide quantization lattice and the original packed vertex tuples are preserved across pages. Boundary duplication is measured as page-local vertices minus unique resident vertices. The compiler rejects groups above 21 clusters, clusters above 128 vertices or triangles, and any page above 131,072 bytes. The maximum 28-byte vertex contract bounds a standalone group at 97,440 payload bytes plus a 64-byte header and at most 36 bytes of section alignment.
+### Resident vertices and page packing
 
-Page packs concatenate compact, 16-byte-aligned page ranges; unused physical-slot bytes are absent on the wire. The directory records every range and SHA256. A page occupies one 128 KiB physical arena slot regardless of its wire size. A 64-byte page header contains sixteen u32 words:
+Positions use the asset-wide 16-bit lattice; normals retain two octahedral snorm16 components, and UVs use the asset-wide two-component unorm16 range. The compiler welds identical complete packed tuples after quantization, preserving every attribute the GPU sees. The hierarchy is built from the original source values; welding adds no quantization loss. Normal precision remains 16 bits. The meshoptimizer octahedral encoder is used for normals and authored tangents. Its expanded post-decode filter would increase resident stride, so transport decoding preserves the compact octahedral pair instead. Colour stays lossless RGBA8; no alpha-bit reduction or float filter is applied.
+
+| Resident bytes | Contents |
+| --- | --- |
+| 0–3 | Position x/y as u16 |
+| 4–7 | Position z as u16; octahedral normal x as snorm16 |
+| 8–11 | Octahedral normal y as snorm16; UV0 u as unorm16 |
+| 12–15 | UV0 v as unorm16; tangent-negative and tangent-present bits, with fourteen reserved zero bits |
+| Optional 4 | Authored tangent octahedral x/y as snorm16; absent for meshes without authored tangents |
+| Optional 4 | Nonconstant source colour as RGBA8 |
+| Optional 4 | UV1 u/v as unorm16; only where the source has UV1 |
+
+The base stride is 16 bytes. Tangents, colour and UV1 add four bytes each, so the maximum is 28 bytes. Every mesh has one word-aligned layout. The vertex shader needs fixed word loads, shifts/masks, the existing octahedral decode and a multiply/add against the asset lattice. Mixed primitives preserve per-vertex tangent absence in the flags. Metadata records the optional word offsets and the census counts every layout.
+
+Whole meshoptimizer groups share one local vertex table per page. The packer considers vertex-sharing neighbours, DAG parents/children/siblings, and adjacent spatial Morton ranks. It prefers shared vertex bytes per incremental payload byte, breaking ties by spatial distance and stable group id. A page contains one mesh, one pin class and at most two adjacent original DAG depths. Each proposed contraction must preserve an acyclic page dependency graph; the written directory is independently topologically checked. This avoids turning page residency into a cyclic or multi-page admission unit. Every terminal group is pinned, including early terminals.
+
+The compiler validates at most 21 clusters/group, 128 vertices/triangles per cluster and 131,072 decoded bytes/page. A standalone worst-case group has at most 97,440 payload bytes plus its 64-byte header and up to 36 bytes of alignment. Boundary/level duplication is measured as the sum of page-local vertex tables minus the asset's unique packed pool.
+
+### Encoded wire pages
+
+Each pack concatenates independently compressed pages. All integers are little endian. A 96-byte encoded-page header has twenty-four u32 words:
 
 | Word | Value |
 | --- | --- |
-| 0–3 | Magic `0x504d5342`, version 4, geometry-local page id, wire bytes |
-| 4–9 | Original DAG depth, pinned flag, local vertex count, reference count, packed index bytes, cluster count |
-| 10–15 | Vertex/reference/index/cluster byte offsets, vertex stride in bytes, whole group count |
+| 0–3 | Magic `0x574d5342`, version 5, geometry-local page id, encoded bytes including header |
+| 4–9 | Decoded resident bytes, vertex count, vertex byte stride, reference count, packed resident index bytes, cluster count |
+| 10–13 | Minimum depth in low u16 and maximum depth in high u16; pinned flag; whole group count; triangle index count excluding meshlet padding |
+| 14–17 | Encoded byte lengths of vertex, reference, triangle and cluster streams |
+| 18–23 | Reserved zero |
 
-Vertices retain the resident packed layout. References are page-local vertex indices; triangle indices remain meshlet-local bytes, padded to four bytes per cluster. Cluster records use the existing 160-byte GPU layout: words 0–3 culling sphere; 4–13 self/parent LOD spheres and errors; 14 material; 15 refined group or `0xffffffff`; 16 page-relative index byte offset; 17 index count; 18 original DAG depth; 19 page-relative reference word offset; 20–31 quantization; 32 page-relative vertex word base; 33 vertex word stride; 34–35 colour/UV1 attribute slots; 36–39 UV1 bounds. Spheres include the same half-quantization-diagonal inflation as the resident upload. Add the physical page base to page-relative addresses.
+Four streams immediately follow: final packed vertex tuples through meshoptimizer vertex codec version 0; u32 local vertex references through its index-sequence codec version 1; concatenated meshlet-local triangle indices through its triangle-index codec version 1; and 160-byte cluster records through vertex codec version 0. Each stream is independently round-tripped by the native compiler. Triangle codec cyclic rotations preserve each triangle and winding; no triangle is reordered or lost. The worker restores byte indices and each meshlet's four-byte padding. Codec compression level is 2. Stream sizes and total wire bytes are reported separately from resident bytes.
 
-A geometry directory starts with the resident format's 32-byte header and 16-byte section-directory entries, using magic `0x44475342` and version 4. UTF-8 JSON metadata includes builder provenance, ranges/hashes and exact census counts. Sections are aligned to sixteen bytes:
+The decoded page has the original 64-byte resident header: magic `0x504d5342`, version 5, page id, decoded byte length, packed depth range, pinned flag, vertex count, reference count, packed index bytes, cluster count, vertex/reference/index/cluster byte offsets, vertex byte stride and group count. Sections start at sixteen-byte boundaries. Indices remain meshlet-local bytes; references index the shared page-local table. The complete image fits one 128 KiB physical arena slot, regardless of encoded size.
+
+Cluster records retain the existing 160-byte GPU layout. Words 0–3 are the culling sphere; 4–13 self/parent LOD spheres and errors; 14 material; 15 refined group; 16 page-relative index byte offset; 17 index count; 18 original DAG depth; 19 page-relative reference word offset; 20–31 quantization. Word 23, previously padding, holds optional tangent word offset 4 or zero. Words 32–35 are page-relative vertex word base, vertex word stride, optional colour offset and optional UV1 offset. Words 36–39 hold UV1 bounds. Spheres include half-quantization-diagonal inflation. Add the physical page base to page-relative addresses; no expanded float vertex array is needed.
+
+### Directory and worker boundary
+
+A geometry directory uses magic `0x44475342`, version 5 and the resident format's 32-byte header plus 16-byte section-directory entries. UTF-8 metadata includes ranges/SHA256, source provenance, layout and exact census counts. Its sixteen-byte-aligned sections are:
 
 | Section id | Contents |
 | --- | --- |
-| 0 | 32 bytes/group: sphere xyzw and error as f32, then page id, page-local first cluster and cluster count as u32 |
+| 0 | 32 bytes/group: sphere xyzw and error as f32; page id, page-local first cluster and cluster count as u32 |
 | 1–2 | Finer dependency CSR: `groupCount + 1` u32 offsets, then u32 group ids |
-| 3–4 | All coarser reverse dependencies in the same CSR layout |
-| 5–6 | Existing node data (16 bytes/node) and conservative bounds/error (32 bytes/node) |
-| 7 | 16 bytes/page: pack byte offset low/high u32, wire bytes, pinned flag |
+| 3–4 | All coarser reverse dependencies in the same layout |
+| 5–6 | Existing node data, 16 bytes/node, and conservative bounds/error, 32 bytes/node |
+| 7 | 16 bytes/page: encoded pack offset low/high u32, encoded wire bytes, pinned flag |
 | 8 | u32 ids of every terminal/coarsest group |
 
-After error pruning, only populated depth rows are passed to `clodBuildHierarchy`, with dense row numbers in that temporary input. The first `rootCount` nodes root the retained rows. Pages, clusters and DAG edges retain their original depths and ids. This satisfies the upstream builder's nonempty-row contract when pruning removes entire fine rows. Every group appears exactly once in the forest.
+After error pruning, only populated depth rows are densely numbered in the temporary input to the unchanged eight-wide BVH builder. Pages/clusters retain original depths and DAG ids. Every retained group occurs once in the forest.
 
-`verifyGeometryPages(path)` reads the written directory and pack, checks hashes/ranges, whole-group coverage, pin closure, both dependency directions, eight-wide BVH coverage, every packed triangle/reference address, and exact byte totals. It is part of the bake, and can read the artifacts independently afterward.
+`@blacksite/geometry/pages` exports `GeometryPageDecoder`. Await `ready`, then call `fetch(packUrl, pageIndex, range, signal)`. One decoder owns one dedicated worker and accepts one page at a time; it has no unbounded queue. The worker fetches the exact HTTP byte range into a bounded encoded buffer, checks SHA256, decodes and validates the image, and transfers that image to the caller. Only then can the residency owner stage it for GPU upload. The response includes decoded bytes, wire bytes and decode milliseconds. Cancellation aborts fetch; `dispose()` terminates the worker. Decoding, hashing and index padding run off the main thread. The owned-assets server supports exact single byte ranges. This entry point is not connected to the current resident renderer.
 
-The whole-level command in `examples/ruins/scripts/build.mjs` also writes `level.directory`. Its 96-byte header starts with eight u32 words: magic `0x4c475342`, version 4, section count 4, placement count, geometry count, material count, spatial node count and material-bitset word count. Four 16-byte section records follow: id, byte offset, byte length and reserved zero. Section data is word aligned. Geometry and material ids index `level.json`'s `geometries` and `materialPaths` arrays; placements retain source order.
+`verifyGeometryPages(path)` reads written artifacts with the same decoder and checks range hashes, group coverage, pin closure, both dependency directions, page-DAG acyclicity, eight-wide forest coverage, all meshlet addresses and exact resident/wire totals. It runs during every bake.
+
+The whole-level `level.directory` retains the 176-byte placement and spatial layouts, with version 5 and magic `0x4c475342`. Its 96-byte header contains eight u32 words: magic, version, section count 4, placement count, geometry count, material count, spatial node count and material-bitset word count. Four 16-byte records follow: id, byte offset, byte length, reserved zero. Geometry/material ids index `level.json`; placements retain source order.
 
 | Section id | Contents |
 | --- | --- |
-| 0 | 176 bytes/placement: matrix and inverse transpose (sixteen f32 each); scale and determinant sign (two f32); material-map word offset and count (two u32); geometry id, forest root count, visible flag and reserved zero (four u32); world sphere (four f32) |
-| 1 | u32 global material ids, indexed by each geometry's local material slots; `0xffffffff` for unused slots |
-| 2 | 32 bytes/spatial node: minimum xyz (f32), left child (u32), maximum xyz (f32), right child (u32). Right `0xffffffff` denotes a leaf whose left field is the source placement index. Node zero is the world root. Bounds round outward. |
-| 3 | `ceil(materialCount / 32)` u32 material-bitset words per spatial node; interior nodes contain the union of both children. Hidden placements retain records and have empty material bitsets. |
+| 0 | 176 bytes/placement: matrix and inverse transpose, sixteen f32 each; scale and determinant sign, two f32; material-map word offset/count, two u32; geometry id, forest root count, visibility and reserved zero, four u32; world sphere, four f32 |
+| 1 | u32 global material ids indexed by each mesh's local slots; `0xffffffff` for unused slots |
+| 2 | 32 bytes/spatial node: minimum xyz f32, left child u32, maximum xyz f32, right child u32. Right `0xffffffff` denotes a leaf whose left is the source placement id. Node zero is the root; bounds round outward. |
+| 3 | `ceil(materialCount / 32)` u32 material words/node; parents contain both children's union. Hidden placements retain records and have empty bitsets. |
 
-`surfaces.json` inventories every active primitive/material use, with complete source paths and unsupported/excluded reasons. `census.json` separates unique payload, page duplication, packed wire bytes, physical-page slack, pinned closure, directory sections/wire bytes and the full placement-weighted coarse cut. This offline geometry bootstrap leaves texture tails and regional collision to their implementation slices and never repoints a published manifest.
+`surfaces.json` inventories every active primitive/material use and unsupported reason. `census.json` distinguishes unique payload, duplicated vertices, resident page images, physical slot slack, codec streams/wire, pinned closure and directories. Texture tails and regional collision stay with their slices. Published manifests are never repointed by this compiler.

@@ -41,7 +41,7 @@ async function nativeBuilder() {
   await run('tar', ['-xzf', archive, '-C', cache, '--strip-components=1', `meshoptimizer-${revision}/src`, `meshoptimizer-${revision}/demo/clusterlod.h`, `meshoptimizer-${revision}/LICENSE.md`])
   const source = join(scriptDirectory, 'build-native.cpp')
   const compiler = process.env.CXX || (process.platform === 'win32' ? 'cl.exe' : 'c++')
-  const identity = sha256(Buffer.concat([await readFile(source), Buffer.from(`${revision}:${compiler}:${process.platform}:${process.arch}`)])).slice(0, 16)
+  const identity = sha256(Buffer.concat([await readFile(source), await readFile(join(scriptDirectory, 'build-pages.h')), Buffer.from(`${revision}:${compiler}:${process.platform}:${process.arch}`)])).slice(0, 16)
   const executable = join(cache, `build-${identity}${process.platform === 'win32' ? '.exe' : ''}`)
   try { await access(executable) } catch {
     console.log('Compiling the native cluster hierarchy builder')
@@ -251,10 +251,11 @@ async function buildGeometry(input, outputArgument, source, budget, paged) {
         return { offset, bytes, pinned: Boolean(arrays.pages[i * 4 + 3]), sha256: sha256(pageData.subarray(offset, offset + bytes)) }
       })
       const metadata = {
-        version: 4, name: input.name ?? basename(outputPath, '.directory'), minimumError,
+        version: 5, name: input.name ?? basename(outputPath, '.directory'), minimumError,
         sourceTriangles: geometry.sourceIndices.length / 3, sourceVertices: geometry.positions.length / 3,
         residentTriangles: stats.residentIndices / 3, vertexStride: stats.vertexWords * 4,
-        colorBits: geometry.colors ? 8 : 0, vertexAttributes: { ...(geometry.colors ? { color: 5 } : {}), ...(geometry.secondaryUvs ? { uv1: 5 + Number(Boolean(geometry.colors)) } : {}) },
+        colorBits: geometry.colors ? 8 : 0, positionBits: 16, normalBits: 16, tangentBits: stats.tangentOffset ? 16 : 0, uvBits: 16,
+        vertexAttributes: { ...(stats.tangentOffset ? { tangent: stats.tangentOffset } : {}), ...(stats.colorOffset ? { color: stats.colorOffset } : {}), ...(stats.uv1Offset ? { uv1: stats.uv1Offset } : {}) },
         bounds: geometry.bounds, primitives: geometry.primitives, materials: geometry.materials,
         pageCapacity: 131072, pagePack: `${basename(outputPath, '.directory')}.pages`, pages, ...stats,
         builder: { project: 'https://github.com/zeux/meshoptimizer', revision, archiveSha256, configuration },
