@@ -2,7 +2,7 @@ import { spawnSync, execFileSync } from 'node:child_process'
 import { appendFileSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { views } from './bench-views.mjs'
+import { views, contendedExit } from './bench-views.mjs'
 
 const archway = 'D:/dev/archway'
 const runner = 'D:/dev/bench-runner-auto'
@@ -148,6 +148,11 @@ function runCommit(sha) {
   if (existsSync(join(baseline, 'sha.txt'))) args.push('--compare')
   const run = spawnSync(process.execPath, args, { cwd: runner, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
   const output = `${run.stdout ?? ''}${run.stderr ?? ''}`
+  if (run.status === contendedExit) {
+    process.stdout.write(output.slice(output.lastIndexOf('Deferred:')))
+    removeWithin(candidate, benchRoot)
+    return false
+  }
   if (run.error || run.status !== 0) {
     recordFailure(sha, `${output}\n${run.error?.stack ?? ''}`, run.status ?? 'spawn-error')
     removeWithin(candidate, benchRoot)

@@ -1,10 +1,10 @@
-import { spawn, spawnSync, execFileSync } from 'node:child_process'
+import { spawn, spawnSync, execFile, execFileSync } from 'node:child_process'
 import { createServer } from 'node:net'
 import { existsSync, mkdirSync, openSync, closeSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'file:///D:/dev/wall/examples/wall/node_modules/playwright/index.mjs'
-import { views as defaultViews } from './bench-views.mjs'
+import { views as defaultViews, contendedExit } from './bench-views.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const probeRoot = 'D:/dev/probe'
@@ -15,6 +15,9 @@ const vite = join(root, 'node_modules', 'vite', 'bin', 'vite.js')
 const viewUrls = Object.fromEntries(defaultViews.map(view => [view, view === 'spawn' ? '/' : `/?view=${view}`]))
 const settleMs = 20000
 const captureMs = 10000
+const foreignGpuLimit = 15
+
+class Contended extends Error {}
 
 function ensureNodeVersion() {
   const [major, minor] = process.versions.node.split('.').map(Number)
@@ -71,6 +74,25 @@ async function acquireLock() {
       await new Promise(resolvePromise => setTimeout(resolvePromise, 2000))
     }
   }
+}
+
+function gpuLoad(seconds) {
+  const script = join(root, 'scripts', 'gpu-load.ps1')
+  return new Promise((resolvePromise, reject) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-Root', String(process.pid), '-Seconds', String(seconds)], { encoding: 'utf8', windowsHide: true }, (error, stdout) => error ? reject(error) : resolvePromise(JSON.parse(stdout))))
+}
+
+function assertUncontended(load, label) {
+  if (load.mean > foreignGpuLimit) throw new Contended(`${label}: other processes use ${load.mean}% of the GPU (limit ${foreignGpuLimit}%): ${load.top.map(entry => `${entry.name ?? 'pid'} ${entry.pid} ${entry.mean}%`).join(', ')}`)
+}
+
+async function admit() {
+  const gpuMemory = execFileSync('nvidia-smi', ['--query-gpu=memory.free', '--format=csv'], { encoding: 'utf8', windowsHide: true })
+  const freeMiB = gpuMemory.trim().split(/\r?\n/).slice(1).map(line => Number.parseInt(line, 10))
+  if (!freeMiB.length || freeMiB.some(value => !Number.isFinite(value) || value < 3072)) throw new Contended(`Benchmark requires at least 3 GiB free GPU memory:\n${gpuMemory.trim()}`)
+  console.log(gpuMemory.trim())
+  const load = await gpuLoad(5)
+  assertUncontended(load, 'Before start')
+  console.log(`Other GPU load ${load.mean}% mean (limit ${foreignGpuLimit}%).`)
 }
 
 function git(...args) {
@@ -193,7 +215,7 @@ async function runView(page, baseUrl, view, outputDir, identity) {
   await page.evaluate(() => { window.__benchEvents.length = 0; window.__benchCapture = true; window.__benchCaptureStart = performance.now(); window.__benchPipelineStart = window.__benchPipelines })
   if (view === 'spawn') await page.keyboard.down('w')
   const captureStarted = new Date().toISOString()
-  await page.waitForTimeout(captureMs)
+  const [foreignGpu] = await Promise.all([gpuLoad(captureMs / 1000), page.waitForTimeout(captureMs)])
   await page.evaluate(() => { window.__benchCapture = false })
   if (view === 'spawn') await page.keyboard.up('w')
   const after = await dump()
@@ -224,6 +246,7 @@ async function runView(page, baseUrl, view, outputDir, identity) {
     texturePromotions: texture.promotions === undefined ? null : texture.promotions - (beforeTexture.promotions ?? 0),
     textureUploadBytes: texture.uploadBytes === undefined ? null : texture.uploadBytes - (beforeTexture.uploadBytes ?? 0),
     geometryPageUploadBytes: pageStats.uploadBytes === undefined ? null : pageStats.uploadBytes - (beforePageStats.uploadBytes ?? 0),
+    foreignGpu,
     consoleErrors: page.__benchErrors,
     telemetry,
     events: await page.evaluate(() => window.__benchEvents),
@@ -248,6 +271,7 @@ async function runView(page, baseUrl, view, outputDir, identity) {
     result.frameLog.spikes = gpuTimes.map((gpuMs, index) => ({ gpuMs, atMs: captureMs + offsets[index] })).sort((a, b) => b.gpuMs - a.gpuMs).slice(0, 10).map(spike => ({ ...spike, eventsWithin100Ms: result.events.filter(event => Math.abs(event.at - spike.atMs) <= 100) }))
   }
   writeFileSync(join(outputDir, `${view}.json`), JSON.stringify(result, null, 2))
+  assertUncontended(foreignGpu, view)
   if (result.consoleErrors.length) throw new Error(`${view} emitted ${result.consoleErrors.length} console error(s): ${result.consoleErrors.join('\n')}`)
   return result
 }
@@ -273,6 +297,7 @@ let browser
 try {
   lock = await acquireLock()
   assertClean()
+  await admit()
   if (!existsSync(vite)) throw new Error('Vite is unavailable. Link the existing node_modules; do not install dependencies.')
   const branch = git('branch', '--show-current')
   const sha = git('rev-parse', 'HEAD')
@@ -296,10 +321,6 @@ try {
     baseUrl = `http://127.0.0.1:${port}`
     await waitForServer(server, baseUrl)
   }
-  const gpuMemory = execFileSync('nvidia-smi', ['--query-gpu=memory.free', '--format=csv'], { encoding: 'utf8', windowsHide: true })
-  const freeMiB = gpuMemory.trim().split(/\r?\n/).slice(1).map(line => Number.parseInt(line, 10))
-  if (!freeMiB.length || freeMiB.some(value => !Number.isFinite(value) || value < 3072)) throw new Error(`Benchmark requires at least 3 GiB free GPU memory:\n${gpuMemory.trim()}`)
-  console.log(gpuMemory.trim())
   browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--enable-unsafe-webgpu'] })
   const results = []
   for (const view of config.views) {
@@ -319,6 +340,10 @@ try {
   })
   table(results, compareResults)
   console.log(`\nResults: ${outputDir}`)
+} catch (error) {
+  if (!(error instanceof Contended)) throw error
+  console.error(`Deferred: ${error.message}`)
+  process.exitCode = contendedExit
 } finally {
   await browser?.close().catch(() => {})
   await stop(server)
