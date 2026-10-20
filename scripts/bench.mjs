@@ -60,7 +60,7 @@ async function acquireLock() {
 }
 
 function assertNoChrome() {
-  const pids = execFileSync('powershell.exe', ['-NoProfile', '-Command', "Get-Process chrome -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id"], { encoding: 'utf8' }).trim().split(/\s+/).filter(Boolean)
+  const pids = execFileSync('powershell.exe', ['-NoProfile', '-Command', "(Get-Process -Name chrome -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id) -join ','; exit 0"], { encoding: 'utf8' }).trim().split(',').filter(Boolean)
   if (pids.length) throw new Error(`Chrome is already using the GPU (pid${pids.length === 1 ? '' : 's'} ${pids.join(', ')}). Close it before benchmarking.`)
 }
 
