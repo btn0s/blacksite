@@ -1,7 +1,13 @@
 import { Box3, BundleGroup, Frustum, Group, Matrix4, StorageBufferAttribute, Vector2, Vector3 } from 'three/webgpu'
-import type { Camera, Mesh, Scene, WebGPURenderer } from 'three/webgpu'
+import type { Camera, Mesh, Object3D } from 'three/webgpu'
 
 export type GeometryPass = 'lit' | 'depth' | 'shadow'
+
+export interface GeometryCompilePass {
+  readonly camera: Camera
+  readonly pass: GeometryPass
+  compile(object: Object3D): Promise<void>
+}
 
 type CoverageNode = { bounds: Box3; materials: Uint32Array; left: number; right: number; first: number; count: number }
 
@@ -89,8 +95,12 @@ export class MaterialSubmission {
   private readonly masks: Uint32Array[]
   private readonly queried: Uint32Array
   private readonly viewport = new Vector2()
-  private readonly compiled = new WeakMap<Camera, Set<Mesh>>()
-  private readonly pending = new WeakMap<Camera, Map<Mesh, Promise<void>>>()
+  private warmup: Promise<void> | null = null
+  private failure: unknown
+  private disposed = false
+  private compiled = 0
+  private total = 0
+  private required = 0
 
   constructor(private readonly coverage: MaterialCoverage) {
     this.masks = Array.from({ length: 2 }, () => new Uint32Array(coverage.words).fill(0xffffffff))
@@ -113,27 +123,53 @@ export class MaterialSubmission {
     this.records.push({ pass, bundle, mesh, first, count, material, bindingVersion: 0 })
   }
 
-  initialize(renderer: WebGPURenderer) {
-    const indices = new Set(this.records.map(({ mesh }) => mesh.geometry.index!))
-    for (const index of indices) renderer.backend.createIndexAttribute(index)
-  }
-
-  async compile(renderer: WebGPURenderer, camera: Camera, scene: Scene, pass: GeometryPass) {
-    if (!this.compiled.has(camera)) this.compiled.set(camera, new Set())
-    if (!this.pending.has(camera)) this.pending.set(camera, new Map())
-    const compiled = this.compiled.get(camera)!, pending = this.pending.get(camera)!
-    await Promise.all(this.records.map(async record => {
-      if (record.pass !== this[pass] || compiled.has(record.mesh)) return
-      if (!pending.has(record.mesh)) {
-        const visible = record.mesh.visible
-        record.mesh.visible = true
-        pending.set(record.mesh, renderer.compileAsync(record.mesh, camera, scene).then(() => { compiled.add(record.mesh); record.bundle.needsUpdate = true }).finally(() => { record.mesh.visible = visible; pending.delete(record.mesh) }))
+  compile(passes: readonly GeometryCompilePass[], world: Matrix4) {
+    if (this.warmup) return this.warmup
+    const frustum = new Frustum(), projection = new Matrix4(), mask = new Uint32Array(this.coverage.words)
+    const jobs = passes.flatMap(pass => {
+      const camera = pass.camera
+      camera.updateMatrixWorld()
+      frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse), camera.coordinateSystem)
+      this.coverage.query(frustum, world, mask)
+      return this.records.filter(record => record.pass === this[pass.pass]).map(record => {
+        let required = false
+        for (let material = record.first; material < record.first + record.count; material++) {
+          if (mask[material >>> 5]! & (1 << (material & 31))) { required = true; break }
+        }
+        return { pass, record, required }
+      })
+    })
+    this.total = jobs.length
+    this.required = jobs.filter(job => job.required).length
+    this.warmup = new Promise<void>((resolve, reject) => {
+      if (!this.required) resolve()
+      const run = async () => {
+        while (jobs.length && !this.disposed) {
+          const urgent = jobs.findIndex(job => job.required)
+          const visible = urgent < 0 ? jobs.findIndex(job => job.record.bundle.visible) : urgent
+          const job = jobs.splice(visible < 0 ? 0 : visible, 1)[0]!
+          const bundle = job.record.bundle
+          const wasVisible = bundle.visible
+          let pending: Promise<void>
+          bundle.visible = true
+          try { pending = job.pass.compile(bundle) }
+          finally { bundle.visible = wasVisible }
+          await pending
+          this.compiled++
+          bundle.needsUpdate = true
+          if (job.required && --this.required === 0) resolve()
+          if (!this.required) await new Promise<void>(next => requestAnimationFrame(() => next()))
+        }
+        if (!this.disposed) performance.mark('geometry-materials-complete')
+        resolve()
       }
-      await pending.get(record.mesh)
-    }))
+      void run().catch(error => { this.failure = error; reject(error) })
+    })
+    return this.warmup
   }
 
   updateBindings(versions: ReadonlyMap<object, number> | undefined, viewport: Readonly<Vector2>) {
+    if (this.failure) throw this.failure
     const resized = !this.viewport.equals(viewport)
     this.viewport.copy(viewport)
     for (const record of this.records) {
@@ -144,8 +180,11 @@ export class MaterialSubmission {
   }
 
   disposeGeometry(pass: GeometryPass) {
+    this.disposed = true
     for (const record of this.records) if (record.pass === this[pass]) record.mesh.geometry.dispose()
   }
+
+  warmupStats() { return { compiled: this.compiled, total: this.total, required: this.required } }
 
   update(frustum: Frustum, world: Matrix4, view: number) {
     if (view < 0 || view > 2) throw new Error('Cluster submission supports one view and two shadow cascades')

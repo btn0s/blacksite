@@ -1,9 +1,9 @@
 import {
   BufferGeometry, Frustum, Group, IndirectStorageBufferAttribute,
-  Matrix4, Mesh, MeshStandardNodeMaterial, PerspectiveCamera, Scene,
+  Matrix4, Mesh, MeshStandardNodeMaterial, PerspectiveCamera,
   StorageBufferAttribute, Vector2, Vector3, Vector4, WebGPUCoordinateSystem,
 } from 'three/webgpu'
-import type { Camera, DepthTexture, MeshBasicNodeMaterial, Node, OrthographicCamera, WebGPURenderer } from 'three/webgpu'
+import type { DepthTexture, MeshBasicNodeMaterial, Node, OrthographicCamera, WebGPURenderer } from 'three/webgpu'
 import {
   Fn, If, Loop, bool, ceil, clamp, float,
   floor, instanceIndex, log2, max, min, mix, output, storage,
@@ -18,11 +18,12 @@ import { ClusterTraversal } from './runtime-traversal'
 import { ClusterFeedback, type MeshletTextureFeedback } from './runtime-textures'
 import type { GeometryPageArena } from './runtime-pages'
 import { FRAME_UPLOAD_BYTES, GEOMETRY_ARENA_BYTES, GEOMETRY_PAGE_BYTES, GEOMETRY_STAGING_BYTES } from './page-residency'
-import { MaterialSubmission, type GeometryPass } from './runtime-submission'
+import { MaterialSubmission, type GeometryCompilePass } from './runtime-submission'
 
 export type { MeshletTextureFeedback, TextureDemandBinding } from './runtime-textures'
 
 export type { MeshletSceneEntry } from './runtime-data'
+export type { GeometryCompilePass } from './runtime-submission'
 export { GEOMETRY_ARENA_BYTES } from './page-residency'
 export { geometryMaterialId, geometryScaleX, geometrySecondaryUV, geometryVertexColor, normalMapWithUV, tangentNormalWithUV } from './runtime-material'
 export type MeshletDebugView = 'normal' | 'meshlets' | 'lod'
@@ -149,10 +150,8 @@ export class MeshletScene {
     let scene: MeshletScene | undefined
     try {
       scene = new MeshletScene(packed, options)
-      scene.submission.initialize(renderer)
       await uploadAttributes(renderer, scene.uploadBuffers)
-      await Promise.all([scene.traversal.upload(renderer), scene.shadows.upload(renderer), scene.streaming.upload(renderer), ...scene.reductionCompute.map(node => renderer.compileComputeAsync(node))])
-      await scene.arena.initialize(renderer)
+      await Promise.all([scene.traversal.upload(renderer), scene.shadows.upload(renderer), scene.streaming.upload(renderer), scene.arena.initialize(renderer), ...scene.reductionCompute.map(node => renderer.compileComputeAsync(node))])
       return scene
     } catch (error) {
       if (scene) scene.dispose()
@@ -319,8 +318,9 @@ export class MeshletScene {
     this.debug.value = view === 'meshlets' ? 1 : view === 'lod' ? 2 : 0
   }
 
-  compile(renderer: WebGPURenderer, camera: Camera, scene: Scene, pass: GeometryPass) {
-    return this.submission.compile(renderer, camera, scene, pass)
+  compile(passes: readonly GeometryCompilePass[]) {
+    this.object.updateWorldMatrix(true, true)
+    return this.submission.compile(passes, this.object.matrixWorld)
   }
 
   setLodEnabled(enabled: boolean) {
@@ -369,7 +369,7 @@ export class MeshletScene {
 
   completeFrame(renderer: WebGPURenderer) { return this.streaming.completeFrame(renderer) }
 
-  pagingStats() { return { ...this.arena.snapshot(), ...this.streaming.stats(), schedulingMs: this.schedulingMs, peakSchedulingMs: this.peakSchedulingMs } }
+  pagingStats() { return { ...this.arena.snapshot(), ...this.streaming.stats(), materialWarmup: this.submission.warmupStats(), schedulingMs: this.schedulingMs, peakSchedulingMs: this.peakSchedulingMs } }
 
   prepare(renderer: WebGPURenderer, camera: PerspectiveCamera, viewport: Readonly<Vector2>) {
     this.lit.visible = false

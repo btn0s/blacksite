@@ -13,3 +13,4 @@ assets/.build/
 assets/.build-site/
 .vercel
 **/public/owned/
+/owned-assets/

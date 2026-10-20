@@ -103,8 +103,7 @@ export class GeometryPageArena {
           const result = await renderer.getArrayBufferAsync(this.fence, target)
           this.residency.completed = new Uint32Array(result.buffer!)[0]!
           target.release()
-        }
-        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+        } else await this.residency.waitForData()
       }
     } finally { target.dispose() }
   }

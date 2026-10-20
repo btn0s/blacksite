@@ -296,6 +296,10 @@ try {
   server = launch(args, env)
   const baseUrl = `http://127.0.0.1:${port}`
   await waitForServer(server, baseUrl)
+  const gpuMemory = execFileSync('nvidia-smi', ['--query-gpu=memory.free', '--format=csv'], { encoding: 'utf8', windowsHide: true })
+  const freeMiB = gpuMemory.trim().split(/\r?\n/).slice(1).map(line => Number.parseInt(line, 10))
+  if (!freeMiB.length || freeMiB.some(value => !Number.isFinite(value) || value < 3072)) throw new Error(`Benchmark requires at least 3 GiB free GPU memory:\n${gpuMemory.trim()}`)
+  console.log(gpuMemory.trim())
   browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--enable-unsafe-webgpu'] })
   const results = []
   for (const view of config.views) {

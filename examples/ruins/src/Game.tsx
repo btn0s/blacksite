@@ -99,9 +99,11 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
       if (!active) return
       performance.measure('ruins-character', 'ruins-character-start')
-      geometry.object.visible = true
       performance.mark('ruins-warmup-start')
-      await look.compile((gl, camera, scene, pass) => geometry.compile(gl, camera, scene, pass), [geometry.object])
+      await look.compile(passes => geometry.compile(passes), [geometry.object])
+      if (!active) return
+      geometry.object.visible = true
+      look.render()
       await geometry.completeFrame(renderer)
       if (!active) return
       performance.measure('ruins-warmup', 'ruins-warmup-start')
