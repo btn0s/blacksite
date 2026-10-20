@@ -1,5 +1,27 @@
 import type { Node } from 'three/webgpu'
-import { float, frameId, max, mix, normalWorldGeometry, positionWorld, screenCoordinate, varying, vec2, vec3 } from 'three/tsl'
+import { float, frameId, max, mix, normalWorldGeometry, positionWorld, screenCoordinate, texture, varying, vec2, vec3 } from 'three/tsl'
+
+export type ScanSample = (name: string, coordinates?: Node<'vec2'>) => ReturnType<typeof texture>
+export const tint = (value: number[]) => vec3(...value.slice(0, 3) as [number, number, number])
+export const overlay = <T extends 'float' | 'vec3'>(base: Node<T>, blend: Node<T>) => base.greaterThan(0.5).select(float(1).sub(float(1).sub(base).mul(float(1).sub(blend)).mul(2)), base.mul(blend).mul(2))
+export const scanNormal = (sample: Node<'vec4'>, strength = 1) => {
+  const xy = sample.xy.mul(2).sub(1)
+  return vec3(xy.mul(vec2(strength, -strength)), float(1).sub(xy.dot(xy)).max(0).sqrt())
+}
+
+export function rotateUV(coordinates: Node<'vec2'>, turns: number, pivot = [0.5, 0.5]) {
+  const angle = turns * Math.PI * 2
+  const point = coordinates.sub(vec2(pivot[0], pivot[1]))
+  return vec2(point.dot(vec2(Math.cos(angle), -Math.sin(angle))), point.dot(vec2(Math.sin(angle), Math.cos(angle)))).add(vec2(pivot[0], pivot[1]))
+}
+
+export function specularResponse(color: Node<'vec3'>, normal: Node<'vec3'>, s: Record<string, number>) {
+  const base = sCurve(color.dot(vec3(s['Dot Base'])).clamp(0, 1), s['Specular Base Contrast']).mul(s['Specular Base Intensity']).clamp(0, 1)
+  const dx = normal.dFdx(), dy = normal.dFdy()
+  const variance = max(dx.dot(dx), dy.dot(dy))
+  const shape = cheapContrast(base, s.Contrast).add(normal.x.clamp(0, 0.75)).clamp(0, 1).sub(variance.mul(s['Normal Spec occlusion Amount'])).clamp(0, 1)
+  return mix(float(s['Specular Min']), float(s['Specular Max']), shape).clamp(0, 1).mul(2)
+}
 
 export const luma = (value: Node<'vec3'>) => value.dot(vec3(0.212639, 0.715169, 0.072192))
 export const saturate = (value: Node<'float'>) => value.clamp(0, 1)
