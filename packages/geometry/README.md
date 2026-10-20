@@ -3,23 +3,27 @@
 Static cluster geometry for three.js `WebGPURenderer`. The offline tool uses meshoptimizer's cluster hierarchy builder. The runtime selects and culls clusters on the GPU, then renders material batches through three's standard node material and lighting path.
 
 ```ts
-import { loadMeshletAsset, MeshletScene } from '@blacksite/geometry'
+import { loadMeshletSource, MeshletScene } from '@blacksite/geometry'
 
-const asset = await loadMeshletAsset('/assets/scene.meshlets')
-const geometry = new MeshletScene([
+const asset = await loadMeshletSource('/assets/scene.meshlets')
+await renderer.init()
+const geometry = await MeshletScene.create(renderer, [
   { asset, instances: matrices, materials: [material] },
 ], { pixelError: 2, occlusion: true })
 scene.add(geometry.object)
-await renderer.init()
 renderer.setAnimationLoop(() => {
   geometry.prepare(renderer, camera, { occluders: [terrain.object, forest.object] })
   renderer.render(scene, camera)
 })
 ```
 
-Entries combine an asset, immutable instance transforms and source material slots. Shared assets occupy storage once, while shared material objects form one indirect batch. Every entry contributes to a single depth pyramid and visibility pipeline. Source `Material.visible` is respected when building immutable batches; invisible surfaces retain their resident geometry but contribute no render candidates. `loadMeshletModel(manifestUrl)` loads unique geometry assets, scene transforms and the manifest's material library. The library contains materials and embedded textures without the original model geometry.
+Entries combine a repeatable asset source, immutable instance transforms and source material slots. A source has `metadata` and an asynchronous `load()` returning a fresh `MeshletAsset`. `loadMeshletSource(url)` reads and cancels the metadata prefix request, then supplies that source. A manifest containing full meshlet metadata can supply the source directly. `loadMeshletAsset` and `parseMeshletAsset` remain available for CPU geometry work.
 
-Standard and physical materials, primary-UV textures, normal maps, alpha-tested foliage and custom surface nodes are supported. Finite invertible affine transforms support rotation, reflection, nonuniform scale and shear. Sphere and error scaling use a conservative bound from the linear transform's Gram matrix; normals use its inverse transpose. The camera must be perspective with standard depth. Occlusion requires single-sample rendering for both the depth target and final camera view; logarithmic and reversed depth are unsupported. Call `prepare` before drawing the camera view and `dispose` when removing the geometry.
+`MeshletScene.create` loads one source at a time, uploads its vertex, reference and index arrays, and detaches the source buffer. Shared sources occupy GPU storage once, and material batches share storage within each source. The runtime never concatenates all scene vertices or retains fetched geometry. Cluster metadata and instance candidates use shared staging buffers that are uploaded and detached after assembly. Compute scratch buffers release their CPU arrays during creation too. Upload uses three's public `compileComputeAsync` API; detaching the backing `ArrayBuffer` also releases arrays retained by compiled storage bindings. The sources remain usable for another scene because every `load()` returns fresh data.
+
+Every entry contributes to a single depth pyramid and visibility pipeline. Source `Material.visible` is respected when building immutable batches; invisible surfaces retain their resident geometry but contribute no render candidates. `loadMeshletModel(manifestUrl)` loads unique geometry source descriptors, scene transforms and the manifest's material library. The library contains materials and embedded textures without the original model geometry. `residentGeometryBytes` reports uploaded vertices, references, indices and cluster metadata without retaining CPU data.
+
+Standard and physical materials, primary-UV textures, normal maps, alpha-tested foliage and custom surface nodes are supported. Batches share material graphs by source material; public per-object node updates select each draw's resident storage buffers and visible-list offset. Opaque depth and shadow graphs omit surface colour and alpha calculations. Finite invertible affine transforms support rotation, reflection, nonuniform scale and shear. Sphere and error scaling use a conservative bound from the linear transform's Gram matrix; normals use its inverse transpose. The camera must be perspective with standard depth. Occlusion requires single-sample rendering for both the depth target and final camera view; logarithmic and reversed depth are unsupported. Call `prepare` before drawing the camera view and `dispose` when removing the geometry.
 
 Custom surface nodes retain their world-position and geometric-normal inputs. For explicit UV mappings, `normalMapWithUV(texture, uvNode, scale?)` derives the normal-map tangent frame from those UVs. `tangentNormalWithUV(signedNormalNode, uvNode)` uses the same frame for authored tangent-normal adjustments. This avoids relying on the draw tile's placeholder UV attribute. Ordinary material `normalMap`, `bumpMap` and physical `clearcoatNormalMap` properties use the pulled primary UVs automatically; custom normal nodes retain that UV context too.
 
@@ -32,7 +36,7 @@ Shadow clusters are selected independently from each orthographic cascade camera
 Set `shadowLayer` (default 31) to a layer excluded by the view camera and enabled on the sun's cascade cameras. With the shared look:
 
 ```ts
-const geometry = new MeshletScene(entries, { shadowLayer: 2, shadowPixelError: 1 })
+const geometry = await MeshletScene.create(renderer, entries, { shadowLayer: 2, shadowPixelError: 1 })
 const removeShadowListener = look.onBeforeShadow((renderer, cascadeCamera, mapSize) => {
   geometry.prepareShadow(renderer, cascadeCamera, mapSize)
 })

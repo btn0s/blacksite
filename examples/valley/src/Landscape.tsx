@@ -21,6 +21,7 @@ export function Landscape({ world, tier, wind, look, owned, stones, handle }: { 
   const camera = useThree(state => state.camera)
   const settings = tiers[tier]
   const [built, setBuilt] = useState<LandscapeHandle | null>(null)
+  const [error, setError] = useState<Error | null>(null)
 
   useEffect(() => {
     const renderer = gl as unknown as WebGPURenderer
@@ -89,25 +90,33 @@ export function Landscape({ world, tier, wind, look, owned, stones, handle }: { 
         dither: tier === 'low',
       },
     })
-    const rocks = createRocks(owned, stones, renderer)
-    const unsubscribe = look.onBeforeShadow((shadowRenderer, shadowCamera, mapSize) => {
-      forest.prepareShadow(shadowRenderer, shadowCamera)
-      cover.prepareShadow(shadowRenderer, shadowCamera)
-      rocks.geometry.prepareShadow(shadowRenderer, shadowCamera, mapSize)
-    })
-    scene.add(terrain.object, cover.object, forest.object, rocks.object)
-    const result = { terrain, cover, forest, rocks }
-    handle.current = result
-    setBuilt(result)
+    let cancelled = false
+    let rocks: Rocks | null = null
+    let unsubscribe: (() => void) | null = null
+    void createRocks(owned, stones, renderer).then(value => {
+      if (cancelled) { value.dispose(); return }
+      rocks = value
+      unsubscribe = look.onBeforeShadow((shadowRenderer, shadowCamera, mapSize) => {
+        forest.prepareShadow(shadowRenderer, shadowCamera)
+        cover.prepareShadow(shadowRenderer, shadowCamera)
+        value.geometry.prepareShadow(shadowRenderer, shadowCamera, mapSize)
+      })
+      scene.add(terrain.object, cover.object, forest.object, value.object)
+      const result = { terrain, cover, forest, rocks: value }
+      handle.current = result
+      setBuilt(result)
+    }).catch(value => { if (!cancelled) setError(value instanceof Error ? value : new Error(String(value))) })
     return () => {
-      unsubscribe()
-      scene.remove(terrain.object, cover.object, forest.object, rocks.object)
+      cancelled = true
+      unsubscribe?.()
+      scene.remove(terrain.object, cover.object, forest.object)
+      if (rocks) scene.remove(rocks.object)
       handle.current = null
       setBuilt(null)
       terrain.dispose()
       cover.dispose()
       forest.dispose()
-      rocks.dispose()
+      rocks?.dispose()
     }
   }, [owned, gl, handle, look, scene, settings, stones, tier, wind, world])
 
@@ -122,5 +131,6 @@ export function Landscape({ world, tier, wind, look, owned, stones, handle }: { 
     rocks.update(camera as PerspectiveCamera, [terrain.object, forest.object])
   }, 0.5)
 
+  if (error) throw error
   return null
 }

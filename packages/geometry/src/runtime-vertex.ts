@@ -1,7 +1,7 @@
 import { BufferAttribute, InstancedBufferGeometry } from 'three/webgpu'
-import type { IndirectStorageBufferAttribute, Node, StorageBufferAttribute } from 'three/webgpu'
-import { Fn, cos, float, instanceIndex, min, mix, normalLocal, storage, uint, varyingProperty, vec3, vec4, vertexIndex } from 'three/tsl'
-import { DRAW_ARGUMENT_OFFSET, type packScene } from './runtime-data'
+import type { IndirectStorageBufferAttribute, Node, Object3D, StorageBufferAttribute } from 'three/webgpu'
+import { Fn, cos, float, instanceIndex, min, mix, normalLocal, storage, uint, uniform, varyingProperty, vec3, vec4, vertexIndex } from 'three/tsl'
+import { DRAW_ARGUMENT_OFFSET, type PackedMeshletScene } from './runtime-data'
 import { clusterReader, instanceReader, vertexReader } from './runtime-layout'
 
 export function clusterGeometry(triangles: number, capacity: number, counters: IndirectStorageBufferAttribute, batchIndex: number) {
@@ -14,12 +14,25 @@ export function clusterGeometry(triangles: number, capacity: number, counters: I
   return geometry
 }
 
-export function clusterVertex(packed: ReturnType<typeof packScene>, visibleAttribute: StorageBufferAttribute, offset: number, debug: Node<'uint'> = uint(0)) {
+export function clusterVertex(packed: PackedMeshletScene, visibleAttribute: StorageBufferAttribute, debug: Node<'uint'> = uint(0)) {
+  type Draw = Pick<PackedMeshletScene['batches'][number], 'geometry' | 'offset'>
+  const draws = new WeakMap<Object3D, Draw>()
+  const drawFor = (object: Object3D | null) => {
+    const draw = object ? draws.get(object) : undefined
+    if (!draw) throw new Error('Cluster draw has no resident geometry binding')
+    return draw
+  }
+  const geometry = packed.batches[0]!.geometry
   const readCluster = clusterReader(packed.clusters)
   const readInstance = instanceReader(packed.instances)
-  const readVertex = vertexReader(packed.vertices)
-  const indices = storage(packed.indices, 'uint', packed.indexCount).toReadOnly()
-  const references = storage(packed.vertexReferences, 'uint', packed.vertexReferences.count).toReadOnly()
+  const vertices = storage(geometry.vertices, 'uint', geometry.vertices.count).toReadOnly()
+    .onObjectUpdate(({ object }) => drawFor(object).geometry.vertices)
+  const readVertex = vertexReader(vertices)
+  const indices = storage(geometry.indices, 'uint', geometry.indices.count).toReadOnly()
+    .onObjectUpdate(({ object }) => drawFor(object).geometry.indices)
+  const references = storage(geometry.vertexReferences, 'uint', geometry.vertexReferences.count).toReadOnly()
+    .onObjectUpdate(({ object }) => drawFor(object).geometry.vertexReferences)
+  const offset = uniform(0, 'uint').onObjectUpdate(({ object }) => drawFor(object).offset)
   const candidates = storage(packed.candidates, 'uvec4', packed.candidateCount).toReadOnly()
   const visible = storage(visibleAttribute, 'uint', packed.candidateCount).toReadOnly()
   const uv = varyingProperty('vec2', 'geometryUv')
@@ -43,5 +56,5 @@ export function clusterVertex(packed: ReturnType<typeof packScene>, visibleAttri
     color.assign(cos(vec3(0, 2, 4).add(shadeId.mul(2.399963))).mul(0.36).add(0.58))
     return instance.transform.mul(vec4(vertex.position, 1)).xyz
   })()
-  return { position, uv, color }
+  return { position, uv, color, bind: (object: Object3D, draw: Draw) => { draws.set(object, draw) } }
 }

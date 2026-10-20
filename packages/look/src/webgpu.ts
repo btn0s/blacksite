@@ -1,4 +1,4 @@
-import { Color, InspectorBase, NeutralToneMapping, NoToneMapping, PCFShadowMap, RenderPipeline, Vector2, Vector3 } from 'three/webgpu'
+import { Color, InspectorBase, Lighting, NeutralToneMapping, NoToneMapping, PCFShadowMap, RenderPipeline, Vector2, Vector3 } from 'three/webgpu'
 import type { Camera, Node, Object3D, OrthographicCamera, RenderTarget, Scene, WebGPURenderer } from 'three/webgpu'
 import { builtinAOContext, float, luminance, mix, mrt, normalView, output, packNormalToRGB, pass, renderOutput, sample, screenUV, texture3D, uniform, uv, vec3, vec4, velocity } from 'three/tsl'
 import { SunLight } from 'three/addons/lights/SunLight.js'
@@ -141,6 +141,8 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, c
   const prePass = pass(scene, camera)
   prePass.name = 'Depth, normals and motion'
   prePass.transparent = false
+  prePass.lighting = new Lighting()
+  prePass.lighting.enabled = false
   prePass.setMRT(mrt({ output: packNormalToRGB(normalView), velocity }))
   timings.labelTarget(prePass.renderTarget, prePass.name)
   const normal = sample(coordinate => prePass.getTextureNode().sample(coordinate).rgb.mul(2).sub(1))

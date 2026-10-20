@@ -1,4 +1,4 @@
-import type { Node, StorageBufferAttribute } from 'three/webgpu'
+import type { Node, StorageBufferAttribute, StorageBufferNode } from 'three/webgpu'
 import { abs, float, int, mat4, max, storage, uintBitsToFloat, vec2, vec3 } from 'three/tsl'
 
 export function clusterReader(attribute: StorageBufferAttribute) {
@@ -30,8 +30,7 @@ export function instanceReader(attribute: StorageBufferAttribute) {
   }
 }
 
-export function vertexReader(attribute: StorageBufferAttribute) {
-  const data = storage(attribute, 'uint', attribute.count).toReadOnly()
+export function vertexReader(data: StorageBufferNode<'uint'>) {
   const oct = (word: Node<'uint'>) => {
     const xy = vec2(float(int(word.shiftLeft(16)).shiftRight(16)), float(int(word).shiftRight(16))).div(32767)
     const z = float(1).sub(abs(xy.x)).sub(abs(xy.y))

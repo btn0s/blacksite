@@ -1,7 +1,12 @@
 import { CLUSTER_LOD_STRIDE, CLUSTER_STRIDE, GROUP_STRIDE, MESHLET_MAGIC, MESHLET_SECTIONS, MESHLET_VERSION } from './format'
 import type { MeshletAsset, MeshletMetadata } from './format'
 
-export function parseMeshletAsset(buffer: ArrayBuffer): MeshletAsset {
+export interface MeshletAssetSource {
+  metadata: MeshletMetadata
+  load(): Promise<MeshletAsset>
+}
+
+function meshletHeader(buffer: ArrayBufferLike) {
   if (buffer.byteLength < 32) throw new Error('Geometry file is truncated')
   const header = new DataView(buffer)
   if (header.getUint32(0, true) !== MESHLET_MAGIC) throw new Error('Geometry file signature is invalid')
@@ -9,8 +14,14 @@ export function parseMeshletAsset(buffer: ArrayBuffer): MeshletAsset {
   const sectionCount = header.getUint32(8, true)
   const metadataLength = header.getUint32(12, true)
   const byteLength = header.getUint32(16, true)
-  if (sectionCount !== MESHLET_SECTIONS.length || byteLength !== buffer.byteLength) throw new Error('Geometry file layout is invalid')
   const metadataOffset = 32 + sectionCount * 16
+  if (sectionCount !== MESHLET_SECTIONS.length || metadataOffset + metadataLength > byteLength) throw new Error('Geometry file layout is invalid')
+  return { header, sectionCount, metadataLength, byteLength, metadataOffset }
+}
+
+export function parseMeshletAsset(buffer: ArrayBuffer): MeshletAsset {
+  const { header, sectionCount, metadataLength, byteLength, metadataOffset } = meshletHeader(buffer)
+  if (byteLength !== buffer.byteLength) throw new Error('Geometry file layout is invalid')
   if (metadataOffset + metadataLength > byteLength) throw new Error('Geometry metadata is truncated')
   const metadata: MeshletMetadata = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, metadataOffset, metadataLength)))
   const arrays: Record<string, Float32Array | Uint32Array> = {}
@@ -36,6 +47,35 @@ export async function loadMeshletAsset(url: string | URL, signal?: AbortSignal):
   const response = await fetch(url, { signal })
   if (!response.ok) throw new Error(`Geometry request failed: ${response.status} ${response.statusText}`)
   return parseMeshletAsset(await response.arrayBuffer())
+}
+
+export async function loadMeshletSource(url: string | URL, signal?: AbortSignal): Promise<MeshletAssetSource> {
+  const response = await fetch(url, { signal })
+  if (!response.ok) throw new Error(`Geometry request failed: ${response.status} ${response.statusText}`)
+  if (!response.body) throw new Error('Geometry response has no body')
+  const reader = response.body.getReader()
+  let bytes = new Uint8Array(0)
+  let required = 32
+  try {
+    while (bytes.length < required) {
+      const { value, done } = await reader.read()
+      if (done) throw new Error('Geometry metadata is truncated')
+      const next = new Uint8Array(bytes.length + value.length)
+      next.set(bytes)
+      next.set(value, bytes.length)
+      bytes = next
+      if (bytes.length >= 32) {
+        const { metadataOffset, metadataLength } = meshletHeader(bytes.buffer)
+        required = metadataOffset + metadataLength
+      }
+    }
+    const { metadataOffset, metadataLength } = meshletHeader(bytes.buffer)
+    const metadata = JSON.parse(new TextDecoder().decode(bytes.subarray(metadataOffset, metadataOffset + metadataLength))) as MeshletMetadata
+    return { metadata, load: () => loadMeshletAsset(url, signal) }
+  } finally {
+    await reader.cancel()
+    reader.releaseLock()
+  }
 }
 
 export function meshletPosition(asset: MeshletAsset, cluster: number, vertex: number): [number, number, number] {

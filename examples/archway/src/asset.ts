@@ -1,7 +1,8 @@
 import { Matrix4 } from 'three'
 import { MeshStandardNodeMaterial, type WebGPURenderer } from 'three/webgpu'
-import { loadMeshletAsset, type MeshletAsset, type MeshletMetadata, type MeshletSceneEntry } from '@blacksite/geometry'
-import { loadScanMaterial, type ScanSurface } from '../../shared/scan-material'
+import type { RapierContext } from '@react-three/rapier'
+import { loadMeshletAsset, MeshletScene, type MeshletAssetSource, type MeshletMetadata, type MeshletSceneEntry } from '@blacksite/geometry'
+import { loadScanMaterials, type ScanSurface } from '../../shared/scan-material'
 
 const root = '/owned/dark-ruins/'
 type EnvironmentComponent = { class: string; transform: { position: number[]; matrix: number[] }; properties: Record<string, unknown> }
@@ -15,42 +16,93 @@ type CourtyardManifest = {
   untranslated: { path: string; parent: string | null; placements: string[] }[]
 }
 
+async function loadCourtyardColliders(url: string, count: number, { world, rapier }: Pick<RapierContext, 'world' | 'rapier'>, signal: AbortSignal) {
+  const response = await fetch(url, { signal })
+  if (!response.ok || !response.body) throw new Error('The published courtyard collision is unavailable')
+  const reader = response.body.getReader()
+  let chunk: Uint8Array = new Uint8Array(0)
+  let cursor = 0
+  const read = async (target: Uint8Array) => {
+    let offset = 0
+    while (offset < target.length) {
+      signal.throwIfAborted()
+      if (cursor === chunk.length) {
+        const next = await reader.read()
+        if (next.done) throw new Error('Courtyard collision is truncated')
+        chunk = next.value
+        cursor = 0
+      }
+      const length = Math.min(target.length - offset, chunk.length - cursor)
+      target.set(chunk.subarray(cursor, cursor + length), offset)
+      cursor += length
+      offset += length
+    }
+  }
+  let remove = () => {}
+  try {
+    const header = new Uint32Array(4)
+    await read(new Uint8Array(header.buffer))
+    if (header[0] !== 0x434c5342 || header[1] !== 1 || header[2] !== count) throw new Error('Courtyard collision layout is invalid')
+    const body = world.createRigidBody(rapier.RigidBodyDesc.fixed())
+    remove = () => {
+      if (world.getRigidBody(body.handle)) world.removeRigidBody(body)
+    }
+    for (let i = 0; i < count; i++) {
+      const counts = new Uint32Array(2)
+      await read(new Uint8Array(counts.buffer))
+      if (counts[0]! % 3 || counts[1]! % 3) throw new Error('Courtyard collider counts are invalid')
+      const vertices = new Float32Array(counts[0]!)
+      const indices = new Uint32Array(counts[1]!)
+      await read(new Uint8Array(vertices.buffer))
+      await read(new Uint8Array(indices.buffer))
+      signal.throwIfAborted()
+      world.createCollider(rapier.ColliderDesc.trimesh(vertices, indices), body).clearShapeCache()
+      vertices.buffer.transfer(0)
+      indices.buffer.transfer(0)
+      await new Promise<void>(resolve => setTimeout(resolve, 0))
+    }
+    if (cursor !== chunk.length) throw new Error('Courtyard collision size is invalid')
+    while (true) {
+      const next = await reader.read()
+      if (next.done) break
+      if (next.value.length) throw new Error('Courtyard collision size is invalid')
+    }
+    signal.throwIfAborted()
+    return remove
+  } catch (error) {
+    remove()
+    throw error
+  } finally {
+    await reader.cancel().catch(() => {})
+    reader.releaseLock()
+  }
+}
+
 export async function loadArchway() {
   const manifestResponse = await fetch(root + 'courtyard.json')
   if (!manifestResponse.ok) throw new Error('Build the owned courtyard assets before opening this example')
   const manifest: CourtyardManifest = await manifestResponse.json()
-  const [surfacesResponse, colliderResponse] = await Promise.all([manifest.surfacesUrl, manifest.colliderUrl].map(file => fetch(root + file)))
-  if (!surfacesResponse.ok || !colliderResponse.ok) throw new Error('The published courtyard asset set is incomplete')
+  const surfacesResponse = await fetch(root + manifest.surfacesUrl)
+  if (!surfacesResponse.ok) throw new Error('The published courtyard asset set is incomplete')
   const surfaceSet: { surfaces: ScanSurface[] } = await surfacesResponse.json()
   const surfaceRoot = root + manifest.surfacesUrl.slice(0, manifest.surfacesUrl.lastIndexOf('/') + 1)
-  const collider = await colliderResponse.arrayBuffer()
-  const header = new Uint32Array(collider, 0, 4)
-  if (header[0] !== 0x434c5342 || header[1] !== 1 || header[2] !== manifest.placements.length) throw new Error('Courtyard collision layout is invalid')
-  const colliders = []
-  let offset = 16
-  for (let i = 0; i < header[2]!; i++) {
-    const counts = new Uint32Array(collider, offset, 2)
-    offset += 8
-    const vertices = new Float32Array(collider, offset, counts[0])
-    offset += counts[0]! * 4
-    const indices = new Uint32Array(collider, offset, counts[1])
-    offset += counts[1]! * 4
-    colliders.push({ vertices, indices })
+  const assetsByGeometry = new Map<number, MeshletAssetSource>()
+  for (const index of new Set(manifest.placements.map(placement => placement.geometry))) {
+    const source = manifest.geometries[index]!
+    assetsByGeometry.set(index, { metadata: source.metadata, load: () => loadMeshletAsset(root + source.url) })
   }
-  if (offset !== collider.byteLength) throw new Error('Courtyard collision size is invalid')
-  const assetsByGeometry = new Map<number, MeshletAsset>()
-  for (const index of new Set(manifest.placements.map(placement => placement.geometry))) assetsByGeometry.set(index, await loadMeshletAsset(root + manifest.geometries[index]!.url))
   const assets = [...assetsByGeometry.values()]
-  const entries: MeshletSceneEntry[] = []
   const sourceTriangles = assets.reduce((sum, asset) => sum + asset.metadata.sourceTriangles, 0)
   const meshlets = assets.reduce((sum, asset) => sum + asset.metadata.clusterCount, 0)
+  const candidateCount = manifest.placements.reduce((sum, placement) => sum + (placement.visible ? manifest.geometries[placement.geometry]!.metadata.clusterCount : 0), 0)
   return {
-    manifest, entries, assets, sourceTriangles, meshlets,
-    storageSize: Math.max(assets.reduce((sum, asset) => sum + asset.vertices.byteLength, 0), assets.reduce((sum, asset) => sum + asset.indices.byteLength, 0), assets.reduce((sum, asset) => sum + asset.vertexReferences.byteLength, 0)),
-    colliders,
-    async prepareMaterials(renderer: WebGPURenderer) {
-      const materials = new Map<string, MeshStandardNodeMaterial>()
-      for (const surface of surfaceSet.surfaces) materials.set(surface.path, await loadScanMaterial(surface, surfaceRoot, renderer))
+    manifest, sourceTriangles, meshlets,
+    uniqueMeshes: assets.length,
+    levels: Math.max(...assets.map(asset => asset.metadata.levelCount)),
+    storageSize: Math.max(meshlets * 128, candidateCount * 16, ...[...assetsByGeometry.keys()].map(index => manifest.geometries[index]!.bytes)),
+    createColliders: (context: Pick<RapierContext, 'world' | 'rapier'>, signal: AbortSignal) => loadCourtyardColliders(root + manifest.colliderUrl, manifest.placements.length, context, signal),
+    async createGeometry(renderer: WebGPURenderer) {
+      const materials = await loadScanMaterials(surfaceSet.surfaces, surfaceRoot, renderer)
       for (const missing of manifest.untranslated) materials.set(missing.path, new MeshStandardNodeMaterial({ name: `Untranslated: ${missing.path}`, visible: false }))
       const materialFor = (path: string | undefined) => {
         const material = path ? materials.get(path) : undefined
@@ -69,7 +121,7 @@ export async function loadArchway() {
         }
         grouped.get(id)!.instances.push(new Matrix4().fromArray(placement.matrix))
       }
-      entries.push(...grouped.values())
+      return MeshletScene.create(renderer, [...grouped.values()], { pixelError: 1, occlusion: true, shadowLayer: 2, shadowPixelError: 1 })
     },
   }
 }

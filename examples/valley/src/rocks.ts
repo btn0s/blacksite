@@ -4,7 +4,7 @@ import { MeshletScene, type MeshletModel, type MeshletSceneEntry } from '@blacks
 import type { Stonework, RuinPiece } from './stonework'
 import type { Owned } from './owned'
 
-export function createRocks(owned: Owned, stones: Stonework, renderer: WebGPURenderer) {
+export async function createRocks(owned: Owned, stones: Stonework, renderer: WebGPURenderer) {
   const entries: MeshletSceneEntry[] = []
   const add = (model: MeshletModel, transforms: Matrix4[]) => {
     if (!transforms.length) return
@@ -14,7 +14,7 @@ export function createRocks(owned: Owned, stones: Stonework, renderer: WebGPURen
     }
   }
   for (const id of Object.keys(stones.pieces) as RuinPiece[]) add(owned.ruins[id].model, stones.pieces[id])
-  const geometry = new MeshletScene(entries, { pixelError: 2, occlusion: true, shadowLayer: 2, fallbackDistance: 120 })
+  const geometry = await MeshletScene.create(renderer, entries, { pixelError: 2, occlusion: true, shadowLayer: 2, fallbackDistance: 120 })
   geometry.object.name = 'Valley stonework'
   const stats = { sceneTriangles: 0, drawnTriangles: 0, totalTriangles: geometry.totalTriangles, candidateClusters: geometry.candidateClusters, visibleClusters: 0, occludedClusters: 0, submittedTriangles: 0 }
   let pending = false
@@ -41,4 +41,4 @@ export function createRocks(owned: Owned, stones: Stonework, renderer: WebGPURen
   }
 }
 
-export type Rocks = ReturnType<typeof createRocks>
+export type Rocks = Awaited<ReturnType<typeof createRocks>>

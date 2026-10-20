@@ -66,21 +66,22 @@ export function bindGeometryMaterial(material: MeshStandardNodeMaterial, pulledU
 }
 
 export function createGeometryDepthMaterial(material: MeshStandardMaterial & Partial<NodeMaterial>) {
+  const coverageUsesAlpha = material.alphaTest > 0 || Boolean(material.alphaTestNode) || material.alphaHash
   const depth = new MeshBasicNodeMaterial({
     colorWrite: false,
     side: material.side,
-    map: material.map,
-    alphaMap: material.alphaMap,
+    map: coverageUsesAlpha ? material.map : null,
+    alphaMap: coverageUsesAlpha ? material.alphaMap : null,
     alphaTest: material.alphaTest,
     alphaHash: material.alphaHash,
-    opacity: material.opacity,
+    opacity: coverageUsesAlpha ? material.opacity : 1,
     depthWrite: material.depthWrite,
     depthTest: material.depthTest,
   })
   depth.positionNode = material.positionNode ?? null
   depth.contextNode = material.contextNode ?? null
-  depth.colorNode = material.alphaTest > 0 || material.alphaTestNode ? material.colorNode ?? null : null
-  depth.opacityNode = material.opacityNode ?? null
+  depth.colorNode = coverageUsesAlpha ? material.colorNode ?? null : null
+  depth.opacityNode = coverageUsesAlpha ? material.opacityNode ?? null : null
   depth.alphaTestNode = material.alphaTestNode ?? null
   depth.maskNode = material.maskNode ?? null
   depth.depthNode = material.depthNode ?? null
@@ -92,20 +93,24 @@ export function createGeometryDepthMaterial(material: MeshStandardMaterial & Par
 
 export function createGeometryShadowMaterial(source: MeshStandardMaterial | MeshStandardNodeMaterial, pulledUv: ReturnType<typeof vec2>, position: ReturnType<typeof vec3>) {
   const node = source as MeshStandardNodeMaterial
-  const material = new MeshBasicNodeMaterial({ side: source.side, alphaTest: node.alphaTestNode ? 0 : source.alphaTest, depthWrite: true })
+  const coverageUsesAlpha = source.alphaTest > 0 || Boolean(node.alphaTestNode) || source.alphaHash
+  const material = new MeshBasicNodeMaterial({ side: source.side, alphaTest: node.alphaTestNode ? 0 : source.alphaTest, alphaHash: source.alphaHash, depthWrite: true })
   const context = { ...node.contextNode?.value, getUV: () => pulledUv }
-  const colorAlpha = node.colorNode ? vec4(node.colorNode).a : source.map ? texture(source.map, pulledUv).setUpdateMatrix(true).a : float(1)
-  const opacity = node.opacityNode ?? float(source.opacity).mul(source.alphaMap ? texture(source.alphaMap, pulledUv).setUpdateMatrix(true).g : 1)
-  const alpha = colorAlpha.mul(opacity).context(context)
   const sourceMask = node.maskShadowNode ?? node.maskNode
   let mask = sourceMask ? sourceMask.context(context) : null
-  if (node.alphaTestNode) {
-    const cutout = alpha.greaterThan(node.alphaTestNode.context(context))
-    mask = mask ? mask.and(cutout) : cutout
+  material.colorNode = vec4(0, 0, 0, 1)
+  if (coverageUsesAlpha) {
+    const colorAlpha = node.colorNode ? vec4(node.colorNode).a : source.map ? texture(source.map, pulledUv).setUpdateMatrix(true).a : float(1)
+    const opacity = node.opacityNode ?? float(source.opacity).mul(source.alphaMap ? texture(source.alphaMap, pulledUv).setUpdateMatrix(true).g : 1)
+    const alpha = colorAlpha.mul(opacity).context(context)
+    material.colorNode = vec4(0, 0, 0, alpha)
+    if (node.alphaTestNode) {
+      const cutout = alpha.greaterThan(node.alphaTestNode.context(context))
+      mask = mask ? mask.and(cutout) : cutout
+    }
   }
   material.positionNode = position
   material.shadowSide = source.shadowSide
-  material.colorNode = vec4(0, 0, 0, alpha)
   material.maskNode = mask
   return material
 }

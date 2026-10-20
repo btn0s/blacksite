@@ -1,13 +1,13 @@
 import { Box3, Matrix4, MeshStandardMaterial, Quaternion, Vector3 } from 'three/webgpu'
 import { loadMeshletModel } from '@blacksite/geometry'
-import type { MeshletAsset, MeshletSceneEntry } from '@blacksite/geometry'
+import type { MeshletAssetSource, MeshletSceneEntry } from '@blacksite/geometry'
 import { fbm, hash2, smoothstep } from '@blacksite/landscape'
 import type { CoastalTerrain } from './terrain'
 
 type Habitat = 'sedge' | 'grass' | 'yucca' | 'sandstone-rock' | 'island-tree-02' | 'coast-rocks'
 
 interface Variant {
-  asset: MeshletAsset
+  asset: MeshletAssetSource
   materials: MeshStandardMaterial[]
   height: number
   width: number

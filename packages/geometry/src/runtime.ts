@@ -9,8 +9,8 @@ import {
   floor, instanceIndex, log2, max, min, mix, output, storage,
   textureLoad, uint, uniform, uniformArray, uvec2, vec2, vec4,
 } from 'three/tsl'
-import { DRAW_ARGUMENT_OFFSET, packScene, transformScale } from './runtime-data'
-import type { MeshletSceneEntry } from './runtime-data'
+import { DRAW_ARGUMENT_OFFSET, packScene, transformScale, uploadAttributes } from './runtime-data'
+import type { MeshletSceneEntry, PackedMeshletScene } from './runtime-data'
 import { bindGeometryMaterial, createGeometryDepthMaterial, createGeometryMaterial } from './runtime-material'
 import { clusterReader, instanceReader } from './runtime-layout'
 import { clusterGeometry, clusterVertex } from './runtime-vertex'
@@ -56,6 +56,7 @@ export class MeshletScene {
   readonly meshes: Mesh<InstancedBufferGeometry, MeshStandardNodeMaterial>[] = []
   readonly totalTriangles: number
   readonly candidateClusters: number
+  readonly residentGeometryBytes: number
   pixelError: number
   occlusionEnabled: boolean
   readonly fallbackDistance: number
@@ -68,6 +69,7 @@ export class MeshletScene {
   private shadowPasses = 0
   private readonly depthScene = new Scene()
   private readonly depthMeshes: Mesh<InstancedBufferGeometry, MeshBasicNodeMaterial>[] = []
+  private readonly materials = new Set<MeshStandardNodeMaterial | MeshBasicNodeMaterial>()
   private readonly target: RenderTarget
   private readonly counters: IndirectStorageBufferAttribute
   private readonly dispatch = new IndirectStorageBufferAttribute(new Uint32Array(3), 1)
@@ -99,14 +101,28 @@ export class MeshletScene {
   private readonly selectionComputes
   private readonly occlusionComputes
   private readonly computeNodes
+  private readonly uploadBuffers: StorageBufferAttribute[]
 
-  constructor(entries: readonly MeshletSceneEntry[], options: MeshletSceneOptions = {}) {
-    const packed = packScene(entries)
+  static async create(renderer: WebGPURenderer, entries: readonly MeshletSceneEntry[], options: MeshletSceneOptions = {}) {
+    const packed = await packScene(renderer, entries)
+    const scene = new MeshletScene(packed, options)
+    try {
+      await uploadAttributes(renderer, scene.uploadBuffers)
+      await scene.shadows.upload(renderer)
+      return scene
+    } catch (error) {
+      scene.dispose()
+      throw error
+    }
+  }
+
+  private constructor(packed: PackedMeshletScene, options: MeshletSceneOptions) {
     this.object.name = 'Cluster scene'
     this.pixelError = options.pixelError ?? 2
     this.occlusionEnabled = options.occlusion ?? true
     this.candidateClusters = packed.candidateCount
     this.totalTriangles = packed.totalTriangles
+    this.residentGeometryBytes = packed.residentGeometryBytes
     this.fallbackDistance = options.fallbackDistance ?? 120
     if (!(this.fallbackDistance > 0)) throw new Error('Geometry fallback distance must be positive')
     this.fallbackReach.value = this.fallbackDistance
@@ -123,6 +139,7 @@ export class MeshletScene {
     const visibleAttribute = new StorageBufferAttribute(this.candidateClusters, 1, Uint32Array)
     const rejectedAttribute = new StorageBufferAttribute(this.candidateClusters, 1, Uint32Array)
     const pyramidAttribute = new StorageBufferAttribute((pyramidSize * pyramidSize * 4 - 1) / 3, 1)
+    this.uploadBuffers = [this.counters, this.dispatch, visibleAttribute, rejectedAttribute, pyramidAttribute]
     const readCluster = clusterReader(packed.clusters)
     const readInstance = instanceReader(packed.instances)
     const candidates = storage(packed.candidates, 'uvec4', this.candidateClusters).toReadOnly()
@@ -243,23 +260,34 @@ export class MeshletScene {
         })
       })
     })().compute(this.candidateClusters, [64]).setName('Cluster recovery')
+    const pulled = clusterVertex(packed, visibleAttribute, this.debug)
+    const materials = new Map<PackedMeshletScene['batches'][number]['material'], { material: MeshStandardNodeMaterial; depth: MeshBasicNodeMaterial }>()
     for (let batchIndex = 0; batchIndex < packed.batches.length; batchIndex++) {
       const batch = packed.batches[batchIndex]!
       const geometry = clusterGeometry(batch.triangles, batch.capacity, this.counters, batchIndex)
-      const pulled = clusterVertex(packed, visibleAttribute, batch.offset, this.debug)
-      const material = createGeometryMaterial(batch.material)
-      bindGeometryMaterial(material, pulled.uv, pulled.position)
-      const depthMaterial = createGeometryDepthMaterial(material)
-      const standardOutput = material.outputNode ?? output
-      material.outputNode = vec4(mix(standardOutput.rgb, pulled.color, float(this.debug.greaterThan(0))), standardOutput.a)
+      let pair = materials.get(batch.material)
+      if (!pair) {
+        const material = createGeometryMaterial(batch.material)
+        bindGeometryMaterial(material, pulled.uv, pulled.position)
+        const depth = createGeometryDepthMaterial(material)
+        const standardOutput = material.outputNode ?? output
+        material.outputNode = vec4(mix(standardOutput.rgb, pulled.color, float(this.debug.greaterThan(0))), standardOutput.a)
+        pair = { material, depth }
+        materials.set(batch.material, pair)
+        this.materials.add(material)
+        this.materials.add(depth)
+      }
+      const { material, depth } = pair
       const mesh = new Mesh(geometry, material)
+      pulled.bind(mesh, batch)
       mesh.name = batch.material.name || `Cluster material ${batchIndex}`
       mesh.frustumCulled = false
       mesh.receiveShadow = true
       mesh.castShadow = false
       this.meshes.push(mesh)
       this.object.add(mesh)
-      const depthMesh = new Mesh(geometry, depthMaterial)
+      const depthMesh = new Mesh(geometry, depth)
+      pulled.bind(depthMesh, batch)
       depthMesh.frustumCulled = false
       depthMesh.matrixAutoUpdate = false
       this.depthMeshes.push(depthMesh)
@@ -420,11 +448,8 @@ export class MeshletScene {
   }
 
   dispose() {
-    for (const mesh of this.meshes) {
-      mesh.geometry.dispose()
-      mesh.material.dispose()
-    }
-    for (const mesh of this.depthMeshes) mesh.material.dispose()
+    for (const mesh of this.meshes) mesh.geometry.dispose()
+    for (const material of this.materials) material.dispose()
     this.shadows.dispose()
     this.externalDepth.dispose()
     this.target.dispose()

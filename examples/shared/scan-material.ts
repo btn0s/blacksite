@@ -1,5 +1,5 @@
-import { LoadingManager, Matrix3, NoColorSpace, RepeatWrapping, SRGBColorSpace, type Texture } from 'three'
-import { MeshPhysicalNodeMaterial, type Node, type WebGPURenderer } from 'three/webgpu'
+import { CompressedTexture, LoadingManager, Matrix3, NoColorSpace, RepeatWrapping, SRGBColorSpace, type Texture } from 'three'
+import { MeshPhysicalNodeMaterial, type MeshStandardNodeMaterial, type Node, type WebGPURenderer } from 'three/webgpu'
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import transcoderScript from 'three/examples/jsm/libs/basis/basis_transcoder.js?url'
 import transcoderWasm from 'three/examples/jsm/libs/basis/basis_transcoder.wasm?url'
@@ -19,10 +19,52 @@ export type ScanSurface = {
 const luma = (value: Node<'vec3'>) => value.dot(vec3(0.212639, 0.715169, 0.072192))
 const saturate = (value: Node<'float'>) => value.clamp(0, 1)
 const cheapContrast = (value: Node<'float'>, contrast: number) => saturate(value.mul(1 + 2 * contrast).sub(contrast))
-const loaders = new WeakMap<WebGPURenderer, { loader: KTX2Loader; images: Map<string, Promise<Texture>>; resident: Map<Texture, number> }>()
+const residentTextures = new WeakMap<WebGPURenderer, { texture: Texture; reportedBytes: number; residentBytes: number }[]>()
 
 export function residentScanTextures(renderer: WebGPURenderer) {
-  return [...(loaders.get(renderer)?.resident ?? [])].map(([texture, reportedBytes]) => ({ texture, reportedBytes }))
+  return residentTextures.get(renderer) ?? []
+}
+
+export async function loadScanMaterials(surfaces: readonly ScanSurface[], root: string, renderer: WebGPURenderer): Promise<Map<string, MeshStandardNodeMaterial>> {
+  const manager = new LoadingManager()
+  manager.setURLModifier(url => url.endsWith('basis_transcoder.js') ? transcoderScript : url.endsWith('basis_transcoder.wasm') ? transcoderWasm : url)
+  const loader = new KTX2Loader(manager).setTranscoderPath('/').detectSupport(renderer)
+  const images = new Map<string, Promise<Texture>>()
+  const resident: { texture: Texture; reportedBytes: number; residentBytes: number }[] = []
+  residentTextures.set(renderer, resident)
+  const loadTexture = (source: ScanSurface['maps'][keyof ScanSurface['maps']]) => {
+    const url = root + source.file
+    if (!images.has(url)) images.set(url, loader.loadAsync(url).then(map => {
+      map.flipY = false
+      map.wrapS = map.wrapT = RepeatWrapping
+      map.anisotropy = 8
+      map.colorSpace = source.srgb ? SRGBColorSpace : NoColorSpace
+      const bytes = map instanceof CompressedTexture ? map.mipmaps.reduce((sum, mip) => sum + mip.data.byteLength, 0) : null
+      if (map instanceof CompressedTexture) map.onUpdate = () => {
+        const buffers = new Set(map.mipmaps.map(mip => mip.data.buffer))
+        const empty = new Uint8Array(0)
+        for (const mip of map.mipmaps) mip.data = empty
+        for (const buffer of buffers) {
+          if (!(buffer instanceof ArrayBuffer)) throw new Error('Texture upload requires transferable buffers')
+          buffer.transfer(0)
+        }
+        map.onUpdate = null
+      }
+      const before = renderer.info.memory.texturesSize
+      renderer.initTexture(map)
+      const reportedBytes = renderer.info.memory.texturesSize - before
+      resident.push({ texture: map, reportedBytes, residentBytes: bytes ?? reportedBytes })
+      return map
+    }))
+    return images.get(url)!
+  }
+  try {
+    const materials = new Map<string, MeshStandardNodeMaterial>()
+    for (const surface of surfaces) materials.set(surface.path, await loadScanMaterial(surface, loadTexture))
+    return materials
+  } finally {
+    loader.dispose()
+  }
 }
 
 function sCurve(value: Node<'float'>, power: number) {
@@ -58,34 +100,16 @@ function boxUV() {
   return weights.z.sub(dither).greaterThan(max(weights.x, weights.y)).select(z, side)
 }
 
-export async function loadScanMaterial(surface: ScanSurface, root: string, renderer: WebGPURenderer) {
+async function loadScanMaterial(surface: ScanSurface, loadTexture: (source: ScanSurface['maps'][keyof ScanSurface['maps']]) => Promise<Texture>) {
   if (surface.family !== 'custom-general') throw new Error(`Unsupported surface family: ${surface.family}`)
   const { scalar: s, vector: v, static_switch: switches } = surface.parameters
   for (const feature of ['Use Pure Metallic Base?', 'Switch - Use UV Random Offset?', 'Use Reconstructed Normal?']) {
     if (switches[feature]) throw new Error(`${surface.path}: unsupported surface feature ${feature}`)
   }
   if (s['Base - Metallic Intensity'] !== 0) throw new Error(`${surface.path}: metallic color response is unsupported`)
-  if (!loaders.has(renderer)) {
-    const manager = new LoadingManager()
-    manager.setURLModifier(url => url.endsWith('basis_transcoder.js') ? transcoderScript : url.endsWith('basis_transcoder.wasm') ? transcoderWasm : url)
-    loaders.set(renderer, { loader: new KTX2Loader(manager).setTranscoderPath('/').detectSupport(renderer), images: new Map(), resident: new Map() })
-  }
-  const { loader, images, resident } = loaders.get(renderer)!
   const used = Object.entries(surface.maps).filter(([name]) => name !== 'Metalness' && (name !== 'Packed' || !switches['Use Dedrived Roughness from Albedo?']) && (name !== 'RGBNoise' || !switches['RGB Blend - Disable']))
   const entries = await Promise.all(used.map(async ([name, source]) => {
-    const url = root + source.file
-    if (!images.has(url)) images.set(url, loader.loadAsync(url))
-    const map = await images.get(url)!
-    map.flipY = false
-    map.wrapS = map.wrapT = RepeatWrapping
-    map.anisotropy = 8
-    map.colorSpace = source.srgb ? SRGBColorSpace : NoColorSpace
-    if (!resident.has(map)) {
-      const before = renderer.info.memory.texturesSize
-      renderer.initTexture(map)
-      resident.set(map, renderer.info.memory.texturesSize - before)
-    }
-    return [name, map] as const
+    return [name, await loadTexture(source)] as const
   }))
   const maps = Object.fromEntries(entries) as Record<keyof ScanSurface['maps'], Texture>
   const primaryUV = Fn(builder => builder.context.getUV?.() ?? uv())()

@@ -116,8 +116,8 @@ export async function createCoastalScene(status: (message: string) => void) {
     .add(cos(p.x.mul(2.3).add(p.y.mul(1.7)).sub(clock.mul(1.15))).mul(0.035))
   water.normalNode = bumpMap(wave, 1.2)
   const entries: MeshletSceneEntry[] = [
-    { asset: terrainAsset, instances: [new Matrix4()], materials: [groundMaterial] },
-    { asset: oceanAsset, instances: [new Matrix4()], materials: [water] },
+    { asset: { metadata: terrainAsset.metadata, load: () => loadMeshletAsset('/owned/geometry/terrain.meshlets') }, instances: [new Matrix4()], materials: [groundMaterial] },
+    { asset: { metadata: oceanAsset.metadata, load: () => loadMeshletAsset('/owned/geometry/ocean.meshlets') }, instances: [new Matrix4()], materials: [water] },
     ...createCitadel(fort, terrain.heightAt(-27, -53) - 0.25),
   ]
   status('Planting the coast and preparing the cluster hierarchy…')

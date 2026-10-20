@@ -1,6 +1,6 @@
 import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Canvas, createPortal, useFrame, useThree } from '@react-three/fiber'
-import { Physics, RigidBody, TrimeshCollider } from '@react-three/rapier'
+import { Physics, useRapier } from '@react-three/rapier'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { WebGPURenderer } from 'three/webgpu'
 import { InputProvider, makeInputDevices } from '@blacksite/input'
@@ -26,24 +26,41 @@ const shadowLayers = [2]
 const glyphs = { home: { label: 'Archway', keyboard: 'R', touch: 'Home', gamepad: { xbox: 'View', playstation: 'Create', generic: 'Back' } } }
 const lodLegend = [{ color: '#ffc1aa', label: 'Source · 0' }, { color: '#adc4ef', label: 'Level 1' }, { color: '#e3ffa3', label: 'Level 2' }]
 
-function Scene({ owned, walker, gameplayCamera, inspector, telemetry, shared }: {
+function CourtyardColliders({ owned, onReady, onError }: { owned: ArchwayAsset; onReady(): void; onError(error: unknown): void }) {
+  const { world, rapier } = useRapier()
+  useEffect(() => {
+    const controller = new AbortController()
+    let remove: (() => void) | undefined
+    void owned.createColliders({ world, rapier }, controller.signal).then(dispose => {
+      if (controller.signal.aborted) dispose()
+      else { remove = dispose; onReady() }
+    }).catch(error => { if (!controller.signal.aborted) onError(error) })
+    return () => { controller.abort(); remove?.() }
+  }, [onError, onReady, owned, rapier, world])
+  return null
+}
+
+function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, shared, onReady }: {
   owned: ArchwayAsset
+  geometry: MeshletScene
   walker: CharacterHandle
   gameplayCamera: PerspectiveCamera
   inspector: ReturnType<typeof createInspector>
   telemetry: TelemetryAction
   shared: { look: { current: Look | null }; warm: { current: number }; geometry: { current: MeshletScene | null } }
+  onReady(): void
 }) {
   const { gl, camera, scene } = useThree()
   const renderer = gl as unknown as WebGPURenderer
   const home = useMemo(() => createArchwayHome(owned.manifest.centre), [owned])
   const [look, setLook] = useState<Look | null>(null)
+  const [collidersReady, setCollidersReady] = useState(false)
   const [error, setError] = useState<Error | null>(null)
-  const geometry = useMemo(() => new MeshletScene(owned.entries, { pixelError: 1, occlusion: true, shadowLayer: 2, shadowPixelError: 1 }), [owned])
   const stats = useMemo(() => ({ sceneTriangles: 0, drawnTriangles: 0 }), [])
   const { atmosphere, sunlight } = useMemo(() => courtyardEnvironment(owned), [owned])
   const onLook = useCallback((value: Look | null) => { shared.look.current = value; shared.warm.current = 0; setLook(value) }, [shared])
   const onError = useCallback((value: unknown) => setError(value instanceof Error ? value : new Error(String(value))), [])
+  const onCollidersReady = useCallback(() => setCollidersReady(true), [])
   const content = useCallback((): InspectionContent => ({
     identity: geometry,
     roots: [geometry.object],
@@ -56,7 +73,7 @@ function Scene({ owned, walker, gameplayCamera, inspector, telemetry, shared }: 
     ],
     setView: view => { geometry.setDebugView(view === 'lod' ? 'lod' : 'normal'); shared.look.current?.setDebug(view === 'lod') },
     textures: () => residentScanTextures(renderer),
-    details: () => ({ placements: owned.manifest.placements.length, uniqueMeshes: owned.assets.length, sourceTriangles: owned.sourceTriangles, meshletCount: owned.meshlets, levels: Math.max(...owned.assets.map(asset => asset.metadata.levelCount)), residentGeometryBytes: owned.assets.reduce((sum, asset) => sum + asset.vertices.byteLength + asset.vertexReferences.byteLength + asset.indices.byteLength + asset.metadata.clusterCount * 128, 0), untranslated: owned.manifest.untranslated, ...stats }),
+    details: () => ({ placements: owned.manifest.placements.length, uniqueMeshes: owned.uniqueMeshes, sourceTriangles: owned.sourceTriangles, meshletCount: owned.meshlets, levels: owned.levels, residentGeometryBytes: geometry.residentGeometryBytes, untranslated: owned.manifest.untranslated, ...stats }),
   }), [geometry, inspector, owned, renderer, shared, stats])
   useEffect(() => {
     shared.geometry.current = geometry
@@ -69,7 +86,10 @@ function Scene({ owned, walker, gameplayCamera, inspector, telemetry, shared }: 
     if (!look) return
     camera.updateMatrixWorld()
     geometry.prepare(renderer, camera as PerspectiveCamera)
-    shared.warm.current++
+    if (collidersReady) {
+      shared.warm.current++
+      if (shared.warm.current === 10) onReady()
+    }
   }, 0.5)
   useEffect(() => {
     let pending = false
@@ -87,16 +107,15 @@ function Scene({ owned, walker, gameplayCamera, inspector, telemetry, shared }: 
   return <>
     <WebGPULook atmosphere={atmosphere} sunlight={sunlight} camera={cameraGrade} quality="high" shadowDistance={80} shadowMap={2048} shadowLayers={shadowLayers} onReady={onLook} onError={onError} />
     <Physics gravity={[0, -9.8, 0]} timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
-      {createPortal(<CharacterController controller={walker} events={events} />, scene, { camera: gameplayCamera })}
-      <RigidBody type="fixed" colliders={false}>
-        {owned.colliders.map((collider, index) => <TrimeshCollider key={index} args={[collider.vertices, collider.indices]} />)}
-      </RigidBody>
+      <CourtyardColliders owned={owned} onReady={onCollidersReady} onError={onError} />
+      {collidersReady && createPortal(<CharacterController controller={walker} events={events} />, scene, { camera: gameplayCamera })}
     </Physics>
     <SceneInspection name="archway" look={shared.look} warm={shared.warm} walker={walker} inspector={inspector} telemetry={telemetry} content={content} />
   </>
 }
 
-function Archway({ owned, runtime }: { owned: ArchwayAsset; runtime: ReturnType<typeof makeInputDevices> }) {
+function Archway({ owned, runtime, onReady }: { owned: ArchwayAsset; runtime: ReturnType<typeof makeInputDevices>; onReady(): void }) {
+  const [geometry, setGeometry] = useState<MeshletScene | null>(null)
   const home = useMemo(() => createArchwayHome(owned.manifest.centre), [owned])
   const walker = useMemo(() => createWalker(home, runtime), [home, runtime])
   const cameras = useMemo(() => createArchwayCameras(owned.manifest.centre), [owned])
@@ -127,13 +146,14 @@ function Archway({ owned, runtime }: { owned: ArchwayAsset; runtime: ReturnType<
     const gl = new WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', trackTimestamp: true, requiredLimits: { maxStorageBufferBindingSize: storageSize, maxBufferSize: storageSize } })
     await gl.init()
     if (!gl.backend.isWebGPUBackend) throw new Error('A WebGPU adapter is required')
-    await owned.prepareMaterials(gl)
+    try { setGeometry(await owned.createGeometry(gl)) }
+    catch (error) { gl.dispose(); throw error }
     gl.info.autoReset = false
     return gl
   }, [owned])
   return <>
     <Canvas frameloop={session.frameloop} shadows dpr={1} camera={cameras[view]} gl={renderer}>
-      <Scene owned={owned} walker={walker} gameplayCamera={cameras.walk} inspector={inspector} telemetry={telemetry} shared={shared} />
+      {geometry && <Scene owned={owned} geometry={geometry} walker={walker} gameplayCamera={cameras.walk} inspector={inspector} telemetry={telemetry} shared={shared} onReady={onReady} />}
     </Canvas>
     <section className="bs-inspect" aria-label="Camera views" style={{ top: 44, right: 'auto', left: 16, width: 240 }}>
       <div className="bs-inspect-view" role="group" aria-label="View bookmarks" style={{ marginTop: 0 }}>
@@ -151,14 +171,16 @@ export function Game() {
   const runtime = useMemo(makeInputDevices, [])
   const [owned, setOwned] = useState<ArchwayAsset | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
+  const onReady = useCallback(() => setReady(true), [])
   useEffect(() => {
     void Promise.all([loadArchway(), preloadAlsCharacterGltf().then(outfit)]).then(([asset]) => setOwned(asset)).catch(error => setError(String(error)))
   }, [])
   return <InputProvider runtime={runtime}><div className="hud-screen">
-    <RenderBoundary>{owned && <Archway owned={owned} runtime={runtime} />}</RenderBoundary>
+    <RenderBoundary>{owned && <Archway owned={owned} runtime={runtime} onReady={onReady} />}</RenderBoundary>
     {error && <div className="hud-menu" role="alert"><strong>Archway could not load</strong><span>{error}</span></div>}
     <TitleCard title="The Archway" />
-    <Loading title="The Archway" detail="Loading source geometry, surfaces and walker" progress={owned ? 1 : 0.35} done={owned !== null || error !== null} />
+    <Loading title="The Archway" detail="Loading source geometry, surfaces and walker" progress={ready ? 1 : owned ? 0.65 : 0.35} done={ready || error !== null} />
   </div></InputProvider>
 }
 

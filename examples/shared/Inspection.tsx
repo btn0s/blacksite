@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { CompressedTexture, Frustum, Matrix4, Mesh, type Object3D, type Texture } from 'three'
+import { Frustum, Matrix4, Mesh, type Object3D, type Texture } from 'three'
 import { sampleView } from '@blacksite/check'
 import type { Inspector, Technique, InspectView } from '@blacksite/inspect'
 import type { WebGPULook } from '@blacksite/look/webgpu'
@@ -19,7 +19,7 @@ export type InspectionContent = {
   techniques: Technique[]
   setView(view: InspectView): void
   details(): unknown
-  textures?(): readonly { texture: Texture; reportedBytes: number }[]
+  textures?(): readonly { texture: Texture; reportedBytes: number; residentBytes: number }[]
 }
 
 export function SceneInspection({ name, look, warm, walker, inspector, telemetry, content }: {
@@ -100,11 +100,9 @@ export function SceneInspection({ name, look, warm, walker, inspector, telemetry
       const adapter = device.adapterInfo
       const current = content()
       const memory = { ...renderer.info.memory }
-      for (const { texture, reportedBytes } of current?.textures?.() ?? []) {
-        if (!(texture instanceof CompressedTexture)) continue
-        const size = texture.mipmaps.reduce((sum, mip) => sum + mip.data.byteLength, 0)
-        memory.texturesSize += size - reportedBytes
-        memory.total += size - reportedBytes
+      for (const { residentBytes, reportedBytes } of current?.textures?.() ?? []) {
+        memory.texturesSize += residentBytes - reportedBytes
+        memory.total += residentBytes - reportedBytes
       }
       const snapshot = {
         version: 1,

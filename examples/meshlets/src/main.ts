@@ -30,7 +30,7 @@ async function start() {
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' })
   const adapterInfo = adapter ? { vendor: adapter.info.vendor, architecture: adapter.info.architecture, device: adapter.info.device, description: adapter.info.description } : null
   const world = await createCoastalScene(ui.status)
-  const meshlets = new MeshletScene(world.entries, { pixelError: 1, occlusion: true })
+  const meshlets = await MeshletScene.create(renderer, world.entries, { pixelError: 1, occlusion: true })
   world.scene.add(meshlets.object)
   const camera = new PerspectiveCamera(55, innerWidth / innerHeight, 0.2, 1600)
   const controls = new OrbitControls(camera, renderer.domElement)
