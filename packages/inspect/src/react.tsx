@@ -20,12 +20,14 @@ export function InspectHud({ inspector, dump, lodLegend = distanceLegend, classN
   return <section className={`bs-inspect ${className}`} aria-label="Performance inspector" onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
     <header className="bs-inspect-heading"><strong>{snapshot.renderer}</strong><span>{snapshot.tier} tier</span></header>
     <dl className="bs-inspect-metrics">
-      <div><dt>Frame p50 / p95</dt><dd>{metrics ? `${ms(metrics.p50)} / ${ms(metrics.p95)} ms` : '—'}</dd></div>
+      <div><dt>CPU p50 / p95</dt><dd>{metrics ? `${ms(metrics.cpu.p50)} / ${ms(metrics.cpu.p95)} ms` : '—'}</dd></div>
+      <div><dt>GPU p50 / p95</dt><dd>{metrics?.gpu ? `${ms(metrics.gpu.p50)} / ${ms(metrics.gpu.p95)} ms` : 'Unavailable'}</dd></div>
       <div><dt>Triangles <small>drawn / scene</small></dt><dd>{metrics ? `${count.format(metrics.drawnTriangles)} / ${count.format(metrics.sceneTriangles)}` : '—'}</dd></div>
       <div><dt>Draw calls</dt><dd>{metrics ? count.format(metrics.drawCalls) : '—'}</dd></div>
       <div><dt>Geometry culled</dt><dd>{metrics ? `${ms(metrics.culledPercent)}%` : '—'}</dd></div>
       <div><dt>GPU longest pass</dt><dd>{gpu.length ? `${ms(Math.max(...gpu.map(([, time]) => time)))} ms` : 'Unavailable'}</dd></div>
     </dl>
+    <div className="bs-inspect-fps">{metrics && <><strong>{Math.round(metrics.fps)} FPS</strong><span>display-capped</span></>}</div>
     <div className="bs-inspect-view" role="group" aria-label="Inspection controls">
       <button type="button" aria-pressed={snapshot.view === 'lod'} onClick={() => inspector.setView(snapshot.view === 'lod' ? 'lit' : 'lod')}>LOD colours</button>
       {dump && <button type="button" disabled={dump.status === 'sending'} onClick={dump.onDump}>{dump.status === 'sending' ? 'Saving…' : 'Dump stats · T'}</button>}

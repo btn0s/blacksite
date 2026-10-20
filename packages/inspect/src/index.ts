@@ -2,6 +2,7 @@ export type InspectView = 'lit' | 'lod'
 
 export type FrameSample = {
   frameMs: number
+  cpuMs: number
   sceneTriangles: number
   drawnTriangles: number
   drawCalls: number
@@ -32,7 +33,7 @@ export type InspectSnapshot = {
   tier: string
   view: InspectView
   techniques: readonly TechniqueState[]
-  metrics: (FrameSample & { p50: number; p95: number; fps: number }) | null
+  metrics: (FrameSample & { cpu: Distribution; gpu: Distribution | null; fps: number }) | null
 }
 
 export type Inspector = ReturnType<typeof createInspector>
@@ -60,6 +61,9 @@ export function createInspector(options: {
   publishIntervalMs?: number
 }) {
   const times = new Float64Array(Math.max(1, Math.floor(options.windowFrames ?? 1200)))
+  const cpuTimes = new Float64Array(times.length)
+  const gpuTimes = new Float64Array(times.length)
+  gpuTimes.fill(Number.NaN)
   const techniques = new Map<string, Technique>()
   const listeners = new Set<() => void>()
   let cursor = 0
@@ -86,15 +90,25 @@ export function createInspector(options: {
 
   function history() {
     const frameTimesMs = Array.from({ length: count }, (_, i) => times[(cursor - count + i + times.length) % times.length]!)
-    return { frameTimesMs, durationMs: windowDuration, frames: distribution(frameTimesMs) }
+    const cpuTimesMs = Array.from({ length: count }, (_, i) => cpuTimes[(cursor - count + i + times.length) % times.length]!)
+    const gpuTimesMs = Array.from({ length: count }, (_, i) => gpuTimes[(cursor - count + i + times.length) % times.length]!).filter(Number.isFinite)
+    return {
+      frameTimesMs,
+      cpuTimesMs,
+      gpuTimesMs,
+      durationMs: windowDuration,
+      frames: distribution(frameTimesMs),
+      cpu: distribution(cpuTimesMs),
+      gpu: gpuTimesMs.length ? distribution(gpuTimesMs) : null,
+    }
   }
 
   function flush() {
     if (!latest) return
-    const frames = history().frames
+    const { frames, cpu, gpu } = history()
     snapshot = {
       ...snapshot,
-      metrics: { ...latest, gpuMs: latest.gpuMs ? { ...latest.gpuMs } : undefined, p50: frames.p50, p95: frames.p95, fps: 1000 / frames.mean },
+      metrics: { ...latest, gpuMs: latest.gpuMs ? { ...latest.gpuMs } : undefined, cpu, gpu, fps: 1000 / frames.mean },
     }
     elapsed = 0
     emit()
@@ -113,10 +127,12 @@ export function createInspector(options: {
       return () => { listeners.delete(listener) }
     },
     sample(frame: FrameSample) {
-      if (!Number.isFinite(frame.frameMs) || frame.frameMs <= 0) return
+      if (!Number.isFinite(frame.frameMs) || frame.frameMs <= 0 || !Number.isFinite(frame.cpuMs) || frame.cpuMs < 0) return
       latest = frame
       if (count === times.length) windowDuration -= times[cursor]!
       times[cursor] = frame.frameMs
+      cpuTimes[cursor] = frame.cpuMs
+      gpuTimes[cursor] = frame.gpuMs ? Object.values(frame.gpuMs).reduce((sum, time) => sum + time, 0) : Number.NaN
       cursor = (cursor + 1) % times.length
       count = Math.min(count + 1, times.length)
       windowDuration += frame.frameMs

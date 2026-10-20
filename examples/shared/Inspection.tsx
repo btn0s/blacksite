@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { addAfterEffect, useFrame, useThree } from '@react-three/fiber'
 import { Frustum, Matrix4, Mesh, type Object3D, type Texture } from 'three'
 import { sampleView } from '@blacksite/check'
-import type { Inspector, Technique, InspectView } from '@blacksite/inspect'
+import type { FrameSample, Inspector, Technique, InspectView } from '@blacksite/inspect'
 import type { WebGPULook } from '@blacksite/look/webgpu'
 import type { CharacterHandle } from '@blacksite/subject'
 import type { WebGPURenderer } from 'three/webgpu'
@@ -37,9 +37,23 @@ export function SceneInspection({ name, look, warm, walker, inspector, telemetry
   const cleanup = useRef<Array<() => void>>([])
   const resumed = useRef(false)
   const previousFrame = useRef<number | null>(null)
+  const callbackStart = useRef(0)
+  const pendingSample = useRef<Omit<FrameSample, 'cpuMs'> | null>(null)
   const otherMeshes = useRef<Mesh[]>([])
   const frustum = useRef(new Frustum())
   const projection = useRef(new Matrix4())
+
+  useFrame(() => {
+    callbackStart.current = performance.now()
+    pendingSample.current = null
+  }, -Infinity)
+
+  useEffect(() => addAfterEffect(() => {
+    const frame = pendingSample.current
+    if (!frame) return
+    pendingSample.current = null
+    inspector.sample({ ...frame, cpuMs: performance.now() - callbackStart.current })
+  }), [inspector])
 
   useFrame(() => {
     const now = performance.now()
@@ -76,14 +90,14 @@ export function SceneInspection({ name, look, warm, walker, inspector, telemetry
       sceneTriangles += triangles
       if (!mesh.frustumCulled || frustum.current.intersectsObject(mesh)) drawnTriangles += triangles
     }
-    inspector.sample({
+    pendingSample.current = {
       frameMs: now - previous,
       sceneTriangles,
       drawnTriangles,
       drawCalls: renderer.info.render.drawCalls,
       culledPercent: sceneTriangles ? Math.max(0, 100 * (1 - drawnTriangles / sceneTriangles)) : 0,
       gpuMs: look.current.timings() ?? undefined,
-    })
+    }
   }, 2)
 
   useEffect(() => {

@@ -34,6 +34,8 @@
 .bs-inspect-metrics dt { color: #b9c8b9; }
 .bs-inspect-metrics dt small { font-size: 9px; }
 .bs-inspect-metrics dd { margin: 0; white-space: nowrap; }
+.bs-inspect-fps { display: flex; justify-content: flex-end; align-items: baseline; gap: 5px; margin-top: 2px; color: #b9c8b9; font-size: 9px; }
+.bs-inspect-fps strong { color: #edf3ec; font-size: 10px; }
 .bs-inspect button { font: inherit; cursor: pointer; color: inherit; }
 .bs-inspect button:disabled { cursor: default; opacity: .55; }
 .bs-inspect button:focus-visible, .bs-inspect summary:focus-visible, .bs-inspect input:focus-visible { outline: 2px solid #b9dfb3; outline-offset: 2px; }
