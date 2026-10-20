@@ -79,7 +79,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     ],
     setView: view => { geometry.setDebugView(view === 'lod' ? 'lod' : 'normal'); shared.look.current?.setDebug(view === 'lod') },
     textures: () => residentScanTextures(renderer),
-    details: () => ({ placements: owned.manifest.placements.length, uniqueMeshes: owned.uniqueMeshes, sourceTriangles: owned.sourceTriangles, meshletCount: owned.meshlets, levels: owned.levels, residentGeometryBytes: geometry.residentGeometryBytes, untranslated: owned.manifest.untranslated, ...stats }),
+    details: () => ({ placements: owned.manifest.placements.length, uniqueMeshes: owned.uniqueMeshes, sourceTriangles: owned.sourceTriangles, meshletCount: owned.meshlets, levels: owned.levels, residentGeometryBytes: geometry.residentGeometryBytes, untranslated: owned.manifest.untranslated, excluded: owned.manifest.excluded, ...stats }),
   }), [geometry, inspector, owned, renderer, shared, stats])
   useEffect(() => {
     shared.geometry.current = geometry
