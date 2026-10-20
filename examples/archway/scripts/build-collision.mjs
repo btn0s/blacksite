@@ -13,10 +13,10 @@ export async function buildCourtyardCollision(root, manifest) {
   const partial = `${destination}.partial`
   const output = await open(partial, 'w')
   const write = array => output.writeFile(Buffer.from(array.buffer, array.byteOffset, array.byteLength))
-  let triangles = 0
-  let largest = 0
+  let vertexCount = 0
+  let indexCount = 0
+  let collisionTriangles = 0
   try {
-    await write(new Uint32Array([0x434c5342, 1, manifest.placements.length, 0]))
     for (const placement of manifest.placements) {
       if (!cache.has(placement.geometry)) {
         const bytes = await readFile(join(root, manifest.geometries[placement.geometry].url))
@@ -39,21 +39,37 @@ export async function buildCourtyardCollision(root, manifest) {
         cache.set(placement.geometry, { positions, indices })
       }
       const source = cache.get(placement.geometry)
-      const positions = new Float32Array(source.positions.length), indices = source.indices.slice()
-      const matrix = new Matrix4().fromArray(placement.matrix), point = new Vector3()
-      for (let i = 0; i < positions.length; i += 3) point.fromArray(source.positions, i).applyMatrix4(matrix).toArray(positions, i)
-      if (matrix.determinant() < 0) for (let i = 0; i < indices.length; i += 3) [indices[i + 1], indices[i + 2]] = [indices[i + 2], indices[i + 1]]
-      await write(new Uint32Array([positions.length, indices.length]))
-      await write(positions)
-      await write(indices)
-      triangles += indices.length / 3
-      largest = Math.max(largest, indices.length / 3)
+      vertexCount += source.positions.length
+      indexCount += source.indices.length
     }
+    const positions = new Float32Array(vertexCount)
+    const indices = new Uint32Array(indexCount)
+    collisionTriangles = indices.length / 3
+    let vertexOffset = 0, indexOffset = 0
+    for (const placement of manifest.placements) {
+      const source = cache.get(placement.geometry)
+      const matrix = new Matrix4().fromArray(placement.matrix), point = new Vector3()
+      const reverseWinding = matrix.determinant() < 0
+      for (let i = 0; i < source.positions.length; i += 3) {
+        point.fromArray(source.positions, i).applyMatrix4(matrix).toArray(positions, vertexOffset + i)
+      }
+      for (let i = 0; i < source.indices.length; i += 3) {
+        indices[indexOffset + i] = vertexOffset / 3 + source.indices[i]
+        indices[indexOffset + i + 1] = vertexOffset / 3 + source.indices[i + (reverseWinding ? 2 : 1)]
+        indices[indexOffset + i + 2] = vertexOffset / 3 + source.indices[i + (reverseWinding ? 1 : 2)]
+      }
+      vertexOffset += source.positions.length
+      indexOffset += source.indices.length
+    }
+    await write(new Uint32Array([0x434c5342, 2, 1, 0]))
+    await write(new Uint32Array([positions.length, indices.length]))
+    await write(positions)
+    await write(indices)
   } finally {
     await output.close()
   }
   await rename(partial, destination)
-  console.log(JSON.stringify({ colliders: manifest.placements.length, collisionTriangles: triangles, largestColliderTriangles: largest }))
+  console.log(JSON.stringify({ colliders: 1, mergedPlacements: manifest.placements.length, collisionTriangles }))
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

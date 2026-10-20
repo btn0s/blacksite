@@ -17,7 +17,7 @@ type CourtyardManifest = {
   excluded: { path: string; reason: string; placements: string[] }[]
 }
 
-async function loadCourtyardColliders(url: string, count: number, { world, rapier }: Pick<RapierContext, 'world' | 'rapier'>, signal: AbortSignal) {
+async function loadCourtyardColliders(url: string, { world, rapier }: Pick<RapierContext, 'world' | 'rapier'>, signal: AbortSignal) {
   const response = await fetch(url, { signal })
   if (!response.ok || !response.body) throw new Error('The published courtyard collision is unavailable')
   const reader = response.body.getReader()
@@ -43,25 +43,22 @@ async function loadCourtyardColliders(url: string, count: number, { world, rapie
   try {
     const header = new Uint32Array(4)
     await read(new Uint8Array(header.buffer))
-    if (header[0] !== 0x434c5342 || header[1] !== 1 || header[2] !== count) throw new Error('Courtyard collision layout is invalid')
+    if (header[0] !== 0x434c5342 || header[1] !== 2 || header[2] !== 1) throw new Error('Courtyard collision layout is invalid')
     const body = world.createRigidBody(rapier.RigidBodyDesc.fixed())
     remove = () => {
       if (world.getRigidBody(body.handle)) world.removeRigidBody(body)
     }
-    for (let i = 0; i < count; i++) {
-      const counts = new Uint32Array(2)
-      await read(new Uint8Array(counts.buffer))
-      if (counts[0]! % 3 || counts[1]! % 3) throw new Error('Courtyard collider counts are invalid')
-      const vertices = new Float32Array(counts[0]!)
-      const indices = new Uint32Array(counts[1]!)
-      await read(new Uint8Array(vertices.buffer))
-      await read(new Uint8Array(indices.buffer))
-      signal.throwIfAborted()
-      world.createCollider(rapier.ColliderDesc.trimesh(vertices, indices), body).clearShapeCache()
-      vertices.buffer.transfer(0)
-      indices.buffer.transfer(0)
-      await new Promise<void>(resolve => setTimeout(resolve, 0))
-    }
+    const counts = new Uint32Array(2)
+    await read(new Uint8Array(counts.buffer))
+    if (counts[0]! % 3 || counts[1]! % 3) throw new Error('Courtyard collider counts are invalid')
+    const vertices = new Float32Array(counts[0]!)
+    const indices = new Uint32Array(counts[1]!)
+    await read(new Uint8Array(vertices.buffer))
+    await read(new Uint8Array(indices.buffer))
+    signal.throwIfAborted()
+    world.createCollider(rapier.ColliderDesc.trimesh(vertices, indices), body).clearShapeCache()
+    vertices.buffer.transfer(0)
+    indices.buffer.transfer(0)
     if (cursor !== chunk.length) throw new Error('Courtyard collision size is invalid')
     while (true) {
       const next = await reader.read()
@@ -101,7 +98,7 @@ export async function loadArchway() {
     uniqueMeshes: assets.length,
     levels: Math.max(...assets.map(asset => asset.metadata.levelCount)),
     storageSize: Math.max(meshlets * 128, candidateCount * 16, ...[...assetsByGeometry.keys()].map(index => manifest.geometries[index]!.bytes)),
-    createColliders: (context: Pick<RapierContext, 'world' | 'rapier'>, signal: AbortSignal) => loadCourtyardColliders(root + manifest.colliderUrl, manifest.placements.length, context, signal),
+    createColliders: (context: Pick<RapierContext, 'world' | 'rapier'>, signal: AbortSignal) => loadCourtyardColliders(root + manifest.colliderUrl, context, signal),
     async createGeometry(renderer: WebGPURenderer) {
       const materials = await loadScanMaterials(surfaceSet.surfaces, surfaceRoot, renderer)
       for (const missing of manifest.untranslated) materials.set(missing.path, new MeshStandardNodeMaterial({ name: `Untranslated: ${missing.path}`, visible: false }))
