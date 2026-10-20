@@ -65,3 +65,34 @@ Version 3 combines compressed resident geometry and traversal nodes. Rebuild exi
 The native builder calls upstream `clodBuildHierarchy` with node width 8. It builds a forest with one root per original DAG depth, at nodes `0..rootCount-1`. Each group appears once, avoiding DAG revisits and a group-instance visitation table. `nodeCount` and `rootCount` are recorded in metadata. A traversal node is pruned when its projected maximum group error meets the threshold; group leaves use the existing cluster self/parent cut rule. This is the upstream acceleration structure for selecting the cluster DAG.
 
 The build API accepts `{minimumError}` as a residency budget (object-space metres, default zero). Convert a world-space budget with `minimumError = worldError / maximumPlacementScale`, using the largest conservative scale among the mesh's placements. For a positive budget, groups with simplified error at or below it are removed before building the traversal BVH. Remaining references are remapped, references across the resident boundary become terminal, and vertex fetch remapping drops unused vertices without changing the vertex layout. `sourceTriangles` preserves provenance; `residentTriangles` counts the finest resident cut. Primitive ranges describe source material slots. `sourceVertices` counts the input vertices and `residentVertices` counts the shared quantized pool. Zero budget retains source detail. The budget is applied before quantization and serialization.
+
+## Page format version 4
+
+`buildMeshletPages(input, outputDirectoryFile, source, {minimumError})` uses the same native hierarchy and quantizer. `buildGltfPages(inputGltf, meshIndex, outputDirectoryFile, {minimumError})` selects authoritative component-local geometry without applying scene-node transforms. A `.directory` and sibling `.pages` pack replace a resident `.meshlets` file for this build contract. Existing resident APIs and version-3 assets keep their format; no runtime loads version 4 yet.
+
+All fields are little endian. Each page contains whole groups from one geometry, one original DAG depth and one pin class. Groups are packed deterministically by depth, pin class and group id. Every terminal group is pinned, including early terminals. A mesh-wide quantization lattice and the original packed vertex tuples are preserved across pages. Boundary duplication is measured as page-local vertices minus unique resident vertices. The compiler rejects groups above 21 clusters, clusters above 128 vertices or triangles, and any page above 131,072 bytes. The maximum 28-byte vertex contract bounds a standalone group at 97,440 payload bytes plus a 64-byte header and at most 36 bytes of section alignment.
+
+Page packs concatenate compact, 16-byte-aligned page ranges; unused physical-slot bytes are absent on the wire. The directory records every range and SHA256. A page occupies one 128 KiB physical arena slot regardless of its wire size. A 64-byte page header contains sixteen u32 words:
+
+| Word | Value |
+| --- | --- |
+| 0–3 | Magic `0x504d5342`, version 4, geometry-local page id, wire bytes |
+| 4–9 | Original DAG depth, pinned flag, local vertex count, reference count, packed index bytes, cluster count |
+| 10–15 | Vertex/reference/index/cluster byte offsets, vertex stride in bytes, whole group count |
+
+Vertices retain the resident packed layout. References are page-local vertex indices; triangle indices remain meshlet-local bytes, padded to four bytes per cluster. Cluster records use the existing 160-byte GPU layout: words 0–3 culling sphere; 4–13 self/parent LOD spheres and errors; 14 material; 15 refined group or `0xffffffff`; 16 page-relative index byte offset; 17 index count; 18 original DAG depth; 19 page-relative reference word offset; 20–31 quantization; 32 page-relative vertex word base; 33 vertex word stride; 34–35 colour/UV1 attribute slots; 36–39 UV1 bounds. Spheres include the same half-quantization-diagonal inflation as the resident upload. Add the physical page base to page-relative addresses.
+
+A geometry directory starts with the resident format's 32-byte header and 16-byte section-directory entries, using magic `0x44475342` and version 4. UTF-8 JSON metadata includes builder provenance, ranges/hashes and exact census counts. Sections are aligned to sixteen bytes:
+
+| Section id | Contents |
+| --- | --- |
+| 0 | 32 bytes/group: sphere xyzw and error as f32, then page id, page-local first cluster and cluster count as u32 |
+| 1–2 | Finer dependency CSR: `groupCount + 1` u32 offsets, then u32 group ids |
+| 3–4 | All coarser reverse dependencies in the same CSR layout |
+| 5–6 | Existing node data (16 bytes/node) and conservative bounds/error (32 bytes/node) |
+| 7 | 16 bytes/page: pack byte offset low/high u32, wire bytes, pinned flag |
+| 8 | u32 ids of every terminal/coarsest group |
+
+After error pruning, only populated depth rows are passed to `clodBuildHierarchy`, with dense row numbers in that temporary input. The first `rootCount` nodes root the retained rows. Pages, clusters and DAG edges retain their original depths and ids. This satisfies the upstream builder's nonempty-row contract when pruning removes entire fine rows. Every group appears exactly once in the forest.
+
+`verifyGeometryPages(path)` reads the written directory and pack, checks hashes/ranges, whole-group coverage, pin closure, both dependency directions, eight-wide BVH coverage, every packed triangle/reference address, and exact byte totals. It is part of the bake, and can read the artifacts independently afterward.

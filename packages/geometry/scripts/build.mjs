@@ -9,6 +9,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { cloneDocument } from '@gltf-transform/functions'
 import { MeshoptDecoder } from 'meshoptimizer'
 import { Matrix3, Matrix4, Vector3 } from 'three'
+import { packPageDirectory, readNativePages, verifyGeometryPages } from './pages.mjs'
 
 const revision = 'f0a684f11ead064e176775c9b796f82a55910e92'
 const archiveSha256 = '52cec854745cd6b39531e07161a2224778700bdc7c8f0e2d8bc8825efde8af1a'
@@ -223,7 +224,10 @@ function prepareGeometry(input) {
   return { positions, normals, uvs, secondaryUvs, colors, sourceIndices, vertices, primitives, materials, bounds }
 }
 
-export async function buildMeshletGeometry(input, outputArgument, source, budget = {}) {
+export const buildMeshletGeometry = (input, output, source, budget = {}) => buildGeometry(input, output, source, budget, false)
+export const buildMeshletPages = (input, output, source, budget = {}) => buildGeometry(input, output, source, budget, true)
+
+async function buildGeometry(input, outputArgument, source, budget, paged) {
   const outputPath = resolve(outputArgument)
   const started = performance.now()
   const executable = await getNativeBuilder()
@@ -236,8 +240,35 @@ export async function buildMeshletGeometry(input, outputArgument, source, budget
     await writeFile(join(work, 'input.bin'), sourceData)
     const minimumError = budget.minimumError ?? 0
     if (!Number.isFinite(minimumError) || minimumError < 0) throw new Error('Minimum resident error must be finite and nonnegative')
-    await run(executable, [join(work, 'input.bin'), join(work, 'output.bin'), String(minimumError)])
+    await run(executable, [join(work, 'input.bin'), join(work, 'output.bin'), String(minimumError), ...(paged ? [join(work, 'pages.bin')] : [])])
     const nativeOutput = await readFile(join(work, 'output.bin'))
+    if (paged) {
+      const { stats, arrays } = readNativePages(nativeOutput)
+      const pageData = await readFile(join(work, 'pages.bin'))
+      const pages = Array.from({ length: stats.pageCount }, (_, i) => {
+        const offset = arrays.pages[i * 4] + arrays.pages[i * 4 + 1] * 4294967296
+        const bytes = arrays.pages[i * 4 + 2]
+        return { offset, bytes, pinned: Boolean(arrays.pages[i * 4 + 3]), sha256: sha256(pageData.subarray(offset, offset + bytes)) }
+      })
+      const metadata = {
+        version: 4, name: input.name ?? basename(outputPath, '.directory'), minimumError,
+        sourceTriangles: geometry.sourceIndices.length / 3, sourceVertices: geometry.positions.length / 3,
+        residentTriangles: stats.residentIndices / 3, vertexStride: stats.vertexWords * 4,
+        colorBits: geometry.colors ? 8 : 0, vertexAttributes: { ...(geometry.colors ? { color: 5 } : {}), ...(geometry.secondaryUvs ? { uv1: 5 + Number(Boolean(geometry.colors)) } : {}) },
+        bounds: geometry.bounds, primitives: geometry.primitives, materials: geometry.materials,
+        pageCapacity: 131072, pagePack: `${basename(outputPath, '.directory')}.pages`, pages, ...stats,
+        builder: { project: 'https://github.com/zeux/meshoptimizer', revision, archiveSha256, configuration },
+        source: source ?? { sha256: sha256(sourceData), bytes: sourceData.byteLength },
+      }
+      const packed = packPageDirectory(metadata, arrays)
+      await mkdir(dirname(outputPath), { recursive: true })
+      await writeFile(join(dirname(outputPath), metadata.pagePack), pageData)
+      await writeFile(outputPath, packed)
+      const verification = await verifyGeometryPages(outputPath)
+      const result = { metadata, verification, output: outputPath, bytes: packed.byteLength + pageData.byteLength, seconds: (performance.now() - started) / 1000 }
+      console.log(JSON.stringify({ output: outputPath, bytes: result.bytes, ...stats, seconds: result.seconds }))
+      return result
+    }
     const buffer = nativeOutput.buffer.slice(nativeOutput.byteOffset, nativeOutput.byteOffset + nativeOutput.byteLength)
     const data = new Uint32Array(buffer, 0, 12)
     if (data[0] !== 0x4f475342) throw new Error('Native builder output signature is invalid')
@@ -273,6 +304,26 @@ export async function buildMeshletGeometry(input, outputArgument, source, budget
   } finally {
     await rm(work, { recursive: true, force: true })
   }
+}
+
+export async function buildGltfPages(inputArgument, meshIndex, outputArgument, budget = {}) {
+  const inputPath = resolve(inputArgument)
+  await MeshoptDecoder.ready
+  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.decoder': MeshoptDecoder })
+  const document = await io.read(inputPath)
+  const root = document.getRoot()
+  const mesh = root.listMeshes()[meshIndex]
+  if (!mesh) throw new Error(`Missing component-local mesh ${meshIndex}: ${inputPath}`)
+  const entries = mesh.listPrimitives().map(primitive => {
+    if (primitive.getMode() !== 4 || primitive.listTargets().length) throw new Error('The geometry builder accepts static triangle primitives only')
+    const position = primitive.getAttribute('POSITION')
+    if (!position) throw new Error('A primitive has no positions')
+    return { primitive, matrix: new Matrix4(), count: position.getCount() }
+  })
+  const geometry = geometryFromEntries(entries, root.listMaterials())
+  const source = await readFile(inputPath)
+  return buildMeshletPages({ name: mesh.getName(), ...geometry, indices: geometry.sourceIndices }, outputArgument,
+    { sha256: sha256(source), bytes: source.byteLength, meshIndex }, budget)
 }
 
 async function writeDocumentMaterials(document, outputPath) {
