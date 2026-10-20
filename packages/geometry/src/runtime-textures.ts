@@ -110,25 +110,27 @@ export class ClusterTextureFeedback {
     this.gather = Fn(() => {
       If(instanceIndex.lessThan(min(counters.element(10), uint(visibleAttribute.count))), () => {
         const selected = visible.element(instanceIndex).toVar()
-        const cluster = readCluster(selected.x)
-        const instance = readInstance(selected.y)
-        const localDensity = densities.element(selected.x).toVar()
-        const center = world.mul(instance.transform).mul(vec4(cluster.bounds.xyz, 1)).xyz
-        const scale = instance.scale.x.mul(worldScale)
-        const distance = max(eye.sub(center).length().sub(cluster.bounds.w.mul(scale)), 0.01)
-        const pixelsPerWorld = projection.div(distance)
-        const range = materialRanges.element(selected.w).toVar()
-        Loop({ start: uint(0), end: range.y, type: 'uint', condition: '<' }, ({ i }) => {
-          const binding = bindings.element(range.x.add(i)).toVar()
-          const uv = uint(binding.y)
-          const extent = float(1).toVar()
-          If(uv.lessThan(2), () => {
-            extent.assign(localDensity.element(uv).mul(scale))
+        If(selected.z.notEqual(0xffffffff), () => {
+          const cluster = readCluster(selected.x)
+          const instance = readInstance(selected.y)
+          const localDensity = densities.element(selected.x).toVar()
+          const center = world.mul(instance.transform).mul(vec4(cluster.bounds.xyz, 1)).xyz
+          const scale = instance.scale.x.mul(worldScale)
+          const distance = max(eye.sub(center).length().sub(cluster.bounds.w.mul(scale)), 0.01)
+          const pixelsPerWorld = projection.div(distance)
+          const range = materialRanges.element(selected.w).toVar()
+          Loop({ start: uint(0), end: range.y, type: 'uint', condition: '<' }, ({ i }) => {
+            const binding = bindings.element(range.x.add(i)).toVar()
+            const uv = uint(binding.y)
+            const extent = float(1).toVar()
+            If(uv.lessThan(2), () => {
+              extent.assign(localDensity.element(uv).mul(scale))
+            })
+            If(binding.w.greaterThan(0), () => { extent.divAssign(clamp(instance.transform.element(0).xyz.length(), 0.5, 10)) })
+            const required = pixelsPerWorld.mul(extent).div(max(abs(binding.z), 0.000001)).mul(1.25)
+            const mip = uint(clamp(floor(log2(float(2048).div(max(required, 1)))), 0, 3))
+            atomicMin(snapshot.element(uint(counterCount).add(uint(binding.x))), mip)
           })
-          If(binding.w.greaterThan(0), () => { extent.divAssign(clamp(instance.transform.element(0).xyz.length(), 0.5, 10)) })
-          const required = pixelsPerWorld.mul(extent).div(max(abs(binding.z), 0.000001)).mul(1.25)
-          const mip = uint(clamp(floor(log2(float(2048).div(max(required, 1)))), 0, 3))
-          atomicMin(snapshot.element(uint(counterCount).add(uint(binding.x))), mip)
         })
       })
     })().computeKernel([64]).setName('Selected cluster texture demand')
