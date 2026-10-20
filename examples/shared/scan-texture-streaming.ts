@@ -36,8 +36,9 @@ export class ScanTextureStreaming {
   readonly resident: Allocation[] = []
   readonly images: ScanTexture[] = []
   readonly bindings = new Map<object, readonly TextureDemandBinding[]>()
+  private readonly bindingVersions = new Map<object, number>()
   readonly feedback: MeshletTextureFeedback = {
-    imageCount: 0, materials: this.bindings, ledger: this.ledger, frame: 0, bindingVersion: 0,
+    imageCount: 0, materials: this.bindings, ledger: this.ledger, frame: 0, bindingVersions: this.bindingVersions,
     consume: (mips, serial) => {
       if (serial <= this.completed || this.disposed) return
       this.completed = serial
@@ -188,7 +189,9 @@ export class ScanTextureStreaming {
           image.allocation = allocation
           image.tail = tail
           for (const node of image.nodes) node.value = texture
-          this.feedback.bindingVersion++
+          for (const [material, bindings] of this.bindings) {
+            if (bindings.some(binding => binding.image === image.id)) this.bindingVersions.set(material, (this.bindingVersions.get(material) ?? 0) + 1)
+          }
         } finally { this.decoding.release(pending.staging) }
         return
       }

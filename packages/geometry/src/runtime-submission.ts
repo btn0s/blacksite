@@ -1,4 +1,4 @@
-import { Box3, BundleGroup, Frustum, Matrix4, Vector2, Vector3 } from 'three/webgpu'
+import { Box3, BundleGroup, Frustum, Group, Matrix4, Vector2, Vector3 } from 'three/webgpu'
 import type { Camera, Mesh, Scene, WebGPURenderer } from 'three/webgpu'
 
 export type GeometryPass = 'lit' | 'depth' | 'shadow'
@@ -61,13 +61,12 @@ export class MaterialCoverage {
 }
 
 export class MaterialSubmission {
-  readonly lit = new BundleGroup()
-  readonly depth = new BundleGroup()
-  readonly shadow = new BundleGroup()
-  private readonly records: { group: BundleGroup; mesh: Mesh; first: number; count: number }[] = []
+  readonly lit = new Group()
+  readonly depth = new Group()
+  readonly shadow = new Group()
+  private readonly records: { pass: Group; bundle: BundleGroup; mesh: Mesh; first: number; count: number; material: object | null; bindingVersion: number }[] = []
   private readonly masks: Uint32Array[]
   private readonly union: Uint32Array
-  private bindingVersion = 0
   private readonly viewport = new Vector2()
 
   constructor(private readonly coverage: MaterialCoverage) {
@@ -78,10 +77,15 @@ export class MaterialSubmission {
     this.shadow.name = 'Cluster sun-shadow selection'
   }
 
-  add(group: BundleGroup, mesh: Mesh, first: number, count = 1) {
+  add(pass: Group, mesh: Mesh, first: number, count: number, material: object | null) {
     mesh.matrixAutoUpdate = false
-    group.add(mesh)
-    this.records.push({ group, mesh, first, count })
+    const bundle = new BundleGroup()
+    bundle.name = mesh.name
+    bundle.matrixAutoUpdate = false
+    bundle.layers.mask = mesh.layers.mask
+    bundle.add(mesh)
+    pass.add(bundle)
+    this.records.push({ pass, bundle, mesh, first, count, material, bindingVersion: 0 })
   }
 
   initialize(renderer: WebGPURenderer) {
@@ -91,26 +95,27 @@ export class MaterialSubmission {
 
   async compile(renderer: WebGPURenderer, camera: Camera, scene: Scene, pass: GeometryPass) {
     for (const record of this.records) {
-      if (record.group !== this[pass]) continue
+      if (record.pass !== this[pass]) continue
       const visible = record.mesh.visible
       record.mesh.visible = true
       try { await renderer.compileAsync(record.mesh, camera, scene) }
       finally { record.mesh.visible = visible }
+      record.bundle.needsUpdate = true
     }
-    this[pass].needsUpdate = true
   }
 
-  updateBindings(version: number, viewport: Readonly<Vector2>) {
-    if (this.bindingVersion === version && this.viewport.equals(viewport)) return
-    this.bindingVersion = version
+  updateBindings(versions: ReadonlyMap<object, number> | undefined, viewport: Readonly<Vector2>) {
+    const resized = !this.viewport.equals(viewport)
     this.viewport.copy(viewport)
-    this.invalidate()
+    for (const record of this.records) {
+      const version = record.material ? versions?.get(record.material) ?? 0 : 0
+      if (resized || record.bindingVersion !== version) record.bundle.needsUpdate = true
+      record.bindingVersion = version
+    }
   }
 
-  private invalidate() {
-    this.lit.needsUpdate = true
-    this.depth.needsUpdate = true
-    this.shadow.needsUpdate = true
+  disposeGeometry(pass: GeometryPass) {
+    for (const record of this.records) if (record.pass === this[pass]) record.mesh.geometry.dispose()
   }
 
   update(frustum: Frustum, world: Matrix4, view: number) {
@@ -125,8 +130,7 @@ export class MaterialSubmission {
     for (const record of this.records) {
       let visible = false
       for (let material = record.first; material < record.first + record.count; material++) if (this.union[material >>> 5]! & (1 << (material & 31))) { visible = true; break }
-      record.mesh.visible = visible
+      record.bundle.visible = visible
     }
-    this.invalidate()
   }
 }
