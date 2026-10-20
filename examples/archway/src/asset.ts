@@ -1,16 +1,17 @@
 import { Matrix4 } from 'three'
 import { MeshStandardNodeMaterial, type WebGPURenderer } from 'three/webgpu'
 import type { RapierContext } from '@react-three/rapier'
-import { loadMeshletAsset, meshletStorageSize, MeshletScene, type MeshletAssetSource, type MeshletMetadata, type MeshletSceneEntry } from '@blacksite/geometry'
+import { GEOMETRY_ARENA_BYTES, loadGeometryPageSource, MeshletScene, type GeometryPageSource, type MeshletSceneEntry } from '@blacksite/geometry'
 import { loadScanMaterials, scanTextureFeedback, type ScanSurface } from '../../shared/scan-material'
 
 const root = '/owned/dark-ruins/'
 type EnvironmentComponent = { class: string; transform: { position: number[]; matrix: number[] }; properties: Record<string, unknown> }
 type CourtyardManifest = {
+  version: number
   centre: [number, number, number]
   surfacesUrl: string
   colliderUrl: string
-  geometries: { url: string; metadata: MeshletMetadata; bytes: number }[]
+  geometries: { url: string }[]
   placements: { name: string; visible: boolean; geometry: number; materials: string[]; matrix: number[]; componentClass: string }[]
   environment: EnvironmentComponent[]
   untranslated: { path: string; parent: string | null; placements: string[] }[]
@@ -80,15 +81,20 @@ export async function loadArchway() {
   const manifestResponse = await fetch(root + 'courtyard.json')
   if (!manifestResponse.ok) throw new Error('Build the owned courtyard assets before opening this example')
   const manifest: CourtyardManifest = await manifestResponse.json()
+  if (manifest.version !== 5) throw new Error('The courtyard requires its version 5 page build')
   const surfacesResponse = await fetch(root + manifest.surfacesUrl)
   if (!surfacesResponse.ok) throw new Error('The published courtyard asset set is incomplete')
   const surfaceSet: { surfaces: ScanSurface[] } = await surfacesResponse.json()
   const surfaceRoot = root + manifest.surfacesUrl.slice(0, manifest.surfacesUrl.lastIndexOf('/') + 1)
-  const assetsByGeometry = new Map<number, MeshletAssetSource>()
-  for (const index of new Set(manifest.placements.map(placement => placement.geometry))) {
-    const source = manifest.geometries[index]!
-    assetsByGeometry.set(index, { metadata: source.metadata, load: () => loadMeshletAsset(root + source.url) })
-  }
+  const assetsByGeometry = new Map<number, GeometryPageSource>()
+  const geometryIds = [...new Set(manifest.placements.map(placement => placement.geometry))]
+  let cursor = 0
+  await Promise.all(Array.from({ length: 4 }, async () => {
+    while (cursor < geometryIds.length) {
+      const index = geometryIds[cursor++]!
+      assetsByGeometry.set(index, await loadGeometryPageSource(root + manifest.geometries[index]!.url))
+    }
+  }))
   const assets = [...assetsByGeometry.values()]
   const sourceTriangles = assets.reduce((sum, asset) => sum + asset.metadata.sourceTriangles, 0)
   const meshlets = assets.reduce((sum, asset) => sum + asset.metadata.clusterCount, 0)
@@ -96,7 +102,7 @@ export async function loadArchway() {
     manifest, sourceTriangles, meshlets,
     uniqueMeshes: assets.length,
     levels: Math.max(...assets.map(asset => asset.metadata.levelCount)),
-    storageSize: Math.max(meshletStorageSize(assets.map(asset => asset.metadata)), 16_000_000 * 6),
+    storageSize: GEOMETRY_ARENA_BYTES,
     createColliders: (context: Pick<RapierContext, 'world' | 'rapier'>, signal: AbortSignal) => loadCourtyardColliders(root + manifest.colliderUrl, context, signal),
     async createGeometry(renderer: WebGPURenderer) {
       const materials = await loadScanMaterials(surfaceSet.surfaces, surfaceRoot, renderer)

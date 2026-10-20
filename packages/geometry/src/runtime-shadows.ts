@@ -48,8 +48,9 @@ export class ClusterShadows {
     await this.traversal.upload(renderer)
   }
 
-  async readStats(renderer: WebGPURenderer) {
-    const values = new Uint32Array(await renderer.getArrayBufferAsync(this.traversal.counters))
+  get counters() { return this.traversal.counters }
+
+  readStats(values: Uint32Array) {
     if (values[20]) throw new Error(`Shadow selection exceeded its hierarchy capacity: ${values[20]}`)
     return this.traversal.indices.readStats(values)
   }

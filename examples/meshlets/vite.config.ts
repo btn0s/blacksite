@@ -4,6 +4,7 @@ import { realpathSync } from 'node:fs'
 
 export default defineConfig({
   root: import.meta.dirname,
+  worker: { format: 'es' },
   resolve: { dedupe: ['three'] },
   server: {
     host: '0.0.0.0',

@@ -38,7 +38,7 @@ export class ScanTextureStreaming {
   readonly bindings = new Map<object, readonly TextureDemandBinding[]>()
   private readonly bindingVersions = new Map<object, number>()
   readonly feedback: MeshletTextureFeedback = {
-    imageCount: 0, materials: this.bindings, ledger: this.ledger, frame: 0, bindingVersions: this.bindingVersions,
+    imageCount: 0, materials: this.bindings, ledger: this.ledger, cpuStaging: this.decoding, frame: 0, bindingVersions: this.bindingVersions,
     consume: (mips, serial) => {
       if (serial <= this.completed || this.disposed) return
       this.completed = serial
@@ -148,19 +148,19 @@ export class ScanTextureStreaming {
     this.cancelled++
   }
 
-  update() {
-    if (this.disposed) return
+  update(deadline = performance.now() + 0.5, allowance = uploadLimit): number {
+    if (this.disposed) return 0
     const start = performance.now()
     this.uploadBytes = 0
     for (let i = this.uploads.length - 1; i >= 0; i--) {
-      if (performance.now() - start >= 0.5) return
+      if (performance.now() >= deadline) return 0
       const upload = this.uploads[i]!
       if (upload.serial > this.completed) continue
       this.ledger.release(upload.owner)
       this.uploads.splice(i, 1)
     }
     for (let i = this.retiring.length - 1; i >= 0; i--) {
-      if (performance.now() - start >= 0.5) return
+      if (performance.now() >= deadline) return 0
       const entry = this.retiring[i]!
       if (entry.serial > this.completed) continue
       this.release(entry.allocation)
@@ -170,6 +170,7 @@ export class ScanTextureStreaming {
     if (pending) {
       if (pending.image.target !== pending.tail) this.cancel(pending)
       else if (pending.texture) {
+        if (pending.bytes > allowance || performance.now() >= deadline) return 0
         this.pending = null
         const { image, tail, texture } = pending
         this.ledger.release(pending)
@@ -193,10 +194,10 @@ export class ScanTextureStreaming {
             if (bindings.some(binding => binding.image === image.id)) this.bindingVersions.set(material, (this.bindingVersions.get(material) ?? 0) + 1)
           }
         } finally { this.decoding.release(pending.staging) }
-        return
+        return this.uploadBytes
       }
     }
-    if (this.pending || performance.now() - start >= 0.5) return
+    if (this.pending || performance.now() >= deadline) return 0
     let next: ScanTexture | null = null
     for (const image of this.images) {
       if (image.target === image.tail || start < image.retryAt) continue
@@ -207,14 +208,14 @@ export class ScanTextureStreaming {
       if (bytes + spare / 2 > this.ledger.available('textures') || bytes > this.ledger.available('staging') || stagingBytes > this.decoding.available() || bytes * 2 + spare > this.ledger.available()) continue
       if (!next || image.target.size < image.tail.size || image.target.size / image.tail.size > next.target.size / next.tail.size) next = image
     }
-    if (!next || performance.now() - start >= 0.5) return
+    if (!next || performance.now() >= deadline) return 0
     const tail = next.target
     const bytes = textureBytes(tail, next.allocation.texture)
     const request: Request = { image: next, tail, controller: new AbortController(), texture: null, staging: {}, upload: {}, bytes }
     const stagingBytes = tail.wireBytes + Math.ceil(tail.width * tail.height * 4 * 4 / 3) * 2
-    if (!this.ledger.reserve(request, 'textures', bytes)) return
-    if (!this.ledger.reserve(request.upload, 'staging', bytes)) { this.ledger.release(request); return }
-    if (!this.decoding.reserve(request.staging, 'decoded', stagingBytes)) { this.ledger.release(request); this.ledger.release(request.upload); return }
+    if (!this.ledger.reserve(request, 'textures', bytes)) return 0
+    if (!this.ledger.reserve(request.upload, 'staging', bytes)) { this.ledger.release(request); return 0 }
+    if (!this.decoding.reserve(request.staging, 'decoded', stagingBytes)) { this.ledger.release(request); this.ledger.release(request.upload); return 0 }
     this.pending = request
     void this.decode(tail, request.controller.signal).then(texture => {
       if (this.disposed || this.pending !== request || request.controller.signal.aborted) {
@@ -231,6 +232,7 @@ export class ScanTextureStreaming {
         console.warn('Texture tail unavailable; retaining the resident tail', error)
       }
     })
+    return 0
   }
 
   snapshot() {

@@ -80,10 +80,13 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   }, [geometry, look])
   useFrame(() => {
     if (!look) return
-    if (shared.warm.current >= 10) textures.update()
+    const deadline = performance.now() + 0.5
+    const uploaded = shared.warm.current >= 10 ? textures.update(deadline) : 0
+    geometry.update(renderer, deadline, 8 * 1048576 - uploaded)
     shared.warm.current++
     if (shared.warm.current === 10) onReady()
   }, 0.5)
+  useFrame(() => { if (look) geometry.endFrame(renderer) }, 2)
   useEffect(() => {
     let pending = false
     const interval = setInterval(() => {
@@ -137,7 +140,7 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
   const renderer = useCallback(async (props: object) => {
     if (!navigator.gpu) throw new Error('WebGPU is required for Dark Ruins')
     const storageSize = owned.largestBuffer
-    const gl = new WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', trackTimestamp: true, requiredLimits: { maxStorageBufferBindingSize: storageSize, maxBufferSize: storageSize } })
+    const gl = new WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', trackTimestamp: true, requiredLimits: { maxStorageBufferBindingSize: storageSize, maxBufferSize: storageSize, maxStorageBuffersPerShaderStage: 12 } })
     await gl.init()
     if (!gl.backend.isWebGPUBackend) throw new Error('A WebGPU adapter is required')
     try { setGeometry(await owned.createGeometry(gl)) }

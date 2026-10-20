@@ -1,24 +1,28 @@
 import type { Node, StorageBufferAttribute, StorageBufferNode } from 'three/webgpu'
-import { If, abs, float, int, mat4, max, storage, uintBitsToFloat, vec2, vec3, vec4 } from 'three/tsl'
-import { CLUSTER_RECORD_WORDS } from './runtime-data'
+import { If, abs, float, int, mat4, max, storage, uint, uintBitsToFloat, uvec4, vec2, vec3, vec4 } from 'three/tsl'
+import { GEOMETRY_PAGE_BYTES } from './page-residency'
 
 export function clusterReader(attribute: StorageBufferAttribute) {
-  const data = storage(attribute, 'uvec4', attribute.count).toReadOnly()
+  const data = storage(attribute, 'uint', attribute.count).toReadOnly()
   return (index: Node<'uint'>) => {
-    const offset = index.mul(CLUSTER_RECORD_WORDS / 4)
+    const base = index.div(GEOMETRY_PAGE_BYTES / 4).mul(GEOMETRY_PAGE_BYTES / 4)
+    const record = (offset: number) => uvec4(...[0, 1, 2, 3].map(i => data.element(index.add(offset * 4 + i))) as [Node<'uint'>, Node<'uint'>, Node<'uint'>, Node<'uint'>])
+    const draw = record(4)
+    const layout = record(8)
     return {
-      bounds: uintBitsToFloat(data.element(offset)),
-      selfSphere: uintBitsToFloat(data.element(offset.add(1))),
-      parentSphere: uintBitsToFloat(data.element(offset.add(2))),
-      errors: uintBitsToFloat(data.element(offset.add(3))).xy,
-      material: data.element(offset.add(3)).z,
-      refinedGroup: data.element(offset.add(3)).w,
-      draw: data.element(offset.add(4)),
-      origin: uintBitsToFloat(data.element(offset.add(5))),
-      step: uintBitsToFloat(data.element(offset.add(6))),
-      uvBounds: uintBitsToFloat(data.element(offset.add(7))),
-      vertexLayout: data.element(offset.add(8)),
-      secondaryUvBounds: uintBitsToFloat(data.element(offset.add(9))),
+      bounds: uintBitsToFloat(record(0)),
+      selfSphere: uintBitsToFloat(record(1)),
+      parentSphere: uintBitsToFloat(record(2)),
+      errors: uintBitsToFloat(record(3)).xy,
+      material: record(3).z,
+      refinedGroup: record(3).w,
+      draw: uvec4(draw.x.add(base.mul(4)), draw.yz, draw.w.add(base)),
+      origin: uintBitsToFloat(record(5)),
+      tangentOffset: data.element(index.add(23)),
+      step: uintBitsToFloat(record(6)),
+      uvBounds: uintBitsToFloat(record(7)),
+      vertexLayout: uvec4(layout.x.add(base), layout.yzw),
+      secondaryUvBounds: uintBitsToFloat(record(9)),
     }
   }
 }
@@ -47,7 +51,9 @@ export function vertexReader(data: StorageBufferNode<'uint'>) {
     const offset = layout.x.add(index.mul(layout.y)).toVar()
     const xy = data.element(offset)
     const zw = data.element(offset.add(1))
-    const uv = data.element(offset.add(3))
+    const normalUv = data.element(offset.add(2))
+    const uvFlags = data.element(offset.add(3))
+    const flags = uvFlags.shiftRight(16)
     const color = vec4(1).toVar()
     If(layout.z.greaterThan(0), () => {
       const rgba = data.element(offset.add(layout.z))
@@ -60,10 +66,10 @@ export function vertexReader(data: StorageBufferNode<'uint'>) {
     })
     return {
       position: vec3(float(xy.bitAnd(65535)), float(xy.shiftRight(16)), float(zw.bitAnd(65535))).mul(cluster.step.xyz).add(cluster.origin.xyz),
-      normal: oct(data.element(offset.add(2))),
-      uv: vec2(float(uv.bitAnd(65535)), float(uv.shiftRight(16))).div(65535).mul(cluster.uvBounds.zw).add(cluster.uvBounds.xy),
-      tangent: oct(data.element(offset.add(4))),
-      handedness: float(int(zw).shiftRight(16)).div(32767),
+      normal: oct(zw.shiftRight(16).bitOr(normalUv.shiftLeft(16))),
+      uv: vec2(float(normalUv.shiftRight(16)), float(uvFlags.bitAnd(65535))).div(65535).mul(cluster.uvBounds.zw).add(cluster.uvBounds.xy),
+      tangent: oct(data.element(offset.add(cluster.tangentOffset))),
+      handedness: flags.bitAnd(1).equal(0).select(float(1), float(-1)),
       color,
       secondaryUv,
     }

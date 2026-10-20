@@ -15,11 +15,11 @@ export function clusterGeometry(indices: StorageBufferAttribute, counters: Indir
 }
 
 export function clusterVertex(packed: PackedMeshletScene, visibleAttribute: StorageBufferAttribute, debug: Node<'uint'> = uint(0)) {
-  const readCluster = clusterReader(packed.clusters)
+  const readCluster = clusterReader(packed.arena.attribute)
   const readInstance = instanceReader(packed.instances)
-  const vertices = storage(packed.vertices, 'uint', packed.vertices.count).toReadOnly()
+  const vertices = storage(packed.arena.attribute, 'uint', packed.arena.attribute.count).toReadOnly()
   const readVertex = vertexReader(vertices)
-  const references = storage(packed.vertexReferences, 'uint', packed.vertexReferences.count).toReadOnly()
+  const references = vertices
   const visible = storage(visibleAttribute, 'uvec4', visibleAttribute.count).toReadOnly()
   const uv = varyingProperty('vec2', 'geometryUv')
   const color = varyingProperty('vec3', 'geometryClusterColor')

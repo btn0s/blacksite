@@ -18,7 +18,7 @@ type GpuSample = { render: number; compute: number; total: number }
 
 async function start() {
   if (!navigator.gpu) throw new Error('This scene requires a browser with WebGPU, served over HTTPS or localhost.')
-  const renderer = new WebGPURenderer({ antialias: false, trackTimestamp: true, powerPreference: 'high-performance' })
+  const renderer = new WebGPURenderer({ antialias: false, trackTimestamp: true, powerPreference: 'high-performance', requiredLimits: { maxStorageBuffersPerShaderStage: 12 } })
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5))
   renderer.setSize(innerWidth, innerHeight)
   renderer.toneMapping = ACESFilmicToneMapping
@@ -118,7 +118,9 @@ async function start() {
       if (frameIntervals.length > 180) frameIntervals.shift()
     }
     camera.updateMatrixWorld()
+    meshlets.update(renderer)
     post.render()
+    meshlets.endFrame(renderer)
     if (timestamps && !gpuPending) {
       gpuPending = true
       Promise.all([renderer.resolveTimestampsAsync('render'), renderer.resolveTimestampsAsync('compute')]).then(([renderMs, computeMs]) => {

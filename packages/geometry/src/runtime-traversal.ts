@@ -1,6 +1,6 @@
 import { IndirectStorageBufferAttribute, StorageBufferAttribute } from 'three/webgpu'
 import type { ComputeNode, Node, WebGPURenderer } from 'three/webgpu'
-import { Fn, If, Loop, atomicAdd, atomicLoad, atomicStore, bool, dot, instanceIndex, max, min, storage, uint, uintBitsToFloat, uvec2, uvec4, vec4 } from 'three/tsl'
+import { Fn, If, Loop, array, atomicAdd, atomicLoad, atomicMax, atomicStore, bool, dot, floatBitsToUint, instanceIndex, max, min, storage, uint, uintBitsToFloat, uvec2, uvec4, vec4 } from 'three/tsl'
 import { DRAW_ARGUMENT_OFFSET, DRAW_ARGUMENT_STRIDE, FRONTIER_CAPACITY, GROUP_CAPACITY, SELECTED_CAPACITY, SELECTION_WORK_BUDGET, uploadAttributes, type PackedMeshletScene } from './runtime-data'
 import { clusterReader, instanceReader } from './runtime-layout'
 import { ClusterIndices } from './runtime-indices'
@@ -44,7 +44,15 @@ export class ClusterTraversal {
     const bounds = storage(packed.instanceBounds, 'vec4', packed.instanceCount).toReadOnly()
     const materials = storage(packed.materialMap, 'uint', packed.materialMap.count).toReadOnly()
     const readInstance = instanceReader(packed.instances)
-    const readCluster = clusterReader(packed.clusters)
+    const readCluster = clusterReader(packed.arena.attribute)
+    const arena = storage(packed.arena.attribute, 'uint', packed.arena.attribute.count).toReadOnly()
+    const groups = storage(packed.groups, 'uvec4', packed.groups.count).toReadOnly()
+    const pages = storage(packed.arena.table, 'uvec4', packed.arena.table.count).toReadOnly()
+    const activity = storage(packed.arena.activity, 'uint', packed.arena.activity.count).toAtomic()
+    const spatial = storage(packed.coverage.spatial, 'uvec4', packed.coverage.spatial.count).toReadOnly()
+    const spatialRoots = storage(packed.coverage.spatialRoots, 'uint', packed.coverage.spatialRoots.count).toReadOnly()
+    const placements = storage(packed.coverage.placements, 'uint', packed.coverage.placements.count).toReadOnly()
+    const request = (page: Node<'uint'>, importance: Node<'float'>) => { atomicMax(activity.element(page.mul(2).add(1)), floatBitsToUint(max(importance, 0.000001))) }
     const dispatch = storage(this.dispatch, 'uint', 3)
     const visible = storage(this.visible, 'uvec4', SELECTED_CAPACITY)
     const sphereWorld = Fn(([sphere, transform, scale]) => vec4(world.mul(transform).mul(vec4(sphere.xyz, 1)).xyz, sphere.w.mul(scale).mul(worldScale)))
@@ -81,24 +89,43 @@ export class ClusterTraversal {
         atomicStore(counters.element(23), uint(0))
         If(atomicLoad(counters.element(2)).equal(3), () => { atomicAdd(counters.element(21), uint(packed.coarsest.work)) })
         Loop(packed.drawCount * DRAW_ARGUMENT_STRIDE, ({ i }) => { atomicStore(counters.element(uint(DRAW_ARGUMENT_OFFSET).add(uint(i))), uint(0)) })
-        If(admit(uint(packed.instanceCount)), () => { writeDispatch(uint(packed.instanceCount)) })
+        If(admit(uint(packed.instanceCount + packed.coverage.spatial.count / 2)), () => { writeDispatch(uint(packed.coverage.spatialRoots.count)) })
       })
     })().compute(1).setName(`${label} Root restart`)
     this.seed = Fn(() => {
-      If(instanceIndex.lessThan(packed.instanceCount), () => {
-        const id = instanceIndex
-        atomicAdd(counters.element(13), uint(1))
-        const sphere = bounds.element(id)
-        const transformed = vec4(world.mul(vec4(sphere.xyz, 1)).xyz, sphere.w.mul(worldScale)).toVar()
-        If(inside(transformed), () => {
-          const entry = info.element(id).toVar()
-          const slot = atomicAdd(counters.element(0), entry.y)
-          If(slot.add(entry.y).lessThanEqual(FRONTIER_CAPACITY), () => {
-            Loop({ start: uint(0), end: entry.y, type: 'uint', condition: '<' }, ({ i }) => { queue[0]!.element(slot.add(i)).assign(uvec2(entry.x.add(i), id)) })
-          }).Else(overflow)
-        }).Else(() => { atomicAdd(counters.element(14), uint(1)) })
+      If(instanceIndex.lessThan(packed.coverage.spatialRoots.count), () => {
+        const stack = array('uint', 64).toVar()
+        const size = uint(1).toVar()
+        stack.element(0).assign(spatialRoots.element(instanceIndex))
+        Loop(size.greaterThan(0), () => {
+          size.subAssign(1)
+          const node = stack.element(size).mul(2).toVar()
+          const sphere = uintBitsToFloat(spatial.element(node)).toVar()
+          const transformed = vec4(world.mul(vec4(sphere.xyz, 1)).xyz, sphere.w.mul(worldScale)).toVar()
+          atomicAdd(counters.element(18), uint(1))
+          If(inside(transformed), () => {
+            const record = spatial.element(node.add(1)).toVar()
+            If(record.x.notEqual(0xffffffff), () => {
+              stack.element(size).assign(record.x); stack.element(size.add(1)).assign(record.y); size.addAssign(2)
+            }).Else(() => {
+              Loop({ start: uint(0), end: record.w, type: 'uint', condition: '<' }, ({ i }) => {
+                const id = placements.element(record.z.add(i)).toVar()
+                atomicAdd(counters.element(13), uint(1))
+                const sphere = bounds.element(id)
+                const transformed = vec4(world.mul(vec4(sphere.xyz, 1)).xyz, sphere.w.mul(worldScale)).toVar()
+                If(inside(transformed), () => {
+                  const entry = info.element(id).toVar()
+                  const slot = atomicAdd(counters.element(0), entry.y)
+                  If(slot.add(entry.y).lessThanEqual(FRONTIER_CAPACITY), () => {
+                    Loop({ start: uint(0), end: entry.y, type: 'uint', condition: '<' }, ({ i }) => { queue[0]!.element(slot.add(i)).assign(uvec2(entry.x.add(i), id)) })
+                  }).Else(overflow)
+                }).Else(() => { atomicAdd(counters.element(14), uint(1)) })
+              })
+            })
+          })
+        })
       })
-    })().computeKernel([64]).setName(`${label} Instance broad phase`)
+    })().computeKernel([64]).setName(`${label} World spatial traversal`)
     this.seed.dispatchSize = this.dispatch as unknown as number[]
     this.steps = [0, 1].map(input => {
       const output = 1 - input
@@ -148,25 +175,43 @@ export class ClusterTraversal {
       })
     })().compute(1).setName(`${label} Group cut dispatch`)
     this.evaluate = Fn(() => {
+      const audit = packed.arena.table.count * 2
+      If(instanceIndex.equal(0).and(atomicLoad(activity.element(audit)).notEqual(packed.arena.epoch)), () => { atomicAdd(activity.element(audit + 1), uint(1)) })
       If(instanceIndex.lessThan(atomicLoad(counters.element(22))), () => {
         const leaf = leaves.element(instanceIndex).toVar()
-        const group = nodes.element(leaf.x.mul(3).add(2)).toVar()
-        {
+        const groupId = nodes.element(leaf.x.mul(3).add(2)).x
+        const group = groups.element(groupId.mul(2).add(1)).toVar()
+        const page = pages.element(group.y).x.toVar()
+        If(page.notEqual(0xffffffff), () => {
+          const identity = pages.element(group.y).w.shiftRight(1)
+          const invalid = page.mod(32768).notEqual(0).or(page.greaterThan(packed.arena.attribute.count - 32768)).or(arena.element(page.add(2)).notEqual(identity)).or(group.z.add(group.w).greaterThan(arena.element(page.add(9))))
+          If(invalid, () => { atomicAdd(activity.element(audit + 2), uint(1)); overflow() })
           const instance = readInstance(leaf.y)
+          const groupBase = info.element(leaf.y).z
           const effectiveThreshold = this.indices.threshold.toVar()
           const effectiveLod = lodEnabled.or(effectiveThreshold.greaterThan(0))
-          Loop({ start: uint(0), end: group.y, type: 'uint', condition: '<' }, ({ i }) => {
+          const first = page.add(arena.element(page.add(13)).div(4)).add(group.z.mul(40)).toVar()
+          atomicMax(activity.element(group.y.mul(2)), packed.arena.frame)
+          Loop({ start: uint(0), end: group.w, type: 'uint', condition: '<' }, ({ i }) => {
             atomicAdd(counters.element(19), uint(1))
-            const task = uvec2(group.x.add(i), leaf.y).toVar()
+            const task = uvec2(first.add(i.mul(40)), leaf.y).toVar()
             const cluster = readCluster(task.x)
             const own = sphereWorld(cluster.selfSphere, instance.transform, instance.scale.x)
             const parent = sphereWorld(cluster.parentSphere, instance.transform, instance.scale.x)
             const sphere = sphereWorld(cluster.bounds, instance.transform, instance.scale.x).toVar()
             const batch = materials.element(uint(instance.scale.z).add(cluster.material)).toVar()
-            const cut = projectedError(own, cluster.errors.x, instance.scale.x).lessThanEqual(effectiveThreshold).and(projectedError(parent, cluster.errors.y, instance.scale.x).greaterThan(effectiveThreshold))
             const finest = cluster.refinedGroup.equal(0xffffffff)
+            const refinedMissing = bool(false).toVar()
+            If(finest.not(), () => {
+              const refined = groups.element(groupBase.add(cluster.refinedGroup).mul(2).add(1))
+              refinedMissing.assign(pages.element(refined.y).x.equal(0xffffffff))
+              const importance = projectedError(own, cluster.errors.x, instance.scale.x).toVar()
+              If(batch.notEqual(0xffffffff).and(inside(sphere)).and(refinedMissing).and(effectiveLod.not().or(importance.greaterThan(effectiveThreshold))), () => { request(refined.y, importance) })
+            })
+            const cut = projectedError(parent, cluster.errors.y, instance.scale.x).greaterThan(effectiveThreshold).and(finest.or(refinedMissing).or(projectedError(own, cluster.errors.x, instance.scale.x).lessThanEqual(effectiveThreshold)))
             const withinReach = lodEnabled.or(eye.sub(sphere.xyz).length().sub(sphere.w).lessThanEqual(reach))
-            If(batch.notEqual(0xffffffff).and(withinReach).and(effectiveLod.select(cut, finest)), () => {
+            If(batch.notEqual(0xffffffff).and(withinReach).and(effectiveLod.select(cut, finest.or(refinedMissing))), () => {
+              If(refinedMissing.and(projectedError(own, cluster.errors.x, instance.scale.x).greaterThan(effectiveThreshold)), () => { atomicAdd(activity.element(audit + 4), uint(1)) })
               atomicAdd(counters.element(4), uint(1))
               atomicAdd(counters.element(12), cluster.draw.y.div(3))
               If(inside(sphere), () => {
@@ -178,7 +223,12 @@ export class ClusterTraversal {
               }).Else(() => { atomicAdd(counters.element(5), uint(1)) })
             })
           })
-        }
+        }).Else(() => {
+          If(pages.element(group.y).w.bitAnd(1).notEqual(0), () => { atomicAdd(activity.element(audit + 3), uint(1)) })
+          const instance = readInstance(leaf.y)
+          const sphere = sphereWorld(uintBitsToFloat(groups.element(groupId.mul(2))), instance.transform, instance.scale.x)
+          request(group.y, projectedError(sphere, uintBitsToFloat(group.x), instance.scale.x))
+        })
       })
     })().computeKernel([64]).setName(`${label} Group cut`)
     this.evaluate.dispatchSize = this.dispatch as unknown as number[]

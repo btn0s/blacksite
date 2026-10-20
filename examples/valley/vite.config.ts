@@ -10,6 +10,7 @@ const root = resolve(import.meta.dirname, '../..')
 
 export default defineConfig({
   root: import.meta.dirname,
+  worker: { format: 'es' },
   resolve: {
     alias: {
       '@react-three/fiber': resolve(root, 'node_modules/@react-three/fiber'),

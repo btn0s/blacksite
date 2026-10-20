@@ -1,9 +1,9 @@
-import { Box3, BundleGroup, Frustum, Group, Matrix4, Vector2, Vector3 } from 'three/webgpu'
+import { Box3, BundleGroup, Frustum, Group, Matrix4, StorageBufferAttribute, Vector2, Vector3 } from 'three/webgpu'
 import type { Camera, Mesh, Scene, WebGPURenderer } from 'three/webgpu'
 
 export type GeometryPass = 'lit' | 'depth' | 'shadow'
 
-type CoverageNode = { bounds: Box3; materials: Uint32Array; left: number; right: number }
+type CoverageNode = { bounds: Box3; materials: Uint32Array; left: number; right: number; first: number; count: number }
 
 export class MaterialCoverage {
   private readonly nodes: CoverageNode[] = []
@@ -11,9 +11,13 @@ export class MaterialCoverage {
   private readonly frustum = new Frustum()
   private readonly inverse = new Matrix4()
   readonly words: number
+  readonly spatial: StorageBufferAttribute
+  readonly spatialRoots: StorageBufferAttribute
+  readonly placements: StorageBufferAttribute
 
   constructor(bounds: Float32Array, instances: Float32Array, materialMap: readonly number[], materials: number, slots: readonly number[]) {
     this.words = Math.ceil(materials / 32)
+    const placements: number[] = []
     const build = (ids: number[]) => {
       const box = new Box3()
       const bits = new Uint32Array(this.words)
@@ -29,7 +33,7 @@ export class MaterialCoverage {
         }
       }
       const index = this.nodes.length
-      const node = { bounds: box, materials: bits, left: -1, right: -1 }
+      const node = { bounds: box, materials: bits, left: -1, right: -1, first: 0, count: 0 }
       this.nodes.push(node)
       if (ids.length > 8) {
         const size = box.getSize(new Vector3())
@@ -38,10 +42,28 @@ export class MaterialCoverage {
         const middle = ids.length >>> 1
         node.left = build(ids.slice(0, middle))
         node.right = build(ids.slice(middle))
-      }
+      } else { node.first = placements.length; node.count = ids.length; placements.push(...ids) }
       return index
     }
     build(Array.from({ length: bounds.length / 4 }, (_, i) => i))
+    const spatial = new Uint32Array(this.nodes.length * 8), floats = new Float32Array(spatial.buffer)
+    const center = new Vector3(), size = new Vector3(), rounding = new Float32Array(1), bits = new Uint32Array(rounding.buffer)
+    for (const [index, node] of this.nodes.entries()) {
+      node.bounds.getCenter(center)
+      const offset = index * 8
+      floats.set(center.toArray(), offset)
+      const error = Math.hypot(center.x - floats[offset]!, center.y - floats[offset + 1]!, center.z - floats[offset + 2]!)
+      const radius = node.bounds.getSize(size).length() * 0.5 + error
+      rounding[0] = radius
+      if (rounding[0]! < radius) bits[0] = bits[0]! + 1
+      floats[offset + 3] = rounding[0]!
+      spatial.set([node.left < 0 ? 0xffffffff : node.left, node.right < 0 ? 0xffffffff : node.right, node.first, node.count], offset + 4)
+    }
+    let roots = [0]
+    for (let depth = 0; depth < 5; depth++) roots = roots.flatMap(id => this.nodes[id]!.left < 0 ? [id] : [this.nodes[id]!.left, this.nodes[id]!.right])
+    this.spatial = new StorageBufferAttribute(spatial, 4)
+    this.spatialRoots = new StorageBufferAttribute(new Uint32Array(roots), 1)
+    this.placements = new StorageBufferAttribute(new Uint32Array(placements), 1)
   }
 
   query(frustum: Frustum, world: Matrix4, result: Uint32Array) {

@@ -76,7 +76,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     ],
     setView: view => { geometry.setDebugView(view === 'lod' ? 'lod' : 'normal'); shared.look.current?.setDebug(view === 'lod') },
     textures: () => residentScanTextures(renderer),
-    details: () => ({ placements: owned.manifest.placements.length, uniqueMeshes: owned.uniqueMeshes, sourceTriangles: owned.sourceTriangles, meshletCount: owned.meshlets, levels: owned.levels, residentGeometryBytes: geometry.residentGeometryBytes, untranslated: owned.manifest.untranslated, excluded: owned.manifest.excluded, textureStreaming: textures.snapshot(), ...stats }),
+    details: () => ({ placements: owned.manifest.placements.length, uniqueMeshes: owned.uniqueMeshes, sourceTriangles: owned.sourceTriangles, meshletCount: owned.meshlets, levels: owned.levels, residentGeometryBytes: geometry.residentGeometryBytes, untranslated: owned.manifest.untranslated, excluded: owned.manifest.excluded, textureStreaming: textures.snapshot(), geometryPaging: geometry.pagingStats(), ...stats }),
   }), [geometry, inspector, owned, renderer, shared, stats, textures])
   useEffect(() => {
     shared.geometry.current = geometry
@@ -95,12 +95,15 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   }, [geometry, look])
   useFrame(() => {
     if (!look) return
-    if (shared.warm.current >= 10) textures.update()
+    const deadline = performance.now() + 0.5
+    const uploaded = shared.warm.current >= 10 ? textures.update(deadline) : 0
+    geometry.update(renderer, deadline, 8 * 1048576 - uploaded)
   }, 0.5)
+  useFrame(() => { if (look) geometry.endFrame(renderer) }, 2)
   useEffect(() => {
     if (!look || !collidersReady) return
     let active = true
-    void look.compile((gl, camera, scene, pass) => geometry.compile(gl, camera, scene, pass)).then(() => geometry.readStats(renderer, look.timings())).then(() => {
+    void look.compile((gl, camera, scene, pass) => geometry.compile(gl, camera, scene, pass)).then(() => geometry.completeFrame(renderer)).then(() => geometry.readStats(renderer, look.timings())).then(() => {
       if (!active) return
       shared.warm.current = 10
       onReady()
@@ -160,7 +163,7 @@ function Archway({ owned, runtime, onReady }: { owned: ArchwayAsset; runtime: Re
   const renderer = useCallback(async (props: object) => {
     if (!navigator.gpu) throw new Error('WebGPU is required for the archway')
     const storageSize = owned.storageSize
-    const gl = new WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', trackTimestamp: true, requiredLimits: { maxStorageBufferBindingSize: storageSize, maxBufferSize: storageSize } })
+    const gl = new WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', trackTimestamp: true, requiredLimits: { maxStorageBufferBindingSize: storageSize, maxBufferSize: storageSize, maxStorageBuffersPerShaderStage: 12 } })
     await gl.init()
     if (!gl.backend.isWebGPUBackend) throw new Error('A WebGPU adapter is required')
     try { setGeometry(await owned.createGeometry(gl)) }

@@ -1,11 +1,6 @@
 import { CLUSTER_LOD_STRIDE, CLUSTER_STRIDE, GROUP_STRIDE, MESHLET_MAGIC, MESHLET_SECTIONS, MESHLET_VERSION } from './format'
 import type { MeshletAsset, MeshletMetadata } from './format'
 
-export interface MeshletAssetSource {
-  metadata: MeshletMetadata
-  load(): Promise<MeshletAsset>
-}
-
 function meshletHeader(buffer: ArrayBufferLike) {
   if (buffer.byteLength < 32) throw new Error('Geometry file is truncated')
   const header = new DataView(buffer)
@@ -49,35 +44,6 @@ export async function loadMeshletAsset(url: string | URL, signal?: AbortSignal):
   return parseMeshletAsset(await response.arrayBuffer())
 }
 
-export async function loadMeshletSource(url: string | URL, signal?: AbortSignal): Promise<MeshletAssetSource> {
-  const response = await fetch(url, { signal })
-  if (!response.ok) throw new Error(`Geometry request failed: ${response.status} ${response.statusText}`)
-  if (!response.body) throw new Error('Geometry response has no body')
-  const reader = response.body.getReader()
-  let bytes = new Uint8Array(0)
-  let required = 32
-  try {
-    while (bytes.length < required) {
-      const { value, done } = await reader.read()
-      if (done) throw new Error('Geometry metadata is truncated')
-      const next = new Uint8Array(bytes.length + value.length)
-      next.set(bytes)
-      next.set(value, bytes.length)
-      bytes = next
-      if (bytes.length >= 32) {
-        const { metadataOffset, metadataLength } = meshletHeader(bytes.buffer)
-        required = metadataOffset + metadataLength
-      }
-    }
-    const { metadataOffset, metadataLength } = meshletHeader(bytes.buffer)
-    const metadata = JSON.parse(new TextDecoder().decode(bytes.subarray(metadataOffset, metadataOffset + metadataLength))) as MeshletMetadata
-    return { metadata, load: () => loadMeshletAsset(url, signal) }
-  } finally {
-    await reader.cancel()
-    reader.releaseLock()
-  }
-}
-
 export function meshletPosition(asset: MeshletAsset, cluster: number, vertex: number): [number, number, number] {
   const offset = asset.vertexReferences[asset.clusterData[cluster * 8 + 7]! + vertex]! * asset.metadata.vertexStride / 4
   const xy = asset.vertices[offset]!
@@ -94,3 +60,4 @@ export function meshletIndex(asset: MeshletAsset, cluster: number, corner: numbe
   const address = asset.clusterData[cluster * 8]! + corner
   return (asset.indices[address >>> 2]! >>> ((address & 3) * 8)) & 255
 }
+
