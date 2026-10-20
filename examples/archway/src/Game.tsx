@@ -19,7 +19,7 @@ import { outfit } from '../../valley/src/outfit'
 import { SceneInspection, type InspectionContent, type TelemetryAction } from '../../shared/Inspection'
 import { createScanMaterialStreaming, residentScanTextures } from '../../shared/scan-material'
 import { loadArchway, type ArchwayAsset } from './asset'
-import { courtyardEnvironment } from './environment'
+import { scanEnvironment } from '../../shared/scan-environment'
 import { archwayViews, createArchwayCameras, createArchwayHome, type ArchwayView } from './views'
 
 const cameraGrade = { contrast: 1, toe: 0 }
@@ -60,7 +60,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   const [collidersReady, setCollidersReady] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const stats = useMemo(() => ({ sceneTriangles: 0, drawnTriangles: 0 }), [])
-  const { atmosphere, sunlight } = useMemo(() => courtyardEnvironment(owned), [owned])
+  const { atmosphere, sunlight } = useMemo(() => scanEnvironment(owned.manifest.environment), [owned])
   const onLook = useCallback((value: Look | null) => { shared.look.current = value; shared.warm.current = 0; setLook(value) }, [shared])
   const onError = useCallback((value: unknown) => setError(value instanceof Error ? value : new Error(String(value))), [])
   const onCollidersReady = useCallback(() => setCollidersReady(true), [])

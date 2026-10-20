@@ -20,7 +20,7 @@ import { SceneInspection, type InspectionContent, type TelemetryAction } from '.
 import { createScanMaterialStreaming, residentScanTextures } from '../../shared/scan-material'
 import { loadRuins, type RuinsAsset } from './asset'
 import { RuinsCollision, type RegionalCollision } from './collision'
-import { levelAtmosphere } from './environment'
+import { scanEnvironment } from '../../shared/scan-environment'
 import { archwayViews as ruinsViews, createArchwayCameras, type ArchwayView as RuinsView } from '../../archway/src/views'
 
 const cameraGrade = { contrast: 1, toe: 0 }
@@ -47,7 +47,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   const [collisionReady, setCollisionReady] = useState(false)
   const onCollisionReady = useCallback(() => setCollisionReady(true), [])
   const [error, setError] = useState<Error | null>(null)
-  const { atmosphere, sunlight } = useMemo(() => levelAtmosphere(owned.environment), [owned])
+  const { atmosphere, sunlight } = useMemo(() => scanEnvironment(owned.environment.components), [owned])
   const home = owned.home
   const stats = useMemo(() => ({ sceneTriangles: 0, drawnTriangles: 0 }), [])
   const onLook = useCallback((value: Look | null) => { shared.look.current = value; shared.warm.current = 0; setLook(value) }, [shared])
