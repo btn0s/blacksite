@@ -15,7 +15,7 @@ export class ClusterIndices {
   private readonly check
   private readonly retries
   private readonly prefix
-  private readonly compactions
+  private readonly compact
   private readonly nodes
   private readonly fits = new WeakMap<ComputeNode, ComputeNode[]>()
 
@@ -35,8 +35,10 @@ export class ClusterIndices {
     const output = storage(this.indices, 'uint', this.indices.count)
     const readCluster = clusterReader(packed.clusters)
     const readInstance = instanceReader(packed.instances)
+    const indices = storage(packed.indices, 'uint', packed.indices.count).toReadOnly()
+    const corners = Math.ceil(Math.max(...packed.batches.map(batch => batch.triangles)) * 3 / 64) * 64
     this.begin = Fn(() => {
-      const floor = read(1).lessThan(triangleBudget * 0.65).select(read(4).mul(0.99), read(4)).toVar()
+      const floor = read(1).lessThan(triangleBudget * 0.8).select(read(4).mul(0.99), read(4)).toVar()
       write(4, floor)
       write(0, max(lodEnabled.select(pixelError, float(0)), floor))
       write(1, 0)
@@ -84,45 +86,32 @@ export class ClusterIndices {
         atomicStore(counters.element(argument + 4), uint(0))
         start.addAssign(count)
       }
+      const groups = atomicLoad(counters.element(10)).mul(corners / 64)
+      dispatch.element(0).assign(min(groups, uint(65535)))
+      dispatch.element(1).assign(max(groups.add(65534).div(65535), uint(1)))
+      dispatch.element(2).assign(1)
     })().compute(1).setName(`${label} Index material ranges`)
-    this.compactions = packed.batches.map((batch, batchIndex) => {
-      const corners = Math.ceil(batch.triangles * 3 / 64) * 64
-      const argument = DRAW_ARGUMENT_OFFSET + batchIndex * DRAW_ARGUMENT_STRIDE
-      const indices = storage(batch.geometry.indices, 'uint', batch.geometry.indices.count).toReadOnly()
-      const prepare = Fn(() => {
-        const count = atomicLoad(counters.element(argument))
-        const start = atomicLoad(counters.element(argument + 2))
-        const changed = count.notEqual(atomicLoad(counters.element(argument + 6))).or(start.notEqual(atomicLoad(counters.element(argument + 7))))
-        const groups = changed.select(atomicLoad(counters.element(argument + 5)).mul(corners / 64), uint(0))
-        dispatch.element(0).assign(min(groups, uint(65535)))
-        dispatch.element(1).assign(max(groups.add(65534).div(65535), uint(1)))
-        dispatch.element(2).assign(1)
-        atomicStore(counters.element(argument + 6), count)
-        atomicStore(counters.element(argument + 7), start)
-      })().compute(1).setName(`${label} Index dispatch ${batchIndex}`)
-      const compact = Fn(() => {
-        const localSlot = instanceIndex.div(corners)
-        const corner = instanceIndex.mod(corners)
-        If(localSlot.lessThan(drawArguments.element(argument + 5)), () => {
-          const slot = localSlot.add(batch.offset)
-          const candidate = visible.element(slot).toVar()
-          If(corner.lessThan(candidate.w), () => {
-            const cluster = readCluster(candidate.x)
-            const instance = readInstance(candidate.y)
-            const triangleCorner = corner.mod(3)
-            const mirrored = triangleCorner.equal(0).select(uint(0), uint(3).sub(triangleCorner))
-            const oriented = instance.scale.y.lessThan(0).select(mirrored, triangleCorner)
-            const address = cluster.draw.x.add(corner.div(3).mul(3)).add(oriented)
-            const localVertex = indices.element(address.div(4)).shiftRight(address.mod(4).mul(8)).bitAnd(255)
-            const destination = drawArguments.element(argument + 2).add(candidate.z).add(corner)
-            output.element(destination).assign(slot.shiftLeft(8).bitOr(localVertex))
-          })
+    this.compact = Fn(() => {
+      const slot = instanceIndex.div(corners)
+      const corner = instanceIndex.mod(corners)
+      If(slot.lessThan(drawArguments.element(10)), () => {
+        const candidate = visible.element(slot).toVar()
+        const cluster = readCluster(candidate.x)
+        If(corner.lessThan(cluster.draw.y), () => {
+          const instance = readInstance(candidate.y)
+          const triangleCorner = corner.mod(3)
+          const mirrored = triangleCorner.equal(0).select(uint(0), uint(3).sub(triangleCorner))
+          const oriented = instance.scale.y.lessThan(0).select(mirrored, triangleCorner)
+          const address = cluster.draw.x.add(corner.div(3).mul(3)).add(oriented)
+          const localVertex = indices.element(address.div(4)).shiftRight(address.mod(4).mul(8)).bitAnd(255)
+          const argument = candidate.w.mul(DRAW_ARGUMENT_STRIDE).add(DRAW_ARGUMENT_OFFSET + 2)
+          const destination = drawArguments.element(argument).add(candidate.z).add(corner)
+          output.element(destination).assign(slot.shiftLeft(8).bitOr(localVertex))
         })
-      })().computeKernel([64]).setName(`${label} Index compaction ${batchIndex}`)
-      compact.dispatchSize = this.dispatch as unknown as number[]
-      return { prepare, compact }
-    })
-    this.nodes = [this.begin, this.activate, this.check, ...this.retries, this.prefix, ...this.compactions.flatMap(entry => [entry.prepare, entry.compact])]
+      })
+    })().computeKernel([64]).setName(`${label} Index compaction`)
+    this.compact.dispatchSize = this.dispatch as unknown as number[]
+    this.nodes = [this.begin, this.activate, this.check, ...this.retries, this.prefix, this.compact]
     this.residentBytes = this.indices.array.byteLength + this.dispatch.array.byteLength + this.retryDispatch.array.byteLength
   }
 
@@ -137,8 +126,7 @@ export class ClusterIndices {
     let nodes = this.fits.get(evaluate)
     if (!nodes) {
       evaluate.dispatchSize = this.retryDispatch as unknown as number[]
-      nodes = [this.activate, this.check, ...this.retries.flatMap(retry => [retry, evaluate, this.check]), this.prefix,
-        ...this.compactions.flatMap(entry => [entry.prepare, entry.compact])]
+      nodes = [this.activate, this.check, ...this.retries.flatMap(retry => [retry, evaluate, this.check]), this.prefix, this.compact]
       this.fits.set(evaluate, nodes)
     }
     renderer.compute(nodes)

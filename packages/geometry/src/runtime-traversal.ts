@@ -150,12 +150,11 @@ export class ClusterTraversal {
     })
     const append = (task: Node<'uvec2'>, corners: Node<'uint'>, batch: Node<'uint'>) => {
       const argument = uint(DRAW_ARGUMENT_OFFSET).add(batch.mul(DRAW_ARGUMENT_STRIDE))
-      const slot = atomicAdd(counters.element(argument.add(5)), uint(1))
-      If(slot.lessThan(materials.element(batch.mul(2).add(1))), () => {
+      const slot = atomicAdd(counters.element(10), uint(1))
+      If(slot.lessThan(capacity), () => {
         const first = atomicAdd(counters.element(argument), corners)
-        visible.element(materials.element(batch.mul(2)).add(slot)).assign(uvec4(task, first, corners))
+        visible.element(slot).assign(uvec4(task, first, batch))
         atomicAdd(counters.element(9), corners.div(3))
-        atomicAdd(counters.element(10), uint(1))
         atomicAdd(counters.element(11), corners.div(3))
       }).Else(overflow)
     }
