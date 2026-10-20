@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { Matrix4, Vector3 } from 'three'
 import { tsImport } from 'tsx/esm/api'
 
-const collisionMaxError = 0.25
+const collisionMaxError = 0.75
 
 export async function buildCourtyardCollision(root, manifest) {
   const { parseMeshletAsset, meshletPosition, meshletIndex } = await tsImport('../../../packages/geometry/src/load.ts', import.meta.url)
