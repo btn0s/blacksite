@@ -2,7 +2,7 @@ import { Box3, Matrix4, Vector3 } from 'three/webgpu'
 import type { Material } from 'three/webgpu'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import type { MeshletGeometryManifest } from './format'
-import { loadMeshletSource, type MeshletAssetSource } from './load'
+import { loadGeometryPageSource, type GeometryPageSource } from './load-pages'
 
 export interface MeshletModelInstance {
   name: string
@@ -12,7 +12,7 @@ export interface MeshletModelInstance {
 
 export interface MeshletModel {
   materials: Material[]
-  geometries: Map<number, MeshletAssetSource>
+  geometries: Map<number, GeometryPageSource>
   instances: MeshletModelInstance[]
   bounds: Box3
 }
@@ -28,10 +28,10 @@ export async function loadMeshletModel(manifestUrl: string): Promise<MeshletMode
     new GLTFLoader().loadAsync(new URL(manifest.materialUrl, manifestLocation).href).then(gltf => gltf.parser.getDependencies('material') as Promise<Material[]>),
     Promise.all(manifest.geometries.map(async geometry => [
       geometry.meshIndex,
-      await loadMeshletSource(new URL(geometry.url, manifestLocation)),
+      await loadGeometryPageSource(new URL(geometry.url, manifestLocation)),
     ] as const)),
   ])
-  const geometries = new Map<number, MeshletAssetSource>(entries)
+  const geometries = new Map<number, GeometryPageSource>(entries)
   if (geometries.size !== entries.length) throw new Error('Geometry manifest contains duplicate mesh indices')
   for (const asset of geometries.values()) {
     if (asset.metadata.primitives.some(primitive => primitive.materialIndex >= materials.length)) throw new Error('Geometry references a missing source material')

@@ -132,6 +132,7 @@ export function Landscape({ world, tier, wind, look, owned, stones, handle }: { 
     forest.update(camera)
     rocks.update()
   }, 0.5)
+  useFrame(() => { built?.rocks.endFrame() }, 2)
 
   if (error) throw error
   return null

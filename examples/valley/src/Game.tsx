@@ -177,7 +177,7 @@ function Valley({ shared, walker, world, owned, stones, tier }: { shared: Shared
   const telemetry = useMemo<TelemetryAction>(() => ({ current: null, status: setDumpStatus }), [])
   const renderer = useCallback(async (props: object) => {
     if (!navigator.gpu) throw new Error('WebGPU is unavailable. Open Valley in a browser with WebGPU enabled.')
-    const gl = new WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', trackTimestamp: true })
+    const gl = new WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', trackTimestamp: true, requiredLimits: { maxStorageBuffersPerShaderStage: 12 } })
     await gl.init()
     if (!gl.backend.isWebGPUBackend) { gl.dispose(); throw new Error('A WebGPU adapter is required to open Valley.') }
     gl.info.autoReset = false

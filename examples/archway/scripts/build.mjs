@@ -1,72 +1,35 @@
-import { readFile, mkdir, mkdtemp, rename, writeFile } from 'node:fs/promises'
-import { basename, resolve, join } from 'node:path'
-import { Box3, Matrix4, Vector3 } from 'three'
-import { buildGltfMeshes } from '../../../packages/geometry/scripts/build.mjs'
-import { buildCourtyardSurfaces } from './build-surfaces.mjs'
-import { buildCourtyardCollision } from './build-collision.mjs'
-import { tsImport } from 'tsx/esm/api'
+import { readFile, mkdir, mkdtemp, link, writeFile } from 'node:fs/promises'
+import { basename, dirname, resolve, join } from 'node:path'
+import { readPageDirectory } from '../../../packages/geometry/scripts/pages.mjs'
 
-const source = resolve(process.argv[2] ?? 'D:/Archive/dark-ruins-export')
-const outputRoot = resolve(process.argv[3] ?? 'D:/dev/owned-assets/dark-ruins')
-await mkdir(outputRoot, { recursive: true })
-const output = await mkdtemp(join(outputRoot, 'build-'))
+const root = resolve(process.argv[2] ?? 'D:/dev/owned-assets/dark-ruins')
+const pageBuild = resolve(process.argv[3] ?? join(root, 'build-pages-v5-20261020-01'))
+const manifest = JSON.parse(await readFile(join(root, 'courtyard.json'), 'utf8'))
+const level = JSON.parse(await readFile(join(pageBuild, 'level.json'), 'utf8'))
+if (level.version !== 5) throw new Error('Courtyard requires the verified version 5 page build')
+const output = await mkdtemp(join(root, 'build-courtyard-pages-'))
+await mkdir(join(output, 'geometry'))
 const generation = basename(output)
-const materialSource = resolve(process.argv[4] ?? 'D:/dev/owned-assets/dark-ruins-source/materials.json')
-const json = async file => JSON.parse(await readFile(join(source, file), 'utf8'))
-const meshes = (await json('meshes.json')).meshes
-const instances = (await json('placements.json')).instances
-const anchor = instances.find(entry => entry.mesh_name === 'SM_ArchWay_01_N1' && entry.transform.matrix.slice(12, 15).every(value => value === 0))
-if (!anchor) throw new Error('The origin archway placement is required')
-const localBounds = new Map()
-async function placementBounds(entry) {
-  const id = `${entry.geometry.file}:${entry.geometry.mesh_index}`
-  if (!localBounds.has(id)) {
-    const document = await json(entry.geometry.file)
-    const bounds = new Box3()
-    for (const primitive of document.meshes[entry.geometry.mesh_index].primitives) {
-      const position = document.accessors[primitive.attributes.POSITION]
-      if (!position.min || !position.max) throw new Error(`Missing source bounds for ${entry.actor_label}`)
-      bounds.expandByPoint(new Vector3().fromArray(position.min))
-      bounds.expandByPoint(new Vector3().fromArray(position.max))
-    }
-    localBounds.set(id, bounds)
-  }
-  return localBounds.get(id).clone().applyMatrix4(new Matrix4().fromArray(entry.transform.matrix))
-}
-const anchorBounds = await placementBounds(anchor)
-const centre = anchorBounds.getCenter(new Vector3())
-centre.y = anchorBounds.min.y
-const placements = []
-for (const entry of instances) if ((await placementBounds(entry)).distanceToPoint(centre) <= 10) placements.push(entry)
-console.log(JSON.stringify({ centre: centre.toArray(), radius: 10, placements: placements.length, uniqueGeometry: new Set(placements.map(entry => `${entry.geometry.file}:${entry.geometry.mesh_index}`)).size }))
-const geometrySources = [...new Set(placements.map(entry => entry.geometry.file))]
-const { parseMeshletAsset } = await tsImport('../../../packages/geometry/src/load.ts', import.meta.url)
-await mkdir(output, { recursive: true })
 const geometries = []
-for (const file of geometrySources) {
-  const id = geometries.length
-  const directory = join(output, 'geometry', String(id))
-  const manifest = await buildGltfMeshes(join(source, file), directory, { minimumError: 0.005 })
-  for (const geometry of manifest.geometries) {
-    if (!placements.some(entry => entry.geometry.file === file && entry.geometry.mesh_index === geometry.meshIndex)) continue
-    const url = `geometry/${id}/${geometry.url}`
-    const bytes = await readFile(join(output, url))
-    const asset = parseMeshletAsset(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
-    geometries.push({ file, meshIndex: geometry.meshIndex, url, metadata: asset.metadata, bytes: bytes.byteLength })
-  }
+const totals = { pages: 0, pinnedPages: 0, wireBytes: 0, residentBytes: 0, directoryBytes: 0 }
+for (const previous of manifest.geometries) {
+  const geometry = level.geometries.find(entry => entry.id === `${previous.file}:${previous.meshIndex}`)
+  if (!geometry) throw new Error(`Page build omits courtyard geometry: ${previous.file}:${previous.meshIndex}`)
+  const directory = await readPageDirectory(join(pageBuild, geometry.url))
+  const m = directory.metadata
+  const previousMetadata = previous.metadata ?? (await readPageDirectory(join(root, previous.url))).metadata
+  if (m.source.sha256 !== previousMetadata.source.sha256 || m.sourceTriangles !== previousMetadata.sourceTriangles) throw new Error('Courtyard source provenance changed')
+  const name = basename(geometry.url)
+  await link(join(pageBuild, geometry.url), join(output, 'geometry', name))
+  await link(join(pageBuild, dirname(geometry.url), m.pagePack), join(output, 'geometry', m.pagePack))
+  geometries.push({ file: previous.file, meshIndex: previous.meshIndex, url: `${generation}/geometry/${name}` })
+  totals.pages += m.pageCount
+  totals.pinnedPages += m.pinnedPages
+  totals.wireBytes += m.packBytes
+  totals.residentBytes += m.residentBytes
+  totals.directoryBytes += directory.bytes
 }
-const materialPaths = [...new Set(placements.flatMap(entry => entry.materials))]
-const uses = materialPaths.map(path => ({ path, placements: placements.filter(entry => entry.materials.includes(path)).map(entry => entry.actor_label) }))
-const { untranslated, excluded } = await buildCourtyardSurfaces(source, materialSource, uses, output, join(outputRoot, 'textures'))
-const environment = await json('environment.json')
-const manifest = {
-  radius: 10, centre: centre.toArray(), geometries: geometries.map(geometry => ({ ...geometry, url: `${generation}/${geometry.url}` })), materialPaths, untranslated, excluded,
-  surfacesUrl: `${generation}/surfaces.json`, colliderUrl: `${generation}/colliders.bin`,
-  placements: placements.map(entry => ({ name: entry.actor_label, visible: entry.visible && !entry.hidden_in_game && !entry.actor_hidden_in_game && !entry.actor_editor_only && !entry.component_editor_only, componentClass: entry.component_class, geometry: geometries.findIndex(geometry => geometry.file === entry.geometry.file && geometry.meshIndex === entry.geometry.mesh_index), materials: meshes[entry.mesh].primitive_material_slots.map(slot => entry.materials[slot] ?? meshes[entry.mesh].materials[slot]), matrix: entry.transform.matrix })),
-  environment: environment.components.filter(entry => ['DirectionalLightComponent', 'SkyAtmosphereComponent', 'SkyLightComponent', 'ExponentialHeightFogComponent'].includes(entry.class)),
-}
-await buildCourtyardCollision(outputRoot, manifest)
-const publication = join(outputRoot, `${generation}.partial`)
-await writeFile(publication, JSON.stringify(manifest))
-await rename(publication, join(outputRoot, 'courtyard.json'))
-console.log(JSON.stringify({ placements: placements.length, uniqueMeshes: geometries.length, sourceTriangles: geometries.reduce((sum, geometry) => sum + geometry.metadata.sourceTriangles, 0), meshlets: geometries.reduce((sum, geometry) => sum + geometry.metadata.clusterCount, 0), geometryBytes: geometries.reduce((sum, geometry) => sum + geometry.bytes, 0), untranslated }, null, 2))
+const next = { ...manifest, version: 5, geometries }
+await writeFile(join(output, 'courtyard.json'), JSON.stringify(next))
+await writeFile(join(output, 'census.json'), JSON.stringify({ version: 5, sourceBuild: pageBuild, placements: manifest.placements.length, geometries: geometries.length, totals }, null, 2))
+console.log(JSON.stringify({ output, totals, published: false }, null, 2))

@@ -4,7 +4,7 @@ import {
   MeshStandardMaterial, MeshStandardNodeMaterial, Quaternion, RedFormat, RepeatWrapping, Scene,
   SRGBColorSpace, TextureLoader, Vector3,
 } from 'three/webgpu'
-import { loadMeshletAsset, loadMeshletModel, normalMapWithUV } from '@blacksite/geometry'
+import { loadGeometryPageSource, loadMeshletAsset, loadMeshletModel, normalMapWithUV } from '@blacksite/geometry'
 import type { MeshletModel, MeshletSceneEntry } from '@blacksite/geometry'
 import { bumpMap, cos, float, mix, mx_noise_float, normalWorldGeometry, positionWorld, sin, smoothstep, texture, triplanarTexture, uniform, vec2, vec3 } from 'three/tsl'
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js'
@@ -54,9 +54,10 @@ function createCitadel(model: MeshletModel, ground: number): MeshletSceneEntry[]
 export async function createCoastalScene(status: (message: string) => void) {
   status('Loading the coastline, stonework and coastal plants…')
   const loader = new TextureLoader()
-  const [terrainAsset, oceanAsset, fort, environment, mossAlbedo, mossNormal, mossOrm, rockAlbedo, rockNormal, rockOrm] = await Promise.all([
+  const [terrainAsset, terrainPages, oceanPages, fort, environment, mossAlbedo, mossNormal, mossOrm, rockAlbedo, rockNormal, rockOrm] = await Promise.all([
     loadMeshletAsset('/owned/geometry/terrain.meshlets'),
-    loadMeshletAsset('/owned/geometry/ocean.meshlets'),
+    loadGeometryPageSource('/owned/geometry/terrain.directory'),
+    loadGeometryPageSource('/owned/geometry/ocean.directory'),
     loadMeshletModel('/owned/geometry/fort/manifest.json'),
     new HDRLoader().loadAsync('/owned/sunset-sky.hdr'),
     loader.loadAsync('/owned/ground-moss-albedo.png'), loader.loadAsync('/owned/ground-moss-normal.png'), loader.loadAsync('/owned/ground-moss-orm.png'),
@@ -116,8 +117,8 @@ export async function createCoastalScene(status: (message: string) => void) {
     .add(cos(p.x.mul(2.3).add(p.y.mul(1.7)).sub(clock.mul(1.15))).mul(0.035))
   water.normalNode = bumpMap(wave, 1.2)
   const entries: MeshletSceneEntry[] = [
-    { asset: { metadata: terrainAsset.metadata, load: () => loadMeshletAsset('/owned/geometry/terrain.meshlets') }, instances: [new Matrix4()], materials: [groundMaterial] },
-    { asset: { metadata: oceanAsset.metadata, load: () => loadMeshletAsset('/owned/geometry/ocean.meshlets') }, instances: [new Matrix4()], materials: [water] },
+    { asset: terrainPages, instances: [new Matrix4()], materials: [groundMaterial] },
+    { asset: oceanPages, instances: [new Matrix4()], materials: [water] },
     ...createCitadel(fort, terrain.heightAt(-27, -53) - 0.25),
   ]
   status('Planting the coast and preparing the cluster hierarchy…')

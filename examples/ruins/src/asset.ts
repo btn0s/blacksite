@@ -1,6 +1,6 @@
 import { Box3, Matrix4, Vector3 } from 'three'
 import type { WebGPURenderer } from 'three/webgpu'
-import { loadMeshletAsset, MeshletScene, type MeshletAssetSource, type MeshletMetadata, type MeshletSceneEntry } from '@blacksite/geometry'
+import { loadGeometryPageSource, MeshletScene, type GeometryPageSource, type MeshletMetadata, type MeshletSceneEntry } from '@blacksite/geometry'
 import { loadScanMaterials, scanTextureFeedback, type ScanSurface } from '../../shared/scan-material'
 
 const root = '/owned/dark-ruins/level/'
@@ -22,11 +22,11 @@ export async function loadRuins(progress: (detail: string) => void) {
   if (manifest.instances.length !== 20430) throw new Error(`Every placement is required; found ${manifest.instances.length}`)
   const unsupported = surfaces.surfaces.filter(surface => surface.family !== 'custom-general')
   if (unsupported.length) throw new Error(`${unsupported.length} source surfaces need authored translation before this level can render. First: ${unsupported[0]!.path}`)
-  const assets = new Map<string, MeshletAssetSource>()
+  const assets = new Map<string, GeometryPageSource>()
   const collisions = new Map<string, { vertices: Float32Array; indices: Uint32Array }>()
   for (const record of manifest.geometries) {
     progress(`Loading collision ${assets.size + 1} / ${manifest.geometries.length}`)
-    assets.set(record.id, { metadata: record, load: () => loadMeshletAsset(root + record.url) })
+    assets.set(record.id, await loadGeometryPageSource(root + record.url))
     const response = await fetch(root + record.collision)
     if (!response.ok) throw new Error(`Missing collision: ${record.collision}`)
     const buffer = await response.arrayBuffer()

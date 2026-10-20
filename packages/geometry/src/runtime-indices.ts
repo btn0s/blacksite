@@ -33,9 +33,9 @@ export class ClusterIndices {
     const visible = storage(visibleAttribute, 'uvec4', visibleAttribute.count).toReadOnly()
     const drawArguments = storage(counters.value, 'uint', counters.value.count).toReadOnly()
     const output = storage(this.indices, 'uint', this.indices.count)
-    const readCluster = clusterReader(packed.clusters)
+    const readCluster = clusterReader(packed.arena.attribute)
     const readInstance = instanceReader(packed.instances)
-    const indices = storage(packed.indices, 'uint', packed.indices.count).toReadOnly()
+    const indices = storage(packed.arena.attribute, 'uint', packed.arena.attribute.count).toReadOnly()
     this.begin = Fn(() => {
       const floor = read(1).lessThan(triangleBudget * 0.8).select(read(4).mul(0.99), read(4)).toVar()
       const workFloor = atomicLoad(counters.element(21)).lessThan(SELECTION_WORK_BUDGET * 0.8).select(read(6).mul(0.99), read(6)).toVar()

@@ -11,6 +11,7 @@ const root = resolve(import.meta.dirname, '../..')
 
 export default defineConfig({
   root: import.meta.dirname,
+  worker: { format: 'es' },
   resolve: {
     alias: {
       '@blacksite/geometry': resolve(root, 'packages/geometry/src/index.ts'),

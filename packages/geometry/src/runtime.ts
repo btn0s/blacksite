@@ -15,17 +15,20 @@ import { bindGeometryMaterial, createGeometryDepthMaterial, createGeometryMateri
 import { clusterGeometry, clusterVertex } from './runtime-vertex'
 import { ClusterShadows } from './runtime-shadows'
 import { ClusterTraversal } from './runtime-traversal'
-import { ClusterTextureFeedback, type MeshletTextureFeedback } from './runtime-textures'
+import { ClusterFeedback, type MeshletTextureFeedback } from './runtime-textures'
+import type { GeometryPageArena } from './runtime-pages'
+import { FRAME_UPLOAD_BYTES, GEOMETRY_ARENA_BYTES, GEOMETRY_PAGE_BYTES, GEOMETRY_STAGING_BYTES } from './page-residency'
 import { MaterialSubmission, type GeometryPass } from './runtime-submission'
 
 export type { MeshletTextureFeedback, TextureDemandBinding } from './runtime-textures'
 
 export type { MeshletSceneEntry } from './runtime-data'
-export { meshletStorageSize } from './runtime-data'
+export { GEOMETRY_ARENA_BYTES } from './page-residency'
 export { geometryScaleX, geometrySecondaryUV, geometryVertexColor, normalMapWithUV, tangentNormalWithUV } from './runtime-material'
 export type MeshletDebugView = 'normal' | 'meshlets' | 'lod'
 
 export interface MeshletSceneOptions {
+  geometryBytes?: number
   textureFeedback?: MeshletTextureFeedback
   pixelError?: number
   occlusion?: boolean
@@ -126,25 +129,40 @@ export class MeshletScene {
   private readonly occlusionComputes
   private readonly computeNodes
   private readonly uploadBuffers: StorageBufferAttribute[]
-  private readonly textureFeedback: ClusterTextureFeedback | null
+  private readonly streaming: ClusterFeedback
+  private readonly arena: GeometryPageArena
+  private schedulingMs = 0
+  private peakSchedulingMs = 0
+  private readonly frameViewport = new Vector2()
 
   static async create(renderer: WebGPURenderer, entries: readonly MeshletSceneEntry[], options: MeshletSceneOptions = {}) {
-    const packed = await packScene(renderer, entries)
-    const scene = new MeshletScene(packed, options)
+    await renderer.init()
+    const backend = renderer.backend as typeof renderer.backend & { device?: { limits: { maxBufferSize: number; maxStorageBufferBindingSize: number; maxStorageBuffersPerShaderStage: number } } }
+    const limits = backend.device?.limits
+    if (!limits || limits.maxStorageBuffersPerShaderStage < 12) throw new Error('Geometry paging requires a WebGPU device requested with twelve storage buffers per shader stage')
+    const maximum = Math.floor(Math.min(limits.maxBufferSize, limits.maxStorageBufferBindingSize) / GEOMETRY_PAGE_BYTES) * GEOMETRY_PAGE_BYTES
+    const bytes = options.geometryBytes ?? Math.min(GEOMETRY_ARENA_BYTES, maximum)
+    if (bytes > maximum) throw new Error('Geometry arena exceeds the requested WebGPU device limits')
+    const packed = await packScene(renderer, entries, bytes, options.textureFeedback?.cpuStaging)
+    let scene: MeshletScene | undefined
     try {
+      scene = new MeshletScene(packed, options)
       scene.submission.initialize(renderer)
       await uploadAttributes(renderer, scene.uploadBuffers)
       await scene.traversal.upload(renderer)
       await scene.shadows.upload(renderer)
-      await scene.textureFeedback?.upload(renderer)
+      await scene.streaming.upload(renderer)
+      await scene.arena.initialize(renderer)
       return scene
     } catch (error) {
-      scene.dispose()
+      if (scene) scene.dispose()
+      else { packed.arena.dispose(); options.textureFeedback?.ledger.release(packed.arena) }
       throw error
     }
   }
 
   private constructor(packed: PackedMeshletScene, options: MeshletSceneOptions) {
+    this.arena = packed.arena
     this.submission = new MaterialSubmission(packed.coverage)
     this.lit = this.submission.lit
     this.depth = this.submission.depth
@@ -287,10 +305,12 @@ export class MeshletScene {
     }
     this.occlusionComputes = [this.pyramidCompute, ...this.reductionCompute]
     this.computeNodes = [this.pyramidCompute, ...this.reductionCompute]
-    this.textureFeedback = options.textureFeedback ? new ClusterTextureFeedback(packed, this.traversal.visible, this.counters,
-      this.world, this.worldScale, this.eye, this.projectionScale, options.textureFeedback) : null
-    if (options.textureFeedback && !options.textureFeedback.ledger.reserve(this, 'geometry', this.residentBytes + this.textureFeedback!.residentBytes)) {
-      throw new Error('Resident geometry and minimum texture tails exceed the shared byte budget')
+    this.streaming = new ClusterFeedback(packed, this.traversal.visible, this.counters, this.shadows.counters,
+      this.world, this.worldScale, this.eye, this.projectionScale, options.textureFeedback)
+    this.residentBytes += this.streaming.residentBytes
+    if (options.textureFeedback) {
+      const stagingBytes = 3 * GEOMETRY_STAGING_BYTES
+      if (!options.textureFeedback.ledger.reserve(this.arena, 'staging', stagingBytes) || !options.textureFeedback.ledger.reserve(this, 'geometry', this.residentBytes - stagingBytes)) throw new Error('Geometry, staging and minimum texture tails exceed the shared byte budget')
     }
   }
   setDebugView(view: MeshletDebugView) {
@@ -324,9 +344,27 @@ export class MeshletScene {
     this.historyValid = false
   }
 
+  setGeometryLimit(bytes: number) { this.arena.residency.setLimit(bytes) }
+
+  update(renderer: WebGPURenderer, deadline = performance.now() + 0.5, allowance = FRAME_UPLOAD_BYTES) {
+    const start = performance.now()
+    this.streaming.consume(start + Math.max(0, deadline - start) * 0.5)
+    const uploaded = this.arena.update(renderer, deadline, allowance)
+    renderer.getDrawingBufferSize(this.frameViewport)
+    this.submission.updateBindings(this.streaming.feedback?.bindingVersions, this.frameViewport)
+    this.schedulingMs = performance.now() - start - this.arena.submissionMs
+    this.peakSchedulingMs = Math.max(this.peakSchedulingMs, this.schedulingMs)
+    if (this.streaming.feedback) this.streaming.feedback.frame = this.arena.frame.value
+    return uploaded
+  }
+
+  endFrame(renderer: WebGPURenderer) { this.streaming.sample(renderer) }
+
+  completeFrame(renderer: WebGPURenderer) { return this.streaming.completeFrame(renderer) }
+
+  pagingStats() { return { ...this.arena.snapshot(), ...this.streaming.stats(), schedulingMs: this.schedulingMs, peakSchedulingMs: this.peakSchedulingMs } }
+
   prepare(renderer: WebGPURenderer, camera: PerspectiveCamera, viewport: Readonly<Vector2>) {
-    this.submission.updateBindings(this.textureFeedback?.feedback.bindingVersions, viewport)
-    if (this.textureFeedback) this.textureFeedback.feedback.frame++
     this.lit.visible = false
     this.depth.visible = true
     this.shadowPasses = 0
@@ -376,13 +414,14 @@ export class MeshletScene {
   }
 
   async readStats(renderer: WebGPURenderer, timings?: Readonly<Record<string, number>>): Promise<MeshletStats> {
-    const values = this.textureFeedback ? await this.textureFeedback.read(renderer) : new Uint32Array(await renderer.getArrayBufferAsync(this.counters))
+    const sample = await this.streaming.read(renderer)
+    const values = sample.view
     if (values[20]) throw new Error(`Geometry selection budget exhausted: ${values[20]} queue or visible records exceeded capacity`)
     const selectionTimings = timings ? Object.entries(timings).filter(([name]) => name.startsWith('Compute \u00b7 View ')) : []
     const selectionMs = selectionTimings.length ? selectionTimings.reduce((sum, [, value]) => sum + value, 0) : null
     const [indices, shadows] = await Promise.all([
       this.traversal.indices.readStats(values),
-      this.shadows.readStats(renderer),
+      this.shadows.readStats(sample.shadow),
     ])
     return {
       triangleBudget: this.triangleBudget, indexPoolBytes: this.triangleBudget * 12,
@@ -412,8 +451,10 @@ export class MeshletScene {
   }
 
   dispose() {
-    this.textureFeedback?.feedback.ledger.release(this)
-    this.textureFeedback?.dispose()
+    this.streaming.feedback?.ledger.release(this)
+    this.streaming.feedback?.ledger.release(this.arena)
+    this.streaming.dispose()
+    this.arena.dispose()
     this.submission.disposeGeometry('lit')
     this.submission.disposeGeometry('depth')
     for (const material of this.materials) material.dispose()

@@ -30,7 +30,9 @@ export async function createRocks(owned: Owned, stones: Stonework, renderer: Web
     setShadowEnabled: (enabled: boolean) => geometry.setShadowEnabled(enabled),
     prepare: (camera: PerspectiveCamera, size: Readonly<Vector2>) => geometry.prepare(renderer, camera, size),
     recover: (depth: DepthTexture) => geometry.recover(renderer, depth),
+    endFrame: () => geometry.endFrame(renderer),
     update() {
+      geometry.update(renderer)
       const now = performance.now()
       if (!pending && now - lastRead > 300) {
         pending = true
