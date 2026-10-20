@@ -168,7 +168,8 @@ function resident(summary) {
   const textures = content.textureStreaming ?? {}
   const paging = content.geometryPaging ?? {}
   return {
-    geometryBytes: content.residentGeometryBytes ?? paging.arenaBytes ?? null,
+    geometryOccupiedBytes: paging.occupiedSlotBytes ?? null,
+    geometryArenaBytes: paging.arenaBytes ?? content.residentGeometryBytes ?? null,
     textureBytes: textures.residentBytes ?? null,
     ledgerPeakBytes: textures.ledger?.peakBytes ?? content.regionalCollision?.cpu?.peakBytes ?? null,
   }
@@ -219,7 +220,8 @@ async function runView(page, baseUrl, view, outputDir, identity) {
     cpuMs: capture?.cpu ?? telemetry.stats?.cpu ?? null,
     gpuMs: capture?.gpu ?? telemetry.stats?.gpu ?? null,
     draws: telemetry.submissions?.drawCalls ?? telemetry.stats?.drawCalls ?? null,
-    triangles: telemetry.submissions?.triangles ?? telemetry.stats?.drawnTriangles ?? null,
+    trianglesDrawn: telemetry.content?.drawnTriangles ?? telemetry.stats?.drawnTriangles ?? null,
+    trianglesSelected: telemetry.content?.sceneTriangles ?? telemetry.stats?.sceneTriangles ?? null,
     resident: resident(telemetry),
     pipelinesCreatedAfterReady: await page.evaluate(() => window.__benchPipelines - window.__benchReadyPipelines),
     texturePromotions: texture.promotions === undefined ? null : texture.promotions - (beforeTexture.promotions ?? 0),
@@ -259,10 +261,10 @@ function table(results, compareResults = null) {
   const rows = results.map(result => {
     const old = compareResults?.find(entry => entry.view === result.view)
     const delta = (field, part) => old ? ` (${fmt(result[field]?.[part] - old[field]?.[part], 2)})` : ''
-    return [result.view, fmt(result.firstPlayableMs / 1000), `${fmt(result.cpuMs?.p50)} / ${fmt(result.cpuMs?.p95)}${delta('cpuMs', 'p95')}`, `${fmt(result.gpuMs?.p50)} / ${fmt(result.gpuMs?.p95)}${delta('gpuMs', 'p95')}`, fmt(result.gpuMs?.max), result.draws ?? '—', result.triangles ?? '—', fmt(result.resident.geometryBytes / 1048576), fmt(result.resident.textureBytes / 1048576), fmt(result.resident.ledgerPeakBytes / 1048576), result.pipelinesCreatedAfterReady]
+    return [result.view, fmt(result.firstPlayableMs / 1000), `${fmt(result.cpuMs?.p50)} / ${fmt(result.cpuMs?.p95)}${delta('cpuMs', 'p95')}`, `${fmt(result.gpuMs?.p50)} / ${fmt(result.gpuMs?.p95)}${delta('gpuMs', 'p95')}`, fmt(result.gpuMs?.max), result.draws ?? '—', `${result.trianglesDrawn ?? '—'} / ${result.trianglesSelected ?? '—'}`, fmt(result.resident.geometryOccupiedBytes / 1048576), fmt(result.resident.geometryArenaBytes / 1048576), fmt(result.resident.textureBytes / 1048576), fmt(result.resident.ledgerPeakBytes / 1048576), result.pipelinesCreatedAfterReady]
   })
-  console.log('\nView             Ready(s) CPU p50/p95 ms      GPU p50/p95 ms      GPU max Draws Triangles Geo MiB Tex MiB Ledger peak MiB Pipelines+')
-  for (const row of rows) console.log(`${row[0].padEnd(16)} ${row[1].padStart(8)} ${row[2].padEnd(20)} ${row[3].padEnd(20)} ${row[4].padStart(7)} ${String(row[5]).padStart(5)} ${String(row[6]).padStart(9)} ${row[7].padStart(7)} ${row[8].padStart(7)} ${row[9].padStart(15)} ${String(row[10]).padStart(10)}`)
+  console.log('\nView             Ready(s) CPU p50/p95 ms      GPU p50/p95 ms      GPU max Draws Triangles drawn/selected Occupied MiB Arena MiB Tex MiB Ledger peak MiB Pipelines+')
+  for (const row of rows) console.log(`${row[0].padEnd(16)} ${row[1].padStart(8)} ${row[2].padEnd(20)} ${row[3].padEnd(20)} ${row[4].padStart(7)} ${String(row[5]).padStart(5)} ${String(row[6]).padStart(25)} ${row[7].padStart(11)} ${row[8].padStart(9)} ${row[9].padStart(7)} ${row[10].padStart(15)} ${String(row[11]).padStart(10)}`)
   if (compareResults) console.log('Parenthesized values are p95 deltas against --compare.')
 }
 
