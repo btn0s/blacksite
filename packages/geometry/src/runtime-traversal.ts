@@ -36,7 +36,7 @@ export class ClusterTraversal {
     const capacity = packed.candidateCount
     const queueCapacity = packed.queueCapacity
     const leafCapacity = packed.leafCapacity
-    const count = DRAW_ARGUMENT_OFFSET + packed.batches.length * DRAW_ARGUMENT_STRIDE
+    const count = DRAW_ARGUMENT_OFFSET + packed.drawCount * DRAW_ARGUMENT_STRIDE
     this.counters = new IndirectStorageBufferAttribute(new Uint32Array(count), 1)
     this.visible = new StorageBufferAttribute(capacity, 4, Uint32Array)
     const rejectedAttribute = new StorageBufferAttribute(capacity, 2, Uint32Array)

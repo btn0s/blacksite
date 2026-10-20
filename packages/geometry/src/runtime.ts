@@ -3,7 +3,7 @@ import {
   Matrix4, Mesh, MeshStandardNodeMaterial, PerspectiveCamera, Scene,
   StorageBufferAttribute, Vector2, Vector3, Vector4, WebGPUCoordinateSystem,
 } from 'three/webgpu'
-import type { DepthTexture, OrthographicCamera, WebGPURenderer } from 'three/webgpu'
+import type { DepthTexture, MeshBasicNodeMaterial, OrthographicCamera, WebGPURenderer } from 'three/webgpu'
 import {
   Fn, If, Loop, bool, ceil, clamp, float,
   floor, instanceIndex, log2, max, min, mix, output, storage,
@@ -11,12 +11,13 @@ import {
 } from 'three/tsl'
 import { packScene, transformScale, uploadAttributes } from './runtime-data'
 import type { MeshletSceneEntry, PackedMeshletScene } from './runtime-data'
-import { bindGeometryMaterial, createGeometryMaterial } from './runtime-material'
+import { bindGeometryMaterial, createGeometryDepthMaterial, createGeometryMaterial } from './runtime-material'
 import { clusterGeometry, clusterVertex } from './runtime-vertex'
 import { ClusterShadows } from './runtime-shadows'
 import { ClusterTraversal } from './runtime-traversal'
 
 export type { MeshletSceneEntry } from './runtime-data'
+export { meshletStorageSize } from './runtime-data'
 export { geometryScaleX, geometrySecondaryUV, geometryVertexColor, normalMapWithUV, tangentNormalWithUV } from './runtime-material'
 export type MeshletDebugView = 'normal' | 'meshlets' | 'lod'
 
@@ -71,6 +72,8 @@ export interface MeshletStats {
 export class MeshletScene {
   readonly object = new Group()
   readonly meshes: Mesh<BufferGeometry, MeshStandardNodeMaterial>[] = []
+  private readonly lit = new Group()
+  private readonly depth = new Group()
   readonly triangleBudget: number
   readonly totalTriangles: number
   readonly candidateClusters: number
@@ -84,7 +87,7 @@ export class MeshletScene {
   private readonly lodEnabled = uniform(true)
   private readonly fallbackReach = uniform(120)
   private shadowPasses = 0
-  private readonly materials = new Set<MeshStandardNodeMaterial>()
+  private readonly materials = new Set<MeshStandardNodeMaterial | MeshBasicNodeMaterial>()
   private readonly counters: IndirectStorageBufferAttribute
   private readonly traversal: ClusterTraversal
   private readonly hierarchyDepth: number
@@ -136,6 +139,10 @@ export class MeshletScene {
 
   private constructor(packed: PackedMeshletScene, options: MeshletSceneOptions) {
     this.object.name = 'Cluster scene'
+    this.lit.name = 'Cluster lit materials'
+    this.depth.name = 'Cluster depth buckets'
+    this.depth.visible = false
+    this.object.add(this.lit, this.depth)
     this.pixelError = options.pixelError ?? 2
     this.triangleBudget = options.triangleBudget ?? 16_000_000
     if (!Number.isSafeInteger(this.triangleBudget) || this.triangleBudget < 2 || this.triangleBudget % 2) throw new Error('Geometry triangle budget must be a positive even integer')
@@ -207,27 +214,29 @@ export class MeshletScene {
     this.counters = this.traversal.counters
     this.residentBytes = packed.residentBytes + this.traversal.residentBytes + this.shadows.residentBytes + pyramidAttribute.array.byteLength
     const pulled = clusterVertex(packed, this.traversal.visible, this.debug)
-    const materials = new Map<PackedMeshletScene['batches'][number]['material'], MeshStandardNodeMaterial>()
     for (let batchIndex = 0; batchIndex < packed.batches.length; batchIndex++) {
       const batch = packed.batches[batchIndex]!
       const geometry = clusterGeometry(this.traversal.indices.indices, this.counters, batchIndex)
-      let material = materials.get(batch.material)
-      if (!material) {
-        material = createGeometryMaterial(batch.material)
-        bindGeometryMaterial(material, pulled)
-        const standardOutput = material.outputNode ?? output
-        material.outputNode = vec4(mix(standardOutput.rgb, pulled.color, float(this.debug.greaterThan(0))), standardOutput.a)
-        materials.set(batch.material, material)
-        this.materials.add(material)
-      }
+      const material = createGeometryMaterial(batch.material)
+      bindGeometryMaterial(material, pulled)
+      const standardOutput = material.outputNode ?? output
+      material.outputNode = vec4(mix(standardOutput.rgb, pulled.color, float(this.debug.greaterThan(0))), standardOutput.a)
+      this.materials.add(material)
       const mesh = new Mesh(geometry, material)
-      pulled.bind(mesh, batch)
       mesh.name = batch.material.name || `Cluster material ${batchIndex}`
       mesh.frustumCulled = false
       mesh.receiveShadow = true
       mesh.castShadow = false
       this.meshes.push(mesh)
-      this.object.add(mesh)
+      this.lit.add(mesh)
+    }
+    for (const batch of packed.depthBatches) {
+      const material = createGeometryDepthMaterial(batch.material, pulled, packed)
+      this.materials.add(material)
+      const mesh = new Mesh(clusterGeometry(this.traversal.indices.indices, this.counters, batch.argument), material)
+      mesh.name = `Cluster depth ${batch.material?.name || 'opaque'}`
+      mesh.frustumCulled = false
+      this.depth.add(mesh)
     }
     this.pyramidCompute = Fn(() => {
       const xy = uvec2(instanceIndex.mod(pyramidSize), instanceIndex.div(pyramidSize))
@@ -296,6 +305,8 @@ export class MeshletScene {
   }
 
   prepare(renderer: WebGPURenderer, camera: PerspectiveCamera, viewport: Readonly<Vector2>) {
+    this.lit.visible = false
+    this.depth.visible = true
     this.shadowPasses = 0
     if (!camera.isPerspectiveCamera) throw new Error('Geometry currently requires a perspective camera')
     if (!(this.pixelError > 0)) throw new Error('Geometry pixel error must be positive')
@@ -327,6 +338,8 @@ export class MeshletScene {
   }
 
   recover(renderer: WebGPURenderer, depth: DepthTexture) {
+    this.depth.visible = false
+    this.lit.visible = true
     if (!this.occlusionEnabled) return
     if (this.depthTexture) this.depthTexture.value = depth
     else this.depthTexture = textureLoad(depth)
@@ -376,6 +389,7 @@ export class MeshletScene {
 
   dispose() {
     for (const mesh of this.meshes) mesh.geometry.dispose()
+    for (const mesh of this.depth.children) (mesh as Mesh).geometry.dispose()
     for (const material of this.materials) material.dispose()
     this.shadows.dispose()
     this.traversal.dispose()

@@ -3,7 +3,7 @@ import type { Node, OrthographicCamera, Vector2, WebGPURenderer } from 'three/we
 import { bool, float, vec3, uniform, uniformArray } from 'three/tsl'
 import type { PackedMeshletScene } from './runtime-data'
 import { ClusterTraversal } from './runtime-traversal'
-import { createGeometryShadowMaterial } from './runtime-material'
+import { createGeometryDepthMaterial } from './runtime-material'
 import { clusterGeometry, clusterVertex } from './runtime-vertex'
 
 export class ClusterShadows {
@@ -15,7 +15,7 @@ export class ClusterShadows {
   private readonly threshold = uniform(1)
   private readonly traversal: ClusterTraversal
   private readonly hierarchyDepth: number
-  private readonly materials = new Set<ReturnType<typeof createGeometryShadowMaterial>>()
+  private readonly materials = new Set<ReturnType<typeof createGeometryDepthMaterial>>()
   readonly residentBytes: number
 
   constructor(packed: PackedMeshletScene, world: Node<'mat4'>, worldScale: Node<'float'>, layer: number, triangleBudget: number) {
@@ -28,19 +28,12 @@ export class ClusterShadows {
       triangleBudget, float(Math.max(packed.maximumError, 0.000001) * 1.001).mul(worldScale).mul(this.projectionScale), 'Shadow')
     this.residentBytes = this.traversal.residentBytes
     const pulled = clusterVertex(packed, this.traversal.visible)
-    const materials = new Map<PackedMeshletScene['batches'][number]['material'], ReturnType<typeof createGeometryShadowMaterial>>()
-    for (let index = 0; index < packed.batches.length; index++) {
-      const batch = packed.batches[index]!
-      const geometry = clusterGeometry(this.traversal.indices.indices, this.traversal.counters, index)
-      let material = materials.get(batch.material)
-      if (!material) {
-        material = createGeometryShadowMaterial(batch.material, pulled)
-        materials.set(batch.material, material)
-        this.materials.add(material)
-      }
+    for (const batch of packed.depthBatches) {
+      const geometry = clusterGeometry(this.traversal.indices.indices, this.traversal.counters, batch.argument)
+      const material = createGeometryDepthMaterial(batch.material, pulled, packed, true)
+      this.materials.add(material)
       const mesh = new Mesh(geometry, material)
-      pulled.bind(mesh, batch)
-      mesh.name = `Cluster shadow ${batch.material.name || index}`
+      mesh.name = `Cluster shadow ${batch.material?.name || 'opaque'}`
       mesh.layers.set(layer)
       mesh.frustumCulled = false
       mesh.castShadow = true

@@ -1,7 +1,9 @@
-import { Matrix4, StorageBufferAttribute, Vector3 } from 'three/webgpu'
+import { BackSide, DoubleSide, FrontSide, Matrix4, StorageBufferAttribute, Vector3 } from 'three/webgpu'
 import type { MeshStandardMaterial, MeshStandardNodeMaterial, WebGPURenderer } from 'three/webgpu'
 import { Fn, storage } from 'three/tsl'
 import type { MeshletAssetSource } from './load'
+import type { MeshletMetadata } from './format'
+import { geometryUsesCoverage } from './runtime-material'
 
 export interface MeshletSceneEntry {
   asset: MeshletAssetSource
@@ -9,17 +11,11 @@ export interface MeshletSceneEntry {
   materials: readonly (MeshStandardMaterial | MeshStandardNodeMaterial)[]
 }
 
-export interface ResidentMeshletGeometry {
-  vertexWords: number
-  colorOffset: number
-  secondaryUvOffset: number
-  secondaryUvBounds: [number, number, number, number]
-  vertices: StorageBufferAttribute
-  vertexReferences: StorageBufferAttribute
-}
-
 export interface PackedMeshletScene {
-  batches: { material: MeshletSceneEntry['materials'][number]; geometry: ResidentMeshletGeometry; capacity: number }[]
+  batches: { material: MeshletSceneEntry['materials'][number]; capacity: number }[]
+  depthBatches: { material: MeshletSceneEntry['materials'][number] | null; argument: number }[]
+  opaqueBatches: number
+  drawCount: number
   clusterCount: number
   instanceCount: number
   candidateCount: number
@@ -37,12 +33,29 @@ export interface PackedMeshletScene {
   instanceInfo: StorageBufferAttribute
   instanceBounds: StorageBufferAttribute
   materialMap: StorageBufferAttribute
+  materialSides: StorageBufferAttribute
+  vertices: StorageBufferAttribute
+  vertexReferences: StorageBufferAttribute
   indices: StorageBufferAttribute
 }
 
+export const CLUSTER_RECORD_WORDS = 40
 export const DRAW_ARGUMENT_OFFSET = 32
 export const DRAW_ARGUMENT_STRIDE = 5
 export const INDEX_BUDGET_OFFSET = 24
+
+function geometryPoolLayout(metadata: readonly MeshletMetadata[]) {
+  return metadata.reduce((pool, asset) => ({
+    vertices: pool.vertices + asset.residentVertices * asset.vertexStride / 4,
+    references: pool.references + asset.meshletVertices,
+    indices: pool.indices + asset.clusterCount * Math.ceil(asset.maxClusterTriangles * 3 / 4),
+    clusters: pool.clusters + asset.clusterCount * CLUSTER_RECORD_WORDS,
+  }), { vertices: 0, references: 0, indices: 0, clusters: 0 })
+}
+
+export function meshletStorageSize(metadata: readonly MeshletMetadata[]) {
+  return Math.max(...Object.values(geometryPoolLayout(metadata))) * 4
+}
 
 export async function uploadAttributes(renderer: WebGPURenderer, attributes: readonly StorageBufferAttribute[]) {
   const buffers = attributes.map(attribute => storage(attribute, 'uint', attribute.array.length))
@@ -98,8 +111,11 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     leafCapacity += entry.asset.metadata.clusterCount * entry.instances.length
     totalTriangles += entry.asset.metadata.sourceTriangles * entry.instances.length
   }
-  const clusterIntegers = new Uint32Array(clusterCount * 32)
-  const indices = new Uint32Array([...sources.keys()].reduce((sum, source) => sum + source.metadata.clusterCount * Math.ceil(source.metadata.maxClusterTriangles * 3 / 4), 0))
+  const layout = geometryPoolLayout([...sources.keys()].map(source => source.metadata))
+  const clusterIntegers = new Uint32Array(layout.clusters)
+  const vertices = new Uint32Array(layout.vertices)
+  const references = new Uint32Array(layout.references)
+  const indices = new Uint32Array(layout.indices)
   const clusterFloats = new Float32Array(clusterIntegers.buffer)
   const nodes = new Uint32Array(nodeCount * 12)
   const nodeFloats = new Float32Array(nodes.buffer)
@@ -114,20 +130,16 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
   let nodeBase = 0
   let instanceIndex = 0
   let indexBase = 0
+  let vertexBase = 0
+  let referenceBase = 0
+  const materialIndices = new Map<MeshletSceneEntry['materials'][number], number>()
   for (const [source, sourceEntries] of sources) {
     const asset = await source.load()
     if (asset.metadata.clusterCount !== source.metadata.clusterCount || asset.metadata.nodeCount !== source.metadata.nodeCount || asset.metadata.rootCount !== source.metadata.rootCount || asset.metadata.residentVertices !== source.metadata.residentVertices || asset.metadata.source.sha256 !== source.metadata.source.sha256) throw new Error('Geometry source changed after metadata was loaded')
-    const geometry: ResidentMeshletGeometry = {
-      vertexWords: asset.metadata.vertexStride / 4,
-      colorOffset: asset.metadata.vertexAttributes?.color ?? 0,
-      secondaryUvOffset: asset.metadata.vertexAttributes?.uv1 ?? 0,
-      secondaryUvBounds: asset.metadata.secondaryUvBounds ?? [0, 0, 0, 0],
-      vertices: new StorageBufferAttribute(asset.vertices, 1),
-      vertexReferences: new StorageBufferAttribute(asset.vertexReferences, 1),
-    }
+    vertices.set(asset.vertices, vertexBase)
+    references.set(asset.vertexReferences, referenceBase)
     indices.set(asset.indices, indexBase)
-    residentGeometryBytes += asset.vertices.byteLength + asset.vertexReferences.byteLength + asset.indices.byteLength + asset.metadata.clusterCount * 128
-    const materialIndices = new Map<MeshletSceneEntry['materials'][number], number>()
+    residentGeometryBytes += asset.vertices.byteLength + asset.vertexReferences.byteLength + asset.indices.byteLength + asset.metadata.clusterCount * CLUSTER_RECORD_WORDS * 4
     const materialCounts = new Uint32Array(asset.metadata.materials.length)
     const materialRoots = new Uint32Array(asset.metadata.materials.length)
     const refinedGroups = new Set<number>()
@@ -135,7 +147,7 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     let sourceError = 0
     let quantizationRadius = 0
     for (let i = 0; i < asset.metadata.clusterCount; i++) {
-      const offset = (clusterBase + i) * 32
+      const offset = (clusterBase + i) * CLUSTER_RECORD_WORDS
       const material = asset.clusterData[i * 8 + 5]!
       if (material >= materialCounts.length) throw new Error('Geometry cluster references a missing material slot')
       materialCounts[material] = materialCounts[material]! + 1
@@ -148,8 +160,10 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
       clusterIntegers[offset + 16] = indexBase * 4 + asset.clusterData[i * 8]!
       clusterIntegers[offset + 17] = asset.clusterData[i * 8 + 1]!
       clusterIntegers[offset + 18] = asset.clusterData[i * 8 + 4]!
-      clusterIntegers[offset + 19] = asset.clusterData[i * 8 + 7]!
+      clusterIntegers[offset + 19] = referenceBase + asset.clusterData[i * 8 + 7]!
       clusterFloats.set(asset.clusterQuantization.subarray(i * 12, i * 12 + 12), offset + 20)
+      clusterIntegers.set([vertexBase, asset.metadata.vertexStride / 4, asset.metadata.vertexAttributes?.color ?? 0, asset.metadata.vertexAttributes?.uv1 ?? 0], offset + 32)
+      clusterFloats.set(asset.metadata.secondaryUvBounds ?? [0, 0, 0, 0], offset + 36)
       const radius = Math.hypot(asset.clusterQuantization[i * 12 + 4]!, asset.clusterQuantization[i * 12 + 5]!, asset.clusterQuantization[i * 12 + 6]!) * 0.5
       quantizationRadius = Math.max(quantizationRadius, radius)
       for (const field of [3, 7, 11]) clusterFloats[offset + field] = clusterFloats[offset + field]! + radius
@@ -192,7 +206,7 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
         }
         if (!materialIndices.has(material)) {
           materialIndices.set(material, batches.length)
-          batches.push({ material, geometry, capacity: 0 })
+          batches.push({ material, capacity: 0 })
         }
         const batchIndex = materialIndices.get(material)!
         const batch = batches[batchIndex]!
@@ -218,8 +232,18 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     clusterBase += asset.metadata.clusterCount
     nodeBase += asset.metadata.nodeCount
     indexBase += asset.indices.length
-    await uploadAttributes(renderer, [geometry.vertices, geometry.vertexReferences])
+    vertexBase += asset.vertices.length
+    referenceBase += asset.vertexReferences.length
+    if (!(asset.vertices.buffer instanceof ArrayBuffer)) throw new Error('Geometry sources require transferable buffers')
+    asset.vertices.buffer.transfer(0)
   }
+  batches.sort((a, b) => Number(geometryUsesCoverage(a.material)) - Number(geometryUsesCoverage(b.material)))
+  const remap = new Uint32Array(batches.length)
+  batches.forEach((batch, index) => { remap[materialIndices.get(batch.material)!] = index })
+  for (let i = 0; i < materialMap.length; i++) if (materialMap[i] !== 0xffffffff) materialMap[i] = remap[materialMap[i]!]!
+  const opaqueBatches = batches.filter(batch => !geometryUsesCoverage(batch.material)).length
+  const depthBatches: PackedMeshletScene['depthBatches'] = opaqueBatches ? [{ material: null, argument: batches.length }] : []
+  for (let i = opaqueBatches; i < batches.length; i++) depthBatches.push({ material: batches[i]!.material, argument: i })
   let candidateCount = 0
   for (const batch of batches) candidateCount += batch.capacity
   if (candidateCount === 0) throw new Error('Geometry requires at least one visible cluster')
@@ -231,16 +255,21 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     instanceInfo: new StorageBufferAttribute(instanceInfo, 4),
     instanceBounds: new StorageBufferAttribute(instanceBounds, 4),
     materialMap: new StorageBufferAttribute(new Uint32Array(materialMap), 1),
+    materialSides: new StorageBufferAttribute(new Uint32Array(batches.flatMap(({ material }) => [material.side, material.shadowSide ?? (material.side === FrontSide ? BackSide : material.side === BackSide ? FrontSide : DoubleSide)])), 2),
+    vertices: new StorageBufferAttribute(vertices, 1),
+    vertexReferences: new StorageBufferAttribute(references, 1),
     indices: new StorageBufferAttribute(indices.subarray(0, indexBase), 1),
   }
-  const residentBytes = residentGeometryBytes + Object.entries(attributes).reduce((sum, [name, attribute]) => sum + (name === 'clusters' || name === 'indices' ? 0 : attribute.array.byteLength), 0)
+  const residentBytes = Object.values(attributes).reduce((sum, attribute) => sum + attribute.array.byteLength, 0)
   const packed: PackedMeshletScene = {
-    batches, clusterCount, instanceCount, candidateCount, totalTriangles, residentGeometryBytes, residentBytes,
+    batches, depthBatches, opaqueBatches, drawCount: batches.length + Number(opaqueBatches > 0),
+    clusterCount, instanceCount, candidateCount, totalTriangles, residentGeometryBytes, residentBytes,
     hierarchyDepth: frontierWidths.length,
     queueCapacity: Math.max(...frontierWidths),
     leafCapacity, rootTriangles, maximumError,
     ...attributes,
   }
-  await uploadAttributes(renderer, Object.values(attributes))
+  await uploadAttributes(renderer, [attributes.vertices, attributes.vertexReferences, attributes.indices])
+  await uploadAttributes(renderer, [attributes.clusters, attributes.instances, attributes.nodes, attributes.instanceInfo, attributes.instanceBounds, attributes.materialMap, attributes.materialSides])
   return packed
 }

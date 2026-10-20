@@ -1,7 +1,7 @@
 import { Matrix4 } from 'three'
 import { MeshStandardNodeMaterial, type WebGPURenderer } from 'three/webgpu'
 import type { RapierContext } from '@react-three/rapier'
-import { loadMeshletAsset, MeshletScene, type MeshletAssetSource, type MeshletMetadata, type MeshletSceneEntry } from '@blacksite/geometry'
+import { loadMeshletAsset, meshletStorageSize, MeshletScene, type MeshletAssetSource, type MeshletMetadata, type MeshletSceneEntry } from '@blacksite/geometry'
 import { loadScanMaterials, type ScanSurface } from '../../shared/scan-material'
 
 const root = '/owned/dark-ruins/'
@@ -97,7 +97,7 @@ export async function loadArchway() {
     manifest, sourceTriangles, meshlets,
     uniqueMeshes: assets.length,
     levels: Math.max(...assets.map(asset => asset.metadata.levelCount)),
-    storageSize: Math.max(meshlets * 128, candidateCount * 16, ...[...assetsByGeometry.keys()].map(index => manifest.geometries[index]!.bytes)),
+    storageSize: Math.max(meshletStorageSize(assets.map(asset => asset.metadata)), candidateCount * 16, 16_000_000 * 6),
     createColliders: (context: Pick<RapierContext, 'world' | 'rapier'>, signal: AbortSignal) => loadCourtyardColliders(root + manifest.colliderUrl, context, signal),
     async createGeometry(renderer: WebGPURenderer) {
       const materials = await loadScanMaterials(surfaceSet.surfaces, surfaceRoot, renderer)
