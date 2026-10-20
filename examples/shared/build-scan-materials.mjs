@@ -37,7 +37,7 @@ export async function buildScanMaterialTails(sourceFile, output) {
   for (const surface of source.surfaces) {
     const maps = {}
     for (const [name, image] of Object.entries(surface.maps)) {
-      const input = resolve(dirname(sourceFile), image.detailFile ?? image.file)
+      const input = resolve(dirname(sourceFile), image.tails?.at(-1)?.file ?? image.detailFile ?? image.file)
       if (!images.has(input)) images.set(input, await textureLevels(input, join(output, 'textures')))
       const encoded = images.get(input)
       maps[name] = { file: `textures/${encoded.file}`, srgb: image.srgb, tails: encoded.tails.map(tail => ({ ...tail, file: `textures/${tail.file}` })) }
