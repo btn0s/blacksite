@@ -35,10 +35,11 @@ function ensureNodeVersion() {
 }
 
 function options() {
-  const result = { views: defaultViews, dev: false, compare: null, compareEnabled: false, output: join(benchRoot, 'run') }
+  const result = { views: defaultViews, dev: false, url: null, compare: null, compareEnabled: false, output: join(benchRoot, 'run') }
   for (let index = 2; index < process.argv.length; index++) {
     const arg = process.argv[index]
     if (arg === '--dev') result.dev = true
+    else if (arg === '--url') result.url = new URL(process.argv[++index]).href
     else if (arg === '--views') result.views = (process.argv[++index] ?? '').split(',').filter(Boolean)
     else if (arg === '--compare') {
       result.compareEnabled = true
@@ -75,11 +76,6 @@ async function acquireLock() {
       await new Promise(resolvePromise => setTimeout(resolvePromise, 2000))
     }
   }
-}
-
-function assertNoChrome() {
-  const pids = execFileSync('powershell.exe', ['-NoProfile', '-Command', "(Get-Process -Name chrome -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id) -join ','; exit 0"], { encoding: 'utf8' }).trim().split(',').filter(Boolean)
-  if (pids.length) throw new Error(`Chrome is already using the GPU (pid${pids.length === 1 ? '' : 's'} ${pids.join(', ')}). Close it before benchmarking.`)
 }
 
 function git(...args) {
@@ -280,7 +276,6 @@ let server
 let browser
 try {
   lock = await acquireLock()
-  assertNoChrome()
   assertClean()
   if (!existsSync(vite)) throw new Error('Vite is unavailable. Link the existing node_modules; do not install dependencies.')
   const branch = git('branch', '--show-current')
@@ -289,18 +284,21 @@ try {
   mkdirSync(outputDir, { recursive: true })
   const identity = { branch, sha, worktree: root, dev: config.dev }
   const env = { ...process.env, BLACKSITE_OWNED_ASSETS: join(root, 'owned-assets') }
-  if (!config.dev) {
+  if (!config.dev && !config.url) {
     const build = spawn(process.execPath, [vite, 'build', '--config', 'examples/archway/vite.config.ts'], { cwd: root, env, stdio: 'inherit', windowsHide: true })
     const status = await new Promise((resolvePromise, reject) => { build.once('error', reject); build.once('exit', (code, signal) => resolvePromise({ code, signal })) })
     if (status.code !== 0) throw new Error(`Production build failed (${status.signal ?? status.code}).`)
   }
-  const port = await freePort()
-  const args = config.dev
-    ? ['--config', 'examples/archway/vite.config.ts', '--host', '127.0.0.1', '--port', String(port), '--strictPort']
-    : ['preview', '--config', 'examples/archway/vite.config.ts', '--host', '127.0.0.1', '--port', String(port), '--strictPort']
-  server = launch(args, env)
-  const baseUrl = `http://127.0.0.1:${port}`
-  await waitForServer(server, baseUrl)
+  let baseUrl = config.url
+  if (!baseUrl) {
+    const port = await freePort()
+    const args = config.dev
+      ? ['--config', 'examples/archway/vite.config.ts', '--host', '127.0.0.1', '--port', String(port), '--strictPort']
+      : ['preview', '--config', 'examples/archway/vite.config.ts', '--host', '127.0.0.1', '--port', String(port), '--strictPort']
+    server = launch(args, env)
+    baseUrl = `http://127.0.0.1:${port}`
+    await waitForServer(server, baseUrl)
+  }
   const gpuMemory = execFileSync('nvidia-smi', ['--query-gpu=memory.free', '--format=csv'], { encoding: 'utf8', windowsHide: true })
   const freeMiB = gpuMemory.trim().split(/\r?\n/).slice(1).map(line => Number.parseInt(line, 10))
   if (!freeMiB.length || freeMiB.some(value => !Number.isFinite(value) || value < 3072)) throw new Error(`Benchmark requires at least 3 GiB free GPU memory:\n${gpuMemory.trim()}`)
