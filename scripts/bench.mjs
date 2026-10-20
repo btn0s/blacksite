@@ -1,23 +1,21 @@
 import { spawn, spawnSync, execFile, execFileSync } from 'node:child_process'
 import { createServer } from 'node:net'
-import { existsSync, mkdirSync, openSync, closeSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'file:///D:/dev/wall/examples/wall/node_modules/playwright/index.mjs'
 import { views as defaultViews, contendedExit } from './bench-views.mjs'
+import { Contended, acquireLock, assertFreeGpuMemory, releaseLock } from './gpu-lock.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const probeRoot = 'D:/dev/probe'
 const benchRoot = join(probeRoot, 'bench')
 const baselineDir = join(benchRoot, 'baseline')
-const lockPath = join(probeRoot, 'bench.lock')
 const vite = join(root, 'node_modules', 'vite', 'bin', 'vite.js')
 const viewUrls = Object.fromEntries(defaultViews.map(view => [view, view === 'spawn' ? '/' : `/?view=${view}`]))
 const settleMs = 20000
 const captureMs = 10000
 const foreignGpuLimit = 15
-
-class Contended extends Error {}
 
 function ensureNodeVersion() {
   const [major, minor] = process.versions.node.split('.').map(Number)
@@ -49,33 +47,6 @@ function options() {
   return result
 }
 
-function isAlive(pid) {
-  try { process.kill(pid, 0); return true } catch (error) { return error.code === 'EPERM' }
-}
-
-async function acquireLock() {
-  mkdirSync(probeRoot, { recursive: true })
-  const holder = { pid: process.pid, worktree: root, startedAt: new Date().toISOString() }
-  for (;;) {
-    try {
-      const fd = openSync(lockPath, 'wx')
-      writeFileSync(fd, JSON.stringify(holder, null, 2))
-      closeSync(fd)
-      return holder
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error
-      let current
-      try { current = JSON.parse(readFileSync(lockPath, 'utf8')) } catch { current = null }
-      if (current?.pid && !isAlive(Number(current.pid))) {
-        try { unlinkSync(lockPath); console.log(`Cleared stale GPU lock from ${current.worktree ?? 'unknown worktree'} (pid ${current.pid}).`); continue } catch (removeError) { if (removeError.code !== 'ENOENT') throw removeError }
-      }
-      const label = current ? `${current.worktree ?? 'unknown worktree'} (pid ${current.pid ?? 'unknown'})` : 'an unreadable lock holder'
-      console.log(`Waiting for the machine GPU lock held by ${label}.`)
-      await new Promise(resolvePromise => setTimeout(resolvePromise, 2000))
-    }
-  }
-}
-
 function gpuLoad(seconds) {
   const script = join(root, 'scripts', 'gpu-load.ps1')
   return new Promise((resolvePromise, reject) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-Root', String(process.pid), '-Seconds', String(seconds)], { encoding: 'utf8', windowsHide: true }, (error, stdout) => error ? reject(error) : resolvePromise(JSON.parse(stdout))))
@@ -86,10 +57,7 @@ function assertUncontended(load, label) {
 }
 
 async function admit() {
-  const gpuMemory = execFileSync('nvidia-smi', ['--query-gpu=memory.free', '--format=csv'], { encoding: 'utf8', windowsHide: true })
-  const freeMiB = gpuMemory.trim().split(/\r?\n/).slice(1).map(line => Number.parseInt(line, 10))
-  if (!freeMiB.length || freeMiB.some(value => !Number.isFinite(value) || value < 3072)) throw new Contended(`Benchmark requires at least 3 GiB free GPU memory:\n${gpuMemory.trim()}`)
-  console.log(gpuMemory.trim())
+  assertFreeGpuMemory('Benchmark')
   const load = await gpuLoad(5)
   assertUncontended(load, 'Before start')
   console.log(`Other GPU load ${load.mean}% mean (limit ${foreignGpuLimit}%).`)
@@ -295,7 +263,7 @@ let lock
 let server
 let browser
 try {
-  lock = await acquireLock()
+  lock = await acquireLock(root)
   assertClean()
   await admit()
   if (!existsSync(vite)) throw new Error('Vite is unavailable. Link the existing node_modules; do not install dependencies.')
@@ -347,10 +315,5 @@ try {
 } finally {
   await browser?.close().catch(() => {})
   await stop(server)
-  if (lock) {
-    try {
-      const current = JSON.parse(readFileSync(lockPath, 'utf8'))
-      if (current.pid === lock.pid && current.worktree === lock.worktree) unlinkSync(lockPath)
-    } catch {}
-  }
+  if (lock) releaseLock(lock)
 }
