@@ -125,7 +125,7 @@ export async function loadArchway() {
         }
         grouped.get(id)!.instances.push(new Matrix4().fromArray(placement.matrix))
       }
-      return MeshletScene.create(renderer, [...grouped.values()], { pixelError: 2, occlusion: true, shadowLayer: 2, shadowPixelError: 4, textureFeedback: scanTextureFeedback(renderer) })
+      return MeshletScene.create(renderer, [...grouped.values()], { materialIds: materials.materialIds, pixelError: 2, occlusion: true, shadowLayer: 2, shadowPixelError: 4, textureFeedback: scanTextureFeedback(renderer) })
     },
   }
 }

@@ -1,9 +1,9 @@
 import {
   BufferGeometry, Frustum, Group, IndirectStorageBufferAttribute,
-  Matrix4, Mesh, MeshStandardNodeMaterial, PerspectiveCamera, Scene,
+  Matrix4, Mesh, MeshStandardNodeMaterial, PerspectiveCamera,
   StorageBufferAttribute, Vector2, Vector3, Vector4, WebGPUCoordinateSystem,
 } from 'three/webgpu'
-import type { Camera, DepthTexture, MeshBasicNodeMaterial, OrthographicCamera, WebGPURenderer } from 'three/webgpu'
+import type { DepthTexture, MeshBasicNodeMaterial, Node, OrthographicCamera, WebGPURenderer } from 'three/webgpu'
 import {
   Fn, If, Loop, bool, ceil, clamp, float,
   floor, instanceIndex, log2, max, min, mix, output, storage,
@@ -18,16 +18,18 @@ import { ClusterTraversal } from './runtime-traversal'
 import { ClusterFeedback, type MeshletTextureFeedback } from './runtime-textures'
 import type { GeometryPageArena } from './runtime-pages'
 import { FRAME_UPLOAD_BYTES, GEOMETRY_ARENA_BYTES, GEOMETRY_PAGE_BYTES, GEOMETRY_STAGING_BYTES } from './page-residency'
-import { MaterialSubmission, type GeometryPass } from './runtime-submission'
+import { MaterialSubmission, type GeometryCompilePass } from './runtime-submission'
 
 export type { MeshletTextureFeedback, TextureDemandBinding } from './runtime-textures'
 
 export type { MeshletSceneEntry } from './runtime-data'
+export type { GeometryCompilePass } from './runtime-submission'
 export { GEOMETRY_ARENA_BYTES } from './page-residency'
-export { geometryScaleX, geometrySecondaryUV, geometryVertexColor, normalMapWithUV, tangentNormalWithUV } from './runtime-material'
+export { geometryMaterialId, geometryScaleX, geometrySecondaryUV, geometryVertexColor, normalMapWithUV, tangentNormalWithUV } from './runtime-material'
 export type MeshletDebugView = 'normal' | 'meshlets' | 'lod'
 
 export interface MeshletSceneOptions {
+  materialIds?: ReadonlyMap<MeshletSceneEntry['materials'][number], number>
   geometryBytes?: number
   textureFeedback?: MeshletTextureFeedback
   pixelError?: number
@@ -144,14 +146,12 @@ export class MeshletScene {
     const maximum = Math.floor(Math.min(limits.maxBufferSize, limits.maxStorageBufferBindingSize) / GEOMETRY_PAGE_BYTES) * GEOMETRY_PAGE_BYTES
     const bytes = options.geometryBytes ?? Math.min(GEOMETRY_ARENA_BYTES, maximum)
     if (bytes > maximum) throw new Error('Geometry arena exceeds the requested WebGPU device limits')
-    const packed = await packScene(renderer, entries, bytes, options.textureFeedback?.cpuStaging)
+    const packed = await packScene(renderer, entries, bytes, options.textureFeedback?.cpuStaging, options.materialIds)
     let scene: MeshletScene | undefined
     try {
       scene = new MeshletScene(packed, options)
-      scene.submission.initialize(renderer)
       await uploadAttributes(renderer, scene.uploadBuffers)
-      await Promise.all([scene.traversal.upload(renderer), scene.shadows.upload(renderer), scene.streaming.upload(renderer), ...scene.reductionCompute.map(node => renderer.compileComputeAsync(node))])
-      await scene.arena.initialize(renderer)
+      await Promise.all([scene.traversal.upload(renderer), scene.shadows.upload(renderer), scene.streaming.upload(renderer), scene.arena.initialize(renderer), ...scene.reductionCompute.map(node => renderer.compileComputeAsync(node))])
       return scene
     } catch (error) {
       if (scene) scene.dispose()
@@ -242,13 +242,15 @@ export class MeshletScene {
     this.residentBytes = packed.residentBytes + this.traversal.residentBytes + this.shadows.residentBytes + pyramidAttribute.array.byteLength
     this.traversalScratchBytes = this.traversal.residentBytes + this.shadows.residentBytes - this.triangleBudget * 12
     const pulled = clusterVertex(packed, this.traversal.visible, this.debug)
+    const debugOutputs = new Map<Node, Node<'vec4'>>()
     for (let batchIndex = 0; batchIndex < packed.batches.length; batchIndex++) {
       const batch = packed.batches[batchIndex]!
       const geometry = clusterGeometry(this.traversal.indices.indices, this.counters, batchIndex)
       const material = createGeometryMaterial(batch.material)
       bindGeometryMaterial(material, pulled)
       const standardOutput = material.outputNode ?? output
-      material.outputNode = vec4(mix(standardOutput.rgb, pulled.color, float(this.debug.greaterThan(0))), standardOutput.a)
+      if (!debugOutputs.has(standardOutput)) debugOutputs.set(standardOutput, vec4(mix(standardOutput.rgb, pulled.color, float(this.debug.greaterThan(0))), standardOutput.a))
+      material.outputNode = debugOutputs.get(standardOutput)!
       this.materials.add(material)
       const mesh = new Mesh(geometry, material)
       mesh.name = batch.material.name || `Cluster material ${batchIndex}`
@@ -316,8 +318,9 @@ export class MeshletScene {
     this.debug.value = view === 'meshlets' ? 1 : view === 'lod' ? 2 : 0
   }
 
-  compile(renderer: WebGPURenderer, camera: Camera, scene: Scene, pass: GeometryPass) {
-    return this.submission.compile(renderer, camera, scene, pass)
+  compile(passes: readonly GeometryCompilePass[]) {
+    this.object.updateWorldMatrix(true, true)
+    return this.submission.compile(passes, this.object.matrixWorld)
   }
 
   setLodEnabled(enabled: boolean) {
@@ -366,7 +369,7 @@ export class MeshletScene {
 
   completeFrame(renderer: WebGPURenderer) { return this.streaming.completeFrame(renderer) }
 
-  pagingStats() { return { ...this.arena.snapshot(), ...this.streaming.stats(), schedulingMs: this.schedulingMs, peakSchedulingMs: this.peakSchedulingMs } }
+  pagingStats() { return { ...this.arena.snapshot(), ...this.streaming.stats(), materialWarmup: this.submission.warmupStats(), schedulingMs: this.schedulingMs, peakSchedulingMs: this.peakSchedulingMs } }
 
   prepare(renderer: WebGPURenderer, camera: PerspectiveCamera, viewport: Readonly<Vector2>) {
     this.lit.visible = false

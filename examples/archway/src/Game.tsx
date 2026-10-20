@@ -105,14 +105,25 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
   useEffect(() => {
     if (!look || !collidersReady) return
     let active = true
-    geometry.object.visible = true
-    void look.compile((gl, camera, scene, pass) => geometry.compile(gl, camera, scene, pass), [geometry.object]).then(() => geometry.completeFrame(renderer)).then(() => geometry.readStats(renderer, look.timings())).then(() => {
+    void (async () => {
+      while (active && !walker.als.pose.current.ready) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
       if (!active) return
+      performance.mark('archway-warmup-start')
+      await look.compile(passes => geometry.compile(passes), [geometry.object])
+      if (!active) return
+      geometry.object.visible = true
+      look.render()
+      await geometry.completeFrame(renderer)
+      await geometry.readStats(renderer, look.timings())
+      if (!active) return
+      performance.measure('archway-warmup', 'archway-warmup-start')
+      performance.mark('archway-first-playable')
       shared.warm.current = 10
       onReady()
-    }).catch(onError)
+    })().catch(error => { if (active) onError(error) })
     return () => { active = false }
-  }, [collidersReady, geometry, look, onError, onReady, renderer, shared])
+  }, [collidersReady, geometry, look, onError, onReady, renderer, shared, walker])
   useEffect(() => {
     let pending = false
     const interval = setInterval(() => {

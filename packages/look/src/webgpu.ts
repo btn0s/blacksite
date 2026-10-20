@@ -1,6 +1,6 @@
 import { Color, InspectorBase, Lighting, NeutralToneMapping, NoToneMapping, PCFShadowMap, RenderPipeline, Vector2, Vector3 } from 'three/webgpu'
 import type { Camera, DepthTexture, Node, Object3D, OrthographicCamera, RenderTarget, Scene, WebGPURenderer } from 'three/webgpu'
-import { builtinAOContext, context, faceDirection, float, luminance, mix, mrt, normalViewGeometry, output, packNormalToRGB, pass, renderOutput, sample, screenUV, texture3D, uniform, uv, vec3, vec4, velocity } from 'three/tsl'
+import { builtinAOContext, context, faceDirection, float, luminance, mix, mrt, normalViewGeometry, output, packNormalToRGB, pass, renderGroup, renderOutput, sample, screenUV, texture3D, uniform, uv, vec3, vec4, velocity } from 'three/tsl'
 import { SunLight } from 'three/addons/lights/SunLight.js'
 import { SunLightNode } from 'three/addons/lights/SunLightNode.js'
 import { LightProbeGrid } from 'three/addons/lighting/LightProbeGrid.js'
@@ -51,7 +51,12 @@ export interface WebGPULook {
 export type WebGPUShadowListener = (renderer: WebGPURenderer, camera: OrthographicCamera, mapSize: Readonly<Vector2>, cascade: number) => void
 export type WebGPUBeforeDepthListener = (renderer: WebGPURenderer, camera: Camera, size: Readonly<Vector2>) => void
 export type WebGPUAfterDepthListener = (renderer: WebGPURenderer, camera: Camera, depth: DepthTexture) => void
-export type WebGPUCompiler = (renderer: WebGPURenderer, camera: Camera, scene: Scene, pass: 'depth' | 'lit' | 'shadow') => Promise<void>
+export interface WebGPUCompilePass {
+  readonly camera: Camera
+  readonly pass: 'depth' | 'lit' | 'shadow'
+  compile(object: Object3D): Promise<void>
+}
+export type WebGPUCompiler = (passes: readonly WebGPUCompilePass[]) => Promise<void>
 
 type TimestampBackend = WebGPURenderer['backend'] & {
   readonly isWebGPUBackend?: boolean
@@ -139,7 +144,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   sun.shadow.camera.far = options.shadowDistance ?? (quality === 'low' ? 90 : 180)
   sun.shadow.normalBias = 0.03
   sun.shadow.bias = -0.0002
-  const sunAngle = uniform((sunlight.sunSize ?? 0.53) * Math.PI / 180)
+  const sunAngle = uniform((sunlight.sunSize ?? 0.53) * Math.PI / 180).setGroup(renderGroup)
   sun.shadow.filterNode = sunPenumbra(sun, sunAngle, 8, 12)
   const shadows = new StaggeredSunShadowNode(sun, scene, camera)
   sun.shadow.shadowNode = shadows
@@ -172,7 +177,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   scenePass.before(prePass)
   scenePass.before(shadows)
   scenePass.setMRT(mrt({ output }))
-  const litContext = { radianceScale: float(exposure) }
+  const litContext = { radianceScale: uniform(exposure).setGroup(renderGroup) }
   scenePass.contextNode = context(litContext)
   timings.labelTarget(scenePass.renderTarget, scenePass.name)
   disposables.push(prePass, scenePass)
@@ -209,7 +214,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   const tint = cameraGrade.tint ?? 0
   const balance = new Vector3(1 + 0.25 * temperature, 1 + 0.12 * tint, 1 - 0.25 * temperature)
   balance.multiplyScalar(1 / (0.2126 * balance.x + 0.7152 * balance.y + 0.0722 * balance.z))
-  const balanced = color.rgb.mul(uniform(balance)).mul(atmosphere.exposure)
+  const balanced = color.rgb.mul(uniform(balance).setGroup(renderGroup)).mul(atmosphere.exposure)
   const saturated = mix(vec3(luminance(balanced)), balanced, atmosphere.grade.saturation ?? 1)
   const display = renderOutput(vec4(saturated, 1)).rgb
   const rolled = display.sub(display.pow(3).mul(cameraGrade.shoulder ?? 0))
@@ -231,17 +236,30 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   const beforeLitListeners = new Set<WebGPUBeforeDepthListener>()
   const afterDepthListeners = new Set<WebGPUAfterDepthListener>()
   const depthSize = new Vector2()
-  let compiling = false
+  let preparingCompile = false
   const captureState = (camera: Camera, pass: 'depth' | 'lit' | 'shadow') => ({
     camera, pass, target: renderer.getRenderTarget(), mrt: renderer.getMRT(), lighting: renderer.lighting,
     context: renderer.contextNode, override: scene.overrideMaterial, toneMapping: renderer.toneMapping, outputColorSpace: renderer.outputColorSpace,
+    cubeFace: renderer.getActiveCubeFace(), mipLevel: renderer.getActiveMipmapLevel(),
+    opaque: renderer.opaque, transparent: renderer.transparent,
   })
+  const applyState = (state: ReturnType<typeof captureState>) => {
+    renderer.setRenderTarget(state.target, state.cubeFace, state.mipLevel)
+    renderer.setMRT(state.mrt)
+    renderer.lighting = state.lighting
+    renderer.contextNode = state.context
+    renderer.toneMapping = state.toneMapping
+    renderer.outputColorSpace = state.outputColorSpace
+    renderer.opaque = state.opaque
+    renderer.transparent = state.transparent
+    scene.overrideMaterial = state.override
+  }
   const states = new Map<string, ReturnType<typeof captureState>>()
   const previousBeforeRender = scene.onBeforeRender
   const previousAfterRender = scene.onAfterRender
   const beforeSceneRender: Scene['onBeforeRender'] = function (...args) {
     previousBeforeRender.apply(this, args)
-    if (compiling || args[1] !== scene) return
+    if (preparingCompile || args[1] !== scene) return
     const [renderer, , activeCamera, target] = args
     if (target === prePass.renderTarget) {
       states.set('depth', captureState(activeCamera, 'depth'))
@@ -263,7 +281,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   }
   const afterSceneRender: Scene['onAfterRender'] = function (...args) {
     previousAfterRender.apply(this, args)
-    if (compiling || args[1] !== scene) return
+    if (preparingCompile || args[1] !== scene) return
     const [renderer, , activeCamera, target] = args
     if (target === prePass.renderTarget) {
       for (const listener of afterDepthListeners) listener(renderer as unknown as WebGPURenderer, activeCamera, prePass.renderTarget.depthTexture!)
@@ -285,7 +303,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     pipeline,
     quality,
     beginFrame() {
-      if (disposed || compiling) return
+      if (disposed) return
       renderer.info.reset()
       timings.startFrame()
     },
@@ -297,41 +315,37 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
       resolved.setSize(1, 1)
     },
     async compile(compiler, ownedRoots = []) {
-      if (compiling || disposed) return
+      if (disposed) return
       const visibility = ownedRoots.map(root => root.visible)
       for (const root of ownedRoots) root.visible = false
-      updateCamera()
-      pipeline.render()
-      const previous = captureState(camera, 'lit')
-      compiling = true
+      const ordinary: Promise<void>[] = []
+      const passes: WebGPUCompilePass[] = []
       try {
+        updateCamera()
+        pipeline.render()
         for (const state of states.values()) {
-          renderer.setRenderTarget(state.target)
-          renderer.setMRT(state.mrt)
-          renderer.lighting = state.lighting
-          renderer.contextNode = state.context
-          renderer.toneMapping = state.toneMapping
-          renderer.outputColorSpace = state.outputColorSpace
-          scene.overrideMaterial = state.override
-          if (state.pass !== 'shadow') await renderer.compileAsync(scene, state.camera)
-          await compiler(renderer, state.camera, scene, state.pass)
+          const compile = (object: Object3D) => {
+            const previous = captureState(camera, 'lit')
+            preparingCompile = true
+            try {
+              applyState(state)
+              return renderer.compileAsync(object, state.camera, scene)
+            } finally {
+              applyState(previous)
+              preparingCompile = false
+            }
+          }
+          passes.push({ camera: state.camera, pass: state.pass, compile })
+          if (state.pass !== 'shadow') ordinary.push(compile(scene))
         }
       } finally {
-        renderer.setRenderTarget(previous.target)
-        renderer.setMRT(previous.mrt)
-        renderer.lighting = previous.lighting
-        renderer.contextNode = previous.context
-        renderer.toneMapping = previous.toneMapping
-        renderer.outputColorSpace = previous.outputColorSpace
-        scene.overrideMaterial = previous.override
         ownedRoots.forEach((root, index) => { root.visible = visibility[index]! })
-        compiling = false
       }
-      updateCamera()
-      pipeline.render()
+      await Promise.all([...ordinary, compiler(passes)])
+      shadows.reset()
     },
     render(dt = 0) {
-      if (disposed || compiling) return
+      if (disposed) return
       updateCamera()
       atmosphereGPU.tick(dt)
       pipeline.render()

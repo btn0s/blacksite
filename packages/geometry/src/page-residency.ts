@@ -72,7 +72,7 @@ export class PageResidency {
   readonly ready: ResidentPage[] = []
   readonly residentIds: number[] = []
   private readonly residentPositions: Int32Array
-  readonly decoders = Array.from({ length: 4 }, () => ({ decoder: new GeometryPageDecoder(), busy: false }))
+  readonly decoders = Array.from({ length: 4 }, () => ({ decoder: new GeometryPageDecoder(), pending: null as Promise<void> | null }))
   private readonly requests: PageHeap
   private readonly lru: PageHeap
   private readonly controllers = new Map<number, AbortController>()
@@ -229,13 +229,14 @@ export class PageResidency {
   }
 
   schedule(deadline: number) {
+    if (this.disposed) throw new Error('Geometry page residency is disposed')
     if (this.failure) throw this.failure
     for (const [id, controller] of this.controllers) {
       const page = this.pages[id]!
       if (!page.pinned && this.frame - page.demanded > 120) controller.abort()
     }
     for (const worker of this.decoders) {
-      if (worker.busy || this.decodedBytes >= 2 * 1048576 || performance.now() >= deadline) continue
+      if (worker.pending || this.decodedBytes >= 2 * 1048576 || performance.now() >= deadline) continue
       let examined = 0
       while (this.requests.first !== undefined && examined++ < 32 && performance.now() < deadline) {
         const page = this.pages[this.requests.first]!
@@ -246,11 +247,10 @@ export class PageResidency {
           continue
         }
         if (!this.cpuStaging.reserve(page, 'decoded', 1048576)) { this.requests.update(page.id); break }
-        worker.busy = true
         page.state = 'loading'
         const controller = new AbortController()
         this.controllers.set(page.id, controller)
-        void worker.decoder.fetch(page.source.source.packUrl, page.local, page.source.source.metadata.pages[page.local]!, controller.signal).then(result => {
+        worker.pending = worker.decoder.fetch(page.source.source.packUrl, page.local, page.source.source.metadata.pages[page.local]!, controller.signal).then(result => {
           if (this.disposed) return
           controller.signal.throwIfAborted()
           page.bytes = result.bytes
@@ -264,7 +264,7 @@ export class PageResidency {
           this.cpuStaging.release(page)
           if (controller.signal.aborted) { page.state = 'absent'; page.importance = 0; this.cancellations++ }
           else if (!this.disposed) this.failure = error
-        }).finally(() => { worker.busy = false; this.controllers.delete(page.id) })
+        }).finally(() => { worker.pending = null; this.controllers.delete(page.id) })
         break
       }
     }
@@ -281,6 +281,11 @@ export class PageResidency {
       }
       if (available) this.requests.update(id)
     }
+  }
+
+  waitForData() {
+    const pending = this.decoders.flatMap(worker => worker.pending ? [worker.pending] : [])
+    return pending.length ? Promise.race(pending) : new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
   }
 
   dispose() {
