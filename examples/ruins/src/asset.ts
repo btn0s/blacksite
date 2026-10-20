@@ -2,7 +2,7 @@ import { Box3, Matrix4, Vector3 } from 'three'
 import { MeshStandardNodeMaterial, type WebGPURenderer } from 'three/webgpu'
 import { GEOMETRY_ARENA_BYTES, loadGeometryPageSource, MeshletScene, type GeometryPageSource, type MeshletSceneEntry } from '@blacksite/geometry'
 import { loadScanMaterials, scanTextureFeedback, type ScanSurface } from '../../shared/scan-material'
-import { createRuinsHome, type RuinsLandmarks } from './views'
+import { createRuinsHome, type RuinsViews } from './views'
 import type { CollisionDirectory } from './collision'
 
 const root = '/owned/dark-ruins/'
@@ -44,8 +44,13 @@ export async function loadRuins(progress: (detail: string) => void) {
     while (cursor < manifest.geometries.length) { const id = cursor++; assets[id] = await loadGeometryPageSource(root + manifest.geometries[id]!.url) }
   }))
   performance.measure('ruins-directories', 'ruins-directory-start')
-  const bounds = new Box3()
-  const landmarks: RuinsLandmarks = { archway: new Box3(), pits: new Box3(), cliffs: new Box3() }
+  const localBounds = assets.map(asset => new Box3(new Vector3(...asset.metadata.bounds.min), new Vector3(...asset.metadata.bounds.max)))
+  const views: RuinsViews = {
+    overview: { bounds: new Box3(), placements: [] },
+    archway: { bounds: new Box3(), placements: [] },
+    pits: { bounds: new Box3(), placements: [] },
+    cliffs: { bounds: new Box3(), placements: [] },
+  }
   const excluded = new Set([...manifest.untranslated, ...manifest.excluded].map(surface => surface.path))
   const size = new Vector3()
   const volumes = { archway: 0, cliffs: 0 }
@@ -53,27 +58,35 @@ export async function loadRuins(progress: (detail: string) => void) {
     if (!placement.visible) continue
     const surfaces = Array.from(materialMap.subarray(placement.firstMaterial, placement.firstMaterial + placement.materials), id => manifest.materialPaths[id]!)
     if (surfaces.every(path => excluded.has(path))) continue
-    const local = assets[placement.geometry]!.metadata.bounds
-    const world = new Box3(new Vector3(...local.min), new Vector3(...local.max))
+    const local = localBounds[placement.geometry]!
+    const world = local.clone()
     world.getSize(size)
     const volume = size.x * size.y * size.z * Math.abs(placement.matrix.determinant())
     world.applyMatrix4(placement.matrix)
-    bounds.union(world)
+    const framed = { bounds: local, matrix: placement.matrix }
+    views.overview.bounds.union(world)
+    views.overview.placements.push(framed)
     const name = manifest.geometries[placement.geometry]!.id
     if (name.includes('/SM_ArchWay_') && volume > volumes.archway) {
-      landmarks.archway.copy(world)
+      views.archway.bounds.copy(world)
+      views.archway.placements = [framed]
       volumes.archway = volume
     }
-    if (name.includes('/SM_Pit_')) landmarks.pits.union(world)
+    if (name.includes('/SM_Pit_')) {
+      views.pits.bounds.union(world)
+      views.pits.placements.push(framed)
+    }
     if (name.includes('Coastal_Cliff_') && surfaces.some(path => path.includes('Beach')) && volume > volumes.cliffs) {
-      landmarks.cliffs.copy(world)
+      views.cliffs.bounds.copy(world)
+      views.cliffs.placements = [framed]
       volumes.cliffs = volume
     }
   }
-  if (bounds.isEmpty() || Object.values(landmarks).some(box => box.isEmpty())) throw new Error('The level is missing its landmark geometry')
-  const home = createRuinsHome(landmarks.archway)
+  if (Object.values(views).some(view => view.bounds.isEmpty())) throw new Error('The level is missing its landmark geometry')
+  const bounds = views.overview.bounds
+  const home = createRuinsHome(views.archway.bounds)
   return {
-    manifest, placements, bounds, landmarks, home, environment, collision,
+    manifest, placements, bounds, views, home, environment, collision,
     collisionRoot: new URL(root + manifest.collision.slice(0, manifest.collision.lastIndexOf('/') + 1), location.href).href,
     largestBuffer: GEOMETRY_ARENA_BYTES,
     sourceTriangles: assets.reduce((sum, asset) => sum + asset.metadata.sourceTriangles, 0),

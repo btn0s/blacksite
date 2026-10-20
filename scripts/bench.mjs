@@ -277,11 +277,12 @@ try {
   const branch = git('branch', '--show-current')
   const sha = git('rev-parse', 'HEAD')
   const outputDir = config.output
+  const buildDir = join(outputDir, 'build')
   mkdirSync(outputDir, { recursive: true })
   const identity = { branch, sha, worktree: root, dev: config.dev }
   const env = { ...process.env, BLACKSITE_OWNED_ASSETS: join(root, 'owned-assets') }
   if (!config.dev && !config.url) {
-    const build = spawn(process.execPath, [vite, 'build', '--config', 'examples/archway/vite.config.ts'], { cwd: root, env, stdio: 'inherit', windowsHide: true })
+    const build = spawn(process.execPath, [vite, 'build', '--config', 'examples/archway/vite.config.ts', '--outDir', buildDir, '--emptyOutDir'], { cwd: root, env, stdio: 'inherit', windowsHide: true })
     const status = await new Promise((resolvePromise, reject) => { build.once('error', reject); build.once('exit', (code, signal) => resolvePromise({ code, signal })) })
     if (status.code !== 0) throw new Error(`Production build failed (${status.signal ?? status.code}).`)
   }
@@ -290,7 +291,7 @@ try {
     const port = await freePort()
     const args = config.dev
       ? ['--config', 'examples/archway/vite.config.ts', '--host', '127.0.0.1', '--port', String(port), '--strictPort']
-      : ['preview', '--config', 'examples/archway/vite.config.ts', '--host', '127.0.0.1', '--port', String(port), '--strictPort']
+      : ['preview', '--config', 'examples/archway/vite.config.ts', '--outDir', buildDir, '--host', '127.0.0.1', '--port', String(port), '--strictPort']
     server = launch(args, env)
     baseUrl = `http://127.0.0.1:${port}`
     await waitForServer(server, baseUrl)

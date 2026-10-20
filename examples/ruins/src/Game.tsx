@@ -142,7 +142,7 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
   const [selection, setSelection] = useState<MeshletStats | null>(null)
   const home = owned.home
   const walker = useMemo(() => createWalker(home, runtime), [home, runtime])
-  const cameras = useMemo(() => createRuinsCameras(owned.bounds, owned.landmarks), [owned])
+  const cameras = useMemo(() => createRuinsCameras(owned.views), [owned])
   const [view, setView] = useState<RuinsView>(() => {
     const requested = new URLSearchParams(location.search).get('view')
     return requested && Object.hasOwn(ruinsViews, requested) ? requested as RuinsView : 'spawn'

@@ -1,4 +1,4 @@
-import { Box3, PerspectiveCamera, Vector3 } from 'three'
+import { Box3, PerspectiveCamera, Vector3, type Matrix4 } from 'three'
 
 export const ruinsViews = {
   overview: 'Overview',
@@ -9,7 +9,11 @@ export const ruinsViews = {
 } as const
 
 export type RuinsView = keyof typeof ruinsViews
-export type RuinsLandmarks = Record<'archway' | 'pits' | 'cliffs', Box3>
+export type RuinsViewGeometry = {
+  bounds: Box3
+  placements: { bounds: Box3; matrix: Matrix4 }[]
+}
+export type RuinsViews = Record<Exclude<RuinsView, 'spawn'>, RuinsViewGeometry>
 
 export function createRuinsHome(archway: Box3) {
   const base = archway.getCenter(new Vector3()).setY(archway.min.y)
@@ -22,17 +26,40 @@ export function createRuinsHome(archway: Box3) {
   }
 }
 
-export function createRuinsCameras(bounds: Box3, landmarks: RuinsLandmarks) {
+export function createRuinsCameras(views: RuinsViews) {
+  const bounds = views.overview.bounds
   const centre = bounds.getCenter(new Vector3())
   const diameter = bounds.getSize(new Vector3()).length()
   const aspect = window.innerWidth / window.innerHeight
-  const home = createRuinsHome(landmarks.archway)
-  const cameraFor = (box: Box3, direction: Vector3) => {
+  const home = createRuinsHome(views.archway.bounds)
+  const cameraFor = (geometry: RuinsViewGeometry, direction: Vector3) => {
     const camera = new PerspectiveCamera(55, aspect)
-    const target = box.getCenter(new Vector3())
-    const halfFov = Math.min(Math.atan(Math.tan(camera.fov * Math.PI / 360) * aspect), camera.fov * Math.PI / 360)
-    const distance = box.getSize(new Vector3()).length() * 0.55 / Math.sin(halfFov)
-    camera.position.copy(target).addScaledVector(direction.normalize(), distance)
+    const target = geometry.bounds.getCenter(new Vector3())
+    const back = direction.normalize()
+    const right = new Vector3(0, 1, 0).cross(back).normalize()
+    const up = back.clone().cross(right)
+    const tanY = Math.tan(camera.fov * Math.PI / 360) / 1.08
+    const tanX = tanY * aspect
+    const point = new Vector3()
+    let left = -Infinity, rightLimit = Infinity, bottom = -Infinity, top = Infinity, front = -Infinity
+    for (const placement of geometry.placements) {
+      for (let corner = 0; corner < 8; corner++) {
+        point.set(
+          corner & 1 ? placement.bounds.max.x : placement.bounds.min.x,
+          corner & 2 ? placement.bounds.max.y : placement.bounds.min.y,
+          corner & 4 ? placement.bounds.max.z : placement.bounds.min.z,
+        ).applyMatrix4(placement.matrix).sub(target)
+        const x = point.dot(right), y = point.dot(up), z = point.dot(back)
+        left = Math.max(left, x + z * tanX)
+        rightLimit = Math.min(rightLimit, x - z * tanX)
+        bottom = Math.max(bottom, y + z * tanY)
+        top = Math.min(top, y - z * tanY)
+        front = Math.max(front, z)
+      }
+    }
+    const distance = Math.max((left - rightLimit) / (2 * tanX), (bottom - top) / (2 * tanY), front + 0.1)
+    target.addScaledVector(right, (left + rightLimit) / 2).addScaledVector(up, (bottom + top) / 2)
+    camera.position.copy(target).addScaledVector(back, distance)
     camera.near = Math.max(0.1, bounds.distanceToPoint(camera.position) / 1000)
     camera.far = Math.max(diameter, camera.position.distanceTo(centre) + diameter / 2) * 1.1
     camera.lookAt(target)
@@ -40,16 +67,16 @@ export function createRuinsCameras(bounds: Box3, landmarks: RuinsLandmarks) {
     camera.updateMatrixWorld()
     return camera
   }
-  const coastDirection = landmarks.cliffs.getCenter(new Vector3()).sub(landmarks.archway.getCenter(new Vector3())).setY(0).normalize().setY(0.35)
+  const coastDirection = views.archway.bounds.getCenter(new Vector3()).sub(views.cliffs.bounds.getCenter(new Vector3())).setY(0).normalize().setY(0.35)
   const spawn = new PerspectiveCamera(55, aspect, 0.1, diameter * 1.1)
   spawn.position.set(...home.position).add(new Vector3(0, 1.6, 0))
   spawn.lookAt(new Vector3(...home.target))
   spawn.updateMatrixWorld()
   return {
-    overview: cameraFor(bounds, new Vector3(-0.45, 0.85, -0.5)),
+    overview: cameraFor(views.overview, new Vector3(-0.45, 0.85, -0.5)),
     spawn,
-    archway: cameraFor(landmarks.archway, new Vector3(0, 0.18, 1)),
-    pits: cameraFor(landmarks.pits, new Vector3(-0.4, 0.9, 0.75)),
-    cliffs: cameraFor(landmarks.cliffs, coastDirection),
+    archway: cameraFor(views.archway, new Vector3(0, 0.18, 1)),
+    pits: cameraFor(views.pits, new Vector3(0, 1, 0.1)),
+    cliffs: cameraFor(views.cliffs, coastDirection),
   }
 }
