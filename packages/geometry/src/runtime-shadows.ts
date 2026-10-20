@@ -18,19 +18,20 @@ export class ClusterShadows {
   private readonly materials = new Set<ReturnType<typeof createGeometryShadowMaterial>>()
   readonly residentBytes: number
 
-  constructor(packed: PackedMeshletScene, world: Node<'mat4'>, worldScale: Node<'float'>, layer: number) {
+  constructor(packed: PackedMeshletScene, world: Node<'mat4'>, worldScale: Node<'float'>, layer: number, triangleBudget: number) {
     if (!Number.isInteger(layer) || layer < 0 || layer > 31) throw new Error('Shadow layer must be an integer between 0 and 31')
     this.object.name = 'Cluster sun-shadow selection'
     this.hierarchyDepth = packed.hierarchyDepth
     this.traversal = new ClusterTraversal(packed, world, worldScale, this.planes,
       (_sphere, error, scale) => error.mul(scale).mul(worldScale).mul(this.projectionScale),
-      this.threshold, bool(true), float(0), vec3(0), () => bool(false), () => bool(false), 'Shadow')
+      this.threshold, bool(true), float(0), vec3(0), () => bool(false), () => bool(false),
+      triangleBudget, float(Math.max(packed.maximumError, 0.000001) * 1.001).mul(worldScale).mul(this.projectionScale), 'Shadow')
     this.residentBytes = this.traversal.residentBytes
     const pulled = clusterVertex(packed, this.traversal.visible)
     const materials = new Map<PackedMeshletScene['batches'][number]['material'], ReturnType<typeof createGeometryShadowMaterial>>()
     for (let index = 0; index < packed.batches.length; index++) {
       const batch = packed.batches[index]!
-      const geometry = clusterGeometry(batch.triangles, batch.capacity, this.traversal.counters, index)
+      const geometry = clusterGeometry(this.traversal.indices.indices, this.traversal.counters, index)
       let material = materials.get(batch.material)
       if (!material) {
         material = createGeometryShadowMaterial(batch.material, pulled.uv, pulled.position)
@@ -50,6 +51,12 @@ export class ClusterShadows {
 
   async upload(renderer: WebGPURenderer) {
     await this.traversal.upload(renderer)
+  }
+
+  async readStats(renderer: WebGPURenderer) {
+    const values = new Uint32Array(await renderer.getArrayBufferAsync(this.traversal.counters))
+    if (values[20]) throw new Error(`Shadow selection exceeded its hierarchy capacity: ${values[20]}`)
+    return this.traversal.indices.readStats(values)
   }
 
   prepare(renderer: WebGPURenderer, camera: OrthographicCamera, mapSize: Readonly<Vector2>, pixelError: number) {

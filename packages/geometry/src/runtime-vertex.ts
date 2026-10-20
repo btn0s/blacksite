@@ -1,21 +1,21 @@
-import { BufferAttribute, InstancedBufferGeometry } from 'three/webgpu'
+import { BufferAttribute, BufferGeometry } from 'three/webgpu'
 import type { IndirectStorageBufferAttribute, Node, Object3D, StorageBufferAttribute } from 'three/webgpu'
-import { Fn, cos, float, instanceIndex, min, mix, normalLocal, storage, uint, uniform, varyingProperty, vec3, vec4, vertexIndex } from 'three/tsl'
-import { DRAW_ARGUMENT_OFFSET, type PackedMeshletScene } from './runtime-data'
+import { Fn, cos, float, mix, normalLocal, storage, uint, varyingProperty, vec3, vec4, vertexIndex } from 'three/tsl'
+import { DRAW_ARGUMENT_OFFSET, DRAW_ARGUMENT_STRIDE, type PackedMeshletScene } from './runtime-data'
 import { clusterReader, instanceReader, vertexReader } from './runtime-layout'
 
-export function clusterGeometry(triangles: number, capacity: number, counters: IndirectStorageBufferAttribute, batchIndex: number) {
-  const geometry = new InstancedBufferGeometry()
-  geometry.instanceCount = capacity
-  geometry.setAttribute('position', new BufferAttribute(new Float32Array(triangles * 9), 3))
-  geometry.setAttribute('normal', new BufferAttribute(new Float32Array(triangles * 9), 3))
-  geometry.setAttribute('uv', new BufferAttribute(new Float32Array(triangles * 6), 2))
-  geometry.setIndirect(counters, (DRAW_ARGUMENT_OFFSET + batchIndex * 4) * 4)
+export function clusterGeometry(indices: StorageBufferAttribute, counters: IndirectStorageBufferAttribute, batchIndex: number) {
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new BufferAttribute(new Float32Array(3), 3))
+  geometry.setAttribute('normal', new BufferAttribute(new Float32Array(3), 3))
+  geometry.setAttribute('uv', new BufferAttribute(new Float32Array(2), 2))
+  geometry.setIndex(indices)
+  geometry.setIndirect(counters, (DRAW_ARGUMENT_OFFSET + batchIndex * DRAW_ARGUMENT_STRIDE) * 4)
   return geometry
 }
 
 export function clusterVertex(packed: PackedMeshletScene, visibleAttribute: StorageBufferAttribute, debug: Node<'uint'> = uint(0)) {
-  type Draw = Pick<PackedMeshletScene['batches'][number], 'geometry' | 'offset'>
+  type Draw = Pick<PackedMeshletScene['batches'][number], 'geometry'>
   const draws = new WeakMap<Object3D, Draw>()
   const drawFor = (object: Object3D | null) => {
     const draw = object ? draws.get(object) : undefined
@@ -28,25 +28,17 @@ export function clusterVertex(packed: PackedMeshletScene, visibleAttribute: Stor
   const vertices = storage(geometry.vertices, 'uint', geometry.vertices.count).toReadOnly()
     .onObjectUpdate(({ object }) => drawFor(object).geometry.vertices)
   const readVertex = vertexReader(vertices)
-  const indices = storage(geometry.indices, 'uint', geometry.indices.count).toReadOnly()
-    .onObjectUpdate(({ object }) => drawFor(object).geometry.indices)
   const references = storage(geometry.vertexReferences, 'uint', geometry.vertexReferences.count).toReadOnly()
     .onObjectUpdate(({ object }) => drawFor(object).geometry.vertexReferences)
-  const offset = uniform(0, 'uint').onObjectUpdate(({ object }) => drawFor(object).offset)
-  const visible = storage(visibleAttribute, 'uvec2', packed.candidateCount).toReadOnly()
+  const visible = storage(visibleAttribute, 'uvec4', packed.candidateCount).toReadOnly()
   const uv = varyingProperty('vec2', 'geometryUv')
   const color = varyingProperty('vec3', 'geometryClusterColor')
   const position = Fn(() => {
-    const candidate = visible.element(instanceIndex.add(offset)).toVar()
+    const candidate = visible.element(vertexIndex.shiftRight(8)).toVar()
     const cluster = readCluster(candidate.x)
     const instance = readInstance(candidate.y)
     const draw = cluster.draw
-    const corner = vertexIndex.mod(3)
-    const mirroredCorner = corner.equal(0).select(uint(0), uint(3).sub(corner))
-    const orientedCorner = instance.scale.y.lessThan(0).select(mirroredCorner, corner)
-    const localIndex = min(vertexIndex.div(3).mul(3).add(orientedCorner), draw.y.sub(1))
-    const address = draw.x.add(localIndex)
-    const index = indices.element(address.div(4)).shiftRight(address.mod(4).mul(8)).bitAnd(255).add(draw.w)
+    const index = vertexIndex.bitAnd(255).add(draw.w)
     const vertex = readVertex(references.element(index), cluster)
     normalLocal.assign(instance.normal.mul(vec4(vertex.normal, 0)).xyz)
     uv.assign(vertex.uv)

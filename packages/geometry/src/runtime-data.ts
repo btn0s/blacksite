@@ -26,6 +26,8 @@ export interface PackedMeshletScene {
   hierarchyDepth: number
   queueCapacity: number
   leafCapacity: number
+  rootTriangles: number
+  maximumError: number
   clusters: StorageBufferAttribute
   instances: StorageBufferAttribute
   nodes: StorageBufferAttribute
@@ -35,6 +37,8 @@ export interface PackedMeshletScene {
 }
 
 export const DRAW_ARGUMENT_OFFSET = 32
+export const DRAW_ARGUMENT_STRIDE = 8
+export const INDEX_BUDGET_OFFSET = 24
 
 export async function uploadAttributes(renderer: WebGPURenderer, attributes: readonly StorageBufferAttribute[]) {
   const buffers = attributes.map(attribute => storage(attribute, 'uint', attribute.array.length))
@@ -75,6 +79,8 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
   let leafCapacity = 0
   let totalTriangles = 0
   let residentGeometryBytes = 0
+  let rootTriangles = 0
+  let maximumError = 0
   for (const entry of entries) {
     if (entry.instances.length === 0) throw new Error('Geometry entries require at least one instance')
     if (entry.materials.length !== entry.asset.metadata.materials.length) throw new Error('Geometry material slots must match the asset')
@@ -114,6 +120,10 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     const materialIndices = new Map<MeshletSceneEntry['materials'][number], number>()
     const materialCounts = new Uint32Array(asset.metadata.materials.length)
     const materialTriangles = new Uint32Array(asset.metadata.materials.length)
+    const materialRoots = new Uint32Array(asset.metadata.materials.length)
+    const refinedGroups = new Set<number>()
+    for (let i = 0; i < asset.metadata.clusterCount; i++) refinedGroups.add(asset.clusterData[i * 8 + 3]!)
+    let sourceError = 0
     let quantizationRadius = 0
     for (let i = 0; i < asset.metadata.clusterCount; i++) {
       const offset = (clusterBase + i) * 32
@@ -121,6 +131,8 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
       if (material >= materialCounts.length) throw new Error('Geometry cluster references a missing material slot')
       materialCounts[material] = materialCounts[material]! + 1
       materialTriangles[material] = Math.max(materialTriangles[material]!, asset.clusterData[i * 8 + 1]! / 3)
+      if (!refinedGroups.has(asset.clusterData[i * 8 + 2]!)) materialRoots[material] = materialRoots[material]! + asset.clusterData[i * 8 + 1]! / 3
+      sourceError = Math.max(sourceError, asset.clusterLod[i * 12 + 8]!)
       clusterFloats.set(asset.clusterBounds.subarray(i * 4, i * 4 + 4), offset)
       clusterFloats.set(asset.clusterLod.subarray(i * 12, i * 12 + 12), offset + 4)
       clusterIntegers[offset + 14] = material
@@ -178,10 +190,12 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
         const batch = batches[batchIndex]!
         batch.capacity += materialCounts[slot]! * entry.instances.length
         batch.triangles = Math.max(batch.triangles, materialTriangles[slot]!)
+        rootTriangles += materialRoots[slot]! * entry.instances.length
         materialMap.push(batchIndex)
       }
       for (const matrix of entry.instances) {
         const scale = transformScale(matrix)
+        maximumError = Math.max(maximumError, sourceError * scale)
         instanceData.set(matrix.elements, instanceIndex * 36)
         inverseTranspose.copy(matrix).invert().transpose()
         instanceData.set(inverseTranspose.elements, instanceIndex * 36 + 16)
@@ -199,15 +213,16 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     await uploadAttributes(renderer, [geometry.vertices, geometry.vertexReferences, geometry.indices])
   }
   let candidateCount = 0
-  const bindings = new Uint32Array(batches.length * 4 + materialMap.length)
-  bindings.set(materialMap, batches.length * 4)
-  for (let i = 0; i < instanceCount; i++) instanceData[i * 36 + 34] = instanceData[i * 36 + 34]! + batches.length * 4
+  const bindings = new Uint32Array(batches.length * 2 + materialMap.length)
+  bindings.set(materialMap, batches.length * 2)
+  for (let i = 0; i < instanceCount; i++) instanceData[i * 36 + 34] = instanceData[i * 36 + 34]! + batches.length * 2
   for (const [index, batch] of batches.entries()) {
     batch.offset = candidateCount
     candidateCount += batch.capacity
-    bindings.set([batch.offset, batch.triangles * 3, batch.capacity, 0], index * 4)
+    bindings.set([batch.offset, batch.capacity], index * 2)
   }
   if (candidateCount === 0) throw new Error('Geometry requires at least one visible cluster')
+  if (candidateCount > 0x1000000) throw new Error('Indexed geometry supports at most 16,777,216 visible cluster slots')
   const attributes = {
     clusters: new StorageBufferAttribute(clusterIntegers, 4),
     instances: new StorageBufferAttribute(instanceData, 4),
@@ -221,7 +236,7 @@ export async function packScene(renderer: WebGPURenderer, entries: readonly Mesh
     batches, clusterCount, instanceCount, candidateCount, totalTriangles, residentGeometryBytes, residentBytes,
     hierarchyDepth: frontierWidths.length,
     queueCapacity: Math.max(...frontierWidths),
-    leafCapacity,
+    leafCapacity, rootTriangles, maximumError,
     ...attributes,
   }
   await uploadAttributes(renderer, Object.values(attributes))
