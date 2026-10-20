@@ -15,6 +15,7 @@ export class StaggeredSunShadowNode extends SunShadowNode {
   private readonly clearTile = new QuadMesh(this.clearMaterial)
   private camera: Camera | null = null
   private frame = 0
+  private readonly renderedAt: number[] = []
   private readonly size = new Vector2()
 
   constructor(light: SunLight, private readonly scene: Scene, private readonly view: Camera) {
@@ -59,6 +60,8 @@ export class StaggeredSunShadowNode extends SunShadowNode {
 
   reset() { this.camera = null }
 
+  age(index: number) { return this.frame - (this.renderedAt[index] ?? -1) }
+
   private due(cascade: number) {
     const period = cascade < 2 ? 2 : 4
     return this.frame % period === (cascade % 2) + (cascade < 2 ? 0 : 2)
@@ -96,6 +99,7 @@ export class StaggeredSunShadowNode extends SunShadowNode {
       this.clearTile.render(renderer)
       map.viewport.set(width * viewport.x, map.height - height * (viewport.y + viewport.w), width * viewport.z, height * viewport.w)
       renderer.render(scene, cascadeCamera)
+      this.renderedAt[index] = this.frame
     }
     scene.name = previousName
     this.frame++

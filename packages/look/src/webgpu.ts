@@ -21,6 +21,10 @@ import { sunPenumbra } from './sun-penumbra'
 import { StaggeredSunShadowNode } from './sun-cascades'
 import { createFilm, type FilmOptions } from './film'
 import { EyeAdaptation } from './exposure'
+import { LookTelemetry, type MotionProbe } from './telemetry'
+
+export { LookTelemetry } from './telemetry'
+export type { FrameTrace, LookTelemetrySnapshot, MotionProbe, PassTrace } from './telemetry'
 
 const METER = [64, 36] as const
 const METER_INTERVAL = 66
@@ -44,12 +48,15 @@ export interface WebGPULook {
   readonly sun: SunLight
   readonly pipeline: RenderPipeline
   readonly quality: QualityTier
+  readonly telemetry: LookTelemetry
   beginFrame(): void
   setCamera(camera: Camera): void
   compile(compiler: WebGPUCompiler, ownedRoots?: readonly Object3D[]): Promise<void>
   render(dt?: number): void
   setSize(width: number, height: number): void
   setDebug(enabled: boolean): void
+  setTemporal(options: { traa?: boolean; gtao?: boolean }): void
+  probeMotion(): Promise<MotionProbe>
   timings(): Readonly<Record<string, number>> | null
   onBeforeDepth(listener: WebGPUBeforeDepthListener): () => void
   onBeforeLit(listener: WebGPUBeforeDepthListener): () => void
@@ -173,6 +180,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   const timings = new LookTimings()
   for (let index = 0; index < sun.shadow.getViewportCount(); index++) timings.labelCamera(sun.shadow.getCamera(index), `Sun cascade ${index + 1}`)
   const disposables: Array<{ dispose(): void }> = []
+  let gtaoNode: { useTemporalFiltering: boolean } | null = null
   const prePass = pass(scene, camera)
   prePass.name = 'Depth, normals and motion'
   prePass.transparent = false
@@ -200,41 +208,34 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     gtao.scale.value = 1.8
     gtao.thickness.value = 0.5
     gtao.useTemporalFiltering = true
+    gtaoNode = gtao
     scenePass.before(gtao)
     scenePass.contextNode = context({ ...builtinAOContext(gtao.getTextureNode().sample(screenUV).r).value, ...litContext })
     disposables.push(gtao)
   }
   const beauty = scenePass.getTextureNode('output')
-  let color: Node<'vec4'> = atmosphereGPU.aerial(beauty, depth, camera, skyScale)
-  const resolved = disabled.has('traa') ? null : traa(color, depth, motion, camera)
-  const stable = resolved ? resolved.getTextureNode() : convertToTexture(color)
+  const aerial: Node<'vec4'> = atmosphereGPU.aerial(beauty, depth, camera, skyScale)
+  const resolved = disabled.has('traa') ? null : traa(aerial, depth, motion, camera)
+  const stable = resolved ? resolved.getTextureNode() : convertToTexture(aerial)
   disposables.push(resolved ?? stable)
-  color = resolved ?? stable
+  const cameraGrade = options.camera ?? {}
+  const film = options.film ? createFilm(options.film) : null
+  const lutImage = atmosphere.grade.lut ? await loadLut(atmosphere.grade.lut) : null
+  const adaptation = film ? new EyeAdaptation(film.exposure, 2 ** sunlight.ev100) : null
+  const filmScale = uniform(adaptation ? adaptation.scale / exposure : 1).setGroup(renderGroup)
+  const grade = (input: Node<'vec4'>): Node<'vec4'> => {
+  let color = input
   if (quality !== 'low' && (atmosphere.grade.bloom ?? 0) > 0) {
     const glow = bloom(color, atmosphere.grade.bloom ?? 0, 0.6, 1.35)
     glow.smoothWidth.value = 0.5
     disposables.push(glow)
     color = vec4(color.rgb.add(glow.rgb), color.a)
   }
-  const cameraGrade = options.camera ?? {}
-  const film = options.film ? createFilm(options.film) : null
   if (quality !== 'low' && (cameraGrade.lensSoftness ?? 0) > 0) {
     const soft = gaussianBlur(color, null, 3)
     disposables.push(soft)
     color = mix(color, soft, float(1).sub(circle(float(1.5), float(0.75), uv())).mul(cameraGrade.lensSoftness ?? 0))
   }
-  const adaptation = film ? new EyeAdaptation(film.exposure, 2 ** sunlight.ev100) : null
-  const filmScale = uniform(adaptation ? adaptation.scale / exposure : 1).setGroup(renderGroup)
-  const meter = film ? (() => {
-    const target = new RenderTarget(METER[0], METER[1], { type: FloatType, depthBuffer: false, minFilter: NearestFilter, magFilter: NearestFilter, generateMipmaps: false })
-    target.texture.name = 'Exposure metering'
-    const jitter = uniform(new Vector2()).setGroup(renderGroup)
-    const material = new NodeMaterial({ depthTest: false, depthWrite: false })
-    const sampled = stable.sample(screenUV.add(jitter.sub(0.5).div(vec2(METER[0], METER[1])))).rgb
-    material.fragmentNode = vec4(log2(sampled.dot(vec3(1 / 3)).div(exposure).max(2 ** film.exposure.histogram[0])), 0, 0, 1)
-    timings.labelTarget(target, 'Exposure metering')
-    return { target, jitter, material, quad: new QuadMesh(material) }
-  })() : null
   let shaped: Node<'vec3'>
   if (film) shaped = renderOutput(vec4(film.output(color.rgb, filmScale), 1), NoToneMapping).rgb
   else {
@@ -251,15 +252,45 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     shaped = lifted.sub(0.5).mul(cameraGrade.contrast ?? 1).add(0.5).clamp(0, 1)
   }
   let graded: Node<'vec4'> = vec4(shaped, 1)
-  if (atmosphere.grade.lut) {
-    const lut = await loadLut(atmosphere.grade.lut)
-    graded = lut3D(graded, texture3D(lut.texture), lut.size, 1)
-  }
+  if (lutImage) graded = lut3D(graded, texture3D(lutImage.texture), lutImage.size, 1)
   const centred = uv().sub(0.5)
   graded = vec4(graded.rgb.mul(float(1).sub(centred.dot(centred).mul(atmosphere.grade.vignette))), 1)
   if (atmosphere.grade.grain > 0) graded = film(graded, atmosphere.grade.grain)
-  pipeline.outputNode = graded
+  return graded
+  }
+  const gradedTemporal = grade(resolved ?? stable)
+  const gradedPlain = resolved ? grade(aerial) : gradedTemporal
+  const meter = film ? (() => {
+    const target = new RenderTarget(METER[0], METER[1], { type: FloatType, depthBuffer: false, minFilter: NearestFilter, magFilter: NearestFilter, generateMipmaps: false })
+    target.texture.name = 'Exposure metering'
+    const jitter = uniform(new Vector2()).setGroup(renderGroup)
+    const materialFor = (source: { sample(coordinate: Node<'vec2'>): Node<'vec4'> }) => {
+      const material = new NodeMaterial({ depthTest: false, depthWrite: false })
+      const sampled = source.sample(screenUV.add(jitter.sub(0.5).div(vec2(METER[0], METER[1])))).rgb
+      material.fragmentNode = vec4(log2(sampled.dot(vec3(1 / 3)).div(exposure).max(2 ** film.exposure.histogram[0])), 0, 0, 1)
+      return material
+    }
+    const temporal = materialFor(stable), plain = materialFor(beauty)
+    timings.labelTarget(target, 'Exposure metering')
+    return { target, jitter, temporal, plain, quad: new QuadMesh(temporal) }
+  })() : null
+  let graded = gradedTemporal
+  const temporal = { traa: resolved !== null, gtao: true }
+  pipeline.outputNode = gradedTemporal
   renderer.inspector = timings
+  const trace = new LookTelemetry(renderer, camera, () => sun.shadow.getViewportCount(), index => shadows.age(index), () => {
+    const history = (resolved as unknown as { _historyRenderTarget?: { width: number; height: number } } | null)?._historyRenderTarget
+    return history ? { width: history.width, height: history.height } : null
+  }, temporal)
+  const backend = renderer.backend as unknown as { draw(renderObject: unknown, info: unknown): void; get(object: unknown): { pipeline?: unknown; error?: boolean } }
+  const originalDraw = backend.draw
+  backend.draw = function (this: unknown, renderObject: { pipeline: unknown }, info: unknown) {
+    const data = backend.get(renderObject.pipeline)
+    trace.recordDraw(data.pipeline !== undefined && data.error !== true)
+    return originalDraw.call(backend, renderObject, info)
+  } as typeof backend.draw
+  let motionRequest: { resolve(value: MotionProbe): void; reject(error: unknown): void } | null = null
+  let motionPromise: Promise<MotionProbe> | null = null
   const shadowListeners = new Set<WebGPUShadowListener>()
   const beforeDepthListeners = new Set<WebGPUBeforeDepthListener>()
   const beforeLitListeners = new Set<WebGPUBeforeDepthListener>()
@@ -284,12 +315,17 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     scene.overrideMaterial = state.override
   }
   const states = new Map<string, ReturnType<typeof captureState>>()
+  const shadowKind = (active: Camera) => {
+    for (let cascade = 0; cascade < sun.shadow.getViewportCount(); cascade++) if (active === sun.shadow.getCamera(cascade)) return `shadow${cascade}`
+    return 'other'
+  }
   const previousBeforeRender = scene.onBeforeRender
   const previousAfterRender = scene.onAfterRender
   const beforeSceneRender: Scene['onBeforeRender'] = function (...args) {
     previousBeforeRender.apply(this, args)
     if (preparingCompile || args[1] !== scene) return
     const [renderer, , activeCamera, target] = args
+    trace.beginPass(target === prePass.renderTarget ? 'depth' : target === scenePass.renderTarget ? 'lit' : shadowKind(activeCamera), activeCamera, target)
     if (target === prePass.renderTarget) {
       states.set('depth', captureState(activeCamera, 'depth'))
       depthSize.set(target.width, target.height)
@@ -312,6 +348,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     previousAfterRender.apply(this, args)
     if (preparingCompile || args[1] !== scene) return
     const [renderer, , activeCamera, target] = args
+    trace.endPass()
     if (target === prePass.renderTarget) {
       for (const listener of afterDepthListeners) listener(renderer as unknown as WebGPURenderer, activeCamera, prePass.renderTarget.depthTexture!)
     }
@@ -327,12 +364,14 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     }
   }
   let disposed = false
+  let debugging = false
   let metering = false
   let meterTime = performance.now()
   return {
     sun,
     pipeline,
     quality,
+    telemetry: trace,
     beginFrame() {
       if (disposed) return
       renderer.info.reset()
@@ -378,13 +417,24 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     render(dt = 0) {
       if (disposed) return
       updateCamera()
+      trace.beginFrame(dt)
       atmosphereGPU.tick(dt)
       pipeline.render()
+      trace.endFrame()
+      if (motionRequest) {
+        const request = motionRequest
+        motionRequest = null
+        const velocityTarget = prePass.renderTarget
+        const internals = resolved as unknown as { beautyNode: { renderTarget: RenderTarget }; _resolveRenderTarget: RenderTarget } | null
+        if (!internals) request.reject(new Error('Temporal AA is disabled'))
+        else trace.probeMotion(velocityTarget, velocityTarget.textures.findIndex(texture => texture.name === 'velocity'), internals.beautyNode.renderTarget, internals._resolveRenderTarget).then(request.resolve, request.reject)
+      }
       if (meter && adaptation && !metering && performance.now() - meterTime > METER_INTERVAL) {
         metering = true
         meter.jitter.value.set(Math.random(), Math.random())
         const previous = renderer.getRenderTarget()
         renderer.setRenderTarget(meter.target)
+        meter.quad.material = temporal.traa ? meter.temporal : meter.plain
         meter.quad.render(renderer)
         renderer.setRenderTarget(previous)
         void renderer.readRenderTargetPixelsAsync(meter.target, 0, 0, METER[0], METER[1]).then(data => {
@@ -401,8 +451,25 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
       if (current.x !== width || current.y !== height) renderer.setSize(width, height, false)
     },
     setDebug(enabled) {
+      debugging = enabled
       pipeline.outputNode = enabled ? renderOutput(beauty, NoToneMapping) : graded
       pipeline.needsUpdate = true
+    },
+    setTemporal(next) {
+      if (next.gtao !== undefined && gtaoNode) { gtaoNode.useTemporalFiltering = next.gtao; temporal.gtao = next.gtao }
+      if (resolved && next.traa !== undefined && next.traa !== temporal.traa) {
+        temporal.traa = next.traa
+        graded = next.traa ? gradedTemporal : gradedPlain
+        if (next.traa) resolved.setSize(1, 1)
+        if (!debugging) { pipeline.outputNode = graded; pipeline.needsUpdate = true }
+        trace.mark(next.traa ? 'traa-on' : 'traa-off')
+      }
+    },
+    probeMotion() {
+      motionPromise ??= new Promise<MotionProbe>((resolve, reject) => {
+        motionRequest = { resolve: value => { motionPromise = null; resolve(value) }, reject: error => { motionPromise = null; reject(error) } }
+      })
+      return motionPromise
     },
     timings() { return timings.snapshot() },
     onBeforeDepth(listener) {
@@ -435,7 +502,9 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
       for (const resource of disposables) resource.dispose()
       atmosphereGPU.dispose()
       meter?.target.dispose()
-      meter?.material.dispose()
+      meter?.temporal.dispose()
+      meter?.plain.dispose()
+      backend.draw = originalDraw
       sun.removeFromParent()
       sun.dispose()
       scene.background = previous.background

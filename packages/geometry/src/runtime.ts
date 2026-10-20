@@ -354,6 +354,8 @@ export class MeshletScene {
 
   setGeometryLimit(bytes: number) { this.arena.residency.setLimit(bytes) }
 
+  setBundleRefresh(enabled: boolean) { this.submission.refreshEveryFrame = enabled }
+
   setRequestReach(meters: number) { this.requestReach.value = meters }
 
   get settled() {
