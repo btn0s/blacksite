@@ -3,12 +3,13 @@ import { type MeshStandardNodeMaterial, type Node, type WebGPURenderer } from 't
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import transcoderScript from 'three/examples/jsm/libs/basis/basis_transcoder.js?url'
 import transcoderWasm from 'three/examples/jsm/libs/basis/basis_transcoder.wasm?url'
-import { Fn, texture, uv } from 'three/tsl'
+import { Fn, nodeObject, uv, vec4 } from 'three/tsl'
 import { type TextureDemandBinding } from '@blacksite/geometry'
 import { createGeneralMaterial } from './scan-material-general'
 import { createSurfaceMaterial } from './scan-material-surfaces'
 import { createSmartMaterial, createPropMaterial } from './scan-surface-materials'
 import { ScanTextureStreaming, type ScanImageSource, type ScanTexture } from './scan-texture-streaming'
+import { ScanMaterialData, ScanMaterialTexture } from './scan-material-data'
 
 type Channel = 'r' | 'g' | 'b' | 'a'
 type Parameters = { scalar: Record<string, number>; vector: Record<string, number[]>; static_switch: Record<string, boolean> }
@@ -50,7 +51,7 @@ function textureBinding(surface: ScanSurface, name: string, image: number): Text
   return { image, uv: 0, scale: 1, placementScale: false }
 }
 
-export async function loadScanMaterials(surfaces: readonly ScanSurface[], root: string, renderer: WebGPURenderer): Promise<Map<string, MeshStandardNodeMaterial>> {
+export async function loadScanMaterials(surfaces: readonly ScanSurface[], root: string, renderer: WebGPURenderer) {
   const manager = new LoadingManager()
   manager.setURLModifier(url => url.endsWith('basis_transcoder.js') ? transcoderScript : url.endsWith('basis_transcoder.wasm') ? transcoderWasm : url)
   const loader = new KTX2Loader(manager).setTranscoderPath('/').setWorkerLimit(2).detectSupport(renderer)
@@ -58,16 +59,47 @@ export async function loadScanMaterials(surfaces: readonly ScanSurface[], root: 
   materialSets.set(renderer, streaming)
   const images = new Map<string, Promise<ScanTexture>>()
   try {
-    const materials = new Map<string, MeshStandardNodeMaterial>()
-    for (const surface of surfaces) {
-      const bindings: TextureDemandBinding[] = []
-      const material = await loadScanMaterial(surface, source => {
-        const identity = `${new URL(root + source.file, location.href).href}:${source.srgb}`
-        if (!images.has(identity)) images.set(identity, streaming.load(source))
-        return images.get(identity)!
-      }, (name, image) => { bindings.push(textureBinding(surface, name, image.id)) })
+    const data = new ScanMaterialData(surfaces)
+    if (!streaming.ledger.reserve(data, 'materials', data.attribute.array.byteLength)) throw new Error('Material parameters exceed the shared residency budget')
+    const materialIds = new Map<MeshStandardNodeMaterial, number>()
+    const materials = Object.assign(new Map<string, MeshStandardNodeMaterial>(), { materialIds })
+    const families = new Map<ScanSurface['family'], MeshStandardNodeMaterial>()
+    const primaryUV = Fn(builder => builder.context.getUV?.() ?? uv())()
+    const loaded: Record<string, ScanTexture>[] = [], defaults = new Map<ScanSurface['family'], Record<string, ScanTexture>>()
+    let cursor = 0
+    await Promise.all(Array.from({ length: 4 }, async () => {
+      while (cursor < surfaces.length) {
+        const id = cursor++, surface = surfaces[id]!
+        validateSurface(surface)
+        loaded[id] = Object.fromEntries(await Promise.all(Object.entries(surface.maps).map(async ([name, source]) => {
+          const identity = `${new URL(root + source.file, location.href).href}:${source.srgb}`
+          if (!images.has(identity)) images.set(identity, streaming.load(source))
+          return [name, await images.get(identity)!] as const
+        })))
+      }
+    }))
+    for (const [id, surface] of surfaces.entries()) defaults.set(surface.family, { ...defaults.get(surface.family), ...loaded[id] })
+    for (const [id, surface] of surfaces.entries()) {
+      const maps = { ...defaults.get(surface.family), ...loaded[id] }
+      if (!families.has(surface.family)) {
+        const graph = data.graph(surface.family)
+        const sample = (name: string, coordinates: Node<'vec2'> = primaryUV) => {
+          const image = maps[name]
+          if (!image) throw new Error(`${surface.family} has no texture slot ${name}`)
+          return vec4(nodeObject(new ScanMaterialTexture(name, image.allocation.texture, coordinates)))
+        }
+        const template = surface.family === 'smart-layers' ? createSmartMaterial(graph, sample, primaryUV)
+          : surface.family === 'simple-orm' || surface.family === 'candle' ? createPropMaterial(graph, sample, primaryUV)
+          : surface.family === 'custom-general' || surface.family === 'foliage' ? createGeneralMaterial(graph, sample, primaryUV)
+          : createSurfaceMaterial(graph, sample, primaryUV)
+        families.set(surface.family, template)
+      }
+      const material = families.get(surface.family)!.clone()
+      material.name = surface.path.split('/').at(-1)!
+      Object.assign(material, { scanTextures: maps })
       materials.set(surface.path, material)
-      streaming.bindings.set(material, bindings)
+      materialIds.set(material, id)
+      streaming.bindings.set(material, Object.entries(maps).map(([name, image]) => textureBinding(surface, name, image.id)))
     }
     return materials
   } catch (error) {
@@ -77,23 +109,11 @@ export async function loadScanMaterials(surfaces: readonly ScanSurface[], root: 
   }
 }
 
-async function loadScanMaterial(surface: ScanSurface, loadTexture: (source: ScanSurface['maps'][keyof ScanSurface['maps']]) => Promise<ScanTexture>, bind: (name: string, image: ScanTexture) => void) {
+function validateSurface(surface: ScanSurface) {
   const switches = surface.parameters.static_switch
-  const used = Object.entries(surface.maps).filter(([name]) => (surface.family !== 'custom-general' && surface.family !== 'foliage') || (name !== 'Metalness' && (name !== 'Packed' || !switches['Use Dedrived Roughness from Albedo?']) && (name !== 'RGBNoise' || !switches['RGB Blend - Disable'])))
-  const entries = await Promise.all(used.map(async ([name, source]) => {
-    return [name, await loadTexture(source)] as const
-  }))
-  const maps = Object.fromEntries(entries) as Record<keyof ScanSurface['maps'], ScanTexture>
-  const primaryUV = Fn(builder => builder.context.getUV?.() ?? uv())()
-  const sampleImage = (image: ScanTexture, coordinatesNode: Node<'vec2'>, name: string) => {
-    bind(name, image)
-    const node = texture(image.allocation.texture, coordinatesNode).setUpdateMatrix(false)
-    image.nodes.push(node)
-    return node
+  if (surface.family === 'custom-general' || surface.family === 'foliage') {
+    if (switches['Use Reconstructed Normal?']) throw new Error(`${surface.path}: unsupported reconstructed normal`)
+    if ((surface.parameters.scalar['Base - Metallic Intensity'] ?? 0) !== 0) throw new Error(`${surface.path}: unsupported metallic color response`)
   }
-  const sampleSurface = (name: string, coordinates = primaryUV) => sampleImage(maps[name]!, coordinates, name)
-  if (surface.family === 'smart-layers') return createSmartMaterial(surface, sampleSurface, primaryUV)
-  if (surface.family === 'simple-orm' || surface.family === 'candle') return createPropMaterial(surface, sampleSurface, primaryUV)
-  if (surface.family === 'custom-general' || surface.family === 'foliage') return createGeneralMaterial(surface, sampleSurface, primaryUV)
-  return createSurfaceMaterial(surface, sampleSurface, primaryUV)
+  if (surface.family === 'smart-layers') for (const feature of ['Enable', 'Surface Overlay', 'Enable Tessellation']) if (switches[feature]) throw new Error(`${surface.path}: unsupported smart surface feature ${feature}`)
 }

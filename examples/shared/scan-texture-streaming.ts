@@ -3,7 +3,6 @@ import type { WebGPURenderer } from 'three/webgpu'
 import type { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import { getByteLength } from 'three/src/extras/TextureUtils.js'
 import { ResidencyLedger, type MeshletTextureFeedback, type TextureDemandBinding } from '@blacksite/geometry'
-import type { texture } from 'three/tsl'
 import { TextureTailReader } from './scan-texture-fetch'
 
 export type ScanTail = { file: string; size: number; width: number; height: number; levels: number; wireBytes: number }
@@ -15,7 +14,6 @@ export type ScanTexture = {
   allocation: Allocation
   tail: ScanTail
   target: ScanTail
-  nodes: ReturnType<typeof texture>[]
   coldSince: number
   retryAt: number
   maxSize: number
@@ -124,7 +122,7 @@ export class ScanTextureStreaming {
       const allocation = this.upload(map, source, tail, upload)
       this.minimumSwapBytes = Math.max(this.minimumSwapBytes, allocation.residentBytes * 2)
       const maxSize = Math.max(...source.tails.filter(tail => tail.size <= 2048 && textureBytes(tail, map) <= uploadLimit).map(tail => tail.size))
-      const image: ScanTexture = { id: this.images.length, source, allocation, tail, target: tail, nodes: [], coldSince: 0, retryAt: 0, maxSize }
+      const image: ScanTexture = { id: this.images.length, source, allocation, tail, target: tail, coldSince: 0, retryAt: 0, maxSize }
       this.images.push(image)
       this.feedback.imageCount = this.images.length
       return image
@@ -189,7 +187,6 @@ export class ScanTextureStreaming {
           else this.demotions++
           image.allocation = allocation
           image.tail = tail
-          for (const node of image.nodes) node.value = texture
           for (const [material, bindings] of this.bindings) {
             if (bindings.some(binding => binding.image === image.id)) this.bindingVersions.set(material, (this.bindingVersions.get(material) ?? 0) + 1)
           }

@@ -1,6 +1,6 @@
 import { Color, InspectorBase, Lighting, NeutralToneMapping, NoToneMapping, PCFShadowMap, RenderPipeline, Vector2, Vector3 } from 'three/webgpu'
 import type { Camera, DepthTexture, Node, Object3D, OrthographicCamera, RenderTarget, Scene, WebGPURenderer } from 'three/webgpu'
-import { builtinAOContext, context, faceDirection, float, luminance, mix, mrt, normalViewGeometry, output, packNormalToRGB, pass, renderOutput, sample, screenUV, texture3D, uniform, uv, vec3, vec4, velocity } from 'three/tsl'
+import { builtinAOContext, context, faceDirection, float, luminance, mix, mrt, normalViewGeometry, output, packNormalToRGB, pass, renderGroup, renderOutput, sample, screenUV, texture3D, uniform, uv, vec3, vec4, velocity } from 'three/tsl'
 import { SunLight } from 'three/addons/lights/SunLight.js'
 import { SunLightNode } from 'three/addons/lights/SunLightNode.js'
 import { LightProbeGrid } from 'three/addons/lighting/LightProbeGrid.js'
@@ -139,7 +139,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   sun.shadow.camera.far = options.shadowDistance ?? (quality === 'low' ? 90 : 180)
   sun.shadow.normalBias = 0.03
   sun.shadow.bias = -0.0002
-  const sunAngle = uniform((sunlight.sunSize ?? 0.53) * Math.PI / 180)
+  const sunAngle = uniform((sunlight.sunSize ?? 0.53) * Math.PI / 180).setGroup(renderGroup)
   sun.shadow.filterNode = sunPenumbra(sun, sunAngle, 8, 12)
   const shadows = new StaggeredSunShadowNode(sun, scene, camera)
   sun.shadow.shadowNode = shadows
@@ -172,7 +172,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   scenePass.before(prePass)
   scenePass.before(shadows)
   scenePass.setMRT(mrt({ output }))
-  const litContext = { radianceScale: float(exposure) }
+  const litContext = { radianceScale: uniform(exposure).setGroup(renderGroup) }
   scenePass.contextNode = context(litContext)
   timings.labelTarget(scenePass.renderTarget, scenePass.name)
   disposables.push(prePass, scenePass)
@@ -209,7 +209,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   const tint = cameraGrade.tint ?? 0
   const balance = new Vector3(1 + 0.25 * temperature, 1 + 0.12 * tint, 1 - 0.25 * temperature)
   balance.multiplyScalar(1 / (0.2126 * balance.x + 0.7152 * balance.y + 0.0722 * balance.z))
-  const balanced = color.rgb.mul(uniform(balance)).mul(atmosphere.exposure)
+  const balanced = color.rgb.mul(uniform(balance).setGroup(renderGroup)).mul(atmosphere.exposure)
   const saturated = mix(vec3(luminance(balanced)), balanced, atmosphere.grade.saturation ?? 1)
   const display = renderOutput(vec4(saturated, 1)).rgb
   const rolled = display.sub(display.pow(3).mul(cameraGrade.shoulder ?? 0))

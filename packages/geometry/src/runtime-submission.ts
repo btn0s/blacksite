@@ -101,6 +101,8 @@ export class MaterialSubmission {
   }
 
   add(pass: Group, mesh: Mesh, first: number, count: number, material: object | null) {
+    mesh.userData.material = material
+    mesh.static = true
     mesh.matrixAutoUpdate = false
     const bundle = new BundleGroup()
     bundle.name = mesh.name

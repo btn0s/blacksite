@@ -1,12 +1,12 @@
 # Whole-level paging work and bootstrap boundary
 
-20 October 2026. Slice 4 is merged into the preview as `8df5b08`, and the published paged courtyard loaded in fresh Wide and Walk runs on 5247. Slice 5 remains **unmerged and unpublished**. The whole level renders and walks in the production probe, but staged bootstrap and the CPU/GPU comparison are unmet. The owned root has no `full.json` publication.
+20 October 2026. Slice 4 is merged into the preview as `8df5b08`. The working whole-level commit `ae9f098` is merged as `4d7d579`, with a new owned-root `full.json` publication. The courtyard remains the default and the whole level opens at `?level=full`. Fresh Wide and Walk captures on 5247 loaded both routes without browser errors. The following measurements describe the original whole-level implementation before material-family reduction.
 
 ## Working implementation
 
 All 20,430 version 5 placement records enter one shared page arena. The 371 geometry directories retain their coarse dependency closure; 450 pinned pages reserve 58,982,400 bytes of physical slots. Full-level material loading uses `build-materials-whole-20261020-01/surfaces.json`: 285 rendered surfaces, 16 explicit FX exclusions and no untranslated surfaces. Its 26 translated descriptors exactly match `build-materials-translated-20261020-01`. Every referenced mip-tail file was checked for existence and declared wire size. The playable assembler reuses that output without encoding or copying images.
 
-The unpublished playable manifest is `D:/dev/owned-assets/dark-ruins/build-full-playable-20261020-03/full.json`. It references the existing immutable version 5 geometry build and complete material output. Its new collision bake contains 52,250 chunks, 20,705,044 triangles and 495,576,148 serialized bytes. Collision covers 19,382 visible placements with rendered surfaces; excluded fog, water, decal and other FX surfaces contribute no solid geometry. All rendering placement records remain present.
+The published playable manifest originates at `D:/dev/owned-assets/dark-ruins/build-full-playable-20261020-03/full.json`. It references the existing immutable version 5 geometry build and complete material output. Its new collision bake contains 52,250 chunks, 20,705,044 triangles and 495,576,148 serialized bytes. Collision covers 19,382 visible placements with rendered surfaces; excluded fog, water, decal and other FX surfaces contribute no solid geometry. All rendering placement records remain present.
 
 Collision uses 32 m index regions and 8 m chunks, with a 4,096-triangle cap. A conservative 0.375 m world-space hierarchy cut and 0.375 m additional simplification share the 0.75 m allowance. Triangles have unique chunk ownership and actual bounds index crossed region seams. Four workers fetch, verify and transfer bounded payloads. A movement tile is protected, nearby chunks prefetch, and distant chunks retain until pressure. Admission cannot replace a nearer wanted chunk with a farther one. Standalone static colliders replace a single large fixed body whose changing collider set caused expensive physics work. ALS is unchanged.
 
@@ -39,7 +39,7 @@ A destination-collision probe intercepted 132 region fetches and gated IO for tw
 
 A 128 MiB logical working-set pressure exercise cycled Wide/Walk/Close. It evicted 4,133 pages and retained complete-looking coarse geometry in the captured view. Missing pinned pages, invalid mappings, epoch mismatches and unsafe slot reuse counters stayed zero. The sample ended while shrinking: occupied slots had fallen from 887,226,368 to 347,471,872 bytes and had not yet reached the 134,217,728-byte logical limit. No physical slot was reused in this short exercise. This is **not a completed shrink-to-cap/retirement proof**; the earlier courtyard pressure evidence remains in `streaming-paging.md`.
 
-## Blocking design boundary
+## Original bootstrap boundary
 
 The attempted staged path compiled one material at a time against captured actual depth, lit and cascade states while normal rendering continued. It failed in the final production probe with:
 
@@ -49,6 +49,25 @@ Evidence is `D:/dev/probe/ruins-cpu-full10-production.json`. r186's `PassNode.co
 
 The unsafe background path is deleted. The remaining working build compiles every cluster material under all actual states before readiness. It therefore does not implement staged first-playable loading. Bundles themselves support these indirect draws, but r186's NodeMaterialObserver requests full updates for node materials, so replay still incurs material/object uniform and binding work; it does not eliminate submission cost at this scale.
 
-The next design step must reduce the work itself: shared material-family graphs and data-driven immutable material parameters, with shared frame uniforms and parallel independent bootstrap resource loading. Serializing a long background compile while freezing rendering would merely move the startup stall into play and would not satisfy the requested design. No full-level loader or manifest publication should be called complete on this evidence.
+This motivated the material-family reduction: shared graphs and immutable material parameters, with shared frame uniforms. The initial working level was published by explicit approval despite the bootstrap target remaining unmet. The renderer is unchanged, and background compilation remains deleted.
+
+## Material-family handoff
+
+The candidate replaces 285 independent surface graphs with twelve family templates. Every authored scalar, vector, switch and channel selector is stored in one 1,067,040-byte readonly storage buffer. Cluster material IDs index its 234-vec4 records. Texture slots use object references to their current streamed allocations, while frame/look uniforms share the render group. Lit, alpha-tested depth and shadow clones retain the family node identities; per-material textures and the spatial material bitsets still determine draws. No assets are rebuilt or republished for this change.
+
+Layered surfaces evaluate their shared response inside a TSL function so common texture samples dominate the dynamic branches that consume them. Normal conversion explicitly uses the unperturbed geometric normal rather than depending on the current material sub-build. This corrects the streaked rock/brick response seen in early family captures. Secondary UVs, vertex colours, layer flags, normal maps and authored tiling remain inputs. The full level and courtyard now use the same environment conversion; the independent environment correction is merged into the preview as `570458e`.
+
+Two renderer boundaries remain for the vendored-three work. Concurrent cold compilation builds duplicate family states before publishing the shared cache. Also, `Renderer.compileAsync()` obtains a call-depth-zero RenderContext while nested post passes render at a different call depth. Newly visible objects therefore create fresh bindings from a cached NodeBuilderState. Its cloned sampled-texture binding initially contains the old allocation; `Bindings._createBindings()` uploads that snapshot before `NodeSampledTexture.update()` applies the current ReferenceNode value. A retired tail has already released its CPU mip bytes, producing a zero-length texture upload. `D:/dev/probe/ruins-family-bindings-28.json` records an unseen Seaweed material compiled in contexts 16/14 but first rendered in context 11, plus the failing upload. `ruins-cpu-families26-production.json` contains the upload stack. No renderer modification, retained obsolete tail, compile-order workaround or warmup visibility guard remains in this candidate.
+
+Meshes are marked static, but stock r186 NodeMaterialObserver returns FULL for node materials before consulting that property. Shared graphs therefore still incur per-object material/binding updates. The vendored observer change owns this; the application does not override it.
+
+Diagnostic run `ruins-cpu-families29-production` temporarily recorded every bundle through the actual pipeline before enabling spatial material culling. That application workaround was removed at the user's direction. Its results establish the family reduction's potential, **not acceptance of the final candidate**: first playable 18.240 s, warmup 6.270 s, 116 total pipelines including 65 compute pipelines, and 154 shader modules. Neither timed interval, nine camera switches nor ten placed-surface reviews created another pipeline or shader. One camera-switch frame was 33.4 ms. The five-second bootstrap target remains unmet.
+
+| Diagnostic view | Main-thread p50 / p95 | GPU total median | Actual draws/frame | Occupied geometry slots | Resident textures |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Walk | 9.588 / 12.176 ms | 9.710 ms | 156.65 | 545,914,880 B | 683,720,096 B |
+| Wide | 8.303 / 10.462 ms | 8.893 ms | 201.50 | 605,683,712 B | 805,092,768 B |
+
+The fixed arena is 1,342,177,280 bytes and the diagnostic ledger peaked at 2,528,212,164 bytes. Each marked interval had one Chrome root; an unrelated Chrome opened between intervals and Wide waited for it to close. Exclusive sampled rendering/submission was 5.278 ms/frame in Walk and 5.589 in Wide, down from 8.563/9.612 in the original full-level run. Settled family Wide captures are `ruins-cpu-families29-production-wide-after.png` and `ruins-cpu-families29-production-courtyard-wide-settled.png`. Steel, all seven GenericProps surfaces and both emissive surfaces were reviewed on placed geometry; exposure-scaled emission remains intact. Final production acceptance must use the shared `scripts/bench.mjs` after the vendored renderer fixes land.
 
 

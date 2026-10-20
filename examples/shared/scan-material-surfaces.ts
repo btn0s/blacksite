@@ -2,18 +2,18 @@ import { DoubleSide } from 'three'
 import { MeshPhysicalNodeMaterial, type Node } from 'three/webgpu'
 import { Fn, float, mix, positionView, vec2, vec3 } from 'three/tsl'
 import { tangentNormalWithUV } from '@blacksite/geometry'
-import type { ScanSurface } from './scan-material'
+import type { ScanGraphSurface } from './scan-material-data'
 import { luma, rotateUV, scanNormal, sCurve, specularResponse, tint, type ScanSample } from './scan-material-nodes'
 import { createVertexBlendMaterial } from './scan-material-blend'
 import { metalSurface } from './scan-material-metal'
 
-export function createSurfaceMaterial(surface: ScanSurface, sample: ScanSample, uv: Node<'vec2'>) {
+export function createSurfaceMaterial(surface: ScanGraphSurface, sample: ScanSample, uv: Node<'vec2'>) {
   if (surface.family === 'vertex-blend') return createVertexBlendMaterial(surface, sample, uv)
   const { scalar: s, vector: v, static_switch: switches } = surface.parameters
-  const material = new MeshPhysicalNodeMaterial({ name: surface.path.split('/').at(-1), roughness: 1, metalness: 0 })
+  const material = new MeshPhysicalNodeMaterial({ name: surface.family, roughness: 1, metalness: 0 })
   if (surface.family === 'solid') {
     material.colorNode = tint(v.Color)
-    material.roughness = s.Roughness
+    material.roughnessNode = s.Roughness
   } else if (surface.family === 'emissive') {
     material.colorNode = vec3(0)
     material.emissiveNode = Fn(builder => tint(v.Color).mul(s.Int).mul(builder.context.radianceScale ?? 1))()
@@ -37,11 +37,11 @@ export function createSurfaceMaterial(surface: ScanSurface, sample: ScanSample, 
     const normal = scanNormal(sample('Normal', uv.mul(20)))
     material.normalNode = tangentNormalWithUV(vec3(normal.xy.mul(0.3), normal.z), uv.mul(20))
   } else if (surface.family === 'cutout') {
-    const coordinates = rotateUV(uv.mul(vec2(s.TilingX, s.TilingY)), s.RotationAngle * 0.025, [0.5, -0.05])
+    const coordinates = rotateUV(uv.mul(vec2(s.TilingX, s.TilingY)), s.RotationAngle.mul(0.025), vec2(0.5, -0.05))
     const image = sample('Albedo', coordinates).rgb
     const controls = v['Albedo Control']
-    const color = mix(vec3(luma(image)), image, controls[0]).mul(controls[1]).mul(tint(v['Albedo Tint'])).max(0).pow(controls[2])
-    const roughness = switches['Use Unique Roughness'] ? sample('Roughness', coordinates).r : float(1).sub(luma(image))
+    const color = mix(vec3(luma(image)), image, controls.x).mul(controls.y).mul(tint(v['Albedo Tint'])).max(0).pow(controls.z)
+    const roughness = switches['Use Unique Roughness'].select(sample('Roughness', coordinates).r, float(1).sub(luma(image)))
     material.colorNode = color
     material.roughnessNode = mix(float(s['Roughness Min']), float(s['Roughness Max']), roughness).max(0).pow(s['Roughness Contrast']).clamp(0, 1)
     material.normalNode = tangentNormalWithUV(scanNormal(sample('Normal', coordinates), s['Normal Strength']), coordinates)
@@ -56,7 +56,7 @@ export function createSurfaceMaterial(surface: ScanSurface, sample: ScanSample, 
     const packed = sample('Packed', coordinates)
     const color = mix(image, vec3(luma(image)), s.Desat).max(0).pow(s.ColourContrast).mul(tint(v.ColourTint))
     const roughness = packed.g.max(0).pow(s.RoughnessContrast).mul(s.RoughnessAmount)
-    const metalness = switches['Use Standalone Metalness'] ? sample('Metalness', coordinates).r : packed.b
+    const metalness = switches['Use Standalone Metalness'].select(sample('Metalness', coordinates).r, packed.b)
     const response = metalSurface(surface, image, color, roughness, metalness)
     material.colorNode = response.color
     material.roughnessNode = response.roughness.clamp(0, 1)

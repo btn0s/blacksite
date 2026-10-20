@@ -77,7 +77,7 @@ export async function loadRuins(progress: (detail: string) => void) {
       }
       progress('Loading the pinned coarse geometry')
       performance.mark('ruins-geometry-start')
-      const geometry = await MeshletScene.create(renderer, [...grouped.values()], { pixelError: 2, occlusion: true, shadowLayer: 2, shadowPixelError: 4, textureFeedback: scanTextureFeedback(renderer) })
+      const geometry = await MeshletScene.create(renderer, [...grouped.values()], { materialIds: materials.materialIds, pixelError: 2, occlusion: true, shadowLayer: 2, shadowPixelError: 4, textureFeedback: scanTextureFeedback(renderer) })
       performance.measure('ruins-geometry', 'ruins-geometry-start')
       return geometry
     },

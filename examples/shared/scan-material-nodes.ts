@@ -1,21 +1,22 @@
 import type { Node } from 'three/webgpu'
-import { float, frameId, max, mix, normalWorldGeometry, positionWorld, screenCoordinate, texture, varying, vec2, vec3 } from 'three/tsl'
+import type { ScanGraphSurface } from './scan-material-data'
+import { float, frameId, max, mix, normalWorldGeometry, positionWorld, screenCoordinate, varying, vec2, vec3 } from 'three/tsl'
 
-export type ScanSample = (name: string, coordinates?: Node<'vec2'>) => ReturnType<typeof texture>
-export const tint = (value: number[]) => vec3(...value.slice(0, 3) as [number, number, number])
+export type ScanSample = (name: string, coordinates?: Node<'vec2'>) => Node<'vec4'>
+export const tint = (value: Node<'vec4'>) => value.rgb
 export const overlay = <T extends 'float' | 'vec3'>(base: Node<T>, blend: Node<T>) => base.greaterThan(0.5).select(float(1).sub(float(1).sub(base).mul(float(1).sub(blend)).mul(2)), base.mul(blend).mul(2))
-export const scanNormal = (sample: Node<'vec4'>, strength = 1) => {
+export const scanNormal = (sample: Node<'vec4'>, strength: number | Node<'float'> = 1) => {
   const xy = sample.xy.mul(2).sub(1)
-  return vec3(xy.mul(vec2(strength, -strength)), float(1).sub(xy.dot(xy)).max(0).sqrt())
+  return vec3(xy.mul(vec2(strength, float(strength).negate())), float(1).sub(xy.dot(xy)).max(0).sqrt())
 }
 
-export function rotateUV(coordinates: Node<'vec2'>, turns: number, pivot = [0.5, 0.5]) {
-  const angle = turns * Math.PI * 2
-  const point = coordinates.sub(vec2(pivot[0], pivot[1]))
-  return vec2(point.dot(vec2(Math.cos(angle), -Math.sin(angle))), point.dot(vec2(Math.sin(angle), Math.cos(angle)))).add(vec2(pivot[0], pivot[1]))
+export function rotateUV(coordinates: Node<'vec2'>, turns: Node<'float'>, pivot: Node<'vec2'> = vec2(0.5)) {
+  const angle = turns.mul(Math.PI * 2)
+  const point = coordinates.sub(pivot)
+  return vec2(point.dot(vec2(angle.cos(), angle.sin().negate())), point.dot(vec2(angle.sin(), angle.cos()))).add(pivot)
 }
 
-export function specularResponse(color: Node<'vec3'>, normal: Node<'vec3'>, s: Record<string, number>) {
+export function specularResponse(color: Node<'vec3'>, normal: Node<'vec3'>, s: ScanGraphSurface['parameters']['scalar']) {
   const base = sCurve(color.dot(vec3(s['Dot Base'])).clamp(0, 1), s['Specular Base Contrast']).mul(s['Specular Base Intensity']).clamp(0, 1)
   const dx = normal.dFdx(), dy = normal.dFdy()
   const variance = max(dx.dot(dx), dy.dot(dy))
@@ -25,22 +26,22 @@ export function specularResponse(color: Node<'vec3'>, normal: Node<'vec3'>, s: R
 
 export const luma = (value: Node<'vec3'>) => value.dot(vec3(0.212639, 0.715169, 0.072192))
 export const saturate = (value: Node<'float'>) => value.clamp(0, 1)
-export const cheapContrast = <T extends 'float' | 'vec2'>(value: Node<T>, contrast: number) => value.mul(1 + 2 * contrast).sub(contrast).clamp(0, 1)
+export const cheapContrast = <T extends 'float' | 'vec2'>(value: Node<T>, contrast: number | Node<'float'>) => value.mul(float(contrast).mul(2).add(1)).sub(contrast).clamp(0, 1)
 
-export function sCurve(value: Node<'float'>, power: number) {
+export function sCurve(value: Node<'float'>, power: Node<'float'>) {
   const high = float(1).sub(float(1).sub(value.sub(0.5).mul(2).clamp(0, 1)).pow(power))
   return mix(value.mul(2).clamp(0, 1).pow(power).mul(0.5), high.mul(0.5).add(0.5), high.mul(500).clamp(0, 1))
 }
 
-export function colorTransform(color: Node<'vec3'>, offset: number[]) {
-  const h = (offset[0] + 1) * Math.PI * 2
-  const v = offset[2] + 1
-  const a = v * (offset[1] + 1) * Math.cos(h)
-  const b = v * (offset[1] + 1) * Math.sin(h)
+export function colorTransform(color: Node<'vec3'>, offset: Node<'vec4'>) {
+  const h = offset.x.add(1).mul(Math.PI * 2)
+  const v = offset.z.add(1)
+  const a = v.mul(offset.y.add(1)).mul(h.cos())
+  const b = v.mul(offset.y.add(1)).mul(h.sin())
   return vec3(
-    color.dot(vec3(0.299 * v + 0.701 * a + 0.168 * b, 0.587 * v - 0.587 * a + 0.330 * b, 0.114 * v - 0.114 * a - 0.497 * b)),
-    color.dot(vec3(0.299 * v - 0.299 * a - 0.328 * b, 0.587 * v + 0.413 * a + 0.035 * b, 0.114 * v - 0.114 * a + 0.292 * b)),
-    color.dot(vec3(0.299 * v - 0.300 * a + 1.25 * b, 0.587 * v - 0.588 * a - 1.05 * b, 0.114 * v + 0.886 * a - 0.203 * b)),
+    color.dot(vec3(v.mul(0.299).add(a.mul(0.701)).add(b.mul(0.168)), v.mul(0.587).sub(a.mul(0.587)).add(b.mul(0.330)), v.mul(0.114).sub(a.mul(0.114)).sub(b.mul(0.497)))),
+    color.dot(vec3(v.mul(0.299).sub(a.mul(0.299)).sub(b.mul(0.328)), v.mul(0.587).add(a.mul(0.413)).add(b.mul(0.035)), v.mul(0.114).sub(a.mul(0.114)).add(b.mul(0.292)))),
+    color.dot(vec3(v.mul(0.299).sub(a.mul(0.300)).add(b.mul(1.25)), v.mul(0.587).sub(a.mul(0.588)).sub(b.mul(1.05)), v.mul(0.114).add(a.mul(0.886)).sub(b.mul(0.203)))),
   )
 }
 
