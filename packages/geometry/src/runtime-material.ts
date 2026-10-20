@@ -1,5 +1,5 @@
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, NoBlending, StandardNodeLibrary, TangentSpaceNormalMap, Texture, Vector2 } from 'three/webgpu'
-import { Fn, bumpMap, context, faceDirection, float, materialColor, max, modelWorldMatrix, mrt, normalViewGeometry, packNormalToRGB, positionView, texture, uniform, uv, vec2, vec3, vec4, velocity, vertexColor } from 'three/tsl'
+import { Fn, bumpMap, context, faceDirection, float, materialColor, max, modelWorldMatrix, mrt, normalViewGeometry, packNormalToRGB, positionPrevious, positionView, texture, uniform, uv, vec2, vec3, vec4, velocity, vertexColor } from 'three/tsl'
 import type { MeshStandardMaterial, Node } from 'three/webgpu'
 import type { clusterVertex } from './runtime-vertex'
 import type { PackedMeshletScene } from './runtime-data'
@@ -116,7 +116,11 @@ export function createGeometryDepthMaterial(batch: PackedMeshletScene['depthBatc
   const material = new MeshBasicNodeMaterial({ blending: NoBlending, fog: false })
   shared.set(signature, material)
   material.allowOverride = false
-  material.positionNode = pulled.position
+  material.positionNode = shadow ? pulled.position : Fn(() => {
+    const world = pulled.position.toVar()
+    positionPrevious.assign(world)
+    return world
+  })()
   material.side = shadow ? batch.shadowSide : batch.side
   material.colorNode = vec4(0, 0, 0, 1)
   if (!shadow) material.mrtNode = mrt({ output: packNormalToRGB(normalViewGeometry.mul(faceDirection)), velocity })
