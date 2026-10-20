@@ -17,11 +17,13 @@ export type ScanTexture = {
   coldSince: number
   retryAt: number
   maxSize: number
+  pinned: boolean
 }
 type Request = { image: ScanTexture; tail: ScanTail; controller: AbortController; texture: Texture | null; staging: object; upload: object; bytes: number }
 const MiB = 1024 * 1024
 const uploadLimit = 8 * MiB
 const promotionConcurrency = 12
+const textureReserve = 96 * MiB
 const textureBytes = (tail: Pick<ScanTail, 'width' | 'height' | 'levels'>, map: Texture) => {
   let bytes = 0
   for (let mip = 0; mip < tail.levels; mip++) bytes += getByteLength(Math.max(1, tail.width >> mip), Math.max(1, tail.height >> mip), map.format, map.type)
@@ -44,6 +46,7 @@ export class ScanTextureStreaming {
       const now = performance.now()
       this.samples++
       for (const image of this.images) {
+        if (image.pinned) continue
         const size = Math.min(image.maxSize, 2048 >> mips[image.id]!)
         const target = image.source.tails.find(tail => tail.size >= size) ?? image.source.tails.at(-1)!
         if (target !== image.target) { image.target = target; image.coldSince = now }
@@ -123,11 +126,16 @@ export class ScanTextureStreaming {
       const allocation = this.upload(map, source, tail, upload)
       this.minimumSwapBytes = Math.max(this.minimumSwapBytes, allocation.residentBytes * 2)
       const maxSize = Math.max(...source.tails.filter(tail => tail.size <= 2048 && textureBytes(tail, map) <= uploadLimit).map(tail => tail.size))
-      const image: ScanTexture = { id: this.images.length, source, allocation, tail, target: tail, coldSince: 0, retryAt: 0, maxSize }
+      const image: ScanTexture = { id: this.images.length, source, allocation, tail, target: tail, coldSince: 0, retryAt: 0, maxSize, pinned: false }
       this.images.push(image)
       this.feedback.imageCount = this.images.length
       return image
     } finally { this.decoding.release(staging) }
+  }
+
+  pin(image: ScanTexture, size: number) {
+    image.pinned = true
+    image.target = image.source.tails.find(tail => tail.size >= size) ?? image.source.tails.at(-1)!
   }
 
   private release(allocation: Allocation) {
@@ -177,16 +185,19 @@ export class ScanTextureStreaming {
   }
 
   private next(start: number) {
-    let next: ScanTexture | null = null
+    let next: ScanTexture | null = null, coldest: ScanTexture | null = null, starved = false
     for (const image of this.images) {
       if (image.target === image.tail || start < image.retryAt || this.pending.some(request => request.image === image)) continue
-      if (image.target.size < image.tail.size && start - image.coldSince < 3000) continue
+      const demotion = image.target.size < image.tail.size
       const bytes = textureBytes(image.target, image.allocation.texture)
-      const spare = image.target.size > image.tail.size ? this.minimumSwapBytes : 0
-      if (bytes + spare / 2 > this.ledger.available('textures') || bytes > this.ledger.available('staging') || image.target.wireBytes + bytes * 2 > this.decoding.available() || bytes * 2 + spare > this.ledger.available()) continue
-      if (!next || image.target.size < image.tail.size || image.target.size / image.tail.size > next.target.size / next.tail.size) next = image
+      const spare = demotion ? 0 : this.minimumSwapBytes
+      const room = bytes + spare / 2 <= this.ledger.available('textures') && bytes * 2 + spare <= this.ledger.available()
+      if (!demotion && !room) starved = true
+      if (!room || bytes > this.ledger.available('staging') || image.target.wireBytes + bytes * 2 > this.decoding.available()) continue
+      if (demotion) { if (!coldest || image.coldSince < coldest.coldSince) coldest = image }
+      else if (!next || image.target.size / image.tail.size > next.target.size / next.tail.size) next = image
     }
-    return next
+    return (starved || this.ledger.available('textures') < textureReserve) && coldest ? coldest : next
   }
 
   private request(image: ScanTexture) {
