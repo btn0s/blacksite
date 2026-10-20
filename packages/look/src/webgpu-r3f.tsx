@@ -33,7 +33,7 @@ export function WebGPULook({ onReady, onError, debug = false, ...options }: WebG
       look.current = null
       callbacks.current.onReady?.(null)
     }
-  }, [gl, scene, options.atmosphere, options.quality, options.shadowDistance, options.shadowMap, options.shadowLayers, options.sunlight, options.camera])
+  }, [gl, scene, options.atmosphere, options.quality, options.shadowDistance, options.shadowMap, options.shadowLayers, options.sunlight, options.camera, options.film])
   useEffect(() => { look.current?.setCamera(camera) }, [camera])
   useEffect(() => { look.current?.setSize(size.width, size.height) }, [size.width, size.height])
   useEffect(() => { look.current?.setDebug(debug) }, [debug])

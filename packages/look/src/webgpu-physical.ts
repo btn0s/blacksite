@@ -4,6 +4,7 @@ import { cameraPosition, positionWorldDirection, sampler, screenUV, texture, uni
 import { LightProbeGenerator } from 'three/addons/lights/LightProbeGenerator.js'
 import type { Atmosphere } from './atmosphere'
 import { QUALITY, type QualityTier } from './quality'
+import { OZONE, RAYLEIGH, wgsl } from './coefficients'
 
 const CORE = `
 fn atRaySphere(origin: vec3f, direction: vec3f, radius: f32) -> vec2f {
@@ -16,12 +17,12 @@ fn atRaySphere(origin: vec3f, direction: vec3f, radius: f32) -> vec2f {
 }
 fn atRho(r: f32) -> f32 { return sqrt(max(0.0, (r - 6360.0) * (r + 6360.0))); }
 fn atRayleigh(h: f32, medium: vec4f) -> vec3f {
-  return vec3f(5.802e-3, 13.558e-3, 33.1e-3) * medium.x * exp(-max(h, 0.0) / 8.0);
+  return ${wgsl(RAYLEIGH)} * medium.x * exp(-max(h, 0.0) / 8.0);
 }
-fn atMie(h: f32, medium: vec4f) -> f32 { return 3.996e-3 * medium.y * exp(-max(h, 0.0) / 1.2); }
-fn atExtinction(h: f32, medium: vec4f) -> vec3f {
+fn atMie(h: f32, medium: vec4f) -> f32 { return medium.y * exp(-max(h, 0.0) / 1.2); }
+fn atExtinction(h: f32, medium: vec4f, terms: vec2f) -> vec3f {
   let height = max(h, 0.0);
-  return atRayleigh(height, medium) + vec3f(4.4e-3 * medium.y * exp(-height / 1.2)) + vec3f(0.65e-3, 1.881e-3, 0.085e-3) * medium.z * max(0.0, 1.0 - abs(height - 25.0) / 15.0);
+  return atRayleigh(height, medium) + vec3f((medium.y + terms.x) * exp(-height / 1.2)) + ${wgsl(OZONE)} * medium.z * max(0.0, 1.0 - abs(height - 25.0) / 15.0);
 }
 fn atTransmittanceUv(r: f32, mu: f32) -> vec2f {
   let top = sqrt(6460.0 * 6460.0 - 6360.0 * 6360.0);
@@ -67,7 +68,7 @@ fn atSky(lut: texture_2d<f32>, lutSampler: sampler, direction: vec3f, medium: ve
 `
 
 const transmittanceNode = wgslFn(`
-fn atmosphereTransmittance(uv: vec2f, medium: vec4f) -> vec4f {
+fn atmosphereTransmittance(uv: vec2f, medium: vec4f, terms: vec2f) -> vec4f {
   let top = sqrt(6460.0 * 6460.0 - 6360.0 * 6360.0);
   let rho = top * uv.y;
   let r = sqrt(rho * rho + 6360.0 * 6360.0);
@@ -83,14 +84,14 @@ fn atmosphereTransmittance(uv: vec2f, medium: vec4f) -> vec4f {
   var depth = vec3f(0.0);
   for (var i = 0; i < 40; i++) {
     let p = origin + direction * ((f32(i) + 0.5) * dt);
-    depth += atExtinction(length(p) - 6360.0, medium) * dt;
+    depth += atExtinction(length(p) - 6360.0, medium, terms) * dt;
   }
   return vec4f(exp(-depth), 1.0);
 }
 ${CORE}`)
 
 const multipleNode = wgslFn(`
-fn atmosphereMultiple(uvIn: vec2f, medium: vec4f, transmittance: texture_2d<f32>, transSampler: sampler) -> vec4f {
+fn atmosphereMultiple(uvIn: vec2f, medium: vec4f, terms: vec2f, transmittance: texture_2d<f32>, transSampler: sampler) -> vec4f {
   let uv = vec2f(atFromSub(uvIn.x, 32.0), atFromSub(uvIn.y, 32.0));
   let cosSun = uv.x * 2.0 - 1.0;
   let r = 6360.0 + max(uv.y * 100.0, 0.01);
@@ -115,7 +116,7 @@ fn atmosphereMultiple(uvIn: vec2f, medium: vec4f, transmittance: texture_2d<f32>
         let p = origin + direction * ((f32(s) + 0.5) * dt);
         let pr = length(p);
         let h = pr - 6360.0;
-        let extinction = max(atExtinction(h, medium), vec3f(1e-9));
+        let extinction = max(atExtinction(h, medium, terms), vec3f(1e-9));
         let scattering = atRayleigh(h, medium) + vec3f(atMie(h, medium));
         let step = exp(-extinction * dt);
         let mu = dot(p, sun) / pr;
@@ -129,7 +130,7 @@ fn atmosphereMultiple(uvIn: vec2f, medium: vec4f, transmittance: texture_2d<f32>
       if (hitsGround) {
         let normal = normalize(origin + direction * span);
         let mu = dot(normal, sun);
-        light += throughput * atTransmittance(transmittance, transSampler, 6360.0, mu) * max(mu, 0.0) * 0.3 / 3.141592653589793;
+        light += throughput * atTransmittance(transmittance, transSampler, 6360.0, mu) * max(mu, 0.0) * terms.y / 3.141592653589793;
       }
       total += light;
       transfer += scatterSum;
@@ -141,7 +142,7 @@ ${CORE}`)
 
 function makeSkyView(steps: number) {
   return wgslFn(`
-fn atmosphereView(uvIn: vec2f, medium: vec4f, sunValue: vec4f, size: vec2f, mieG: f32, transmittance: texture_2d<f32>, transSampler: sampler, multi: texture_2d<f32>, multiSampler: sampler) -> vec4f {
+fn atmosphereView(uvIn: vec2f, medium: vec4f, terms: vec2f, sunValue: vec4f, size: vec2f, mieG: f32, transmittance: texture_2d<f32>, transSampler: sampler, multi: texture_2d<f32>, multiSampler: sampler) -> vec4f {
   let uv = vec2f(atFromSub(uvIn.x, size.x), atFromSub(uvIn.y, size.y));
   let r = 6360.0 + medium.w;
   let cosBeta = atRho(r) / r;
@@ -172,7 +173,7 @@ fn atmosphereView(uvIn: vec2f, medium: vec4f, sunValue: vec4f, size: vec2f, mieG
     previous = next;
     let pr = length(p);
     let h = pr - 6360.0;
-    let extinction = max(atExtinction(h, medium), vec3f(1e-9));
+    let extinction = max(atExtinction(h, medium, terms), vec3f(1e-9));
     let mu = dot(p, sun) / pr;
     var sunT = vec3f(0.0);
     if (!atSunHidden(pr, mu)) { sunT = atTransmittance(transmittance, transSampler, pr, mu); }
@@ -300,7 +301,7 @@ ${CLOUDS}`)
 }
 
 const aerialNode = wgslFn(`
-fn atmosphereAerial(color: vec4f, uv: vec2f, depth: f32, projectionInverse: mat4x4f, cameraWorld: mat4x4f, reversed: f32, medium: vec4f, sun: vec4f, size: vec2f, aerial: f32, clearDistance: f32, radianceScale: f32, fog: vec4f, fogTint: vec3f, transmittance: texture_2d<f32>, transSampler: sampler, skyView: texture_2d<f32>, viewSampler: sampler) -> vec4f {
+fn atmosphereAerial(color: vec4f, uv: vec2f, depth: f32, projectionInverse: mat4x4f, cameraWorld: mat4x4f, reversed: f32, medium: vec4f, terms: vec2f, sun: vec4f, size: vec2f, aerial: f32, clearDistance: vec2f, radianceScale: f32, fog: vec4f, fogAlbedo: vec3f, fogEmissive: vec3f, transmittance: texture_2d<f32>, transSampler: sampler, skyView: texture_2d<f32>, viewSampler: sampler) -> vec4f {
   if ((reversed < 0.5 && depth >= 1.0) || (reversed > 0.5 && depth <= 0.0)) { return color; }
   let projected = projectionInverse * vec4f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0);
   let point = projected.xyz / projected.w;
@@ -311,19 +312,22 @@ fn atmosphereAerial(color: vec4f, uv: vec2f, depth: f32, projectionInverse: mat4
   let km = span * 0.001;
   let h0 = max(y0 * 0.001 + medium.w, 0.0);
   let h1 = max(y1 * 0.001 + medium.w, 0.0);
-  let tauAir = (vec3f(5.802e-3, 13.558e-3, 33.1e-3) * medium.x * atLayer(h0, h1, km, 8.0) + vec3f(4.4e-3 * medium.y * atLayer(h0, h1, km, 1.2))) * aerial;
+  let tauAir = (${wgsl(RAYLEIGH)} * medium.x * atLayer(h0, h1, km, 8.0) + vec3f((medium.y + terms.x) * atLayer(h0, h1, km, 1.2))) * aerial;
   var tauFog = 0.0;
   if (fog.x > 0.0) { tauFog = fog.x * atLayer(max(y0 - fog.y, 0.0), max(y1 - fog.y, 0.0), span, fog.z); }
-  let tau = (tauAir + vec3f(tauFog)) * clamp(1.0 - clearDistance / max(span, 1.0), 0.0, 1.0);
+  let cleared = clamp(vec2f(1.0) - clearDistance / max(span, 1.0), vec2f(0.0), vec2f(1.0));
+  let airTau = tauAir * cleared.x;
+  let fogTau = tauFog * cleared.y;
+  let tau = airTau + vec3f(fogTau);
   let transmission = exp(-tau);
   let horizon = normalize(vec3f(direction.x, max(direction.y, 0.0), direction.z));
   let air = atSky(skyView, viewSampler, horizon, medium, sun, size);
   var fogColor = air;
   if (fog.x > 0.0) {
-    let sunlight = atTransmittance(transmittance, transSampler, 6360.0 + medium.w, sun.y) * sun.w * atPhaseHg(dot(direction, sun.xyz), 0.55);
-    fogColor = fogTint * (atSky(skyView, viewSampler, vec3f(0.0, 1.0, 0.0), medium, sun, size) * 0.55 + air * 0.45 + sunlight);
+    let sunlight = atTransmittance(transmittance, transSampler, 6360.0 + medium.w, sun.y) * sun.w * atPhaseHg(dot(direction, sun.xyz), fog.w);
+    fogColor = fogAlbedo * (atSky(skyView, viewSampler, vec3f(0.0, 1.0, 0.0), medium, sun, size) * 0.55 + air * 0.45 + sunlight) + fogEmissive * sun.w;
   }
-  let weight = vec3f(tauFog) / max(tauAir + vec3f(tauFog), vec3f(1e-6));
+  let weight = vec3f(fogTau) / max(airTau + vec3f(fogTau), vec3f(1e-6));
   let inscatter = mix(air, fogColor, weight) * (vec3f(1.0) - transmission) * radianceScale;
   return vec4f(color.rgb * transmission + inscatter, color.a);
 }
@@ -340,7 +344,8 @@ export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmospher
   const spec = atmosphere.physical
   if (!spec) throw new Error('The WebGPU atmosphere requires a physical sky definition')
   const settings = QUALITY[quality].atmosphere
-  const medium = uniform(new Vector4(spec.rayleigh, spec.mie, spec.ozone, Math.max(spec.elevation, 1) * 0.001))
+  const medium = uniform(new Vector4(spec.rayleigh, spec.mieScattering, spec.ozone, Math.max(spec.elevation, 1) * 0.001))
+  const terms = uniform(new Vector2(spec.mieAbsorption, spec.groundAlbedo))
   const direction = new Vector3(...atmosphere.sun.direction).normalize()
   const sun = uniform(new Vector4(direction.x, direction.y, direction.z, spec.illuminance))
   const size = uniform(new Vector2(...settings.view))
@@ -361,9 +366,9 @@ export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmospher
   const quad = new QuadMesh(material)
   const previous = renderer.getRenderTarget()
   const draws = [
-    transmittanceNode({ uv: screenUV, medium }),
-    multipleNode({ uvIn: screenUV, medium, transmittance: transTexture, transSampler: sampler(transTexture) }),
-    makeSkyView(settings.steps)({ uvIn: screenUV, medium, sunValue: sun, size, mieG: uniform(spec.mieAnisotropy), transmittance: transTexture, transSampler: sampler(transTexture), multi: multiTexture, multiSampler: sampler(multiTexture) }),
+    transmittanceNode({ uv: screenUV, medium, terms }),
+    multipleNode({ uvIn: screenUV, medium, terms, transmittance: transTexture, transSampler: sampler(transTexture) }),
+    makeSkyView(settings.steps)({ uvIn: screenUV, medium, terms, sunValue: sun, size, mieG: uniform(spec.mieAnisotropy), transmittance: transTexture, transSampler: sampler(transTexture), multi: multiTexture, multiSampler: sampler(multiTexture) }),
   ]
   for (let index = 0; index < draws.length; index++) {
     material.fragmentNode = draws[index]
@@ -394,7 +399,7 @@ export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmospher
     irradiance,
     aerial(color: Node<'vec4'>, depth: Node<'float'>, camera: Camera, radianceScale: number) {
       const fog = spec.heightFog
-      return aerialNode({ color, uv: screenUV, depth, projectionInverse: uniform(camera.projectionMatrixInverse), cameraWorld: uniform(camera.matrixWorld), reversed: uniform(camera.reversedDepth ? 1 : 0), ...shared, aerial: uniform(spec.aerial), clearDistance: uniform(spec.clear ?? 0), radianceScale: uniform(radianceScale), fog: uniform(new Vector4(fog?.density ?? 0, fog?.base ?? 0, Math.max(fog?.falloff ?? 1, 1), 0)), fogTint: uniform(new Vector3(...(fog?.tint ?? [1, 1, 1] as const))) }) as Node<'vec4'>
+      return aerialNode({ color, uv: screenUV, depth, projectionInverse: uniform(camera.projectionMatrixInverse), cameraWorld: uniform(camera.matrixWorld), reversed: uniform(camera.reversedDepth ? 1 : 0), ...shared, terms, aerial: uniform(spec.aerial), clearDistance: uniform(new Vector2(spec.clear ?? 0, fog?.start ?? 0)), radianceScale: uniform(radianceScale), fog: uniform(new Vector4(fog?.extinction ?? 0, fog?.base ?? 0, Math.max(fog?.scaleHeight ?? 1, 1), fog?.phase ?? 0)), fogAlbedo: uniform(new Vector3(...(fog?.albedo ?? [1, 1, 1] as const))), fogEmissive: uniform(new Vector3(...(fog?.emissive ?? [0, 0, 0] as const))) }) as Node<'vec4'>
     },
     tick(dt: number) { cloudTime.value += dt * (spec.clouds?.wind ?? 0) },
     dispose() { for (const target of targets) target.dispose(); environment.dispose() },

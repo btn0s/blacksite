@@ -6,11 +6,8 @@ import type { DirectionalLight, Texture, WebGLRenderer } from 'three';
 import type { Atmosphere, PhysicalSkySpec } from './atmosphere';
 import type { QualitySettings } from './quality';
 import type { Sky } from './sky';
+import { OZONE, RAYLEIGH } from './coefficients';
 
-const RAYLEIGH = [5.802e-3, 13.558e-3, 33.1e-3] as const;
-const OZONE = [0.65e-3, 1.881e-3, 0.085e-3] as const;
-const MIE_SCATTERING = 3.996e-3;
-const MIE_EXTINCTION = 4.4e-3;
 const TRANSMITTANCE_SIZE = [256, 64] as const;
 const MULTI_SIZE = 32;
 const SUN_RADIUS = 0.004675;
@@ -26,6 +23,7 @@ export const ATMOSPHERE_CORE = `
   uniform vec3 atRayleigh;
   uniform float atMieScattering;
   uniform float atMieExtinction;
+  uniform float atGroundAlbedo;
   uniform float atMieG;
   uniform vec3 atOzone;
   uniform float atAltitude;
@@ -193,7 +191,7 @@ const MULTI_FRAGMENT = `
         if (hitsGround) {
           vec3 normal = normalize(origin + direction * span);
           float mu = dot(normal, sun);
-          light += throughput * atTransmittance(AT_RG, mu) * max(mu, 0.0) * 0.3 / AT_PI;
+          light += throughput * atTransmittance(AT_RG, mu) * max(mu, 0.0) * atGroundAlbedo / AT_PI;
         }
         total += light;
         transfer += scatterSum;
@@ -419,6 +417,7 @@ export interface AtmosphereUniforms {
   readonly atRayleigh: Uniform<Vector3>;
   readonly atMieScattering: Uniform<number>;
   readonly atMieExtinction: Uniform<number>;
+  readonly atGroundAlbedo: Uniform<number>;
   readonly atMieG: Uniform<number>;
   readonly atOzone: Uniform<Vector3>;
   readonly atAltitude: Uniform<number>;
@@ -451,7 +450,7 @@ function lutTarget(width: number, height: number): WebGLRenderTarget {
 }
 
 function mediumKey(spec: PhysicalSkySpec): string {
-  return `${spec.rayleigh}|${spec.mie}|${spec.ozone}`;
+  return `${spec.rayleigh}|${spec.mieScattering}|${spec.mieAbsorption}|${spec.ozone}|${spec.groundAlbedo}`;
 }
 
 export function createAtmosphereLuts(renderer: WebGLRenderer, settings: QualitySettings['atmosphere']): AtmosphereLuts {
@@ -467,6 +466,7 @@ export function createAtmosphereLuts(renderer: WebGLRenderer, settings: QualityS
     atRayleigh: new Uniform(new Vector3()),
     atMieScattering: new Uniform(0),
     atMieExtinction: new Uniform(0),
+    atGroundAlbedo: new Uniform(0.3),
     atMieG: new Uniform(0.8),
     atOzone: new Uniform(new Vector3()),
     atAltitude: new Uniform(0),
@@ -513,8 +513,9 @@ export function createAtmosphereLuts(renderer: WebGLRenderer, settings: QualityS
       const spec = atmosphere.physical;
       if (!spec) return;
       uniforms.atRayleigh.value.set(RAYLEIGH[0] * spec.rayleigh, RAYLEIGH[1] * spec.rayleigh, RAYLEIGH[2] * spec.rayleigh);
-      uniforms.atMieScattering.value = MIE_SCATTERING * spec.mie;
-      uniforms.atMieExtinction.value = MIE_EXTINCTION * spec.mie;
+      uniforms.atMieScattering.value = spec.mieScattering;
+      uniforms.atMieExtinction.value = spec.mieScattering + spec.mieAbsorption;
+      uniforms.atGroundAlbedo.value = spec.groundAlbedo;
       uniforms.atMieG.value = spec.mieAnisotropy;
       uniforms.atOzone.value.set(OZONE[0] * spec.ozone, OZONE[1] * spec.ozone, OZONE[2] * spec.ozone);
       uniforms.atAltitude.value = Math.max(spec.elevation, 1) * 0.001;
