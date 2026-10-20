@@ -5,10 +5,8 @@ import { extname, resolve, sep } from 'node:path'
 
 export function ownedAssets(directory = resolve(homedir(), 'dev/owned-assets')) {
   const root = resolve(directory)
-  return {
-    name: 'blacksite-owned-assets',
-    configureServer(server) {
-      server.middlewares.use('/owned', async (request, response, next) => {
+  const configure = server => {
+    server.middlewares.use('/owned', async (request, response, next) => {
         if (request.method !== 'GET' && request.method !== 'HEAD') return next()
         let file
         try { file = resolve(root, `.${decodeURIComponent(new URL(request.url, 'http://localhost').pathname)}`) } catch { return next() }
@@ -38,7 +36,11 @@ export function ownedAssets(directory = resolve(homedir(), 'dev/owned-assets')) 
         response.setHeader('Cache-Control', 'no-cache')
         if (request.method === 'HEAD' || info.size === 0) return response.end()
         createReadStream(file, { start, end }).on('error', next).pipe(response)
-      })
-    },
+    })
+  }
+  return {
+    name: 'blacksite-owned-assets',
+    configureServer: configure,
+    configurePreviewServer: configure,
   }
 }
