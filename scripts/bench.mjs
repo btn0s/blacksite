@@ -65,7 +65,7 @@ function assertNoChrome() {
 }
 
 function git(...args) {
-  return execFileSync('git', ['-c', `safe.directory=${root}`, '-C', root, ...args], { encoding: 'utf8' }).trim()
+  return execFileSync('git', ['-c', `safe.directory=${root.replaceAll('\\', '/')}`, '-C', root, ...args], { encoding: 'utf8' }).trim()
 }
 
 function assertClean() {
