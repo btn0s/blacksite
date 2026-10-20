@@ -7,3 +7,4 @@ For anything game-related, read `skills/blacksite/SKILL.md` and follow it; witho
 Never read credential stores or any file whose name contains login, token, secret, key, or credential; use the Blacksite CLI, which never prints credentials. Never copy purchased assets into this repository. Use caret ranges at latest published dependency versions. Do not add code comments. Keep external game repositories untouched. Do not run headed browsers or push/publish without explicit authorization.
 
 Performance and visual claims come from `node scripts/bench.mjs`.
+Merges into `btn0s/meshlet-showcase-archway` are benched automatically; compare with `node scripts/bench.mjs --compare`, which uses `D:\dev\probe\bench\baseline`.

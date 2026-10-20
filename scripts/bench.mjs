@@ -7,6 +7,8 @@ import { chromium } from 'file:///D:/dev/wall/examples/wall/node_modules/playwri
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const probeRoot = 'D:/dev/probe'
+const benchRoot = join(probeRoot, 'bench')
+const baselineDir = join(benchRoot, 'baseline')
 const lockPath = join(probeRoot, 'bench.lock')
 const vite = join(root, 'node_modules', 'vite', 'bin', 'vite.js')
 const defaultViews = ['courtyard-wide', 'courtyard-walk', 'full-wide', 'full-walk']
@@ -20,12 +22,15 @@ const settleMs = 20000
 const captureMs = 10000
 
 function options() {
-  const result = { views: defaultViews, dev: false, compare: null }
+  const result = { views: defaultViews, dev: false, compare: null, compareEnabled: false, output: join(benchRoot, 'run') }
   for (let index = 2; index < process.argv.length; index++) {
     const arg = process.argv[index]
     if (arg === '--dev') result.dev = true
     else if (arg === '--views') result.views = (process.argv[++index] ?? '').split(',').filter(Boolean)
-    else if (arg === '--compare') result.compare = resolve(process.argv[++index] ?? '')
+    else if (arg === '--compare') {
+      result.compareEnabled = true
+      result.compare = process.argv[index + 1] && !process.argv[index + 1].startsWith('--') ? resolve(process.argv[++index]) : baselineDir
+    } else if (arg === '--output') result.output = resolve(process.argv[++index] ?? '')
     else throw new Error(`Unknown option: ${arg}`)
   }
   if (!result.views.length || result.views.some(view => !viewUrls[view])) throw new Error(`Views must be selected from: ${Object.keys(viewUrls).join(', ')}`)
@@ -109,10 +114,20 @@ async function stop(child) {
 
 function instrument() {
   window.__benchEvents = []
+  window.__benchTelemetry = []
   window.__benchCapture = false
   window.__benchPipelines = 0
+  const nativeFetch = window.fetch.bind(window)
+  window.fetch = (input, init) => {
+    const url = new URL(typeof input === 'string' ? input : input.url, location.href)
+    if (url.pathname === '/__inspect/telemetry' && init?.method === 'POST') {
+      window.__benchTelemetry.push(JSON.parse(init.body))
+      return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    }
+    return nativeFetch(input, init)
+  }
   const record = (kind, bytes = 0) => {
-    if (window.__benchCapture) window.__benchEvents.push({ at: performance.now(), kind, bytes })
+    if (window.__benchCapture) window.__benchEvents.push({ at: performance.now() - window.__benchCaptureStart, kind, bytes })
   }
   for (const name of ['createRenderPipeline', 'createRenderPipelineAsync', 'createComputePipeline', 'createComputePipelineAsync']) {
     const original = GPUDevice.prototype[name]
@@ -145,7 +160,7 @@ function resident(summary) {
   }
 }
 
-async function runView(page, baseUrl, view, outputDir) {
+async function runView(page, baseUrl, view, outputDir, identity) {
   const url = new URL(viewUrls[view], baseUrl).href
   const started = performance.now()
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 })
@@ -156,17 +171,11 @@ async function runView(page, baseUrl, view, outputDir) {
   await page.evaluate(() => { window.__benchReadyPipelines = window.__benchPipelines })
   if (view.endsWith('-walk')) await page.locator('canvas').click({ position: { x: 960, y: 540 } })
   await page.waitForTimeout(settleMs)
-  let telemetry
-  await page.route('**/__inspect/telemetry', async route => {
-    telemetry = route.request().postDataJSON()
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-  })
   const dump = async () => {
-    telemetry = undefined
+    const count = await page.evaluate(() => window.__benchTelemetry.length)
     await page.keyboard.press('t')
-    for (let attempt = 0; attempt < 100 && !telemetry; attempt++) await page.waitForTimeout(50)
-    if (!telemetry) throw new Error(`${view} did not produce a HUD telemetry dump`)
-    return telemetry
+    await page.waitForFunction(previous => window.__benchTelemetry.length > previous, count, { timeout: 10000 })
+    return page.evaluate(() => window.__benchTelemetry.at(-1))
   }
   const before = await dump()
   const screenshotPath = join(outputDir, `${view}.png`)
@@ -177,14 +186,14 @@ async function runView(page, baseUrl, view, outputDir) {
   await page.waitForTimeout(captureMs)
   if (view.endsWith('-walk')) await page.keyboard.up('w')
   const after = await dump()
-  await page.unroute('**/__inspect/telemetry')
-  telemetry = after
+  const telemetry = after
   const capture = telemetry.history
   const texture = telemetry.content?.textureStreaming ?? {}
   const beforeTexture = before.content?.textureStreaming ?? {}
   const pageStats = telemetry.content?.geometryPaging ?? {}
   const beforePageStats = before.content?.geometryPaging ?? {}
   const result = {
+    ...identity,
     view,
     url,
     capturedAt: captureStarted,
@@ -213,7 +222,19 @@ async function runView(page, baseUrl, view, outputDir) {
     textureUploadEvents: result.events.filter(event => event.kind === 'texture-upload').length,
     textureUploadBytes: result.events.filter(event => event.kind === 'texture-upload').reduce((sum, event) => sum + event.bytes, 0),
   }
+  const frameTimes = capture?.frameTimesMs ?? []
+  const gpuTimes = capture?.gpuTimesMs ?? []
+  if (frameTimes.length && frameTimes.length === gpuTimes.length) {
+    const offsets = []
+    let offset = -frameTimes.reduce((sum, value) => sum + value, 0)
+    for (let index = 0; index < frameTimes.length; index++) {
+      offset += frameTimes[index]
+      offsets.push(offset)
+    }
+    result.frameLog.spikes = gpuTimes.map((gpuMs, index) => ({ gpuMs, atMs: offsets[index] })).sort((a, b) => b.gpuMs - a.gpuMs).slice(0, 10).map(spike => ({ ...spike, eventsWithin100Ms: result.events.filter(event => Math.abs(event.at - spike.atMs) <= 100) }))
+  }
   writeFileSync(join(outputDir, `${view}.json`), JSON.stringify(result, null, 2))
+  if (result.consoleErrors.length) throw new Error(`${view} emitted ${result.consoleErrors.length} console error(s): ${result.consoleErrors.join('\n')}`)
   return result
 }
 
@@ -240,9 +261,10 @@ try {
   assertClean()
   if (!existsSync(vite)) throw new Error('Vite is unavailable. Link the existing node_modules; do not install dependencies.')
   const branch = git('branch', '--show-current')
-  const sha = git('rev-parse', '--short', 'HEAD')
-  const outputDir = join(probeRoot, 'bench', branch.replaceAll('/', '-'), sha)
+  const sha = git('rev-parse', 'HEAD')
+  const outputDir = config.output
   mkdirSync(outputDir, { recursive: true })
+  const identity = { branch, sha, worktree: root, dev: config.dev }
   const env = { ...process.env, BLACKSITE_OWNED_ASSETS: join(root, 'owned-assets') }
   if (!config.dev) {
     const build = spawn(process.execPath, [vite, 'build', '--config', 'examples/archway/vite.config.ts'], { cwd: root, env, stdio: 'inherit', windowsHide: true })
@@ -264,11 +286,11 @@ try {
     page.on('pageerror', error => page.__benchErrors.push(error.stack ?? String(error)))
     page.on('console', message => { if (message.type() === 'error') page.__benchErrors.push(message.text()) })
     await page.addInitScript(instrument)
-    results.push(await runView(page, baseUrl, view, outputDir))
+    results.push(await runView(page, baseUrl, view, outputDir, identity))
     await page.close()
   }
   let compareResults = null
-  if (config.compare) compareResults = results.map(result => {
+  if (config.compareEnabled) compareResults = results.map(result => {
     const priorPath = join(config.compare, `${result.view}.json`)
     if (!existsSync(priorPath)) throw new Error(`Missing comparison result: ${priorPath}`)
     return JSON.parse(readFileSync(priorPath, 'utf8'))
