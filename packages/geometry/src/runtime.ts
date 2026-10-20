@@ -15,13 +15,10 @@ import { bindGeometryMaterial, createGeometryDepthMaterial, createGeometryMateri
 import { clusterGeometry, clusterVertex } from './runtime-vertex'
 import { ClusterShadows } from './runtime-shadows'
 import { ClusterTraversal } from './runtime-traversal'
-<<<<<<< HEAD
 import { ClusterTextureFeedback, type MeshletTextureFeedback } from './runtime-textures'
+import { MaterialSubmission } from './runtime-submission'
 
 export type { MeshletTextureFeedback, TextureDemandBinding } from './runtime-textures'
-=======
-import { MaterialSubmission } from './runtime-submission'
->>>>>>> 3cf674d
 
 export type { MeshletSceneEntry } from './runtime-data'
 export { meshletStorageSize } from './runtime-data'
