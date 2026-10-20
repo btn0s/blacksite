@@ -21,11 +21,11 @@ import { createScanMaterialStreaming, residentScanTextures } from '../../shared/
 import { loadRuins, type RuinsAsset } from './asset'
 import { RuinsCollision, type RegionalCollision } from './collision'
 import { scanEnvironment } from '../../shared/scan-environment'
-import { archwayViews as ruinsViews, createArchwayCameras, type ArchwayView as RuinsView } from '../../archway/src/views'
+import { ruinsViews, createRuinsCameras, type RuinsView } from './views'
 
 const cameraGrade = { contrast: 1, toe: 0 }
 const shadowLayers = [2]
-const glyphs = { home: { label: 'Archway', keyboard: 'R', touch: 'Home', gamepad: { xbox: 'View', playstation: 'Create', generic: 'Back' } } }
+const glyphs = { home: { label: 'Spawn', keyboard: 'R', touch: 'Home', gamepad: { xbox: 'View', playstation: 'Create', generic: 'Back' } } }
 const lodLegend = [{ color: '#ffc1aa', label: 'Source · 0' }, { color: '#adc4ef', label: 'Level 1' }, { color: '#e3ffa3', label: 'Level 2' }]
 
 function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, shared, onStats, onReady }: {
@@ -64,7 +64,7 @@ function Scene({ owned, geometry, walker, gameplayCamera, inspector, telemetry, 
     ],
     setView: view => { geometry.setDebugView(view === 'lod' ? 'lod' : 'normal'); shared.look.current?.setDebug(view === 'lod') },
     textures: () => residentScanTextures(renderer),
-    details: () => ({ placements: owned.placements.length, minimumWorldError: owned.manifest.minimumWorldError, sourceTriangles: owned.sourceTriangles, untranslated: owned.manifest.untranslated, excluded: owned.manifest.excluded, geometryPaging: geometry.pagingStats(), textureStreaming: textures.snapshot(), regionalCollision: shared.collision.current?.stats(), ...stats }),
+    details: () => ({ placements: owned.placements.length, minimumWorldError: owned.manifest.minimumWorldError, sourceTriangles: owned.sourceTriangles, cappedTriangles: owned.cappedTriangles, bounds: { min: owned.bounds.min.toArray(), max: owned.bounds.max.toArray() }, untranslated: owned.manifest.untranslated, excluded: owned.manifest.excluded, geometryPaging: geometry.pagingStats(), textureStreaming: textures.snapshot(), regionalCollision: shared.collision.current?.stats(), ...stats }),
   }), [geometry, inspector, owned, renderer, shared, stats, textures])
   useEffect(() => {
     shared.geometry.current = geometry
@@ -142,21 +142,31 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
   const [selection, setSelection] = useState<MeshletStats | null>(null)
   const home = owned.home
   const walker = useMemo(() => createWalker(home, runtime), [home, runtime])
-  const cameras = useMemo(() => createArchwayCameras(owned.manifest.centre), [owned])
+  const cameras = useMemo(() => createRuinsCameras(owned.bounds, owned.landmarks), [owned])
   const [view, setView] = useState<RuinsView>(() => {
     const requested = new URLSearchParams(location.search).get('view')
-    return requested === 'wide' || requested === 'close' ? requested : 'walk'
+    return requested && Object.hasOwn(ruinsViews, requested) ? requested as RuinsView : 'spawn'
   })
   useEffect(() => {
-    walker.active = view === 'walk'
+    walker.active = view === 'spawn'
     for (const camera of Object.values(cameras)) camera.layers.enable(BODY_LAYER)
   }, [cameras, view, walker])
+  const [viewError, setViewError] = useState<Error | null>(null)
   const selectView = (next: RuinsView) => {
-    walker.setPaused(false)
-    setView(next)
-    const url = new URL(location.href)
-    url.searchParams.set('view', next)
-    history.replaceState(null, '', url)
+    const activate = () => {
+      walker.setPaused(false)
+      setView(next)
+      const url = new URL(location.href)
+      url.searchParams.set('view', next)
+      history.replaceState(null, '', url)
+    }
+    if (next !== 'spawn') { activate(); return }
+    void shared.collision.current?.prepare(new Vector3(...home.position)).then(() => {
+      walker.respawn(undefined, [...home.position])
+      walker.face(new Vector3(...home.target))
+      geometry?.resetHistory()
+      activate()
+    }).catch(error => setViewError(error instanceof Error ? error : new Error(String(error))))
   }
   const status = useCharacterStatus(walker)
   const session = useLocalSession(walker)
@@ -175,27 +185,27 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
     gl.info.autoReset = false
     return gl
   }, [owned])
+  if (viewError) throw viewError
   return <>
     <Canvas frameloop={session.frameloop} shadows dpr={1} camera={cameras[view]} gl={renderer}>
-      {geometry && <Scene owned={owned} geometry={geometry} walker={walker} gameplayCamera={cameras.walk} inspector={inspector} telemetry={telemetry} shared={shared} onStats={setSelection} onReady={onReady} />}
+      {geometry && <Scene owned={owned} geometry={geometry} walker={walker} gameplayCamera={cameras.spawn} inspector={inspector} telemetry={telemetry} shared={shared} onStats={setSelection} onReady={onReady} />}
     </Canvas>
-    <SelectionDisplay selection={selection} />
-    <section className="bs-inspect" aria-label="Camera views" style={{ top: 44, right: 'auto', left: 16, width: 240 }}>
+    <SelectionDisplay selection={selection} sourceTriangles={owned.sourceTriangles} cappedTriangles={owned.cappedTriangles} />
+    <section className="bs-inspect" aria-label="Camera views" style={{ top: 44, right: 'auto', left: 16, width: 360, maxWidth: 'calc(100vw - 32px)' }}>
       <div className="bs-inspect-view" role="group" aria-label="View bookmarks" style={{ marginTop: 0 }}>
-        {(Object.keys(ruinsViews) as Array<keyof typeof ruinsViews>).map(id => <button key={id} type="button" aria-pressed={view === id} onClick={() => selectView(id)}>{ruinsViews[id].label}</button>)}
-        <button type="button" aria-pressed={view === 'walk'} onClick={() => selectView('walk')}>Walk</button>
+        {(Object.keys(ruinsViews) as Array<keyof typeof ruinsViews>).map(id => <button key={id} type="button" aria-pressed={view === id} onClick={() => selectView(id)}>{ruinsViews[id]}</button>)}
       </div>
     </section>
-    <InspectHud inspector={inspector} lodLegend={lodLegend} dump={{ onDump: () => { void telemetry.current?.() }, status: dumpStatus, message: `${owned.placements.length.toLocaleString()} placements | ${(owned.manifest.minimumWorldError * 100).toFixed(0)} cm resident error` }} />
-    <CharacterOverlay controller={walker} visible={view === 'walk'} glyphs={glyphs} hints={['move', 'sprint', 'jump', 'roll', 'home']} prompt="Click to look around · T saves telemetry" buttons={[{ id: 'jump', label: 'Jump' }, { id: 'roll', label: 'Roll' }, { id: 'crouch', label: 'Crouch' }, { id: 'home', label: 'Home' }]} />
-    {status.paused && view === 'walk' && <CharacterPause controller={walker} items={[{ id: 'home', label: 'Return to the archway', onPress: () => { walker.setPaused(false); void shared.collision.current?.prepare(new Vector3(...home.position)).then(() => { walker.respawn(undefined, [...home.position]); walker.face(new Vector3(...home.target)) }) } }]} />}
+    <InspectHud inspector={inspector} lodLegend={lodLegend} dump={{ onDump: () => { void telemetry.current?.() }, status: dumpStatus, message: `${owned.placements.length.toLocaleString()} placements | ${(owned.manifest.minimumWorldError * 1000).toFixed(0)} mm geometry cap` }} />
+    <CharacterOverlay controller={walker} visible={view === 'spawn'} glyphs={glyphs} hints={['move', 'sprint', 'jump', 'roll', 'home']} prompt="Click to look around · T saves telemetry" buttons={[{ id: 'jump', label: 'Jump' }, { id: 'roll', label: 'Roll' }, { id: 'crouch', label: 'Crouch' }, { id: 'home', label: 'Home' }]} />
+    {status.paused && view === 'spawn' && <CharacterPause controller={walker} items={[{ id: 'home', label: 'Return to spawn', onPress: () => { walker.setPaused(false); void shared.collision.current?.prepare(new Vector3(...home.position)).then(() => { walker.respawn(undefined, [...home.position]); walker.face(new Vector3(...home.target)) }) } }]} />}
   </>
 }
 
 export function Game() {
   const runtime = useMemo(makeInputDevices, [])
   const [owned, setOwned] = useState<RuinsAsset | null>(null)
-  const [detail, setDetail] = useState('Waiting for the full-level asset build')
+  const [detail, setDetail] = useState('Loading the level directories')
   const [error, setError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
   const onReady = useCallback(() => setReady(true), [])
@@ -216,10 +226,12 @@ class RenderBoundary extends Component<{ children: ReactNode }, { error: string 
   render() { return this.state.error ? <div className="hud-menu" role="alert"><strong>Dark Ruins could not start</strong><span>{this.state.error}</span></div> : this.props.children }
 }
 
-function SelectionDisplay({ selection }: { selection: MeshletStats | null }) {
+function SelectionDisplay({ selection, sourceTriangles, cappedTriangles }: { selection: MeshletStats | null; sourceTriangles: number; cappedTriangles: number }) {
   if (!selection) return null
   const n = (value: number) => value.toLocaleString()
   return <aside className="bs-inspect" style={{ left: 16, top: 96, right: 'auto', width: 280, fontFamily: 'monospace', fontSize: 12 }} aria-label="Selection telemetry">
+    <div>Source unique {n(sourceTriangles)}</div>
+    <div>Retained unique {n(cappedTriangles)}</div>
     <div>Instances tested {n(selection.instancesTested)}</div>
     <div>Frustum culled {n(selection.instancesFrustumCulled)}</div>
     <div>Occluded {n(selection.instancesOccluded)}</div>

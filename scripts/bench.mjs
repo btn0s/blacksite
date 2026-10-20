@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, openSync, closeSync, readFileSync, readdirSync, 
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'file:///D:/dev/wall/examples/wall/node_modules/playwright/index.mjs'
+import { views as defaultViews } from './bench-views.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const probeRoot = 'D:/dev/probe'
@@ -11,13 +12,7 @@ const benchRoot = join(probeRoot, 'bench')
 const baselineDir = join(benchRoot, 'baseline')
 const lockPath = join(probeRoot, 'bench.lock')
 const vite = join(root, 'node_modules', 'vite', 'bin', 'vite.js')
-const defaultViews = ['courtyard-wide', 'courtyard-walk', 'full-wide', 'full-walk']
-const viewUrls = {
-  'courtyard-wide': '/?view=wide',
-  'courtyard-walk': '/?view=walk',
-  'full-wide': '/?level=full&view=wide',
-  'full-walk': '/?level=full&view=walk',
-}
+const viewUrls = Object.fromEntries(defaultViews.map(view => [view, view === 'spawn' ? '/' : `/?view=${view}`]))
 const settleMs = 20000
 const captureMs = 10000
 
@@ -184,7 +179,7 @@ async function runView(page, baseUrl, view, outputDir, identity) {
     measures: performance.getEntriesByType('measure').map(({ name, startTime, duration }) => ({ name, startTime, duration })),
   }))
   await page.evaluate(() => { window.__benchReadyPipelines = window.__benchPipelines })
-  if (view.endsWith('-walk')) await page.locator('canvas').click({ position: { x: 960, y: 540 } })
+  if (view === 'spawn') await page.locator('canvas').click({ position: { x: 960, y: 540 } })
   await page.waitForTimeout(settleMs)
   const dump = async () => {
     const count = await page.evaluate(() => window.__benchTelemetry.length)
@@ -196,11 +191,11 @@ async function runView(page, baseUrl, view, outputDir, identity) {
   const screenshotPath = join(outputDir, `${view}.png`)
   await page.screenshot({ path: screenshotPath })
   await page.evaluate(() => { window.__benchEvents.length = 0; window.__benchCapture = true; window.__benchCaptureStart = performance.now(); window.__benchPipelineStart = window.__benchPipelines })
-  if (view.endsWith('-walk')) await page.keyboard.down('w')
+  if (view === 'spawn') await page.keyboard.down('w')
   const captureStarted = new Date().toISOString()
   await page.waitForTimeout(captureMs)
   await page.evaluate(() => { window.__benchCapture = false })
-  if (view.endsWith('-walk')) await page.keyboard.up('w')
+  if (view === 'spawn') await page.keyboard.up('w')
   const after = await dump()
   const telemetry = after
   const capture = telemetry.history
@@ -223,6 +218,7 @@ async function runView(page, baseUrl, view, outputDir, identity) {
     draws: telemetry.submissions?.drawCalls ?? telemetry.stats?.drawCalls ?? null,
     trianglesDrawn: telemetry.content?.drawnTriangles ?? telemetry.stats?.drawnTriangles ?? null,
     trianglesSelected: telemetry.content?.sceneTriangles ?? telemetry.stats?.sceneTriangles ?? null,
+    sourceTriangles: telemetry.content?.sourceTriangles ?? null,
     resident: resident(telemetry),
     pipelinesCreatedAfterReady: await page.evaluate(() => window.__benchPipelines - window.__benchReadyPipelines),
     texturePromotions: texture.promotions === undefined ? null : texture.promotions - (beforeTexture.promotions ?? 0),

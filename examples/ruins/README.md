@@ -1,6 +1,8 @@
 # Dark Ruins
 
-The whole-level preview uses the same paged geometry renderer, look and ALS character as the courtyard. Open `?level=full&view=walk`; the courtyard remains the default. Wide, Close and Walk use the courtyard's bookmarks so performance comparisons retain the same cameras. All 20,430 exported placement records enter the shared runtime; invisible placements and explicitly excluded FX surfaces retain non-rendering material slots.
+The default URL opens the complete level at Spawn with the ALS shoulder-camera walker. All 20,430 exported placement records enter one paged geometry runtime; invisible placements and explicitly excluded FX surfaces retain non-rendering material slots.
+
+The five views are `overview`, `spawn`, `archway`, `pits` and `cliffs`, selected with `?view=` or the view buttons. Overview frames the full bounds of visible geometry with authored surfaces. Archway frames the largest placed arch, Pits frames both pit meshes, and Cliffs frames the largest coastal cliff carrying a beach surface. Each landmark uses the source bounds transformed by the complete placement matrix. Camera clipping distances follow the whole-level bounds. The export contains no player-start record, so Spawn uses the main arch base as its entrance; R and the Spawn button restore that position. The HUD separates unique source triangles, the finest retained triangles after the 5 mm geometry cap, and selected/drawn instance triangles.
 
 The runtime reads `/owned/dark-ruins/full.json`. This version 5 manifest references the immutable whole-level placement directory, 371 geometry directories, complete version 2 material descriptors, environment and regional collision directory. Owned content stays outside Git. ALS remains in its existing package.
 

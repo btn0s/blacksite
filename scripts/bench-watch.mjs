@@ -2,6 +2,7 @@ import { spawnSync, execFileSync } from 'node:child_process'
 import { appendFileSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { views } from './bench-views.mjs'
 
 const archway = 'D:/dev/archway'
 const runner = 'D:/dev/bench-runner-auto'
@@ -13,7 +14,6 @@ const staging = join(benchRoot, 'baseline.next')
 const previous = join(benchRoot, 'baseline.previous')
 const lockPath = join(benchRoot, 'watcher.lock')
 const targetBranch = 'btn0s/meshlet-showcase-archway'
-const views = ['courtyard-wide', 'courtyard-walk', 'full-wide', 'full-walk']
 
 function safePath(path) { return path.replaceAll('\\', '/') }
 
@@ -66,7 +66,7 @@ function setupRunner(sha) {
     if (git(runner, 'status', '--porcelain', '--untracked-files=normal')) throw new Error(`${runner} has uncommitted changes`)
     git(runner, 'checkout', '--detach', sha)
   }
-  git(runner, 'submodule', 'update', '--init', 'vendor/als-web')
+  git(runner, 'submodule', 'update', '--init')
   linkDirectory(join(archway, 'node_modules'), join(runner, 'node_modules'))
   linkDirectory(ownedAssets, join(runner, 'owned-assets'))
   for (const group of ['packages', 'examples']) {

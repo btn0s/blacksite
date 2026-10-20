@@ -12,13 +12,12 @@ const pathFromRoot = file => {
 }
 const level = JSON.parse(await readFile(join(pageBuild, 'level.json'), 'utf8'))
 const surfaces = JSON.parse(await readFile(join(materialBuild, 'surfaces.json'), 'utf8'))
-const courtyard = JSON.parse(await readFile(join(root, 'courtyard.json'), 'utf8'))
 if (level.version !== 5 || surfaces.version !== 2 || surfaces.untranslated.length) throw new Error('Playable level requires version 5 pages and complete version 2 materials')
 await access(join(output, 'collision.json'))
 const accounted = new Set([...surfaces.surfaces, ...surfaces.excluded].map(surface => surface.path))
 for (const path of level.materialPaths) if (!accounted.has(path)) throw new Error(`Whole-level surface is unaccounted: ${path}`)
 const manifest = {
-  version: 5, placements: 20430, centre: courtyard.centre, minimumWorldError: level.minimumWorldError,
+  version: 5, placements: 20430, minimumWorldError: level.minimumWorldError,
   directory: pathFromRoot(join(pageBuild, level.directory)), environment: pathFromRoot(join(pageBuild, level.environment)),
   collision: pathFromRoot(join(output, 'collision.json')), surfaces: pathFromRoot(join(materialBuild, 'surfaces.json')),
   materialPaths: level.materialPaths, geometries: level.geometries.map(({ id, url }) => ({ id, url: pathFromRoot(join(pageBuild, url)) })),

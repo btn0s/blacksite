@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "vite --host 0.0.0.0", "build:asset": "node scripts/build.mjs" },
+  "scripts": { "dev": "vite --host 0.0.0.0" },
   "dependencies": {
     "@blacksite/geometry": "workspace:*",
     "@blacksite/input": "workspace:*",

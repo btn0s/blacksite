@@ -2,13 +2,13 @@ import { Box3, Matrix4, Vector3 } from 'three'
 import { MeshStandardNodeMaterial, type WebGPURenderer } from 'three/webgpu'
 import { GEOMETRY_ARENA_BYTES, loadGeometryPageSource, MeshletScene, type GeometryPageSource, type MeshletSceneEntry } from '@blacksite/geometry'
 import { loadScanMaterials, scanTextureFeedback, type ScanSurface } from '../../shared/scan-material'
-import { createArchwayHome } from '../../archway/src/views'
+import { createRuinsHome, type RuinsLandmarks } from './views'
 import type { CollisionDirectory } from './collision'
 
 const root = '/owned/dark-ruins/'
 type EnvironmentComponent = { class: string; transform: { matrix: number[]; position: number[] }; properties: Record<string, unknown> }
 type FullManifest = {
-  version: number; placements: number; centre: [number, number, number]; minimumWorldError: number
+  version: number; placements: number; minimumWorldError: number
   directory: string; surfaces: string; environment: string; collision: string
   materialPaths: string[]; geometries: { id: string; url: string }[]
   untranslated: { path: string; reason?: string }[]; excluded: { path: string; reason: string }[]
@@ -34,8 +34,6 @@ export async function loadRuins(progress: (detail: string) => void) {
   if (header[0] !== 0x4c475342 || header[1] !== 5 || header[2] !== 4 || header[3] !== 20430 || header[4] !== manifest.geometries.length || header[5] !== manifest.materialPaths.length) throw new Error('Full-level directory header disagrees')
   const placementWords = new Uint32Array(directory, header[9], header[10]! / 4), placementFloats = new Float32Array(placementWords.buffer, placementWords.byteOffset, placementWords.length)
   const materialMap = new Uint32Array(directory, header[13], header[14]! / 4)
-  const spatial = new Float32Array(directory, header[17], header[18]! / 4)
-  const bounds = new Box3(new Vector3(spatial[0], spatial[1], spatial[2]), new Vector3(spatial[4], spatial[5], spatial[6]))
   const placements = Array.from({ length: manifest.placements }, (_, id) => ({
     id, geometry: placementWords[id * 44 + 36]!, matrix: new Matrix4().fromArray(placementFloats, id * 44),
     firstMaterial: placementWords[id * 44 + 34]!, materials: placementWords[id * 44 + 35]!, visible: !!placementWords[id * 44 + 38],
@@ -46,12 +44,40 @@ export async function loadRuins(progress: (detail: string) => void) {
     while (cursor < manifest.geometries.length) { const id = cursor++; assets[id] = await loadGeometryPageSource(root + manifest.geometries[id]!.url) }
   }))
   performance.measure('ruins-directories', 'ruins-directory-start')
-  const home = createArchwayHome(manifest.centre)
+  const bounds = new Box3()
+  const landmarks: RuinsLandmarks = { archway: new Box3(), pits: new Box3(), cliffs: new Box3() }
+  const excluded = new Set([...manifest.untranslated, ...manifest.excluded].map(surface => surface.path))
+  const size = new Vector3()
+  const volumes = { archway: 0, cliffs: 0 }
+  for (const placement of placements) {
+    if (!placement.visible) continue
+    const surfaces = Array.from(materialMap.subarray(placement.firstMaterial, placement.firstMaterial + placement.materials), id => manifest.materialPaths[id]!)
+    if (surfaces.every(path => excluded.has(path))) continue
+    const local = assets[placement.geometry]!.metadata.bounds
+    const world = new Box3(new Vector3(...local.min), new Vector3(...local.max))
+    world.getSize(size)
+    const volume = size.x * size.y * size.z * Math.abs(placement.matrix.determinant())
+    world.applyMatrix4(placement.matrix)
+    bounds.union(world)
+    const name = manifest.geometries[placement.geometry]!.id
+    if (name.includes('/SM_ArchWay_') && volume > volumes.archway) {
+      landmarks.archway.copy(world)
+      volumes.archway = volume
+    }
+    if (name.includes('/SM_Pit_')) landmarks.pits.union(world)
+    if (name.includes('Coastal_Cliff_') && surfaces.some(path => path.includes('Beach')) && volume > volumes.cliffs) {
+      landmarks.cliffs.copy(world)
+      volumes.cliffs = volume
+    }
+  }
+  if (bounds.isEmpty() || Object.values(landmarks).some(box => box.isEmpty())) throw new Error('The level is missing its landmark geometry')
+  const home = createRuinsHome(landmarks.archway)
   return {
-    manifest, placements, bounds, home, environment, collision,
+    manifest, placements, bounds, landmarks, home, environment, collision,
     collisionRoot: new URL(root + manifest.collision.slice(0, manifest.collision.lastIndexOf('/') + 1), location.href).href,
     largestBuffer: GEOMETRY_ARENA_BYTES,
     sourceTriangles: assets.reduce((sum, asset) => sum + asset.metadata.sourceTriangles, 0),
+    cappedTriangles: assets.reduce((sum, asset) => sum + asset.metadata.residentTriangles, 0),
     async createGeometry(renderer: WebGPURenderer) {
       performance.mark('ruins-materials-start')
       progress('Loading minimum texture tails')
