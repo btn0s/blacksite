@@ -68,6 +68,8 @@ export class RegionalCollision {
   private disposed = false
   private dirty = true
   private frame = 0
+  private readonly idle: Collider[] = []
+  private readonly idleGuards: Collider[] = []
   private resident = 0
   private residentTriangles = 0
   private peakResidentTriangles = 0
@@ -173,10 +175,26 @@ export class RegionalCollision {
     const slot = this.workers.find(slot => slot.entry === entry)
     if (slot) { slot.worker.postMessage({ cancel: true }); return }
     this.hideOverlay(entry.id)
-    if (entry.collider) { this.chunkOf.delete(entry.collider.handle); this.context.world.removeCollider(entry.collider, false); this.resident--; this.residentTriangles -= this.directory.chunks[entry.id]!.triangles; this.removals++ }
+    if (entry.collider) { this.chunkOf.delete(entry.collider.handle); this.park(entry.collider); this.resident--; this.residentTriangles -= this.directory.chunks[entry.id]!.triangles; this.removals++ }
     const index = this.ready.indexOf(entry)
     if (index >= 0) this.ready.splice(index, 1)
     this.entries.delete(entry.id); this.ledger.release(entry.charge); entry.buffer = null; this.dirty = true
+  }
+
+  private park(collider: Collider) {
+    collider.setEnabled(false)
+    collider.setShape(new this.context.rapier.Ball(0.01))
+    collider.clearShapeCache()
+    this.idle.push(collider)
+  }
+
+  private acquire(vertices: Float32Array, indices: Uint32Array) {
+    const { world, rapier } = this.context
+    const collider = this.idle.pop()
+    if (!collider) return world.createCollider(rapier.ColliderDesc.trimesh(vertices, indices, rapier.TriMeshFlags.FIX_INTERNAL_EDGES))
+    collider.setShape(new rapier.TriMesh(vertices, indices, rapier.TriMeshFlags.FIX_INTERNAL_EDGES))
+    collider.setEnabled(true)
+    return collider
   }
 
   step() {
@@ -189,7 +207,7 @@ export class RegionalCollision {
       const entry = this.ready.splice(priority < 0 ? 0 : priority, 1)[0]!, words = new Uint32Array(entry.buffer!, 0, 8)
       const vertices = new Float32Array(entry.buffer!, 32, words[2]), indices = new Uint32Array(entry.buffer!, 32 + words[2]! * 4, words[3])
       const start = performance.now()
-      entry.collider = world.createCollider(rapier.ColliderDesc.trimesh(vertices, indices, rapier.TriMeshFlags.FIX_INTERNAL_EDGES))
+      entry.collider = this.acquire(vertices, indices)
       entry.collider.clearShapeCache()
       this.chunkOf.set(entry.collider.handle, entry.id)
       this.insertionMs += performance.now() - start; this.peakInsertionMs = Math.max(this.peakInsertionMs, this.insertionMs)
@@ -272,7 +290,7 @@ export class RegionalCollision {
     if (signature === this.guardSignature) return
     this.guardSignature = signature
     const { world, rapier } = this.context
-    for (const collider of this.guards) world.removeCollider(collider, false)
+    for (const collider of this.guards) { collider.setEnabled(false); this.idleGuards.push(collider) }
     this.guards.length = 0
     for (const id of available) {
       const cell = id.split(',').map(Number), center = new Vector3(...cell).addScalar(0.5).multiplyScalar(tileSize)
@@ -281,7 +299,11 @@ export class RegionalCollision {
         if (available.has(next.join(','))) continue
         const size = [4, 4, 4]; size[axis] = 0.1
         const position = center.clone().setComponent(axis, center.getComponent(axis) + direction * 4)
-        this.guards.push(world.createCollider(rapier.ColliderDesc.cuboid(size[0]!, size[1]!, size[2]!).setTranslation(position.x, position.y, position.z)))
+        const guard = this.idleGuards.pop() ?? world.createCollider(rapier.ColliderDesc.cuboid(size[0]!, size[1]!, size[2]!))
+        guard.setHalfExtents({ x: size[0]!, y: size[1]!, z: size[2]! })
+        guard.setTranslation(position)
+        guard.setEnabled(true)
+        this.guards.push(guard)
       }
     }
   }
@@ -296,7 +318,7 @@ export class RegionalCollision {
       entry.buffer?.transfer(0)
       this.ledger.release(entry.charge)
     }
-    for (const collider of this.guards) this.context.world.removeCollider(collider, false)
+    for (const collider of [...this.guards, ...this.idle, ...this.idleGuards]) this.context.world.removeCollider(collider, false)
     for (const id of [...this.overlayMeshes.keys()]) this.hideOverlay(id)
     this.overlayMaterial.dispose()
     this.ledger.release(this); this.entries.clear(); this.ready.length = 0
