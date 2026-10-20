@@ -1,12 +1,16 @@
 #include <cassert>
+#include <algorithm>
 #include <cstdint>
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <cstring>
+#include <map>
 #include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include "meshoptimizer.h"
 #define CLUSTERLOD_IMPLEMENTATION
 #include "clusterlod.h"
@@ -38,9 +42,147 @@ int emitGroup(void* context, clodGroup group, const clodCluster* clusters, size_
 void appendSphere(std::vector<float>& destination, const clodBounds& bounds) {
   destination.insert(destination.end(), {bounds.center[0], bounds.center[1], bounds.center[2], bounds.radius});
 }
+uint32_t floatWord(float value) {
+  uint32_t word;
+  std::memcpy(&word, &value, 4);
+  return word;
+}
+uint32_t align16(uint32_t value) { return (value + 15) & ~15u; }
+struct Page {
+  uint32_t depth, pinned;
+  std::vector<uint32_t> groups, vertices;
+  std::unordered_map<uint32_t, uint32_t> remap;
+  uint32_t references = 0, indices = 0, clusters = 0;
+};
+uint32_t pageSize(uint32_t vertices, uint32_t references, uint32_t indices, uint32_t clusters, uint32_t stride) {
+  return align16(align16(align16(64 + vertices * stride) + references * 4) + indices) + clusters * 160;
+}
+void writePages(const char* directoryPath, const char* packPath, const Output& out,
+  const std::vector<uint32_t>& vertices, const std::vector<uint32_t>& references, const std::vector<uint32_t>& indices,
+  const std::vector<uint32_t>& clusterData, const std::vector<float>& clusterBounds, const std::vector<float>& clusterLod,
+  const std::vector<float>& quantization, const std::vector<uint32_t>& groupChildren, const std::vector<uint32_t>& groupData,
+  const std::vector<uint32_t>& nodeData, const std::vector<float>& nodeBounds, uint32_t levels, uint32_t vertexWords,
+  uint32_t residentIndices, bool hasColor, bool hasUv1, const float* uv1Lower, const float* uv1Upper) {
+  const uint32_t capacity = 128 * 1024, stride = vertexWords * 4;
+  const float quantizationRadius = std::sqrt(quantization[4] * quantization[4] + quantization[5] * quantization[5] + quantization[6] * quantization[6]) * 0.5f;
+  std::vector<std::vector<uint32_t>> parents(out.groups.size());
+  for (uint32_t group = 0; group < out.groups.size(); group++)
+    for (uint32_t i = 0; i < groupData[group * 4 + 3]; i++)
+      parents[groupChildren[groupData[group * 4 + 2] + i]].push_back(group);
+  std::vector<uint32_t> roots, childOffsets{0}, parentOffsets{0}, parentEdges;
+  std::map<std::pair<uint32_t, uint32_t>, std::vector<uint32_t>> buckets;
+  for (uint32_t group = 0; group < out.groups.size(); group++) {
+    bool terminal = out.groups[group].value.simplified.error == FLT_MAX;
+    if (terminal != parents[group].empty()) throw std::runtime_error("Terminal group has inconsistent reverse dependencies");
+    if (terminal) roots.push_back(group);
+    buckets[{uint32_t(out.groups[group].value.depth), uint32_t(terminal)}].push_back(group);
+    childOffsets.push_back(childOffsets.back() + groupData[group * 4 + 3]);
+    parentEdges.insert(parentEdges.end(), parents[group].begin(), parents[group].end());
+    parentOffsets.push_back(uint32_t(parentEdges.size()));
+  }
+  std::vector<Page> pages;
+  uint32_t maxGroupClusters = 0, maxGroupBytes = 0, maxVertices = 0, maxTriangles = 0;
+  for (const auto& bucket : buckets) {
+    size_t bucketFirst = pages.size();
+    for (uint32_t id : bucket.second) {
+      const Group& group = out.groups[id];
+      if (group.count > 21) throw std::runtime_error("Group exceeds the pinned 21-cluster contract");
+      std::set<uint32_t> used;
+      uint32_t referenceCount = 0, indexBytes = 0;
+      for (uint32_t j = group.offset; j < group.offset + group.count; j++) {
+        uint32_t count = clusterData[j * 8 + 6], triangles = clusterData[j * 8 + 1] / 3;
+        if (count > 128 || triangles > 128) throw std::runtime_error("Cluster exceeds the pinned 128-vertex/triangle contract");
+        maxVertices = std::max(maxVertices, count);
+        maxTriangles = std::max(maxTriangles, triangles);
+        referenceCount += count;
+        indexBytes += (clusterData[j * 8 + 1] + 3) / 4 * 4;
+        for (uint32_t k = 0; k < count; k++) used.insert(references[clusterData[j * 8 + 7] + k]);
+      }
+      uint32_t groupBytes = pageSize(uint32_t(used.size()), referenceCount, indexBytes, group.count, stride);
+      if (groupBytes > capacity) throw std::runtime_error("Whole group does not fit a physical page");
+      maxGroupClusters = std::max(maxGroupClusters, group.count);
+      maxGroupBytes = std::max(maxGroupBytes, groupBytes);
+      uint32_t added = uint32_t(used.size());
+      if (pages.size() > bucketFirst) for (uint32_t vertex : used) added -= uint32_t(pages.back().remap.count(vertex));
+      if (pages.size() == bucketFirst || pageSize(uint32_t(pages.back().vertices.size()) + added,
+        pages.back().references + referenceCount, pages.back().indices + indexBytes, pages.back().clusters + group.count, stride) > capacity)
+        pages.push_back({bucket.first.first, bucket.first.second, {}, {}, {}});
+      Page& page = pages.back();
+      page.groups.push_back(id);
+      for (uint32_t vertex : used) if (!page.remap.count(vertex)) {
+        page.remap[vertex] = uint32_t(page.vertices.size());
+        page.vertices.push_back(vertex);
+      }
+      page.references += referenceCount;
+      page.indices += indexBytes;
+      page.clusters += group.count;
+    }
+  }
+  std::vector<uint32_t> groups(out.groups.size() * 8), pageDirectory;
+  uint64_t packBytes = 0, payloadBytes = 0, pageVertices = 0, rootWire = 0, rootPayload = 0, rootPages = 0;
+  uint64_t coarseClusters = 0, coarseTriangles = 0, coarseReferences = 0, coarseVertices = 0, padding = 0;
+  std::ofstream pack(packPath, std::ios::binary);
+  for (uint32_t pageId = 0; pageId < pages.size(); pageId++) {
+    const Page& page = pages[pageId];
+    uint32_t vertexOffset = 64, referenceOffset = align16(vertexOffset + uint32_t(page.vertices.size()) * stride);
+    uint32_t indexOffset = align16(referenceOffset + page.references * 4), clusterOffset = align16(indexOffset + page.indices);
+    uint32_t bytes = clusterOffset + page.clusters * 160;
+    std::vector<uint32_t> words(bytes / 4);
+    const uint32_t header[16] = {0x504d5342, 4, pageId, bytes, page.depth, page.pinned, uint32_t(page.vertices.size()), page.references,
+      page.indices, page.clusters, vertexOffset, referenceOffset, indexOffset, clusterOffset, stride, uint32_t(page.groups.size())};
+    std::copy(header, header + 16, words.begin());
+    for (uint32_t i = 0; i < page.vertices.size(); i++)
+      std::copy_n(vertices.data() + page.vertices[i] * vertexWords, vertexWords, words.data() + vertexOffset / 4 + i * vertexWords);
+    uint32_t referenceCursor = referenceOffset / 4, indexCursor = indexOffset / 4, clusterCursor = 0;
+    for (uint32_t groupId : page.groups) {
+      const Group& group = out.groups[groupId];
+      const clodBounds& bounds = group.value.simplified;
+      uint32_t* record = groups.data() + groupId * 8;
+      record[0] = floatWord(bounds.center[0]); record[1] = floatWord(bounds.center[1]); record[2] = floatWord(bounds.center[2]);
+      record[3] = floatWord(bounds.radius + quantizationRadius); record[4] = floatWord(bounds.error);
+      record[5] = pageId; record[6] = clusterCursor; record[7] = group.count;
+      for (uint32_t j = group.offset; j < group.offset + group.count; j++, clusterCursor++) {
+        const uint32_t* data = clusterData.data() + j * 8;
+        uint32_t* cluster = words.data() + clusterOffset / 4 + clusterCursor * 40;
+        for (uint32_t k = 0; k < 4; k++) cluster[k] = floatWord(clusterBounds[j * 4 + k]);
+        for (uint32_t k = 0; k < 12; k++) cluster[k + 4] = floatWord(clusterLod[j * 12 + k]);
+        cluster[14] = data[5]; cluster[15] = data[3]; cluster[16] = indexCursor * 4; cluster[17] = data[1];
+        cluster[18] = data[4]; cluster[19] = referenceCursor;
+        for (uint32_t k = 0; k < 12; k++) cluster[k + 20] = floatWord(quantization[j * 12 + k]);
+        cluster[32] = vertexOffset / 4; cluster[33] = vertexWords; cluster[34] = hasColor ? 5 : 0; cluster[35] = hasUv1 ? 5 + uint32_t(hasColor) : 0;
+        for (uint32_t k = 0; k < 2; k++) { cluster[36 + k] = floatWord(uv1Lower[k]); cluster[38 + k] = floatWord(uv1Upper[k] - uv1Lower[k]); }
+        float radius = std::sqrt(quantization[j * 12 + 4] * quantization[j * 12 + 4] + quantization[j * 12 + 5] * quantization[j * 12 + 5] + quantization[j * 12 + 6] * quantization[j * 12 + 6]) * 0.5f;
+        for (uint32_t k : {3u, 7u, 11u}) { float value; std::memcpy(&value, cluster + k, 4); cluster[k] = floatWord(value + radius); }
+        for (uint32_t k = 0; k < data[6]; k++) words[referenceCursor++] = page.remap.at(references[data[7] + k]);
+        uint32_t count = (data[1] + 3) / 4;
+        std::copy_n(indices.data() + data[0] / 4, count, words.data() + indexCursor);
+        indexCursor += count;
+        if (page.pinned) { coarseClusters++; coarseTriangles += data[1] / 3; coarseReferences += data[6]; }
+      }
+    }
+    if (referenceCursor != referenceOffset / 4 + page.references || indexCursor != indexOffset / 4 + page.indices / 4 || clusterCursor != page.clusters)
+      throw std::runtime_error("Page section accounting mismatch");
+    write(pack, words);
+    pageDirectory.insert(pageDirectory.end(), {uint32_t(packBytes), uint32_t(packBytes >> 32), bytes, page.pinned});
+    uint64_t payload = page.vertices.size() * stride + page.references * 4 + page.indices + page.clusters * 160;
+    packBytes += bytes; payloadBytes += payload; pageVertices += page.vertices.size(); padding += bytes - 64 - payload;
+    if (page.pinned) { rootPages++; rootWire += bytes; rootPayload += payload; coarseVertices += page.vertices.size(); }
+  }
+  std::ofstream directory(directoryPath, std::ios::binary);
+  write(directory, std::vector<uint64_t>{0x50475342, 4, out.clusters.size(), out.groups.size(), indices.size(), groupChildren.size(), levels,
+    vertices.size() / vertexWords, residentIndices, references.size(), nodeData.size() / 4, vertexWords, pages.size(), roots.size(),
+    pageVertices, references.size() * 4, indices.size() * 4, maxGroupClusters, maxGroupBytes, coarseClusters, coarseTriangles,
+    coarseReferences, coarseVertices, rootPayload, rootPages, rootWire, packBytes, payloadBytes,
+    vertices.size() * 4 + references.size() * 4 + indices.size() * 4 + out.clusters.size() * 160, padding, maxVertices, maxTriangles});
+  write(directory, groups); write(directory, childOffsets); write(directory, groupChildren); write(directory, parentOffsets); write(directory, parentEdges);
+  std::vector<float> conservativeNodeBounds = nodeBounds;
+  for (size_t i = 0; i < conservativeNodeBounds.size(); i += 8) conservativeNodeBounds[i + 3] += quantizationRadius;
+  write(directory, nodeData); write(directory, conservativeNodeBounds); write(directory, pageDirectory); write(directory, roots);
+  std::cout << "Packed " << pages.size() << " pages; " << rootPages << " pinned; " << packBytes << " wire bytes\n";
+}
 int main(int argc, char** argv) {
   try {
-    if (argc != 4) throw std::runtime_error("Expected input, output and minimum resident error");
+    if (argc != 4 && argc != 5) throw std::runtime_error("Expected input, output, minimum resident error and optional page pack");
     const float minimumError = std::stof(argv[3]);
     if (!std::isfinite(minimumError) || minimumError < 0) throw std::runtime_error("Invalid minimum resident error");
     std::ifstream input(argv[1], std::ios::binary);
@@ -219,14 +361,28 @@ int main(int argc, char** argv) {
     }
     std::vector<clodGroup> hierarchyGroups;
     for (const Group& group : out.groups) hierarchyGroups.push_back(group.value);
-    std::vector<clodNode> nodes(clodBuildHierarchyBound(hierarchyGroups.size(), 8, levels));
-    nodes.resize(clodBuildHierarchy(nodes.data(), hierarchyGroups.data(), hierarchyGroups.size(), 8, levels));
+    uint32_t hierarchyLevels = levels;
+    if (argc == 5) {
+      std::map<int, int> depths;
+      for (const clodGroup& group : hierarchyGroups) depths[group.depth] = 0;
+      int depth = 0;
+      for (auto& entry : depths) entry.second = depth++;
+      for (clodGroup& group : hierarchyGroups) group.depth = depths.at(group.depth);
+      hierarchyLevels = uint32_t(depths.size());
+    }
+    std::vector<clodNode> nodes(clodBuildHierarchyBound(hierarchyGroups.size(), 8, hierarchyLevels));
+    nodes.resize(clodBuildHierarchy(nodes.data(), hierarchyGroups.data(), hierarchyGroups.size(), 8, hierarchyLevels));
     std::vector<uint32_t> nodeData;
     std::vector<float> nodeBounds;
     for (const clodNode& node : nodes) {
       nodeData.insert(nodeData.end(), {uint32_t(node.group), node.child_offset, node.child_count, 0});
       appendSphere(nodeBounds, node.bounds);
       nodeBounds.insert(nodeBounds.end(), {node.bounds.error, 0.f, 0.f, 0.f});
+    }
+    if (argc == 5) {
+      writePages(argv[2], argv[4], out, packedVertices, vertexReferences, packedIndices, clusterData, clusterBounds, clusterLod,
+        clusterQuantization, groupChildren, groupData, nodeData, nodeBounds, hierarchyLevels, vertexWords, uint32_t(indices.size()), hasColor, hasUv1, uv1Lower, uv1Upper);
+      return 0;
     }
     std::ofstream output(argv[2], std::ios::binary);
     write(output, std::vector<uint32_t>{0x4f475342, uint32_t(out.clusters.size()), uint32_t(out.groups.size()), uint32_t(packedIndices.size()), uint32_t(groupChildren.size()), levels, uint32_t(packedVertices.size() / vertexWords), uint32_t(indices.size()), uint32_t(vertexReferences.size()), uint32_t(nodes.size()), vertexWords, 0});
