@@ -15,6 +15,8 @@ type Collider = ReturnType<RapierContext['world']['createCollider']>
 type Entry = { id: number; charge: object; state: 'loading' | 'ready' | 'resident'; used: number; collider: Collider | null; buffer: ArrayBuffer | null }
 const intersects = (chunk: Chunk, box: Box3) => chunk.bounds.min.every((value, axis) => value <= box.max.getComponent(axis) && chunk.bounds.max[axis]! >= box.min.getComponent(axis))
 const tileSize = 8
+const residentCost = (chunk: Chunk) => chunk.triangles * 128 + 8192
+const stagingCost = (chunk: Chunk) => chunk.bytes * 2 + residentCost(chunk)
 const overlayColors = { floor: [0.25, 0.9, 0.4], wall: [0.95, 0.25, 0.2], ceiling: [0.3, 0.45, 0.95] }
 
 function overlayGeometry(vertices: Float32Array, indices: Uint32Array) {
@@ -46,6 +48,7 @@ export class RegionalCollision {
   private readonly workers = Array.from({ length: 4 }, () => ({ worker: new Worker(new URL('./collision-worker.mjs', import.meta.url), { type: 'module' }), entry: null as Entry | null }))
   private queue: number[] = []
   private critical = new Set<number>()
+  private required = new Set<number>()
   private wanted = new Set<number>()
   private readonly guards: Collider[] = []
   private readonly chunkOf = new Map<number, number>()
@@ -54,7 +57,7 @@ export class RegionalCollision {
   private readonly overlayMeshes = new Map<number, Mesh>()
   private readonly overlayClearance = uniform(0)
   private readonly overlayMaterial = new MeshBasicNodeMaterial({ vertexColors: true, side: DoubleSide })
-  private guardCells: { cell: number[]; chunks: Set<number> }[] = []
+  private guardCells: { cell: number[]; chunks: Set<number>; distance: number }[] = []
   private guardTile = ''
   private guardSignature = ''
   private tile = ''
@@ -132,24 +135,36 @@ export class RegionalCollision {
     this.center.copy(coordinate).addScalar(0.5).multiplyScalar(tileSize)
     this.critical = this.select(this.area(this.center, 5))
     if (this.destination) for (const id of this.select(this.area(this.player.clone().divideScalar(tileSize).floor().addScalar(0.5).multiplyScalar(tileSize), 5))) this.critical.add(id)
-    this.wanted = this.select(this.area(this.center, 24))
-    for (const id of this.critical) this.wanted.add(id)
     let criticalBytes = 2 * 1048576
-    for (const id of this.critical) { const chunk = this.directory.chunks[id]!; criticalBytes += chunk.bytes * 2 + chunk.triangles * 256 + 8192 }
+    for (const id of this.critical) criticalBytes += residentCost(this.directory.chunks[id]!)
     if (criticalBytes > this.ledger.capacity) throw new Error('The movement neighborhood exceeds the collision CPU budget')
-    for (const entry of this.entries.values()) if (this.wanted.has(entry.id)) entry.used = this.frame
-    this.queue = [...this.wanted].filter(id => !this.entries.has(id)).sort((a, b) => Number(this.critical.has(b)) - Number(this.critical.has(a)) || this.distance(a) - this.distance(b))
-    const keep = this.area(this.center, 40)
-    for (const entry of this.entries.values()) if (!this.critical.has(entry.id) && !intersects(this.directory.chunks[entry.id]!, keep)) this.remove(entry)
     if (this.guardTile !== playerTile) {
       this.guardTile = playerTile
       const origin = this.player.clone().divideScalar(tileSize).floor()
       this.guardCells = []
       for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
         const cell = origin.clone().add(new Vector3(x, y, z)), center = cell.clone().addScalar(0.5).multiplyScalar(tileSize)
-        this.guardCells.push({ cell: cell.toArray(), chunks: this.select(this.area(center, 5)) })
+        this.guardCells.push({ cell: cell.toArray(), chunks: this.select(this.area(center, 5)), distance: center.distanceTo(this.player) })
+      }
+      this.guardCells.sort((a, b) => a.distance - b.distance)
+    }
+    this.required = new Set(this.critical)
+    if (!this.destination) {
+      let bytes = criticalBytes
+      for (const { chunks } of this.guardCells) {
+        let cost = 0
+        for (const id of chunks) if (!this.required.has(id)) cost += residentCost(this.directory.chunks[id]!)
+        if (bytes + cost > this.ledger.capacity) continue
+        bytes += cost
+        for (const id of chunks) this.required.add(id)
       }
     }
+    this.wanted = this.select(this.area(this.center, 24))
+    for (const id of this.required) this.wanted.add(id)
+    for (const entry of this.entries.values()) if (this.wanted.has(entry.id)) entry.used = this.frame
+    this.queue = [...this.wanted].filter(id => !this.entries.has(id)).sort((a, b) => Number(this.critical.has(b)) - Number(this.critical.has(a)) || Number(this.required.has(b)) - Number(this.required.has(a)) || this.distance(a) - this.distance(b))
+    const keep = this.area(this.center, 40)
+    for (const entry of this.entries.values()) if (!this.required.has(entry.id) && !intersects(this.directory.chunks[entry.id]!, keep)) this.remove(entry)
     this.dirty = true
     this.peakSchedulingMs = Math.max(this.peakSchedulingMs, performance.now() - start)
   }
@@ -170,7 +185,7 @@ export class RegionalCollision {
     this.insertionMs = 0
     const insertionDeadline = performance.now() + 0.5
     while (this.ready.length && performance.now() < insertionDeadline) {
-      const priority = this.ready.findIndex(entry => this.critical.has(entry.id))
+      const urgent = this.ready.findIndex(entry => this.critical.has(entry.id)), priority = urgent >= 0 ? urgent : this.ready.findIndex(entry => this.required.has(entry.id))
       const entry = this.ready.splice(priority < 0 ? 0 : priority, 1)[0]!, words = new Uint32Array(entry.buffer!, 0, 8)
       const vertices = new Float32Array(entry.buffer!, 32, words[2]), indices = new Uint32Array(entry.buffer!, 32 + words[2]! * 4, words[3])
       const start = performance.now()
@@ -179,6 +194,8 @@ export class RegionalCollision {
       this.chunkOf.set(entry.collider.handle, entry.id)
       this.insertionMs += performance.now() - start; this.peakInsertionMs = Math.max(this.peakInsertionMs, this.insertionMs)
       entry.buffer!.transfer(0); entry.buffer = null; entry.state = 'resident'
+      this.ledger.release(entry.charge)
+      this.ledger.reserve(entry.charge, 'native', residentCost(this.directory.chunks[entry.id]!))
       this.showOverlay(entry)
       this.resident++; this.residentTriangles += this.directory.chunks[entry.id]!.triangles
       this.peakResidentTriangles = Math.max(this.peakResidentTriangles, this.residentTriangles)
@@ -189,13 +206,13 @@ export class RegionalCollision {
       if (slot.entry || performance.now() >= deadline) continue
       const id = this.queue[0]
       if (id === undefined) continue
-      const chunk = this.directory.chunks[id]!, charge = {}, bytes = chunk.bytes * 2 + chunk.triangles * 256 + 8192
+      const chunk = this.directory.chunks[id]!, charge = {}, bytes = stagingCost(chunk)
       if (!this.ledger.reserve(charge, 'native-and-staging', bytes)) {
         let victim: Entry | undefined, priority = -Infinity
         for (const entry of this.entries.values()) {
-          if (entry.state !== 'resident' || this.critical.has(entry.id)) continue
+          if (entry.state !== 'resident' || this.required.has(entry.id)) continue
           const distance = this.distance(entry.id), outside = !this.wanted.has(entry.id)
-          if (!this.critical.has(id) && !outside && distance <= this.distance(id)) continue
+          if (!this.required.has(id) && !outside && distance <= this.distance(id)) continue
           const score = outside ? 1e12 + this.frame - entry.used : distance
           if (score > priority) { victim = entry; priority = score }
         }
