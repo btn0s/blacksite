@@ -66,6 +66,7 @@ function setupRunner(sha) {
     if (git(runner, 'status', '--porcelain', '--untracked-files=normal')) throw new Error(`${runner} has uncommitted changes`)
     git(runner, 'checkout', '--detach', sha)
   }
+  git(runner, 'submodule', 'update', '--init', 'vendor/als-web')
   linkDirectory(join(archway, 'node_modules'), join(runner, 'node_modules'))
   linkDirectory(ownedAssets, join(runner, 'owned-assets'))
   for (const group of ['packages', 'examples']) {
