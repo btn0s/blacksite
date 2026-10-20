@@ -21,6 +21,7 @@ export type ScanTexture = {
 type Request = { image: ScanTexture; tail: ScanTail; controller: AbortController; texture: Texture | null; staging: object; upload: object; bytes: number }
 const MiB = 1024 * 1024
 const uploadLimit = 8 * MiB
+const promotionConcurrency = 12
 const textureBytes = (tail: Pick<ScanTail, 'width' | 'height' | 'levels'>, map: Texture) => {
   let bytes = 0
   for (let mip = 0; mip < tail.levels; mip++) bytes += getByteLength(Math.max(1, tail.width >> mip), Math.max(1, tail.height >> mip), map.format, map.type)
@@ -30,7 +31,7 @@ const textureBytes = (tail: Pick<ScanTail, 'width' | 'height' | 'levels'>, map: 
 export class ScanTextureStreaming {
   private readonly reader = new TextureTailReader()
   readonly ledger = new ResidencyLedger(2560 * MiB, { textures: 768 * MiB, staging: 64 * MiB })
-  private readonly decoding = new ResidencyLedger(64 * MiB, {})
+  private readonly decoding = new ResidencyLedger(128 * MiB, {})
   readonly resident: Allocation[] = []
   readonly images: ScanTexture[] = []
   readonly bindings = new Map<object, readonly TextureDemandBinding[]>()
@@ -50,7 +51,7 @@ export class ScanTextureStreaming {
     },
   }
   private completed = -1
-  private pending: Request | null = null
+  private readonly pending: Request[] = []
   private readonly retiring: { allocation: Allocation; serial: number }[] = []
   private readonly uploads: { owner: object; serial: number }[] = []
   private disposed = false
@@ -142,8 +143,76 @@ export class ScanTextureStreaming {
     this.ledger.release(request)
     this.ledger.release(request.upload)
     if (request.texture) this.decoding.release(request.staging)
-    if (this.pending === request) this.pending = null
+    this.drop(request)
     this.cancelled++
+  }
+
+  private drop(request: Request) {
+    const index = this.pending.indexOf(request)
+    if (index >= 0) this.pending.splice(index, 1)
+  }
+
+  private publish(request: Request) {
+    const { image, tail, texture } = request
+    this.ledger.release(request)
+    try {
+      const before = performance.now()
+      const allocation = this.upload(texture!, image.source, tail, request.upload)
+      this.lastUploadMs = performance.now() - before
+      this.lastUploadAt = performance.now()
+      performance.measure('Texture tail upload', { start: before, end: this.lastUploadAt, detail: { bytes: allocation.residentBytes, serial: this.feedback.frame } })
+      performance.clearMeasures('Texture tail upload')
+      this.peakUploadMs = Math.max(this.peakUploadMs, this.lastUploadMs)
+      this.uploadBytes += allocation.residentBytes
+      this.peakUploadBytes = Math.max(this.peakUploadBytes, this.uploadBytes)
+      this.retiring.push({ allocation: image.allocation, serial: this.feedback.frame })
+      if (tail.size > image.tail.size) this.promotions++
+      else this.demotions++
+      image.allocation = allocation
+      image.tail = tail
+      for (const [material, bindings] of this.bindings) {
+        if (bindings.some(binding => binding.image === image.id)) this.bindingVersions.set(material, (this.bindingVersions.get(material) ?? 0) + 1)
+      }
+    } finally { this.decoding.release(request.staging) }
+  }
+
+  private next(start: number) {
+    let next: ScanTexture | null = null
+    for (const image of this.images) {
+      if (image.target === image.tail || start < image.retryAt || this.pending.some(request => request.image === image)) continue
+      if (image.target.size < image.tail.size && start - image.coldSince < 3000) continue
+      const bytes = textureBytes(image.target, image.allocation.texture)
+      const spare = image.target.size > image.tail.size ? this.minimumSwapBytes : 0
+      if (bytes + spare / 2 > this.ledger.available('textures') || bytes > this.ledger.available('staging') || image.target.wireBytes + bytes * 2 > this.decoding.available() || bytes * 2 + spare > this.ledger.available()) continue
+      if (!next || image.target.size < image.tail.size || image.target.size / image.tail.size > next.target.size / next.tail.size) next = image
+    }
+    return next
+  }
+
+  private request(image: ScanTexture) {
+    const tail = image.target
+    const bytes = textureBytes(tail, image.allocation.texture)
+    const request: Request = { image, tail, controller: new AbortController(), texture: null, staging: {}, upload: {}, bytes }
+    if (!this.ledger.reserve(request, 'textures', bytes)) return false
+    if (!this.ledger.reserve(request.upload, 'staging', bytes)) { this.ledger.release(request); return false }
+    if (!this.decoding.reserve(request.staging, 'decoded', tail.wireBytes + bytes * 2)) { this.ledger.release(request); this.ledger.release(request.upload); return false }
+    this.pending.push(request)
+    void this.decode(tail, request.controller.signal).then(texture => {
+      if (this.disposed || !this.pending.includes(request) || request.controller.signal.aborted) {
+        texture.dispose()
+        this.decoding.release(request.staging)
+      } else request.texture = texture
+    }).catch(error => {
+      this.ledger.release(request)
+      this.ledger.release(request.upload)
+      this.decoding.release(request.staging)
+      this.drop(request)
+      if (!request.controller.signal.aborted && !this.disposed) {
+        image.retryAt = performance.now() + 30000
+        console.warn('Texture tail unavailable; retaining the resident tail', error)
+      }
+    })
+    return true
   }
 
   update(deadline = performance.now() + 0.5, allowance = uploadLimit): number {
@@ -164,82 +233,33 @@ export class ScanTextureStreaming {
       this.release(entry.allocation)
       this.retiring.splice(i, 1)
     }
-    const pending = this.pending
-    if (pending) {
-      if (pending.image.target !== pending.tail) this.cancel(pending)
-      else if (pending.texture) {
-        if (pending.bytes > allowance || performance.now() >= deadline) return 0
-        this.pending = null
-        const { image, tail, texture } = pending
-        this.ledger.release(pending)
-        try {
-          const before = performance.now()
-          const allocation = this.upload(texture, image.source, tail, pending.upload)
-          this.lastUploadMs = performance.now() - before
-          this.lastUploadAt = performance.now()
-          performance.measure('Texture tail upload', { start: before, end: this.lastUploadAt, detail: { bytes: allocation.residentBytes, serial: this.feedback.frame } })
-          performance.clearMeasures('Texture tail upload')
-          this.peakUploadMs = Math.max(this.peakUploadMs, this.lastUploadMs)
-          this.uploadBytes = allocation.residentBytes
-          this.peakUploadBytes = Math.max(this.peakUploadBytes, this.uploadBytes)
-          this.retiring.push({ allocation: image.allocation, serial: this.feedback.frame })
-          if (tail.size > image.tail.size) this.promotions++
-          else this.demotions++
-          image.allocation = allocation
-          image.tail = tail
-          for (const [material, bindings] of this.bindings) {
-            if (bindings.some(binding => binding.image === image.id)) this.bindingVersions.set(material, (this.bindingVersions.get(material) ?? 0) + 1)
-          }
-        } finally { this.decoding.release(pending.staging) }
-        return this.uploadBytes
+    for (let i = this.pending.length - 1; i >= 0; i--) {
+      const request = this.pending[i]!
+      if (request.image.target !== request.tail) this.cancel(request)
+      else if (request.texture && request.bytes <= allowance - this.uploadBytes && performance.now() < deadline) {
+        this.pending.splice(i, 1)
+        this.publish(request)
       }
     }
-    if (this.pending || performance.now() >= deadline) return 0
-    let next: ScanTexture | null = null
-    for (const image of this.images) {
-      if (image.target === image.tail || start < image.retryAt) continue
-      if (image.target.size < image.tail.size && start - image.coldSince < 3000) continue
-      const bytes = textureBytes(image.target, image.allocation.texture)
-      const stagingBytes = image.target.wireBytes + Math.ceil(image.target.width * image.target.height * 4 * 4 / 3) * 2
-      const spare = image.target.size > image.tail.size ? this.minimumSwapBytes : 0
-      if (bytes + spare / 2 > this.ledger.available('textures') || bytes > this.ledger.available('staging') || stagingBytes > this.decoding.available() || bytes * 2 + spare > this.ledger.available()) continue
-      if (!next || image.target.size < image.tail.size || image.target.size / image.tail.size > next.target.size / next.tail.size) next = image
+    while (this.pending.length < promotionConcurrency && performance.now() < deadline) {
+      const image = this.next(start)
+      if (!image || !this.request(image)) break
     }
-    if (!next || performance.now() >= deadline) return 0
-    const tail = next.target
-    const bytes = textureBytes(tail, next.allocation.texture)
-    const request: Request = { image: next, tail, controller: new AbortController(), texture: null, staging: {}, upload: {}, bytes }
-    const stagingBytes = tail.wireBytes + Math.ceil(tail.width * tail.height * 4 * 4 / 3) * 2
-    if (!this.ledger.reserve(request, 'textures', bytes)) return 0
-    if (!this.ledger.reserve(request.upload, 'staging', bytes)) { this.ledger.release(request); return 0 }
-    if (!this.decoding.reserve(request.staging, 'decoded', stagingBytes)) { this.ledger.release(request); this.ledger.release(request.upload); return 0 }
-    this.pending = request
-    void this.decode(tail, request.controller.signal).then(texture => {
-      if (this.disposed || this.pending !== request || request.controller.signal.aborted) {
-        texture.dispose()
-        this.decoding.release(request.staging)
-      } else request.texture = texture
-    }).catch(error => {
-      this.ledger.release(request)
-      this.ledger.release(request.upload)
-      this.decoding.release(request.staging)
-      if (this.pending === request) this.pending = null
-      if (!request.controller.signal.aborted && !this.disposed) {
-        request.image.retryAt = performance.now() + 30000
-        console.warn('Texture tail unavailable; retaining the resident tail', error)
-      }
-    })
-    return 0
+    return this.uploadBytes
+  }
+
+  get settled() {
+    return this.pending.length === 0 && this.next(performance.now()) === null
   }
 
   snapshot() {
     const tails: Record<string, number> = {}
     for (const image of this.images) tails[image.tail.size] = (tails[image.tail.size] ?? 0) + 1
     return {
-      ledger: this.ledger.snapshot(), cpuStaging: this.decoding.snapshot(), tails, images: this.images.length,
+      ledger: this.ledger.snapshot(), cpuStaging: this.decoding.snapshot(), tails, images: this.images.length, unmet: this.images.filter(image => image.target.size > image.tail.size).length,
       residentBytes: this.resident.reduce((sum, entry) => sum + entry.residentBytes, 0),
       retiringBytes: this.retiring.reduce((sum, entry) => sum + entry.allocation.residentBytes, 0),
-      pendingBytes: this.pending?.bytes ?? 0, promotions: this.promotions, demotions: this.demotions, cancelled: this.cancelled, samples: this.samples,
+      pendingBytes: this.pending.reduce((sum, request) => sum + request.bytes, 0), promotions: this.promotions, demotions: this.demotions, cancelled: this.cancelled, samples: this.samples,
       uploadBytes: this.uploadBytes, peakUploadBytes: this.peakUploadBytes, peakUploadMs: this.peakUploadMs, lastUploadMs: this.lastUploadMs, lastUploadAt: this.lastUploadAt,
       completedSerial: this.completed,
     }
@@ -248,7 +268,7 @@ export class ScanTextureStreaming {
   dispose() {
     this.disposed = true
     this.reader.dispose()
-    if (this.pending) this.cancel(this.pending)
+    for (const request of [...this.pending]) this.cancel(request)
     for (const allocation of [...this.resident]) this.release(allocation)
     this.retiring.length = 0
     for (const upload of this.uploads) this.ledger.release(upload.owner)

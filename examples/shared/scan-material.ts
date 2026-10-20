@@ -54,7 +54,7 @@ function textureBinding(surface: ScanSurface, name: string, image: number): Text
 export async function loadScanMaterials(surfaces: readonly ScanSurface[], root: string, renderer: WebGPURenderer) {
   const manager = new LoadingManager()
   manager.setURLModifier(url => url.endsWith('basis_transcoder.js') ? transcoderScript : url.endsWith('basis_transcoder.wasm') ? transcoderWasm : url)
-  const loader = new KTX2Loader(manager).setTranscoderPath('/').setWorkerLimit(2).detectSupport(renderer)
+  const loader = new KTX2Loader(manager).setTranscoderPath('/').setWorkerLimit(8).detectSupport(renderer)
   const streaming = new ScanTextureStreaming(renderer, loader, root)
   materialSets.set(renderer, streaming)
   const images = new Map<string, Promise<ScanTexture>>()

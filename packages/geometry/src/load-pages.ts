@@ -1,7 +1,7 @@
 import type { MeshletMetadata } from './format'
 
 export interface GeometryPageRange { offset: number; bytes: number; sha256: string }
-export interface DecodedGeometryPage { bytes: Uint8Array<ArrayBuffer>; decodeMilliseconds: number; wireBytes: number }
+export interface DecodedGeometryPage { bytes: Uint8Array<ArrayBuffer>; decodeMilliseconds: number; fetchMilliseconds: number; wireBytes: number }
 
 export interface GeometryPageMetadata extends MeshletMetadata {
   version: number
@@ -73,7 +73,7 @@ export class GeometryPageDecoder {
         this.#pending = null
         pending.removeAbort()
         if (data.error) pending.reject(new Error(data.error))
-        else pending.resolve({ bytes: new Uint8Array(data.buffer), decodeMilliseconds: data.decodeMilliseconds, wireBytes: data.wireBytes })
+        else pending.resolve({ bytes: new Uint8Array(data.buffer), decodeMilliseconds: data.decodeMilliseconds, fetchMilliseconds: data.fetchMilliseconds, wireBytes: data.wireBytes })
       }
       this.#worker.onerror = event => {
         const error = new Error(event.message || 'Geometry page worker failed')

@@ -10,6 +10,7 @@ self.onmessage = async ({ data: request }) => {
     const { range } = request
     if (!Number.isSafeInteger(range.offset) || range.offset < 0 || !Number.isSafeInteger(range.bytes) || range.bytes < 96 || range.bytes > 262144 || !/^[a-f0-9]{64}$/.test(range.sha256)) throw new Error('Invalid geometry page range')
     const end = range.offset + range.bytes - 1
+    const fetchStart = performance.now()
     const response = await fetch(request.url, { headers: { Range: `bytes=${range.offset}-${end}` }, signal: controller.signal })
     if (response.status !== 206 || !response.headers.get('Content-Range')?.startsWith(`bytes ${range.offset}-${end}/`)) throw new Error('Geometry page fetch requires the exact HTTP byte range')
     if (!response.body) throw new Error('Geometry page fetch has no body')
@@ -26,11 +27,12 @@ self.onmessage = async ({ data: request }) => {
     if (received !== range.bytes) throw new Error('Geometry page fetch length disagrees')
     const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', wire))
     if (Array.from(digest, value => value.toString(16).padStart(2, '0')).join('') !== range.sha256) throw new Error('Geometry page wire hash disagrees')
+    const fetchMilliseconds = performance.now() - fetchStart
     controller.signal.throwIfAborted()
     const start = performance.now(), decoded = decodeGeometryPage(wire), decodeMilliseconds = performance.now() - start
     if (new DataView(decoded.buffer).getUint32(8, true) !== request.pageIndex) throw new Error('Decoded page identity disagrees')
     controller.signal.throwIfAborted()
-    self.postMessage({ id: request.id, buffer: decoded.buffer, decodeMilliseconds, wireBytes: wire.byteLength }, [decoded.buffer])
+    self.postMessage({ id: request.id, buffer: decoded.buffer, decodeMilliseconds, fetchMilliseconds, wireBytes: wire.byteLength }, [decoded.buffer])
   } catch (error) {
     self.postMessage({ id: request.id, error: error instanceof Error ? error.message : String(error) })
   } finally { active = null }
