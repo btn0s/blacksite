@@ -74,11 +74,15 @@ export function createTerrainNodes(source: TerrainUniforms) {
     const nearSample = texture(source.terrainSurfaceNear.value, uv(near, root))
     return mix(level === undefined ? farSample : farSample.level(float(level)), level === undefined ? nearSample : nearSample.level(float(level)), weight(root))
   }
+  const edgeRange = uniform(source.terrainEdgeRange.value)
+  const nearHeight = Fn(([root]: [Node<'vec2'>]) => fetchHeight(source.terrainHeightNear.value, near, root))
+  const nearSurface = (root: Node<'vec2'>) => texture(source.terrainSurfaceNear.value, uv(near, root)).level(float(0))
+  const edge = (root: Node<'vec2'>) => texture(source.terrainEdge.value, uv(near, root)).level(float(0)).r.mul(2).sub(1).mul(edgeRange)
   const normal = Fn(([sample]: [Node<'vec4'>]) => {
     const xz = sample.xy.mul(2).sub(1)
     return normalize(vec3(xz.x, sqrt(max(float(1).sub(dot(xz, xz)), 0.02)), xz.y))
   })
-  return { near, far, band, height, surface, normal }
+  return { near, far, band, height, surface, normal, nearHeight, nearSurface, edge }
 }
 
 export interface CoverSample {

@@ -3,7 +3,7 @@ import {
   Matrix4, Sphere, Vector2, Vector3, Vector4,
 } from 'three'
 import type { Camera, DataArrayTexture, Material } from 'three'
-import { heightAt as fieldHeight, heightTexture, type Heightfield } from './heightfield'
+import { edgeTextureFromData, heightAt as fieldHeight, heightTexture, type Heightfield } from './heightfield'
 import type { MeshStandardNodeMaterial } from 'three/webgpu'
 import type { CoverGround } from './nodes'
 import { createTerrainMaterial } from './terrain-nodes'
@@ -15,6 +15,8 @@ export interface TerrainSources {
   readonly nearSurface: DataTexture
   readonly farSurface: DataTexture
   readonly band?: number
+  readonly nearEdge?: DataTexture
+  readonly edgeRange?: number
 }
 
 export interface TerrainUniforms {
@@ -22,6 +24,8 @@ export interface TerrainUniforms {
   terrainHeightFar: { value: DataTexture }
   terrainSurfaceNear: { value: DataTexture }
   terrainSurfaceFar: { value: DataTexture }
+  terrainEdge: { value: DataTexture }
+  terrainEdgeRange: { value: number }
   terrainNear: { value: Vector4 }
   terrainFar: { value: Vector4 }
   terrainBand: { value: number }
@@ -35,6 +39,8 @@ export function terrainUniforms(sources: TerrainSources): TerrainUniforms {
     terrainHeightFar: { value: heightTexture(far) },
     terrainSurfaceNear: { value: sources.nearSurface },
     terrainSurfaceFar: { value: sources.farSurface },
+    terrainEdge: { value: sources.nearEdge ?? edgeTextureFromData(new Uint8Array([255]), 1) },
+    terrainEdgeRange: { value: sources.edgeRange ?? 1e6 },
     terrainNear: { value: new Vector4(near.origin[0], near.origin[1], near.extent, near.size) },
     terrainFar: { value: new Vector4(far.origin[0], far.origin[1], far.extent, far.size) },
     terrainBand: { value: sources.band ?? 240 },
@@ -80,6 +86,7 @@ export interface TerrainOptions {
   readonly detailDistance?: number
   readonly shadowDistance?: number
   readonly cover?: { readonly ground: CoverGround }
+  readonly footprint?: { readonly tint: readonly [number, number, number]; readonly reach: number }
   readonly canopy?: CanopySpec
 }
 

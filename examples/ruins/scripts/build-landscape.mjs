@@ -4,9 +4,8 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { deflateSync } from 'node:zlib'
 import sharp from 'sharp'
-import { smoothstep } from '../../../packages/landscape/src/random.ts'
 import { rasterizeLevelGround } from './level-ground.mjs'
-import { hills, levelSurface, macro, relaxMembrane, surfaceMasks, world } from './landscape-shape.mjs'
+import { ground, levelGround, surfaceMasks, world } from './landscape-shape.mjs'
 
 const [collisionDirectory, materialsDirectory, output] = process.argv.slice(2).map(path => resolve(path))
 if (!collisionDirectory || !materialsDirectory || !output) throw new Error('Usage: build-landscape.mjs <collision directory> <materials directory> <output directory>')
@@ -14,21 +13,8 @@ await mkdir(join(output, 'layers'), { recursive: true })
 
 const report = message => console.log(message)
 const raster = await rasterizeLevelGround(collisionDirectory)
-const surface = levelSurface(raster)
-const { field } = relaxMembrane(surface, report)
-
-const rasterAt = (x, z) => {
-  const i = Math.round((x - surface.x0) / surface.cell), j = Math.round((z - surface.z0) / surface.cell)
-  return i < 0 || j < 0 || i >= surface.width || j >= surface.height ? -1 : j * surface.width + i
-}
-
-function height(x, z, detail) {
-  const slot = rasterAt(x, z)
-  if (slot < 0) return macro(x, z) + hills(x, z, detail)
-  if (surface.solid[slot]) return surface.under[slot]
-  const ramp = smoothstep(20, 180, surface.rimDistance[slot] * surface.cell)
-  return field[slot] + hills(x, z, detail) * ramp
-}
+const level = levelGround(raster, report)
+const height = (x, z, detail) => level.height(x, z, detail)
 
 function bake(name, size, extent, centre, detail) {
   const spacing = extent / (size - 1)
@@ -48,8 +34,7 @@ function bake(name, size, extent, centre, detail) {
     const dx = at(column + 1, row) - at(column - 1, row), dz = at(column, row + 1) - at(column, row - 1)
     const length = Math.hypot(dx, 2 * spacing, dz)
     const x = origin[0] + column * spacing, z = origin[1] + row * spacing
-    const slot = rasterAt(x, z)
-    const rimDistance = slot < 0 || name === 'far' ? 1e6 : surface.rimDistance[slot] * surface.cell
+    const rimDistance = name === 'far' ? 1e6 : level.rimDistance(x, z)
     const [soil, sand] = surfaceMasks(x, z, value, Math.hypot(dx, dz) / (2 * spacing), rimDistance)
     colours[index * 4] = Math.round((-dx / length * 0.5 + 0.5) * 255)
     colours[index * 4 + 1] = Math.round((-dz / length * 0.5 + 0.5) * 255)
@@ -63,6 +48,14 @@ function bake(name, size, extent, centre, detail) {
 const near = bake('near', world.nearSize, world.nearExtent, world.centre, true)
 const far = bake('far', world.farSize, world.farExtent, world.centre, false)
 for (const field of [near, far]) await writeFile(join(output, field.file), field.packed)
+
+const edge = new Uint8Array(near.size * near.size)
+const spacing = near.extent / (near.size - 1)
+for (let row = 0; row < near.size; row++) for (let column = 0; column < near.size; column++) {
+  const signed = Math.max(-ground.edgeRange, Math.min(ground.edgeRange, level.edge(near.origin[0] + column * spacing, near.origin[1] + row * spacing)))
+  edge[row * near.size + column] = Math.round((signed / ground.edgeRange * 0.5 + 0.5) * 255)
+}
+await writeFile(join(output, 'edge.bin'), deflateSync(edge, { level: 9 }))
 
 const basisDirectory = join(dirname(fileURLToPath(import.meta.resolve('three'))), '../examples/jsm/libs/basis/')
 const transcoder = new Function('require', 'module', '__dirname', `${await readFile(join(basisDirectory, 'basis_transcoder.js'), 'utf8')}\nreturn BASIS`)(createRequire(pathToFileURL(basisDirectory)), {}, basisDirectory)
@@ -83,6 +76,12 @@ async function decode(file) {
 const surfaces = JSON.parse(await readFile(join(materialsDirectory, 'surfaces.json'), 'utf8')).surfaces
 const surfaceRoot = materialsDirectory
 const layerSize = 1024
+const linear = value => { const c = value / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 }
+function average(pixels) {
+  let r = 0, g = 0, b = 0, count = 0
+  for (let offset = 0; offset < pixels.length; offset += 4 * 97) { r += linear(pixels[offset]); g += linear(pixels[offset + 1]); b += linear(pixels[offset + 2]); count++ }
+  return [r / count, g / count, b / count]
+}
 async function layer(name, material) {
   const source = surfaces.find(surface => surface.path.split('/').at(-1).startsWith(`${material}.`))
   if (!source) throw new Error(`Surface ${material} is missing`)
@@ -92,14 +91,15 @@ async function layer(name, material) {
   const normal = await decode(tail('Normal'))
   for (let index = 1; index < normal.pixels.length; index += 4) normal.pixels[index] = 255 - normal.pixels[index]
   await sharp(Buffer.from(normal.pixels), { raw: { width: normal.width, height: normal.height, channels: 4 } }).removeAlpha().webp({ quality: 92 }).toFile(join(output, 'layers', `${name}_n.webp`))
-  return { name, material }
+  return { name, material, average: average(colour.pixels) }
 }
 
+const grass = await sharp(join(dirname(fileURLToPath(import.meta.url)), '../../../packages/look/assets/world/grass_c.webp')).resize(layerSize, layerSize).removeAlpha().ensureAlpha().raw().toBuffer()
 const layers = [
   await layer('soil', 'MI_Rocky_Soil_Ground_vb2qdgwew'),
   await layer('sand', 'MI_Dry_Sandy_Mud_wdunfjf_1'),
   await layer('rock', 'MI_Massive_Nordic_Coastal_Cliff'),
 ]
 const fields = Object.fromEntries([['near', near], ['far', far]].map(([name, value]) => [name, { file: value.file, size: value.size, extent: value.extent, origin: value.origin, min: value.min, max: value.max, bytes: value.packed.length }]))
-await writeFile(join(output, 'landscape.json'), JSON.stringify({ version: 1, band: world.band, seaLevel: world.seaLevel, ...fields, layers }, null, 1))
+await writeFile(join(output, 'landscape.json'), JSON.stringify({ version: 2, band: world.band, seaLevel: world.seaLevel, ...fields, edge: { file: 'edge.bin', range: ground.edgeRange }, averages: [average(grass), ...layers.map(entry => entry.average)], layers: layers.map(({ name, material }) => ({ name, material })) }, null, 1))
 console.log(`landscape written to ${output}`)

@@ -5,6 +5,7 @@ import type { TerrainOptions, TerrainUniforms } from './terrain'
 import { createTerrainNodes, landscapeDither, landscapeNoise } from './nodes'
 import { canopyCoverage, canopySurface } from './canopy-nodes'
 import { forestRepresentationWeight } from './forest-coverage'
+import { footprintTone, groundLayers, groundTone } from './ground'
 
 function tileSample(image: DataArrayTexture, uv: Node<'vec2'>, layer: number, mean: Node<'vec4'>) {
   const p = uv.mul(3.4641016)
@@ -51,21 +52,8 @@ export function createTerrainMaterial(options: TerrainOptions, source: TerrainUn
     const surface = terrain.surface(world.xz)
     const base = terrain.normal(surface)
     const distance = length(world.sub(eye))
-    const variation = landscapeNoise(world.xz.mul(0.045), 21)
-    const macro = landscapeNoise(world.xz.mul(0.011), 23).mul(0.6).add(landscapeNoise(world.xz.mul(0.06), 29).mul(0.4))
     const slope = float(1).sub(base.y)
-    const forest = surface.b.clamp(0, 1)
-    const path = smoothstep(0.25, 0.65, surface.a.add(variation.sub(0.5).mul(0.2)))
-    const rock = smoothstep(0.24, 0.42, slope.add(macro.sub(0.5).mul(0.12))).mul(float(1).sub(smoothstep(0.3, 0.6, surface.b).mul(0.85)))
-    const rawWeights = vec4(float(1).sub(forest).mul(float(1).sub(path)).mul(float(1).sub(rock)), forest.mul(float(1).sub(path)).mul(float(1).sub(rock)), path.mul(float(1).sub(rock)), rock)
-    const weights = rawWeights.div(max(dot(rawWeights, vec4(1)), 1e-4))
-    const average = vec3(0).toVar()
-    const roughness = float(0).toVar()
-    for (let layer = 0; layer < 4; layer++) {
-      const spec = options.layerSpecs[layer]!
-      average.addAssign(vec3(...options.layers.averages[layer]!).mul(vec3(...spec.tint)).mul(weights.element(layer)))
-      roughness.addAssign(weights.element(layer).mul(spec.roughness))
-    }
+    const { weights, macro, average, roughness } = groundLayers(options.layers.averages, options.layerSpecs, world.xz, surface, base)
     const detail = float(1).sub(smoothstep((options.detailDistance ?? 260) * 0.3, options.detailDistance ?? 260, distance))
     const albedo = average.toVar()
     const detailNormal = vec3(0, 0, 1).toVar()
@@ -84,9 +72,8 @@ export function createTerrainMaterial(options: TerrainOptions, source: TerrainUn
       albedo.assign(mix(average, sampledColor, detail))
       detailNormal.assign(normalize(mix(vec3(0, 0, 1), sampledNormal, detail)))
     })
-    albedo.mulAssign(macro.mul(0.36).add(0.82))
-    const dry = smoothstep(0.45, 0.85, landscapeNoise(world.xz.mul(0.018), 31).mul(0.7).add(landscapeNoise(world.xz.mul(0.09), 37).mul(0.3)))
-    albedo.assign(mix(albedo, albedo.mul(vec3(1.3, 1.04, 0.6)), dry.mul(weights.x).mul(0.7)))
+    albedo.assign(groundTone(albedo, world.xz, macro, weights))
+    if (options.footprint) albedo.mulAssign(footprintTone(options.footprint, terrain.edge(world.xz)))
     if (options.cover) {
       const ground = options.cover.ground({ root: world.xz, surface, slope, ground: world.y, distance })
       const mottle = landscapeNoise(world.xz.mul(1.9), 41).mul(0.6).add(landscapeNoise(world.xz.mul(5.3), 43).mul(0.4)).sub(0.5).mul(0.36).mul(detail)

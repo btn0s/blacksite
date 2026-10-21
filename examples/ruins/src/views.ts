@@ -21,8 +21,8 @@ export const ruinsHorizon = 16000
 export const ruinsHome = {
   id: 1,
   name: 'Spawn',
-  position: [25.8, 25.8, 4.6] as [number, number, number],
-  target: [15.8, 27, 4.6] as [number, number, number],
+  position: [-78, 23.7, 366] as [number, number, number],
+  target: [-88, 23.1, 366.9] as [number, number, number],
   note: '',
 }
 
