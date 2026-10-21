@@ -56,6 +56,43 @@ export function Prompt({ text, visible }: { text: string; visible: boolean }) {
   return <div className={`hud-prompt${visible ? '' : ' hud-prompt--hidden'}`} aria-hidden={!visible}>{text}</div>
 }
 
+const COMPASS_POINTS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+const COMPASS_PX_PER_DEGREE = 3
+const COMPASS_POINT_LABELS = [-360, 0, 360].flatMap(turn => COMPASS_POINTS.map((point, index) => ({ key: `${turn}${point}`, point, degrees: turn + index * 45 })))
+
+export function Compass({ heading }: { heading: () => number }) {
+  const strip = useRef<HTMLDivElement>(null)
+  const reading = useRef<HTMLDivElement>(null)
+  const latest = useRef(heading)
+  latest.current = heading
+  useEffect(() => {
+    let frame = 0
+    let shown = NaN
+    const tick = () => {
+      frame = requestAnimationFrame(tick)
+      const degrees = ((latest.current() * 180 / Math.PI) % 360 + 360) % 360
+      if (strip.current) strip.current.style.transform = `translate3d(${-(degrees + 360) * COMPASS_PX_PER_DEGREE}px, 0, 0)`
+      const whole = Math.round(degrees) % 360
+      if (reading.current && whole !== shown) { shown = whole; reading.current.textContent = `${String(whole).padStart(3, '0')}°` }
+    }
+    tick()
+    return () => cancelAnimationFrame(frame)
+  }, [])
+  return <div className="hud-compass" aria-hidden="true">
+    <div className="hud-compass-window">
+      <div ref={strip} className="hud-compass-strip" style={{ width: 1080 * COMPASS_PX_PER_DEGREE }}>
+        {COMPASS_POINT_LABELS.map(label => <span key={label.key} data-cardinal={label.point.length === 1 ? '' : undefined} style={{ left: (label.degrees + 360) * COMPASS_PX_PER_DEGREE }}>{label.point}</span>)}
+      </div>
+    </div>
+    <div className="hud-compass-marker" />
+    <div ref={reading} className="hud-compass-reading" />
+  </div>
+}
+
+export function Notice({ text, visible }: { text: string; visible: boolean }) {
+  return <div className={`hud-notice${visible ? '' : ' hud-notice--hidden'}`} role="status" aria-hidden={!visible}>{text}</div>
+}
+
 export type TouchButton = { id: string; label: string; hold?: boolean }
 
 export function TouchPad({ onMove, onLook, buttons, onButton, lookTarget }: {

@@ -18,6 +18,7 @@ import { applyCameraImpulse } from '../feel/impulse'
 import { RECOIL_TUNING } from '../feel/recoil'
 import { aimCandidates, characterInput, padLookDegrees, type AimTarget } from '../input'
 import { readActionIntent } from '../intent'
+import { stepFlight } from './fly'
 import { ROLL_TAP_SECONDS, WALK_STICK, type CharacterHandle as Controller } from './state'
 import { createCharacterWorld } from './world'
 
@@ -50,6 +51,8 @@ const ASSIST_CONE = 6
 const TOUCH_SPRINT = 0.92
 const DEG = Math.PI / 180
 const noop = () => {}
+const STILL = { x: 0, y: 0, z: 0 }
+const unwind = (degrees: number) => ((degrees % 360) + 540) % 360 - 180
 const NO_HITS: WeaponQueries = { castRay: () => null, sweepSphere: () => null }
 
 export function CharacterController({ controller, queries, events, aimTargets, onPresentation, ragdollRef, renderWeapon, snapshotRateHz, manifestUrl }: CharacterControllerProps) {
@@ -70,7 +73,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     right: new Vector3(), up: new Vector3(0, 1, 0),
     latch: { sprint: false, crouch: false, walk: false }, mouse: { fire: false }, candidates: [] as AimCandidate[],
     aimed: false, crouched: false, grounded: true, fall: 0, height: controller.eyeConfig.stand, jumpHeld: false, walk: false, settled: false,
-    sprintHeld: false, sprintSince: 0, rollSequence: 0, jumpBuffer: 0,
+    sprintHeld: false, sprintSince: 0, rollSequence: 0, jumpBuffer: 0, jumpTap: -Infinity,
     assist: createAimAssist(controller.aimAssist || undefined),
     offset: { pitch: 0, yaw: 0 }, fireReadyAt: 0, accumulated: 0,
   }), [controller])
@@ -99,6 +102,8 @@ export function CharacterController({ controller, queries, events, aimTargets, o
       viewPitchAngle: command.pitch,
       aiming: command.aim,
       overlayMode: command.overlay,
+      externalMovement: controller.flying ? { position: controller.flight.position, velocity: controller.flight.velocity, yaw: unwind(command.yaw) } : undefined,
+      releaseVelocity: STILL,
     }
   }, [als, controller, scratch])
   const bodyLod = useMemo(() => () => ({ visible: camera.layers.isEnabled(BODY_LAYER), shadow: gl.shadowMap.enabled }), [camera, gl])
@@ -118,6 +123,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
 
   useEffect(() => controller.input.actions.subscribe(({ action, device }) => {
     if (controller.status().paused || controller.driver) return
+    if (controller.flying && (action === 'roll' || action === 'ragdoll')) return
     if ((action === 'roll' || action === 'ragdoll') && device === 'gamepad') controller.input.rumble(140, 0.5, 0.3)
     if (action === 'roll') controller.roll()
     else if (action === 'ragdoll') controller.ragdoll()
@@ -267,27 +273,37 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     const clock = controller.clock
     const sprintHeld = !drive && hub.isHeld('sprint')
     if (sprintHeld && !scratch.sprintHeld) scratch.sprintSince = clock
-    if (!sprintHeld && scratch.sprintHeld && clock - scratch.sprintSince < ROLL_TAP_SECONDS) controller.queued.roll = true
+    if (!sprintHeld && scratch.sprintHeld && clock - scratch.sprintSince < ROLL_TAP_SECONDS && !controller.flying) controller.queued.roll = true
     scratch.sprintHeld = sprintHeld
-    if (controller.queued.roll && active) scratch.rollSequence++
+    if (controller.queued.roll && active && !controller.flying) scratch.rollSequence++
     controller.queued.roll = false
     const jumpPressed = (intent.jump && !scratch.jumpHeld) || controller.queued.jump
-    if (jumpPressed && active) {
+    const doubleTap = jumpPressed && active && controller.fly !== null && clock - scratch.jumpTap < controller.fly.doubleTapSeconds
+    if (jumpPressed && active) scratch.jumpTap = doubleTap ? -Infinity : clock
+    if (doubleTap) { controller.toggleFlying(); scratch.fall = scratch.jumpBuffer = 0 }
+    const flying = controller.flying
+    if (jumpPressed && active && !doubleTap && !flying) {
       command.jumpSequence++
       if (character?.locomotionMode === 'InAir') scratch.jumpBuffer = clock + controller.jumpConfig.bufferSeconds
     }
-    if (scratch.jumpBuffer > clock && character?.locomotionMode === 'Grounded' && !character.locomotionAction) {
+    if (scratch.jumpBuffer > clock && character?.locomotionMode === 'Grounded' && !character.locomotionAction && !flying) {
       scratch.jumpBuffer = 0
       command.jumpSequence++
     }
     scratch.jumpHeld = intent.jump
     controller.queued.jump = false
     if (drive) drive.jump = false
+    const crouching = intent.crouch || (!drive && status.touchCrouch)
+    const sprintIntent = intent.sprint || (!drive && Math.hypot(touch.forward, touch.right) > TOUCH_SPRINT)
+    if (flying) {
+      const rise = active ? Number(intent.jump || (!drive && touch.rise)) - Number(crouching) : 0
+      stepFlight(controller.flight, { forward: active ? intent.forward : 0, right: active ? intent.right : 0, rise, sprint: active && sprintIntent }, scratch.rotation.y, controller.fly!, Math.min(delta, 0.1))
+    }
     command.active = active
-    command.forward = active ? intent.forward : 0
-    command.right = active ? intent.right : 0
-    command.crouch = active && (intent.crouch || (!drive && status.touchCrouch))
-    command.sprint = active && (intent.sprint || (!drive && Math.hypot(touch.forward, touch.right) > TOUCH_SPRINT)) && !firing
+    command.forward = active && !flying ? intent.forward : 0
+    command.right = active && !flying ? intent.right : 0
+    command.crouch = active && !flying && crouching
+    command.sprint = active && !flying && sprintIntent && !firing
     command.aim = aiming
     scratch.walk = intent.walk || command.aim
     command.yaw = -(scratch.rotation.y + Math.PI / 2) / DEG
@@ -327,7 +343,7 @@ export function CharacterController({ controller, queries, events, aimTargets, o
     controller.crouching = crouched
     controller.sprinting = sprinting
     controller.speed = speed
-    if (!grounded) scratch.fall = Math.min(scratch.fall, controller.velocity.y)
+    if (!grounded && !controller.flying) scratch.fall = Math.min(scratch.fall, controller.velocity.y)
     if (scratch.settled && grounded && !scratch.grounded) {
       const landed = -scratch.fall
       hooks.current?.onLand?.(landed)

@@ -8,6 +8,7 @@ import { createCameraFeel } from '../feel/camera'
 import type { ImpulsePoint } from '../feel/impulse'
 import { createAimRecoil } from '../feel/recoil'
 import { PAD_LOOK, type PadLook } from '../input'
+import { CHARACTER_FLY, createFlight, type CharacterFly } from './fly'
 
 type AlsOverlayMode = AlsPlayerCommand['overlay']
 type AlsGaitSpeedOverrides = NonNullable<CharacterProps['gaitSpeedOverrides']>
@@ -18,8 +19,8 @@ export type CharacterView = 'arms' | 'head' | 'shoulder'
 export type CharacterRumble = { readonly ms: number; readonly strong: number; readonly weak: number; readonly trigger: number }
 export type CharacterWeapon = { readonly definition: WeaponDefinition; readonly adsFov: number; readonly adsSeconds: number; readonly overlay: AlsOverlayMode; readonly rumble?: CharacterRumble }
 export type CharacterDriver = { forward: number; right: number; sprint: boolean; jump: boolean; fire: boolean; aim: boolean; crouch?: boolean; walk?: boolean }
-export type CharacterTouch = { forward: number; right: number; lookX: number; lookY: number; fire: boolean }
-export type CharacterStatus = { readonly locked: boolean; readonly paused: boolean; readonly view: CharacterView; readonly touchAim: boolean; readonly touchCrouch: boolean }
+export type CharacterTouch = { forward: number; right: number; lookX: number; lookY: number; fire: boolean; rise: boolean }
+export type CharacterStatus = { readonly locked: boolean; readonly paused: boolean; readonly view: CharacterView; readonly touchAim: boolean; readonly touchCrouch: boolean; readonly flying: boolean }
 export type CharacterLook = { readonly mouse: number; readonly touch: number; readonly touchScale: number; readonly pitchMin: number; readonly pitchMax: number }
 export type CharacterEye = { readonly stand: number; readonly crouch: number; readonly smoothing: number }
 export type CharacterJump = { readonly bufferSeconds: number; readonly coyoteSeconds: number }
@@ -34,6 +35,7 @@ export type CharacterConfig = {
   readonly gaits?: AlsGaitSpeedOverrides
   readonly eye?: CharacterEye
   readonly jump?: Partial<CharacterJump>
+  readonly fly?: Partial<CharacterFly>
   readonly shoulderOffset?: number
   readonly sprintOutSeconds?: number
   readonly fov?: number
@@ -70,7 +72,7 @@ export function createCharacterController(config: CharacterConfig) {
   arms.weapon = first as ArmsWeapon
   arms.aimSeconds = weapons[0]?.adsSeconds ?? arms.aimSeconds
   const listeners = new Set<() => void>()
-  let status: CharacterStatus = { locked: false, paused: false, view: config.views[0], touchAim: false, touchCrouch: false }
+  let status: CharacterStatus = { locked: false, paused: false, view: config.views[0], touchAim: false, touchCrouch: false, flying: false }
   const setStatus = (next: Partial<CharacterStatus>) => {
     if (Object.entries(next).every(([field, value]) => status[field as keyof CharacterStatus] === value)) return
     status = { ...status, ...next }
@@ -90,6 +92,9 @@ export function createCharacterController(config: CharacterConfig) {
     aimKick: config.aimKick ?? 0.75,
     eyeConfig: config.eye ?? CHARACTER_EYE,
     jumpConfig: { ...CHARACTER_JUMP, ...config.jump },
+    fly: config.fly ? { ...CHARACTER_FLY, ...config.fly } : null,
+    flight: createFlight(),
+    flying: false,
     shoulderOffset: config.shoulderOffset ?? 0,
     sprintOutSeconds: config.sprintOutSeconds ?? 0.22,
     fov: config.fov ?? 75,
@@ -111,7 +116,7 @@ export function createCharacterController(config: CharacterConfig) {
     rightShoulder: true,
     aim: { origin: new Vector3(), direction: new Vector3(0, 0, -1) },
     muzzle: new Vector3(),
-    touch: { forward: 0, right: 0, lookX: 0, lookY: 0, fire: false } as CharacterTouch,
+    touch: { forward: 0, right: 0, lookX: 0, lookY: 0, fire: false, rise: false } as CharacterTouch,
     driver: null as CharacterDriver | null,
     override: false,
     pointer: { current: null as (() => void) | null },
@@ -141,12 +146,26 @@ export function createCharacterController(config: CharacterConfig) {
     reload() { controller.queued.reload = true },
     jump() { controller.queued.jump = true },
     roll() { controller.queued.roll = true },
+    setFlying(on: boolean) {
+      if (on === controller.flying) return
+      if (on) {
+        const body = als.pose.current.ownerRigidBody
+        if (!controller.fly || !body) return
+        const at = body.translation()
+        controller.flight.position.set(at.x, at.y, at.z)
+        controller.flight.velocity.copy(controller.velocity)
+      } else controller.flight.velocity.set(0, 0, 0)
+      controller.flying = on
+      setStatus({ flying: on })
+    },
+    toggleFlying() { controller.setFlying(!controller.flying) },
     swapShoulder() { controller.rightShoulder = !controller.rightShoulder },
     inspect() { arms.inspectSequence++ },
     hurt(amount: number, side: number) { controller.feel.hurt(amount, side) },
     blast(source: ImpulsePoint, strength = 1) { controller.feel.impulse.blast(source, strength, controller.eye, controller.control.yaw) },
     drive(next: CharacterDriver | null) { controller.driver = next },
     teleport(position: Vec3, yaw: number, pitch = config.start.pitch ?? 0) {
+      controller.setFlying(false)
       controller.control.yaw = yaw
       controller.control.pitch = pitch
       controller.control.reset = true

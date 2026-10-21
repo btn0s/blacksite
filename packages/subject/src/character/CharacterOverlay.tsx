@@ -16,7 +16,7 @@ export type CharacterOverlayProps = {
 
 const hintsFor = (controller: CharacterHandle) => controller.armed
   ? ['move', 'fire', 'aim', 'sprint', 'crouch']
-  : ['move', 'jump', 'sprint', 'roll', ...(controller.config.views.includes('shoulder') ? ['shoulder'] : []), ...(controller.config.views.length > 1 ? ['view'] : [])]
+  : ['move', 'jump', 'sprint', 'roll', ...(controller.fly ? ['fly'] : []), ...(controller.config.views.includes('shoulder') ? ['shoulder'] : []), ...(controller.config.views.length > 1 ? ['view'] : [])]
 
 const buttonsFor = (controller: CharacterHandle, status: { touchAim: boolean; touchCrouch: boolean }): TouchButton[] => controller.armed
   ? [{ id: 'fire', label: 'Fire' }, { id: 'aim', label: status.touchAim ? 'Hip' : 'Aim' }, { id: 'reload', label: 'Reload' }, { id: 'crouch', label: status.touchCrouch ? 'Stand' : 'Crouch' }, { id: 'jump', label: 'Jump' }, { id: 'swap', label: 'Swap' }]
@@ -57,6 +57,7 @@ export function TouchControls({ controller, buttons }: { controller: CharacterHa
     onLook={(dx, dy) => { touch.lookX += dx * controller.look.touchScale; touch.lookY += dy * controller.look.touchScale }}
     onButton={(id, pressed) => {
       if (id === 'fire') { touch.fire = pressed; return }
+      if (id === 'jump') touch.rise = pressed
       const own = TOUCH[id]
       if (!own) { controller.input.actions.setTouchButton(id, pressed); return }
       if (pressed) own(controller)

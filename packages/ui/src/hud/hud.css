@@ -17,6 +17,17 @@ canvas { display: block; touch-action: none; image-rendering: pixelated; }
 .hud-prompt { position: absolute; z-index: 6; left: 50%; top: 24%; transform: translateX(-50%); padding: 8px 14px; border: 1px solid #e2a23b80; background: #0c0e0bb8; font: 600 14px 'Barlow Condensed', sans-serif; letter-spacing: 0.14em; text-transform: uppercase; color: #f0ecdb; pointer-events: none; transition: opacity 240ms ease; }
 .hud-prompt--hidden { opacity: 0; }
 
+.hud-compass { position: absolute; z-index: 5; top: calc(12px + env(safe-area-inset-top)); left: 50%; width: clamp(160px, calc(100vw - 700px), 360px); transform: translateX(-50%); display: grid; justify-items: center; pointer-events: none; color: #eef4ec; font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; text-shadow: 0 0 2px #000, 0 0 2px #000, 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; }
+.hud-compass-window { position: relative; width: 100%; height: 24px; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent); mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent); }
+.hud-compass-strip { position: absolute; top: 0; left: 50%; height: 100%; will-change: transform; background-repeat: repeat-x; background-position: -0.5px 100%, -0.5px 100%; background-size: 15px 5px, 45px 9px; background-image: linear-gradient(90deg, #eef4ecb0 0 1px, transparent 1px), linear-gradient(90deg, #eef4ec 0 1px, transparent 1px); filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000); }
+.hud-compass-strip span { position: absolute; top: 1px; transform: translateX(-50%); font-size: 11px; }
+.hud-compass-strip span[data-cardinal] { font-size: 13px; font-weight: 700; }
+.hud-compass-marker { width: 0; height: 0; margin-top: 1px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 6px solid #eef4ec; filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000); }
+.hud-compass-reading { margin-top: 2px; font-size: 11px; }
+
+.hud-notice { position: absolute; z-index: 6; top: calc(84px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); pointer-events: none; color: #eef4ec; font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; text-shadow: 0 0 2px #000, 0 0 2px #000, 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; transition: opacity 240ms ease; }
+.hud-notice--hidden { opacity: 0; }
+
 .hud-loading { position: absolute; z-index: 20; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 45%, #1a1e16, #0b0d0a 70%); transition: opacity 600ms ease; }
 .hud-loading--done { opacity: 0; pointer-events: none; }
 .hud-loading > div { display: grid; gap: 10px; width: min(300px, 80vw); }

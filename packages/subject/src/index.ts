@@ -2,6 +2,7 @@ export { CharacterController, BODY_LAYER, type AlsFootstepSoundRequest, type Cha
 export { CharacterOverlay, CharacterPause, TouchControls, useCharacterStatus, useTouchActive, type CharacterOverlayProps } from './character/CharacterOverlay'
 export { CHARACTER_AIM_ASSIST, CHARACTER_EYE, CHARACTER_JUMP, CHARACTER_LOOK, CHARACTER_RUMBLE, createCharacterController, type CharacterCheckMove, type CharacterConfig, type CharacterHandle, type CharacterDriver, type CharacterEye, type CharacterJump, type CharacterLook, type CharacterStart, type CharacterWorld, type CharacterRumble, type CharacterStatus, type CharacterTouch, type CharacterView, type CharacterWeapon } from './character/state'
 export { CHARACTER_GLYPHS, PAD_LOOK, PAD_MOVE_DEAD_ZONE, aimCandidates, characterActions, characterBindings, characterInput, padLookDegrees, type AimTarget, type CharacterCapabilities, type PadLook } from './input'
+export { CHARACTER_FLY, type CharacterFly } from './character/fly'
 export { createLocalClock, useLocalSession, type LocalClock } from './session'
 export { readActionIntent, type ActionIntent, type IntentLatch } from './intent'
 export { Replication, REMOTE_INTERPOLATION_MS, SNAPSHOT_RATE_HZ, pawnYaw, type Replica, type ReplicationProps, type ReplicationStatus } from './character/Replication'
