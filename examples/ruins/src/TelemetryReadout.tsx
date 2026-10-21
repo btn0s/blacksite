@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { DebugBlock } from '@blacksite/inspect/react'
 import type { MeshletScene, MeshletStats } from '@blacksite/geometry'
 import type { MotionProbe, WebGPULook } from '@blacksite/look/webgpu'
 
@@ -37,7 +38,7 @@ export function TelemetryReadout({ look, geometry, selection }: { look: { curren
     return () => clearInterval(interval)
   }, [geometry, look])
   if (!lines.length) return null
-  return <aside aria-label="Render telemetry" style={{ position: 'fixed', left: 16, bottom: 16, zIndex: 20, pointerEvents: 'none', font: '11px/1.35 monospace', color: '#cfe3d4', background: 'rgba(8,14,12,0.78)', padding: '6px 8px', borderRadius: 6, maxWidth: 420 }}>
-    {lines.map(line => <div key={line.id} style={{ color: line.bad ? '#ff9a7a' : '#8fd6a3' }}>{line.id} {line.label}: {line.detail}</div>)}
-  </aside>
+  return <DebugBlock>
+    {lines.map(line => <div key={line.id} style={{ color: line.bad ? '#ff9a7a' : undefined }}>{line.id} {line.label}: {line.detail}</div>)}
+  </DebugBlock>
 }
