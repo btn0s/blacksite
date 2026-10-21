@@ -73,7 +73,7 @@ export function Compass({ heading }: { heading: () => number }) {
       const degrees = ((latest.current() * 180 / Math.PI) % 360 + 360) % 360
       if (strip.current) strip.current.style.transform = `translate3d(${-(degrees + 360) * COMPASS_PX_PER_DEGREE}px, 0, 0)`
       const whole = Math.round(degrees) % 360
-      if (reading.current && whole !== shown) { shown = whole; reading.current.textContent = `${String(whole).padStart(3, '0')}°` }
+      if (reading.current && whole !== shown) { shown = whole; reading.current.textContent = String(whole).padStart(3, '0') }
     }
     tick()
     return () => cancelAnimationFrame(frame)
