@@ -1,7 +1,7 @@
 .bs-debug {
   position: absolute;
-  top: calc(40px + env(safe-area-inset-top));
-  left: max(16px, env(safe-area-inset-left));
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
   z-index: 30;
   max-width: calc(100vw - 340px);
   opacity: 0.75;
