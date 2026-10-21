@@ -1,4 +1,4 @@
-import type { Node } from 'three/webgpu'
+import type { Node, Texture } from 'three/webgpu'
 import { Fn, If, clamp, dot, float, floor, fract, ivec2, max, min, mix, normalize, sin, smoothstep, sqrt, texture, textureLoad, uniform, vec2, vec3, wgslFn } from 'three/tsl'
 import type { TerrainUniforms } from './terrain'
 import type { Wind } from './wind'
@@ -52,16 +52,18 @@ export function createTerrainNodes(source: TerrainUniforms) {
     const u = root.sub(near.xy)
     return smoothstep(0, band, min(min(u.x, u.y), min(near.z.sub(u.x), near.z.sub(u.y))))
   })
-  const fetchHeight = (image: typeof source.terrainHeightNear.value, info: Node<'vec4'>, root: Node<'vec2'>) => {
+  // Bilinear texel loads need no sampler, which keeps materials that add these maps under the 16-sampler limit.
+  const fetchTexel = (image: Texture, info: Node<'vec4'>, root: Node<'vec2'>) => {
     const g = clamp(root.sub(info.xy).div(info.z).mul(info.w.sub(1)), vec2(0), vec2(info.w.sub(1.001)))
     const i = ivec2(floor(g))
     const f = fract(g)
-    const a = textureLoad(image, i).r
-    const b = textureLoad(image, i.add(ivec2(1, 0))).r
-    const c = textureLoad(image, i.add(ivec2(0, 1))).r
-    const d = textureLoad(image, i.add(ivec2(1, 1))).r
+    const a = textureLoad(image, i)
+    const b = textureLoad(image, i.add(ivec2(1, 0)))
+    const c = textureLoad(image, i.add(ivec2(0, 1)))
+    const d = textureLoad(image, i.add(ivec2(1, 1)))
     return mix(mix(a, b, f.x), mix(c, d, f.x), f.y)
   }
+  const fetchHeight = (image: Texture, info: Node<'vec4'>, root: Node<'vec2'>) => fetchTexel(image, info, root).r
   const height = Fn(([root]: [Node<'vec2'>]) => {
     const w = weight(root)
     const value = fetchHeight(source.terrainHeightFar.value, far, root).toVar()
@@ -76,8 +78,8 @@ export function createTerrainNodes(source: TerrainUniforms) {
   }
   const edgeRange = uniform(source.terrainEdgeRange.value)
   const nearHeight = Fn(([root]: [Node<'vec2'>]) => fetchHeight(source.terrainHeightNear.value, near, root))
-  const nearSurface = (root: Node<'vec2'>) => texture(source.terrainSurfaceNear.value, uv(near, root)).level(float(0))
-  const edge = (root: Node<'vec2'>) => texture(source.terrainEdge.value, uv(near, root)).level(float(0)).r.mul(2).sub(1).mul(edgeRange)
+  const nearSurface = (root: Node<'vec2'>) => fetchTexel(source.terrainSurfaceNear.value, near, root)
+  const edge = (root: Node<'vec2'>) => fetchTexel(source.terrainEdge.value, near, root).r.mul(2).sub(1).mul(edgeRange)
   const normal = Fn(([sample]: [Node<'vec4'>]) => {
     const xz = sample.xy.mul(2).sub(1)
     return normalize(vec3(xz.x, sqrt(max(float(1).sub(dot(xz, xz)), 0.02)), xz.y))
