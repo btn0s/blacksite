@@ -4,18 +4,20 @@ import { Physics } from '@react-three/rapier'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { WebGPURenderer } from 'three/webgpu'
 import { InputProvider, makeInputDevices } from '@blacksite/input'
-import { BODY_LAYER, CharacterController, CharacterOverlay, CharacterPause, useCharacterStatus, useLocalSession, type CharacterEvents, type CharacterHandle } from '@blacksite/subject'
+import { BODY_LAYER, CharacterController, CharacterOverlay, CharacterPause, useCharacterStatus, useLocalSession, useTouchActive, type CharacterEvents, type CharacterHandle } from '@blacksite/subject'
 import { MeshletScene, type MeshletStats } from '@blacksite/geometry'
 import { createInspector } from '@blacksite/inspect'
 import { DebugBlock, InspectHud } from '@blacksite/inspect/react'
 import { WebGPULook } from '@blacksite/look/webgpu-r3f'
 import type { WebGPULook as Look, WebGPULookStage } from '@blacksite/look/webgpu'
-import { Loading } from '@blacksite/ui/hud'
+import { Compass, Loading, Notice } from '@blacksite/ui/hud'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import { AlsPhysicsStepper } from 'als-ue5-r3f/app/AlsPhysicsStepper'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { createWalker } from '../../valley/src/walker'
 import { wearSurvivor } from './survivor'
+import { AxesGizmo } from '../../shared/AxesGizmo'
+import { Screenshot } from '../../shared/Screenshot'
 import { SceneInspection, type InspectionContent, type TelemetryAction } from '../../shared/Inspection'
 import { createScanMaterialStreaming, residentScanTextures } from '../../shared/scan-material'
 import { loadRuins, type RuinsAsset } from './asset'
@@ -30,7 +32,12 @@ import { ruinsViews, ruinsNearRadius, createRuinsCameras, type RuinsView } from 
 
 const shadowLayers = [2]
 const disabledStages = (new URLSearchParams(location.search).get('off') ?? '').split(',').filter(Boolean) as WebGPULookStage[]
-const glyphs = { home: { label: 'Spawn', keyboard: 'R', touch: 'Home', gamepad: { xbox: 'View', playstation: 'Create', generic: 'Back' } } }
+const glyphs = {
+  home: { label: 'Spawn', keyboard: 'R', touch: 'Home', gamepad: { xbox: 'View', playstation: 'Create', generic: 'Back' } },
+  screenshot: { label: 'Screenshot', keyboard: 'P', gamepad: { generic: 'P key' } },
+}
+const noticeMs = 2200
+const touchGizmoBottom = 230
 const outwardReach = 1e30
 const nearTimeoutMs = 20000
 const loadingFrameMs = 6
@@ -38,9 +45,11 @@ const loadingUploadBytes = 32 * 1048576
 const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
 const lodLegend = [{ color: '#ffc1aa', label: 'Source · 0' }, { color: '#adc4ef', label: 'Level 1' }, { color: '#e3ffa3', label: 'Level 2' }]
 
-function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, telemetry, shared, onStats, onReady }: {
+function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, telemetry, shared, gizmoBottom, onStats, onReady, onSaved }: {
   onStats(value: MeshletStats): void
   onReady(): void
+  onSaved(file: string): void
+  gizmoBottom: number
   owned: RuinsAsset
   geometry: MeshletScene
   flames: ScanFlames
@@ -180,7 +189,14 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
       {landscape && <TerrainCollision asset={landscape} />}
     </Physics>
     <SceneInspection name="ruins" look={shared.look} warm={shared.warm} walker={walker} inspector={inspector} telemetry={telemetry} content={content} />
+    <Screenshot name="ruins" look={shared.look} warm={shared.warm} walker={walker} onSaved={onSaved} />
+    <AxesGizmo bottom={gizmoBottom} />
   </>
+}
+
+function FlyDisplay({ walker }: { walker: CharacterHandle }) {
+  const { flying } = useCharacterStatus(walker)
+  return <DebugBlock><div>Flying {flying ? 'on' : 'off'} · double-tap jump</div></DebugBlock>
 }
 
 function ContactDisplay({ shared }: { shared: { collision: { current: RegionalCollision | null } } }) {
@@ -207,7 +223,7 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
   const [flames, setFlames] = useState<ScanFlames | null>(null)
   const [selection, setSelection] = useState<MeshletStats | null>(null)
   const home = owned.home
-  const walker = useMemo(() => createWalker(home, runtime), [home, runtime])
+  const walker = useMemo(() => createWalker(home, runtime, {}), [home, runtime])
   const cameras = useMemo(() => createRuinsCameras(owned.views), [owned])
   const [view] = useState<RuinsView>(() => {
     const requested = new URLSearchParams(location.search).get('view')
@@ -218,6 +234,19 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
     for (const camera of Object.values(cameras)) camera.layers.enable(BODY_LAYER)
   }, [cameras, view, walker])
   const status = useCharacterStatus(walker)
+  const touch = useTouchActive()
+  const [saved, setSaved] = useState(false)
+  const savedTimer = useRef(0)
+  const onSaved = useCallback(() => {
+    clearTimeout(savedTimer.current)
+    setSaved(true)
+    savedTimer.current = window.setTimeout(() => setSaved(false), noticeMs)
+  }, [])
+  useEffect(() => () => clearTimeout(savedTimer.current), [])
+  const heading = useMemo(() => {
+    const direction = new Vector3()
+    return () => { cameras[view].getWorldDirection(direction); return Math.atan2(direction.x, -direction.z) }
+  }, [cameras, view])
   const session = useLocalSession(walker)
   const shared = useMemo(() => ({ look: { current: null as Look | null }, warm: { current: 0 }, geometry: { current: null as MeshletScene | null }, collision: { current: null as RegionalCollision | null } }), [])
   const inspector = useMemo(() => createInspector({ renderer: 'WebGPU', tier: 'high', windowFrames: 600, onViewChange: view => { shared.geometry.current?.setDebugView(view === 'lod' ? 'lod' : 'normal'); shared.look.current?.setDebug(view === 'lod') } }), [shared])
@@ -240,14 +269,17 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
   }, [owned])
   return <>
     <Canvas frameloop="always" shadows dpr={1} camera={cameras[view]} gl={renderer}>
-      {geometry && flames && <Scene owned={owned} geometry={geometry} flames={flames} walker={walker} gameplayCamera={cameras.spawn} inspector={inspector} telemetry={telemetry} shared={shared} onStats={setSelection} onReady={onReady} />}
+      {geometry && flames && <Scene owned={owned} geometry={geometry} flames={flames} walker={walker} gameplayCamera={cameras.spawn} inspector={inspector} telemetry={telemetry} shared={shared} gizmoBottom={touch ? touchGizmoBottom : 16} onStats={setSelection} onReady={onReady} onSaved={onSaved} />}
     </Canvas>
     <InspectHud inspector={inspector} lodLegend={lodLegend} dump={{ onDump: () => { void telemetry.current?.() }, status: dumpStatus, message: `${owned.placements.length.toLocaleString()} placements | ${(owned.manifest.minimumWorldError * 1000).toFixed(0)} mm geometry cap` }}>
       <SelectionDisplay selection={selection} sourceTriangles={owned.sourceTriangles} cappedTriangles={owned.cappedTriangles} />
       <TelemetryReadout look={shared.look} geometry={geometry} selection={selection} />
+      <FlyDisplay walker={walker} />
       <ContactDisplay shared={shared} />
     </InspectHud>
-    <CharacterOverlay controller={walker} visible={view === 'spawn'} glyphs={glyphs} hints={['move', 'sprint', 'jump', 'roll', 'home']} prompt="Click to look around · T saves telemetry" buttons={[{ id: 'jump', label: 'Jump' }, { id: 'roll', label: 'Roll' }, { id: 'crouch', label: 'Crouch' }, { id: 'home', label: 'Home' }]} />
+    <Compass heading={heading} />
+    <Notice text="Saved screenshot" visible={saved} />
+    <CharacterOverlay controller={walker} visible={view === 'spawn'} glyphs={glyphs} hints={['move', 'sprint', 'jump', 'roll', 'fly', 'home', 'screenshot']} prompt="Click to look around · T saves telemetry" buttons={[{ id: 'jump', label: 'Jump' }, { id: 'roll', label: 'Roll' }, { id: 'crouch', label: 'Crouch' }, { id: 'home', label: 'Home' }]} />
     {status.paused && view === 'spawn' && <CharacterPause controller={walker} items={[{ id: 'home', label: 'Return to spawn', onPress: () => { walker.setPaused(false); void shared.collision.current?.prepare(new Vector3(...home.position)).then(() => { walker.respawn(undefined, [...home.position]); walker.face(new Vector3(...home.target)) }) } }]} />}
   </>
 }

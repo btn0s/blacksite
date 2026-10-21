@@ -68,6 +68,7 @@ export const CHARACTER_GLYPHS: GlyphMap = {
   crouch: { label: 'Crouch', keyboard: 'C', gamepad: { xbox: 'B', playstation: '○', generic: 'B' } },
   walk: { label: 'Walk', keyboard: 'Alt', gamepad: { xbox: 'LS ½', playstation: 'L ½', generic: 'LS ½' } },
   jump: { label: 'Jump', keyboard: 'Space', gamepad: { xbox: 'A', playstation: '✕', generic: 'A' } },
+  fly: { label: 'Fly', keyboard: 'Space ×2', touch: 'Jump ×2', gamepad: { xbox: 'A ×2', playstation: '✕ ×2', generic: 'A ×2' } },
   roll: { label: 'Roll', keyboard: 'Shift tap', gamepad: { xbox: 'RB', playstation: 'R1', generic: 'RB' } },
   ragdoll: { label: 'Fall / up', keyboard: 'X', gamepad: { xbox: 'D-pad ←', playstation: 'D-pad ←', generic: 'D-pad ←' } },
   shoulder: { label: 'Shoulder', keyboard: 'E', gamepad: { xbox: 'R3', playstation: 'R3', generic: 'R3' } },

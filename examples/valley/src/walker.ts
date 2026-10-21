@@ -1,5 +1,5 @@
 import type { Binding, InputRuntime } from '@blacksite/input'
-import { createCharacterController, type CharacterHandle } from '@blacksite/subject'
+import { createCharacterController, type CharacterFly, type CharacterHandle } from '@blacksite/subject'
 import { camera, input as tuning, type ValleyBookmark } from './model'
 
 const DEG = Math.PI / 180
@@ -16,7 +16,7 @@ export const VALLEY_GLYPHS = {
 
 export const yawOf = (heading: number) => -heading - Math.PI / 2
 
-export function createWalker(bookmark: ValleyBookmark, input: InputRuntime): CharacterHandle {
+export function createWalker(bookmark: ValleyBookmark, input: InputRuntime, fly?: Partial<CharacterFly>): CharacterHandle {
   const spawn = bookmark.position
   const dx = bookmark.target[0] - spawn[0], dz = bookmark.target[2] - spawn[2]
   const yaw = Math.atan2(-dx, -dz)
@@ -28,5 +28,6 @@ export function createWalker(bookmark: ValleyBookmark, input: InputRuntime): Cha
     look: { touchScale: tuning.touchScale, pitchMin: tuning.pitchMin * DEG, pitchMax: tuning.pitchMax * DEG },
     bindings: VALLEY_BINDINGS,
     input,
+    fly,
   })
 }

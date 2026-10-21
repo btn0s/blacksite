@@ -135,7 +135,7 @@ export function SceneInspection({ name, look, warm, walker, inspector, telemetry
           features: [...device.features],
         },
         viewport: { width: size.width, height: size.height, pixelRatio: renderer.getPixelRatio() },
-        player: { position: walker.position.toArray(), velocity: walker.velocity.toArray(), grounded: walker.grounded, gait: walker.als.pose.current.character?.gait, yaw: walker.control.yaw, pitch: walker.control.pitch, view: sampleView(camera) },
+        player: { position: walker.position.toArray(), velocity: walker.velocity.toArray(), grounded: walker.grounded, flying: walker.flying, gait: walker.als.pose.current.character?.gait, yaw: walker.control.yaw, pitch: walker.control.pitch, view: sampleView(camera) },
         stats: stats.metrics,
         history: inspector.history(),
         view: stats.view,
