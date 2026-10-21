@@ -1,47 +1,77 @@
-import { fbm, smoothstep, valueNoise } from '../../../packages/landscape/src/random.ts'
+import { fbm, ridged, smoothstep, valueNoise } from '../../../packages/landscape/src/random.ts'
 
 export const world = {
   nearExtent: 4096, nearSize: 2049, farExtent: 16384, farSize: 2049, band: 256,
-  centre: [64, 384], seaLevel: 0, underLevel: 0.75, rimLip: 0.06, screening: 140, envelope: 900, padding: 160,
+  centre: [-1250, 350], seaLevel: -300, underLevel: 0.75, rimLip: 0.06, screening: 140, envelope: 250, padding: 160,
 }
 
-const mix = (a, b, t) => a + (b - a) * t
-const coastWest = z => -48 + 34 * Math.sin(z / 260 + 1.1) + 18 * Math.sin(z / 97)
-const coastSouth = x => 455 + 40 * Math.sin(x / 190) + 22 * Math.sin(x / 63 + 2)
+const valley = { west: -3300, south: 1900, floor: -250, shelf: 120, rim: 0, foot: 880 }
 
-function seaDepth(x, z) {
-  const west = coastWest(z) - x
-  const south = z - coastSouth(x) - 4000 * smoothstep(260, 620, x)
-  return Math.max(west, south)
+const mix = (a, b, t) => a + (b - a) * t
+const bump = (value, centre, width) => Math.exp(-(((value - centre) / width) ** 2))
+const smoothMin = (a, b, k) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k / 4 }
+
+const coastLine = x => -1480 + 70 * Math.sin(x / 380 + 1) + 40 * Math.sin(x / 120)
+const frontEdge = [[-400, -923], [-300, -899], [-200, -920], [-100, -945], [0, -959], [100, -964], [200, -976], [300, -958], [500, -1090], [600, -1060], [700, -1063], [1100, -1225], [1700, -1060], [2000, -1000]]
+function edgeEast(z) {
+  let index = 0
+  while (index < frontEdge.length - 2 && z > frontEdge[index + 1][0]) index++
+  const [z0, x0] = frontEdge[index], [z1, x1] = frontEdge[index + 1]
+  return mix(x0, x1, smoothstep(z0, z1, z)) + 25 * Math.sin(z / 170)
+}
+const edgeWest = z => valley.west + 220 * Math.sin(z / 800 + 1.3) + 90 * Math.sin(z / 310)
+const edgeSouth = x => valley.south + 160 * Math.sin(x / 700) + 80 * Math.sin(x / 260 + 1)
+
+function landform(x, z) {
+  const ex = Math.max(edgeWest(z) - x, x - edgeEast(z), 0)
+  const ez = Math.max(z - edgeSouth(x), 0)
+  return { e: Math.hypot(ex, ez), sea: coastLine(x) - z }
+}
+
+function floorHeight(z) {
+  const inland = valley.floor + 25 * smoothstep(-1200, 1900, z)
+  return mix(-297, inland, smoothstep(-1520, -1050, z))
+}
+
+function seabed(sea) {
+  return world.seaLevel - 28 * smoothstep(0, 300, sea) - 170 * smoothstep(300, 4000, sea) - 150 * smoothstep(4000, 9000, sea)
 }
 
 export function macro(x, z) {
-  const depth = seaDepth(x, z)
-  const sea = smoothstep(-30, 130, depth)
-  const inland = smoothstep(0, 150, -depth)
-  const plateau = 42 + 56 * smoothstep(0, 270, x) + 12 * smoothstep(270, 1600, x)
-  const land = 3 + plateau * inland
-  const floor = -3 - 25 * smoothstep(10, 480, depth)
-  return mix(land, floor, sea)
+  const { e, sea } = landform(x, z)
+  const floor = floorHeight(z)
+  const front = floor + (valley.rim - valley.floor) * (e / valley.foot) ** 3.2
+  const shelf = valley.shelf - 60 * smoothstep(2500, 3600, e)
+  const reach = Math.max(smoothstep(-1500, -3300, x), smoothstep(400, 2000, z))
+  const crest = (330 + 170 * reach) * (0.55 + 0.9 * ridged(x / 1100, z / 1100, 3, 401))
+  const high = smoothMin(front, shelf, 80) + crest * bump(e, 2300, 450)
+  const land = floor + (high - floor) * mix(0.2, 1, smoothstep(-1500, -450, z))
+  return mix(land, seabed(sea), smoothstep(-60, 140, sea))
 }
 
 export function hills(x, z, detail = true) {
-  const depth = seaDepth(x, z)
-  const land = 1 - smoothstep(-20, 140, depth)
-  const broad = (fbm(x / 900, z / 900, 3, 301) - 0.5) * 46
-  const mid = (fbm(x / 230, z / 230, 3, 311) - 0.5) * 17
+  const { e, sea } = landform(x, z)
+  const land = 1 - smoothstep(-20, 150, sea)
+  const mountain = smoothstep(450, 1100, e)
+  const broad = (fbm(x / 700, z / 700, 3, 301) - 0.5) * 110
+  const mid = (fbm(x / 230, z / 230, 3, 311) - 0.5) * 28
   const fine = (fbm(x / 47, z / 47, 2, 317) - 0.5) * 2.6
   const grain = (valueNoise(x / 9, z / 9, 331) - 0.5) * 0.4
   const ripple = (valueNoise(x / 31, z / 31, 337) - 0.5) * 0.5
-  return (broad + mid + (detail ? fine + grain : 0)) * land + (detail ? ripple : 0) * (1 - land)
+  const crags = (ridged(x / 380, z / 380, 4, 411) - 0.35) * 90
+  const floorHills = broad + mid + (detail ? fine + grain : 0)
+  const mountainHills = broad * 1.2 + crags + (detail ? (ridged(x / 110, z / 110, 3, 419) - 0.3) * 22 + fine : 0)
+  return mix(floorHills, mountainHills, mountain) * land + (detail ? ripple : 0) * (1 - land)
 }
 
 export function surfaceMasks(x, z, height, slope, rimDistance) {
-  const shore = 1 - smoothstep(1.5, 8 + 5 * (valueNoise(x / 40, z / 40, 347) - 0.5), height)
-  const sand = Math.min(1, shore + (1 - smoothstep(1, 14, height)) * 0.4)
+  const above = height - world.seaLevel
+  const shore = 1 - smoothstep(2, 9 + 5 * (valueNoise(x / 40, z / 40, 347) - 0.5), above)
+  const sand = Math.min(1, shore + (1 - smoothstep(1, 16, above)) * 0.4)
   const patches = smoothstep(0.52, 0.78, fbm(x / 85, z / 85, 3, 353))
   const apron = (1 - smoothstep(10, 60, rimDistance)) * (0.55 + 0.45 * valueNoise(x / 14, z / 14, 359))
-  const soil = Math.min(1, patches * 0.9 + apron + smoothstep(0.09, 0.2, slope) * 0.6)
+  const altitude = smoothstep(240, 430, height + (fbm(x / 160, z / 160, 3, 431) - 0.5) * 90)
+  const soil = Math.min(1, patches * 0.9 + apron + smoothstep(0.09, 0.2, slope) * 0.6 + altitude * 0.9)
   return [soil * (1 - sand), sand]
 }
 
