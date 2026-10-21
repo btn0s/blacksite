@@ -1,12 +1,13 @@
 import {
-  BufferAttribute, BufferGeometry, Color, DataTexture, DynamicDrawUsage, Frustum, Group, InstancedBufferAttribute, InstancedMesh,
-  Matrix4, MeshDepthMaterial, MeshStandardMaterial, RGBADepthPacking, Sphere, Vector2, Vector3, Vector4,
+  BufferAttribute, BufferGeometry, DataTexture, DynamicDrawUsage, Frustum, Group, InstancedBufferAttribute, InstancedMesh,
+  Matrix4, Sphere, Vector2, Vector3, Vector4,
 } from 'three'
 import type { Camera, DataArrayTexture, Material } from 'three'
 import { heightAt as fieldHeight, heightTexture, type Heightfield } from './heightfield'
-import { patchMaterial, replaceChunk } from './patch'
-import { NOISE_GLSL } from './wind'
-import { ANTI_TILING_GLSL } from './tiling'
+import type { MeshStandardNodeMaterial } from 'three/webgpu'
+import type { CoverGround } from './nodes'
+import { createTerrainMaterial } from './terrain-nodes'
+import type { ForestCoverage } from './forest-coverage'
 
 export interface TerrainSources {
   readonly near: Heightfield
@@ -15,57 +16,6 @@ export interface TerrainSources {
   readonly farSurface: DataTexture
   readonly band?: number
 }
-
-export const TERRAIN_GLSL = /* glsl */ `
-uniform sampler2D terrainHeightNear;
-uniform sampler2D terrainHeightFar;
-uniform sampler2D terrainSurfaceNear;
-uniform sampler2D terrainSurfaceFar;
-uniform vec4 terrainNear;
-uniform vec4 terrainFar;
-uniform float terrainBand;
-float terrainFetch(sampler2D tex, vec4 info, vec2 xz) {
-  float n = info.w;
-  vec2 g = clamp((xz - info.xy) / info.z * (n - 1.0), vec2(0.0), vec2(n - 1.001));
-  ivec2 i = ivec2(floor(g));
-  vec2 f = g - vec2(i);
-  float a = texelFetch(tex, i, 0).r;
-  float b = texelFetch(tex, i + ivec2(1, 0), 0).r;
-  float c = texelFetch(tex, i + ivec2(0, 1), 0).r;
-  float d = texelFetch(tex, i + ivec2(1, 1), 0).r;
-  return a + (b - a) * f.x + (c - a) * f.y + (a - b - c + d) * f.x * f.y;
-}
-float terrainNearWeight(vec2 xz) {
-  vec2 u = xz - terrainNear.xy;
-  float edge = min(min(u.x, u.y), min(terrainNear.z - u.x, terrainNear.z - u.y));
-  return smoothstep(0.0, terrainBand, edge);
-}
-float terrainHeight(vec2 xz) {
-  float w = terrainNearWeight(xz);
-  float far = terrainFetch(terrainHeightFar, terrainFar, xz);
-  if (w <= 0.0) return far;
-  return mix(far, terrainFetch(terrainHeightNear, terrainNear, xz), w);
-}
-vec2 terrainUv(vec4 info, vec2 xz) {
-  return ((xz - info.xy) / info.z * (info.w - 1.0) + 0.5) / info.w;
-}
-vec4 terrainSurfaceLod(vec2 xz, float lod) {
-  float w = terrainNearWeight(xz);
-  vec4 far = textureLod(terrainSurfaceFar, terrainUv(terrainFar, xz), lod);
-  if (w <= 0.0) return far;
-  return mix(far, textureLod(terrainSurfaceNear, terrainUv(terrainNear, xz), lod), w);
-}
-vec4 terrainSurface(vec2 xz) {
-  float w = terrainNearWeight(xz);
-  vec4 far = texture(terrainSurfaceFar, terrainUv(terrainFar, xz));
-  vec4 near = texture(terrainSurfaceNear, terrainUv(terrainNear, xz));
-  return mix(far, near, w);
-}
-vec3 terrainNormalOf(vec4 surface) {
-  vec2 xz = surface.xy * 2.0 - 1.0;
-  return normalize(vec3(xz.x, sqrt(max(1.0 - dot(xz, xz), 0.02)), xz.y));
-}
-`
 
 export interface TerrainUniforms {
   terrainHeightNear: { value: DataTexture }
@@ -112,11 +62,10 @@ export interface TerrainLayerSpec {
 
 export interface CanopySpec {
   readonly height: number
-  readonly start: number
-  readonly end: number
-  readonly color: readonly [number, number, number]
-  readonly shade: readonly [number, number, number]
   readonly crown: number
+  readonly forest: ForestCoverage
+  readonly colors: readonly [readonly [number, number, number], readonly [number, number, number]]
+  readonly broadleaf?: number
   readonly dither?: boolean
 }
 
@@ -125,21 +74,23 @@ export interface TerrainOptions {
   readonly uniforms?: TerrainUniforms
   readonly layers: { readonly color: DataArrayTexture; readonly normal: DataArrayTexture; readonly averages: readonly (readonly [number, number, number])[] }
   readonly layerSpecs: readonly [TerrainLayerSpec, TerrainLayerSpec, TerrainLayerSpec, TerrainLayerSpec]
-  readonly canopy: CanopySpec
   readonly leafSize?: number
   readonly grid?: number
   readonly rangeFactor?: number
   readonly detailDistance?: number
   readonly shadowDistance?: number
-  readonly cover?: { readonly ground: string }
+  readonly cover?: { readonly ground: CoverGround }
+  readonly canopy?: CanopySpec
 }
 
 export interface Terrain {
   readonly object: Group
   readonly uniforms: TerrainUniforms
-  readonly material: MeshStandardMaterial
+  readonly material: MeshStandardNodeMaterial
   readonly materials: readonly Material[]
-  readonly stats: { nodes: number }
+  readonly stats: { nodes: number; candidateNodes: number; culledNodes: number; sceneTriangles: number; drawnTriangles: number; fullDetailTriangles: number }
+  setLodView(enabled: boolean): void
+  setLodEnabled(enabled: boolean): void
   update(camera: Camera): void
   heightAt(x: number, z: number): number
   dispose(): void
@@ -148,6 +99,7 @@ export interface Terrain {
 function gridGeometry(cells: number) {
   const geometry = new BufferGeometry()
   const vertices = new Float32Array((cells + 1) * (cells + 1) * 3)
+  const normals = new Float32Array(vertices.length)
   let cursor = 0
   for (let j = 0; j <= cells; j++) for (let i = 0; i <= cells; i++) { vertices[cursor++] = i; vertices[cursor++] = 0; vertices[cursor++] = j }
   const indices = new Uint32Array(cells * cells * 6)
@@ -161,190 +113,16 @@ function gridGeometry(cells: number) {
     cursor += 6
   }
   geometry.setAttribute('position', new BufferAttribute(vertices, 3))
+  for (let index = 1; index < normals.length; index += 3) normals[index] = 1
+  geometry.setAttribute('normal', new BufferAttribute(normals, 3))
   geometry.setIndex(new BufferAttribute(indices, 1))
   return geometry
 }
 
 const MAX_LEVELS = 14
 
-const VERTEX_HEAD = /* glsl */ `
-attribute vec4 nodeInfo;
-uniform vec3 terrainViewer;
-uniform vec2 terrainMorph[${MAX_LEVELS}];
-uniform vec4 canopyParams;
-varying vec3 vTerrainWorld;
-varying float vTerrainCanopy;
-`
-
-const VERTEX_BODY = /* glsl */ `
-vec2 bsGrid = position.xz;
-vec2 bsXZ = nodeInfo.xy + bsGrid * nodeInfo.z;
-float bsHeight = terrainHeight(bsXZ);
-float bsDistance = distance(vec3(bsXZ.x, bsHeight, bsXZ.y), terrainViewer);
-vec2 bsMorph = terrainMorph[int(nodeInfo.w + 0.5)];
-float bsK = clamp((bsDistance - bsMorph.x) / max(bsMorph.y - bsMorph.x, 1.0), 0.0, 1.0);
-bsGrid -= fract(bsGrid * 0.5) * 2.0 * bsK;
-bsXZ = nodeInfo.xy + bsGrid * nodeInfo.z;
-bsHeight = terrainHeight(bsXZ);
-bsDistance = distance(vec3(bsXZ.x, bsHeight, bsXZ.y), terrainViewer);
-float bsForest = terrainSurfaceLod(bsXZ, 2.0).b;
-float bsCanopy = smoothstep(0.35, 0.75, bsForest) * smoothstep(canopyParams.y, canopyParams.z, bsDistance);
-vTerrainCanopy = bsCanopy;
-vec3 transformed = vec3(bsXZ.x, bsHeight + bsCanopy * canopyParams.x, bsXZ.y);
-vTerrainWorld = transformed;
-`
-
-const FRAGMENT_HEAD = /* glsl */ `
-uniform sampler2DArray layerColor;
-uniform sampler2DArray layerNormal;
-uniform vec4 layerTile;
-uniform vec3 layerTint[4];
-uniform vec3 layerAverage[4];
-uniform vec4 layerRoughness;
-uniform vec4 layerNormalScale;
-uniform vec3 terrainViewer;
-uniform vec4 canopyParams;
-uniform vec3 canopyColor;
-uniform vec3 canopyShade;
-vec4 bsCrowns(vec2 p, uint salt, vec3 view, float fill, out float cover) {
-  vec2 cell = floor(p);
-  vec2 local = p - cell;
-  vec2 along = view.xy;
-  vec2 side = vec2(-along.y, along.x);
-  float sine = view.z;
-  float cosine = sqrt(max(1.0 - sine * sine, 0.0));
-  float squash = max(sine, 0.3);
-  vec2 stretch = vec2(sqrt(squash), inversesqrt(squash));
-  float top = -1e9;
-  cover = -1.0;
-  vec4 result = vec4(0.0, 1.0, 0.0, 0.5);
-  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-    ivec2 id = ivec2(cell) + ivec2(i, j);
-    vec2 centre = vec2(float(i), float(j)) + 0.2 + 0.6 * vec2(bsHash(id, salt), bsHash(id, salt + 2u));
-    float radius = (0.4 + 0.3 * bsHash(id, salt + 4u)) * fill;
-    vec2 r = local - centre;
-    vec2 e = vec2(dot(r, side), dot(r, along)) / (radius * stretch);
-    float d2 = dot(e, e);
-    float z = sqrt(max(1.0 - d2, 0.0));
-    float key = (z * radius + bsHash(id, salt + 6u) * 0.35) * sine - dot(centre, along) * cosine;
-    if (d2 < 1.0 && key > top) { top = key; cover = z; result = vec4(e, max(z, 0.14), bsHash(id, salt + 8u)); }
-  }
-  if (cover < 0.0) return result;
-  vec3 c = vec3(-along.x * cosine, sine, -along.y * cosine);
-  vec3 u = vec3(along.x * sine, cosine, along.y * sine);
-  vec3 s = vec3(side.x, 0.0, side.y);
-  return vec4(normalize(s * result.x + u * result.y + c * result.z), result.w);
-}
-uniform float terrainDetail;
-varying vec3 vTerrainWorld;
-varying float vTerrainCanopy;
-`
-
-const FRAGMENT_SPLAT = (cover: boolean) => /* glsl */ `
-vec4 bsSurface = terrainSurface(vTerrainWorld.xz);
-vec3 bsBase = terrainNormalOf(bsSurface);
-float bsDist = distance(vTerrainWorld, terrainViewer);
-float bsVariation = bsNoise(vTerrainWorld.xz * 0.045, 21u);
-float bsMacro = bsNoise(vTerrainWorld.xz * 0.011, 23u) * 0.6 + bsNoise(vTerrainWorld.xz * 0.06, 29u) * 0.4;
-float bsSlope = 1.0 - bsBase.y;
-vec4 bsWeights = vec4(1.0, 0.0, 0.0, 0.0);
-bsWeights.y = smoothstep(0.3, 0.75, bsSurface.b + (bsVariation - 0.5) * 0.25);
-bsWeights.z = smoothstep(0.25, 0.65, bsSurface.a + (bsVariation - 0.5) * 0.2);
-bsWeights.w = smoothstep(0.24, 0.42, bsSlope + (bsMacro - 0.5) * 0.12) * (1.0 - 0.85 * smoothstep(0.3, 0.6, bsSurface.b));
-bsWeights.x = 1.0;
-bsWeights.x *= (1.0 - bsWeights.y);
-bsWeights.y *= (1.0 - bsWeights.z);
-bsWeights.x *= (1.0 - bsWeights.z);
-bsWeights.xyz *= (1.0 - bsWeights.w);
-bsWeights /= max(dot(bsWeights, vec4(1.0)), 1e-4);
-vec3 bsAlbedo = vec3(0.0);
-vec3 bsAverage = vec3(0.0);
-for (int layer = 0; layer < 4; layer++) bsAverage += layerAverage[layer] * layerTint[layer] * bsWeights[layer];
-vec3 bsDetailNormal = vec3(0.0, 0.0, 1.0);
-float bsRough = dot(bsWeights, layerRoughness);
-float bsDetailFade = 1.0 - smoothstep(terrainDetail * 0.3, terrainDetail, bsDist);
-if (bsDetailFade > 0.0) {
-  vec3 tn = vec3(0.0);
-  vec3 col = vec3(0.0);
-  for (int layer = 0; layer < 4; layer++) {
-    float w = bsWeights[layer];
-    if (w < 0.01) continue;
-    vec2 uv = vTerrainWorld.xz / layerTile[layer];
-    BsTiles tiles = bsTilesAt(uv, float(layer));
-    col += bsTileSample(layerColor, uv, float(layer), tiles, vec4(layerAverage[layer], 1.0)).rgb * layerTint[layer] * w;
-    vec3 n = bsTileSample(layerNormal, uv, float(layer), tiles, vec4(0.5, 0.5, 1.0, 1.0)).xyz * 2.0 - 1.0;
-    tn += vec3(n.xy * layerNormalScale[layer], n.z) * w;
-  }
-  bsAlbedo = mix(bsAverage, col, bsDetailFade);
-  bsDetailNormal = normalize(mix(vec3(0.0, 0.0, 1.0), tn, bsDetailFade));
-} else {
-  bsAlbedo = bsAverage;
-}
-bsAlbedo *= 0.82 + bsMacro * 0.36;
-float bsDry = smoothstep(0.45, 0.85, bsNoise(vTerrainWorld.xz * 0.018, 31u) * 0.7 + bsNoise(vTerrainWorld.xz * 0.09, 37u) * 0.3);
-bsAlbedo = mix(bsAlbedo, bsAlbedo * vec3(1.3, 1.04, 0.6), bsDry * bsWeights.x * 0.7);
-${cover ? `vec4 bsCover = coverGround(vTerrainWorld.xz, bsSurface, bsSlope, vTerrainWorld.y, bsDist);
-float bsMottle = bsDetailFade > 0.0 ? (bsNoise(vTerrainWorld.xz * 1.9, 41u) * 0.6 + bsNoise(vTerrainWorld.xz * 5.3, 43u) * 0.4 - 0.5) * 0.36 * bsDetailFade : 0.0;
-bsAlbedo = mix(bsAlbedo, bsCover.rgb * (1.0 + bsMottle), bsCover.a);
-bsDetailNormal = normalize(mix(bsDetailNormal, vec3(0.0, 0.0, 1.0), bsCover.a));` : ''}
-vec3 bsT = normalize(cross(bsBase, vec3(0.0, 0.0, 1.0)));
-vec3 bsB = cross(bsT, bsBase);
-vec3 bsWorldNormal = normalize(bsT * bsDetailNormal.x - bsB * bsDetailNormal.y + bsBase * bsDetailNormal.z);
-if (vTerrainCanopy > 0.001) {
-  float footprint = length(fwidth(vTerrainWorld.xz));
-  float level = log2(footprint / (canopyParams.w * 0.3));
-  float lumpFade = 1.0 - smoothstep(3.6, 4.8, level);
-  level = clamp(level, 0.0, 3.0);
-  float l0 = min(floor(level), 2.0);
-  float lf = level - l0;
-  float s0 = canopyParams.w * exp2(l0);
-  vec3 bsToEye = cameraPosition - vTerrainWorld;
-  vec2 bsAway = -bsToEye.xz / max(length(bsToEye.xz), 1e-3);
-  vec3 bsGeo = normalize(cross(dFdx(vTerrainWorld), dFdy(vTerrainWorld)));
-  bsGeo *= sign(bsGeo.y + 1e-4);
-  vec3 bsEye = bsToEye / max(length(bsToEye), 1e-3);
-  float bsSteep = smoothstep(0.25, 0.65, 1.0 - min(bsGeo.y, bsBase.y));
-  vec3 bsView = vec3(bsAway, clamp(max(max(dot(bsEye, bsBase), dot(bsEye, bsGeo)), mix(0.3, 0.75, bsSteep)), 0.0, 1.0));
-  float bsStand = smoothstep(0.42, 0.62, bsNoise(vTerrainWorld.xz * 0.0024, 91u));
-  float bsLight = smoothstep(0.5, 0.72, bsNoise(vTerrainWorld.xz * 0.0041, 93u)) * (1.0 - bsStand);
-  float bsFill = mix(0.78, 1.08, bsNoise(vTerrainWorld.xz * 0.0031, 95u));
-  float k0;
-  float k1;
-#ifdef CANOPY_DITHER
-  float pick = step(fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))), lf);
-  vec4 c0 = bsCrowns(vTerrainWorld.xz / (s0 * (1.0 + pick)), pick > 0.5 ? 74u + uint(l0) * 13u : 61u + uint(l0) * 13u, bsView, bsFill, k0);
-  vec4 c1 = c0;
-  k1 = k0;
-#else
-  vec4 c0 = bsCrowns(vTerrainWorld.xz / s0, 61u + uint(l0) * 13u, bsView, bsFill, k0);
-  vec4 c1 = bsCrowns(vTerrainWorld.xz / (s0 * 2.0), 74u + uint(l0) * 13u, bsView, bsFill, k1);
-#endif
-  vec3 lump = normalize(mix(c0.xyz, c1.xyz, lf));
-  float top = mix(k0, k1, lf);
-  float rim = mix(max(k0, 0.0), max(k1, 0.0), lf);
-  float tone = mix(fract(c0.w), fract(c1.w), lf);
-  float covered = smoothstep(-0.6, 0.2, top);
-  float relief = 1.0 / (1.0 + level * 0.3);
-  vec3 canopyNormal = normalize(mix(bsBase, lump, (0.68 * covered + 0.15) * lumpFade * relief + 0.1));
-  float sunSide = 1.0;
-#if NUM_DIR_LIGHTS > 0
-  sunSide = smoothstep(-0.25, 0.55, dot(normalize((viewMatrix * vec4(lump, 0.0)).xyz), directionalLights[0].direction));
-#endif
-  float crownAo = mix(0.52 - 0.48 * relief, mix(0.16, 1.0, smoothstep(0.0, 0.75, rim)) * mix(0.28, 1.0, sunSide), covered);
-  vec3 standColor = canopyColor * mix(mix(vec3(1.0), vec3(1.22, 1.16, 0.8), bsLight), vec3(0.5, 0.68, 0.9), bsStand);
-  vec3 cellAlbedo = mix(canopyShade, standColor * (0.62 + tone * 0.76), crownAo);
-  vec3 meanAlbedo = mix(canopyShade, standColor * 0.95, 0.5 * bsFill);
-  vec3 canopyAlbedo = mix(meanAlbedo, cellAlbedo, lumpFade);
-  canopyAlbedo *= (0.85 + bsMacro * 0.3) * mix(0.84, 1.0, smoothstep(canopyParams.y, canopyParams.z + 450.0, bsDist));
-  bsAlbedo = mix(bsAlbedo, canopyAlbedo, vTerrainCanopy);
-  bsWorldNormal = normalize(mix(bsWorldNormal, canopyNormal, vTerrainCanopy));
-  bsRough = mix(bsRough, 0.9, vTerrainCanopy);
-}
-diffuseColor.rgb *= bsAlbedo;
-`
-
 export function createTerrain(options: TerrainOptions): Terrain {
-  const { sources, layers, layerSpecs, canopy } = options
+  const { sources } = options
   const leafSize = options.leafSize ?? 32
   const grid = options.grid ?? 32
   const rangeFactor = options.rangeFactor ?? 2.4
@@ -376,7 +154,7 @@ export function createTerrain(options: TerrainOptions): Terrain {
       const d = corners[(j + 1) * (side + 1) + i + 1]!
       const centre = terrainHeightAt(sources, rootOrigin.x + (i + 0.5) * leafSize, rootOrigin.y + (j + 0.5) * leafSize)
       min[j * side + i] = Math.min(a, b, c, d, centre) - 6
-      max[j * side + i] = Math.max(a, b, c, d, centre) + 6 + canopy.height
+      max[j * side + i] = Math.max(a, b, c, d, centre) + 6 + (options.canopy?.height ?? 0)
     }
     pyramid.push({ min, max, side })
     let current = pyramid[0]!
@@ -402,48 +180,8 @@ export function createTerrain(options: TerrainOptions): Terrain {
 
   const uniforms = options.uniforms ?? terrainUniforms(sources)
   const viewer = new Vector3()
-  const shared = {
-    terrainViewer: { value: viewer },
-    terrainMorph: { value: morph },
-    canopyParams: { value: new Vector4(canopy.height, canopy.start, canopy.end, canopy.crown) },
-  }
-  const fragmentUniforms = {
-    layerColor: { value: layers.color },
-    layerNormal: { value: layers.normal },
-    layerTile: { value: new Vector4(...layerSpecs.map(spec => spec.tile)) },
-    layerTint: { value: layerSpecs.map(spec => new Vector3(...spec.tint)) },
-    layerAverage: { value: layers.averages.map(average => new Vector3(...average)) },
-    layerRoughness: { value: new Vector4(...layerSpecs.map(spec => spec.roughness)) },
-    layerNormalScale: { value: new Vector4(...layerSpecs.map(spec => spec.normalScale)) },
-    canopyColor: { value: new Vector3(...canopy.color) },
-    canopyShade: { value: new Vector3(...canopy.shade) },
-    terrainDetail: { value: options.detailDistance ?? 260 },
-  }
-
-  const material = new MeshStandardMaterial({ name: 'world-terrain', color: new Color(1, 1, 1), roughness: 1, metalness: 0, envMapIntensity: 0.55 })
-  if (canopy.dither) material.defines = { CANOPY_DITHER: '' }
-  patchMaterial(material, `world-terrain-v4${options.cover ? `|${options.cover.ground}` : ''}`, shader => {
-    Object.assign(shader.uniforms, uniforms, shared, fragmentUniforms)
-    shader.vertexShader = `${NOISE_GLSL}\n${TERRAIN_GLSL}\n${VERTEX_HEAD}\n${shader.vertexShader}`
-    shader.vertexShader = replaceChunk(shader.vertexShader, 'beginnormal_vertex', `${VERTEX_BODY}\nvec3 objectNormal = mix(terrainNormalOf(terrainSurfaceLod(bsXZ, 0.0)), vec3(0.0, 1.0, 0.0), bsCanopy);`)
-    shader.vertexShader = replaceChunk(shader.vertexShader, 'begin_vertex', '')
-    shader.fragmentShader = `${NOISE_GLSL}\n${TERRAIN_GLSL}\n${ANTI_TILING_GLSL}\n${FRAGMENT_HEAD}\n${options.cover?.ground ?? ''}\n${shader.fragmentShader}`
-    shader.fragmentShader = replaceChunk(shader.fragmentShader, 'map_fragment', FRAGMENT_SPLAT(Boolean(options.cover)))
-    shader.fragmentShader = replaceChunk(shader.fragmentShader, 'roughnessmap_fragment', 'float roughnessFactor = roughness * bsRough;')
-    shader.fragmentShader = replaceChunk(shader.fragmentShader, 'normal_fragment_begin', `
-      vec3 normal = normalize((viewMatrix * vec4(bsWorldNormal, 0.0)).xyz);
-      vec3 nonPerturbedNormal = normalize((viewMatrix * vec4(bsBase, 0.0)).xyz);
-      float faceDirection = 1.0;
-    `)
-  })
-
-  const depth = new MeshDepthMaterial({ depthPacking: RGBADepthPacking })
-  patchMaterial(depth, 'world-terrain-depth-v1', shader => {
-    Object.assign(shader.uniforms, uniforms, shared)
-    shader.vertexShader = `${NOISE_GLSL}\n${TERRAIN_GLSL}\n${VERTEX_HEAD}\n${shader.vertexShader}`
-    shader.vertexShader = replaceChunk(shader.vertexShader, 'begin_vertex', VERTEX_BODY)
-  })
-
+  const { material, lodView } = createTerrainMaterial(options, uniforms, viewer, morph)
+  const baseRanges = [...ranges]
   const capacity = 1024
   const makeMesh = (cells: number) => {
     const geometry = gridGeometry(cells)
@@ -455,7 +193,6 @@ export function createTerrain(options: TerrainOptions): Terrain {
     mesh.frustumCulled = false
     mesh.receiveShadow = true
     mesh.castShadow = true
-    mesh.customDepthMaterial = depth
     mesh.matrixAutoUpdate = false
     for (let index = 0; index < capacity; index++) mesh.setMatrixAt(index, identity)
     return { mesh, info, cells }
@@ -474,7 +211,7 @@ export function createTerrain(options: TerrainOptions): Terrain {
   const sphere = new Sphere()
   const box = { min: new Vector3(), max: new Vector3() }
   const shadowDistance = options.shadowDistance ?? 220
-  const stats = { nodes: 0 }
+  const stats = { nodes: 0, candidateNodes: 0, culledNodes: 0, sceneTriangles: 0, drawnTriangles: 0, fullDetailTriangles: cellsPerSide * cellsPerSide * grid * grid * 2 }
 
   const nodeBounds = (level: number, i: number, j: number) => {
     const layer = pyramid[level]!
@@ -496,7 +233,11 @@ export function createTerrain(options: TerrainOptions): Terrain {
     return frustum.intersectsSphere(sphere)
   }
   const push = (target: typeof full, x: number, z: number, spacing: number, level: number) => {
-    if (target.mesh.count >= capacity) return
+    const triangles = target.cells * target.cells * 2
+    stats.candidateNodes++
+    stats.sceneTriangles += triangles
+    if (!visible() || target.mesh.count >= capacity) { stats.culledNodes++; return }
+    stats.drawnTriangles += triangles
     const offset = target.mesh.count * 4
     const array = target.info.array as Float32Array
     array[offset] = x
@@ -509,7 +250,6 @@ export function createTerrain(options: TerrainOptions): Terrain {
     nodeBounds(level, i, j)
     const distance = distanceToBox()
     if (distance > ranges[level]!) return false
-    if (!visible()) return true
     const size = leafSize * 2 ** level
     const x = rootOrigin.x + i * size
     const z = rootOrigin.y + j * size
@@ -527,12 +267,25 @@ export function createTerrain(options: TerrainOptions): Terrain {
     object,
     uniforms,
     material,
-    materials: [material, depth],
+    materials: [material],
     stats,
+    setLodView(enabled) { lodView.value = enabled },
+    setLodEnabled(enabled) {
+      for (let level = 0; level <= maxLevel; level++) {
+        ranges[level] = enabled ? baseRanges[level]! : baseRanges[level]! + 180
+        const end = level === maxLevel ? 1e9 : ranges[level]!
+        const start = level === 0 ? end * 0.7 : ranges[level - 1]! + (end - ranges[level - 1]!) * 0.55
+        morph[level]!.set(start, level === maxLevel ? 1e9 + 1 : end * 0.97)
+      }
+    },
     update(camera) {
       viewer.setFromMatrixPosition(camera.matrixWorld)
       projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
-      frustum.setFromProjectionMatrix(projection)
+      frustum.setFromProjectionMatrix(projection, camera.coordinateSystem)
+      stats.candidateNodes = 0
+      stats.culledNodes = 0
+      stats.sceneTriangles = 0
+      stats.drawnTriangles = 0
       full.mesh.count = 0
       quad.mesh.count = 0
       select(maxLevel, 0, 0)
@@ -548,7 +301,6 @@ export function createTerrain(options: TerrainOptions): Terrain {
     dispose() {
       for (const mesh of [full.mesh, quad.mesh]) { mesh.geometry.dispose(); mesh.dispose() }
       material.dispose()
-      depth.dispose()
     },
   }
 }

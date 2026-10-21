@@ -1,6 +1,9 @@
 export { isExpFog, normalize } from './atmosphere';
 export type { Atmosphere, CloudSpec, ExpFogSpec, FillSpec, FogSpec, GradeSpec, HeightFogSpec, LinearFogSpec, PhysicalSkySpec, Rgb, SkySpec, SunSpec, ToneCurve } from './atmosphere';
 export { AerialEffect } from './aerial';
+export { atmosphereTransmittance } from './transmittance';
+export { FILM_EXPOSURE, createFilm } from './film';
+export type { ExposureSettings, Film, FilmOptions, GradeGroup, Vec4 } from './film';
 export { GradeEffect } from './grade';
 export { POST_TUNING, createLook } from './look';
 export type { Look, LookOptions } from './look';

@@ -111,6 +111,10 @@ export function surfaceTexture(field: Heightfield, masks?: MaskSampler): DataTex
       data[index + 3] = Math.round(Math.min(1, Math.max(0, mask[1])) * 255)
     }
   }
+  return surfaceTextureFromData(data, size)
+}
+
+export function surfaceTextureFromData(data: Uint8Array, size: number): DataTexture {
   const texture = new DataTexture(data, size, size, RGBAFormat, UnsignedByteType)
   texture.minFilter = LinearMipmapLinearFilter
   texture.magFilter = LinearFilter
@@ -119,85 +123,4 @@ export function surfaceTexture(field: Heightfield, masks?: MaskSampler): DataTex
   texture.generateMipmaps = true
   texture.needsUpdate = true
   return texture
-}
-
-async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate'))
-  return new Uint8Array(await new Response(stream).arrayBuffer())
-}
-
-export async function decodeGrey16Png(buffer: ArrayBuffer): Promise<{ width: number; height: number; data: Uint16Array }> {
-  const bytes = new Uint8Array(buffer)
-  const view = new DataView(buffer)
-  const signature = [137, 80, 78, 71, 13, 10, 26, 10]
-  if (!signature.every((value, index) => bytes[index] === value)) throw new Error('Not a PNG')
-  let offset = 8
-  let width = 0
-  let height = 0
-  const chunks: Uint8Array[] = []
-  while (offset < bytes.length) {
-    const length = view.getUint32(offset)
-    const type = String.fromCharCode(bytes[offset + 4]!, bytes[offset + 5]!, bytes[offset + 6]!, bytes[offset + 7]!)
-    const body = bytes.subarray(offset + 8, offset + 8 + length)
-    if (type === 'IHDR') {
-      width = view.getUint32(offset + 8)
-      height = view.getUint32(offset + 12)
-      if (body[8] !== 16 || body[9] !== 0 || body[12] !== 0) throw new Error('Heightmaps must be 16-bit greyscale, non-interlaced PNGs')
-    } else if (type === 'IDAT') chunks.push(body)
-    else if (type === 'IEND') break
-    offset += 12 + length
-  }
-  const joined = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.length, 0))
-  let cursor = 0
-  for (const chunk of chunks) { joined.set(chunk, cursor); cursor += chunk.length }
-  const raw = await inflate(joined)
-  const stride = width * 2
-  const out = new Uint8Array(stride * height)
-  for (let row = 0; row < height; row++) {
-    const filter = raw[row * (stride + 1)]!
-    const source = row * (stride + 1) + 1
-    const target = row * stride
-    for (let column = 0; column < stride; column++) {
-      const value = raw[source + column]!
-      const left = column >= 2 ? out[target + column - 2]! : 0
-      const up = row > 0 ? out[target - stride + column]! : 0
-      const corner = row > 0 && column >= 2 ? out[target - stride + column - 2]! : 0
-      let predicted = 0
-      if (filter === 1) predicted = left
-      else if (filter === 2) predicted = up
-      else if (filter === 3) predicted = (left + up) >> 1
-      else if (filter === 4) {
-        const p = left + up - corner
-        const pa = Math.abs(p - left)
-        const pb = Math.abs(p - up)
-        const pc = Math.abs(p - corner)
-        predicted = pa <= pb && pa <= pc ? left : pb <= pc ? up : corner
-      }
-      out[target + column] = (value + predicted) & 255
-    }
-  }
-  const data = new Uint16Array(width * height)
-  for (let index = 0; index < data.length; index++) data[index] = (out[index * 2]! << 8) | out[index * 2 + 1]!
-  return { width, height, data }
-}
-
-export interface HeightmapOptions {
-  readonly spacing: number
-  readonly minHeight: number
-  readonly maxHeight: number
-  readonly verticalScale?: number
-  readonly origin?: readonly [number, number]
-}
-
-export async function loadHeightmap(url: string, options: HeightmapOptions): Promise<Heightfield> {
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`Heightmap ${url}: ${response.status}`)
-  const image = await decodeGrey16Png(await response.arrayBuffer())
-  if (image.width !== image.height) throw new Error('Heightmaps must be square')
-  const scale = options.verticalScale ?? 1
-  const range = (options.maxHeight - options.minHeight) * scale
-  const heights = new Float32Array(image.data.length)
-  for (let index = 0; index < heights.length; index++) heights[index] = image.data[index]! / 65535 * range
-  const extent = (image.width - 1) * options.spacing
-  return createHeightfield({ size: image.width, extent, origin: options.origin, heights })
 }

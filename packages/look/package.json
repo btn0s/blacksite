@@ -13,6 +13,8 @@
     "./quality": "./src/quality.ts",
     "./world": "./src/world/index.ts",
     "./soft": "./src/soft.ts",
+    "./webgpu": "./src/webgpu.ts",
+    "./webgpu-r3f": "./src/webgpu-r3f.tsx",
     "./luts/*": "./luts/*"
   },
   "scripts": {

@@ -1,11 +1,11 @@
-import {
-  Color, DoubleSide, FrontSide, GLSL3, LinearFilter, LinearMipmapLinearFilter, Mesh, MeshStandardMaterial, NoColorSpace, OrthographicCamera,
-  RawShaderMaterial, SRGBColorSpace, Scene, UnsignedByteType, Vector3, Vector4, WebGLRenderTarget,
-} from 'three'
-import type { Texture, WebGLRenderer } from 'three'
-import { patchMaterial, replaceChunk } from './patch'
-import type { TreeModel } from './trees'
-import { NOISE_GLSL, WIND_GLSL, type Wind } from './wind'
+import { Box2, Color, DoubleSide, LinearFilter, LinearMipmapLinearFilter, Mesh, NoColorSpace, OrthographicCamera, RenderTarget, SRGBColorSpace, Scene, UnsignedByteType, Vector2, Vector3, Vector4 } from 'three'
+import type { Texture } from 'three'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
+import type { Node, WebGPURenderer } from 'three/webgpu'
+import { Fn, attribute, cameraPosition, cameraViewMatrix, cameraWorldMatrix, clamp, cos, cross, diffuseColor, dot, float, floor, length, max, min, mix, mrt, normalGeometry, normalize, output, positionGeometry, positionPrevious, screenCoordinate, select, sin, smoothstep, sqrt, step, texture, uniform, uv, varying, vec2, vec3, vec4 } from 'three/tsl'
+import type { FoliageModel } from './foliage-model'
+import type { Wind } from './wind'
+import { createWindNodes, element, landscapeDither } from './nodes'
 
 export interface ImpostorAtlas {
   readonly albedo: Texture
@@ -18,64 +18,18 @@ export interface ImpostorAtlas {
   dispose(): void
 }
 
-export interface TreeTextures {
-  readonly bark: Texture
-  readonly barkNormal?: Texture
-  readonly leaf: Texture
-}
-
 export interface BakeOptions {
   readonly frames?: number
   readonly frameSize?: number
   readonly samples?: number
 }
 
-const BAKE_VERTEX = /* glsl */ `
-precision highp float;
-in vec3 position;
-in vec3 normal;
-in vec2 uv;
-in vec3 color;
-uniform mat4 modelViewMatrix;
-uniform mat4 projectionMatrix;
-out vec3 vNormal;
-out vec2 vUv;
-out vec3 vColor;
-void main() {
-  vNormal = normal;
-  vUv = uv;
-  vColor = color;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-`
-
-const BAKE_FRAGMENT = /* glsl */ `
-precision highp float;
-uniform sampler2D map;
-uniform vec3 tint;
-uniform float cutout;
-in vec3 vNormal;
-in vec2 vUv;
-in vec3 vColor;
-layout(location = 0) out vec4 gAlbedo;
-layout(location = 1) out vec4 gNormal;
-void main() {
-  vec4 texel = texture(map, vUv);
-  if (cutout > 0.5 && texel.a < 0.5) discard;
-  vec3 n = normalize(vNormal);
-  gAlbedo = vec4(texel.rgb * tint * vColor, 1.0);
-  gNormal = vec4(n * 0.5 + 0.5, 1.0);
-}
-`
-
-function bakeMaterial(map: Texture, tint: readonly [number, number, number], cutout: boolean) {
-  return new RawShaderMaterial({
-    glslVersion: GLSL3,
-    vertexShader: BAKE_VERTEX,
-    fragmentShader: BAKE_FRAGMENT,
-    uniforms: { map: { value: map }, tint: { value: new Color(...tint) }, cutout: { value: cutout ? 1 : 0 } },
-    side: cutout ? DoubleSide : FrontSide,
-  })
+function bakeMaterial(renderer: WebGPURenderer, source: FoliageModel['primitives'][number]['material']) {
+  const material = renderer.library.fromMaterial(source.clone()) as MeshStandardNodeMaterial
+  if (!material) throw new Error(`Unsupported impostor material: ${source.type}`)
+  material.outputNode = vec4(diffuseColor.rgb, 1)
+  material.toneMapped = false
+  return material
 }
 
 export function hemiOctDirection(u: number, v: number, out = new Vector3()): Vector3 {
@@ -87,202 +41,81 @@ export function hemiOctDirection(u: number, v: number, out = new Vector3()): Vec
   return out.set(x, Math.max(y, 0), z).normalize()
 }
 
-export function bakeImpostor(renderer: WebGLRenderer, model: TreeModel, textures: TreeTextures, options: BakeOptions = {}): ImpostorAtlas {
+export function bakeImpostor(renderer: WebGPURenderer, model: FoliageModel, options: BakeOptions = {}): ImpostorAtlas {
   const started = performance.now()
-  const frames = options.frames ?? 8
+  const frames = Math.max(2, options.frames ?? 8)
   const frameSize = options.frameSize ?? 192
   const size = frames * frameSize
   const centre = model.bounds.center.clone()
   const radius = model.bounds.radius * 1.02
   const scene = new Scene()
-  const woodMaterial = bakeMaterial(textures.bark, model.species.bark, false)
-  const leafMaterial = bakeMaterial(textures.leaf, model.species.leaves, true)
-  scene.add(new Mesh(model.wood, woodMaterial), new Mesh(model.leaves, leafMaterial))
+  const materials = model.primitives.map(primitive => bakeMaterial(renderer, primitive.material))
+  model.primitives.forEach((primitive, index) => scene.add(new Mesh(primitive.geometry, materials[index])))
   const camera = new OrthographicCamera(-radius, radius, radius, -radius, 0.01, radius * 4)
-  const target = new WebGLRenderTarget(size, size, {
-    count: 2,
-    type: UnsignedByteType,
-    minFilter: LinearMipmapLinearFilter,
-    magFilter: LinearFilter,
-    generateMipmaps: false,
-    depthBuffer: true,
-    samples: options.samples ?? 4,
+  const target = new RenderTarget(size, size, {
+    count: 2, type: UnsignedByteType, minFilter: LinearMipmapLinearFilter, magFilter: LinearFilter,
+    generateMipmaps: true, depthBuffer: false,
+  })
+  const sourceMip = 2
+  const sourceSize = frameSize * 2 ** sourceMip
+  const source = new RenderTarget(sourceSize, sourceSize, {
+    count: 2, type: UnsignedByteType, minFilter: LinearMipmapLinearFilter, magFilter: LinearFilter,
+    generateMipmaps: true, depthBuffer: true, samples: options.samples ?? 4,
   })
   const [albedo, normal] = target.textures as [Texture, Texture]
-  albedo.colorSpace = SRGBColorSpace
-  normal.colorSpace = NoColorSpace
+  const [sourceAlbedo, sourceNormal] = source.textures as [Texture, Texture]
+  for (const texture of [albedo, sourceAlbedo]) { texture.colorSpace = SRGBColorSpace; texture.name = 'output' }
+  for (const texture of [normal, sourceNormal]) { texture.colorSpace = NoColorSpace; texture.name = 'normal' }
   albedo.anisotropy = 4
-  albedo.name = `${model.species.name}-impostor-albedo`
-  normal.name = `${model.species.name}-impostor-normal`
-
+  const outputs = mrt({ output, normal: vec4(normalize(normalGeometry).mul(0.5).add(0.5), 1) })
+    .setClearColor('output', 0x000000, 0)
+    .setClearColor('normal', 0x000000, 0)
+  const region = new Box2(new Vector2(), new Vector2(frameSize, frameSize))
+  const destination = new Vector2()
   const previousTarget = renderer.getRenderTarget()
-  const previousClear = new Color()
-  renderer.getClearColor(previousClear)
+  const previousMrt = renderer.getMRT()
+  const previousClear = renderer.getClearColor(new Color())
   const previousAlpha = renderer.getClearAlpha()
   const previousAutoClear = renderer.autoClear
-  const previousShadows = renderer.shadowMap.autoUpdate
-  renderer.shadowMap.autoUpdate = false
-  renderer.autoClear = false
-  renderer.setClearColor(0x000000, 0)
-  target.scissorTest = false
-  target.viewport.set(0, 0, size, size)
-  renderer.setRenderTarget(target)
-  renderer.clear(true, true, true)
-  const direction = new Vector3()
-  const up = new Vector3()
-  target.scissorTest = true
-  for (let j = 0; j < frames; j++) {
-    for (let i = 0; i < frames; i++) {
+  const previousShadows = renderer.shadowMap.enabled
+  try {
+    renderer.shadowMap.enabled = false
+    renderer.autoClear = true
+    renderer.setMRT(outputs)
+    renderer.setClearColor(0x000000, 0)
+    renderer.initRenderTarget(target)
+    albedo.generateMipmaps = false
+    normal.generateMipmaps = false
+    const direction = new Vector3()
+    for (let j = 0; j < frames; j++) for (let i = 0; i < frames; i++) {
       hemiOctDirection(i / (frames - 1), j / (frames - 1), direction)
-      up.set(0, 1, 0)
-      if (direction.y > 0.999) up.set(0, 0, -1)
-      camera.up.copy(up)
+      camera.up.set(0, direction.y > 0.999 ? 0 : 1, direction.y > 0.999 ? -1 : 0)
       camera.position.copy(centre).addScaledVector(direction, radius * 2)
       camera.lookAt(centre)
       camera.updateMatrixWorld()
-      target.viewport.set(i * frameSize, j * frameSize, frameSize, frameSize)
-      target.scissor.set(i * frameSize, j * frameSize, frameSize, frameSize)
+      renderer.setRenderTarget(source)
+      renderer.render(scene, camera)
       const last = i === frames - 1 && j === frames - 1
       albedo.generateMipmaps = last
       normal.generateMipmaps = last
-      renderer.setRenderTarget(target)
-      renderer.render(scene, camera)
+      destination.set(i * frameSize, j * frameSize)
+      renderer.copyTextureToTexture(sourceAlbedo, albedo, region, destination, sourceMip)
+      renderer.copyTextureToTexture(sourceNormal, normal, region, destination, sourceMip)
     }
+  } catch (error) {
+    target.dispose()
+    throw error
+  } finally {
+    source.dispose()
+    renderer.setRenderTarget(previousTarget)
+    renderer.setMRT(previousMrt)
+    renderer.setClearColor(previousClear, previousAlpha)
+    renderer.autoClear = previousAutoClear
+    renderer.shadowMap.enabled = previousShadows
+    for (const material of materials) material.dispose()
   }
-  target.scissorTest = false
-  renderer.setRenderTarget(previousTarget)
-  renderer.setClearColor(previousClear, previousAlpha)
-  renderer.autoClear = previousAutoClear
-  renderer.shadowMap.autoUpdate = previousShadows
-  woodMaterial.dispose()
-  leafMaterial.dispose()
-  return {
-    albedo,
-    normal,
-    frames,
-    frameSize,
-    centre,
-    radius,
-    milliseconds: performance.now() - started,
-    dispose: () => target.dispose(),
-  }
+  return { albedo, normal, frames, frameSize, centre, radius, milliseconds: performance.now() - started, dispose: () => target.dispose() }
 }
-
-export const IMPOSTOR_GLSL = /* glsl */ `
-vec2 bsHemiOct(vec3 d) {
-  d /= abs(d.x) + abs(d.y) + abs(d.z);
-  return vec2(d.x + d.z, d.x - d.z) * 0.5 + 0.5;
-}
-vec3 bsRotY(vec3 v, float c, float s) {
-  return vec3(c * v.x + s * v.z, v.y, -s * v.x + c * v.z);
-}
-`
-
-const VERTEX_HEAD = /* glsl */ `
-attribute vec4 treeInstance;
-attribute float treeScale;
-uniform vec4 impostorShape;
-uniform vec4 impostorRange;
-uniform float impostorFrames;
-varying vec2 vImpostorGrid;
-varying vec2 vImpostorUv;
-varying vec3 vImpostorFade;
-varying vec2 vImpostorYaw;
-varying vec3 vImpostorOffset;
-varying vec3 vImpostorView;
-`
-
-const VERTEX_BODY = /* glsl */ `
-float bsYaw = treeInstance.w;
-float bsC = cos(bsYaw);
-float bsS = sin(bsYaw);
-vec3 bsCentre = treeInstance.xyz + bsRotY(impostorShape.xyz * treeScale, bsC, bsS);
-vec3 bsToCam = cameraPosition - bsCentre;
-float bsDist = length(bsToCam);
-float bsRootDist = distance(cameraPosition, treeInstance.xyz);
-float bsIn = smoothstep(impostorRange.x, impostorRange.y, bsRootDist);
-float bsOut = 1.0 - smoothstep(impostorRange.z, impostorRange.w, bsRootDist);
-vec3 bsDir = bsToCam / max(bsDist, 0.001);
-vec3 bsLocal = vec3(bsC * bsDir.x - bsS * bsDir.z, bsDir.y, bsS * bsDir.x + bsC * bsDir.z);
-bsLocal.y = max(bsLocal.y, 0.0);
-bsLocal = normalize(bsLocal + vec3(0.0, 0.0001, 0.0));
-vImpostorGrid = bsHemiOct(bsLocal) * (impostorFrames - 1.0);
-vec3 bsUpL = bsLocal.y > 0.999 ? vec3(0.0, 0.0, -1.0) : vec3(0.0, 1.0, 0.0);
-vec3 bsRightL = normalize(cross(bsUpL, bsLocal));
-vec3 bsUpvL = cross(bsLocal, bsRightL);
-vec3 bsRightW = bsRotY(bsRightL, bsC, bsS);
-vec3 bsUpW = bsRotY(bsUpvL, bsC, bsS);
-float bsSize = impostorShape.w * treeScale * 2.0 * step(0.0001, bsIn * bsOut);
-float bsLift = position.y + 0.5;
-float bsSway = windAt(treeInstance.xz) * 0.025 * impostorShape.w * treeScale * bsLift * bsLift;
-vec3 transformed = bsCentre + (bsRightW * position.x + bsUpW * position.y) * bsSize + vec3(windDirection.x, 0.0, windDirection.y) * bsSway;
-vImpostorUv = uv;
-vImpostorFade = vec3(bsIn, bsOut, smoothstep(impostorRange.y, impostorRange.w, bsRootDist));
-vImpostorYaw = vec2(bsC, bsS);
-vImpostorOffset = (transformed - bsCentre - vec3(0.0, 0.18, 0.0) * impostorShape.w * treeScale) / max(impostorShape.w * treeScale * 0.78, 0.001);
-vImpostorView = bsDir;
-`
-
-const FRAGMENT_HEAD = /* glsl */ `
-uniform sampler2D impostorAlbedo;
-uniform sampler2D impostorNormal;
-uniform float impostorFrames;
-uniform vec3 impostorTint;
-uniform float impostorContact;
-uniform float impostorBlur;
-uniform vec3 impostorFarTint;
-varying vec2 vImpostorGrid;
-varying vec2 vImpostorUv;
-varying vec3 vImpostorFade;
-varying vec2 vImpostorYaw;
-varying vec3 vImpostorOffset;
-varying vec3 vImpostorView;
-vec2 bsFrameUv(vec2 frame) {
-  return (frame + clamp(vImpostorUv, vec2(0.004), vec2(0.996))) / impostorFrames;
-}
-`
-
-const FRAGMENT_SAMPLE = /* glsl */ `
-float bsSmudge = vImpostorFade.z;
-float bsBias = bsSmudge * impostorBlur;
-#ifdef IMPOSTOR_SINGLE
-vec2 bsFrame = clamp(floor(vImpostorGrid + 0.5), vec2(0.0), vec2(impostorFrames - 1.0));
-vec4 bsA = texture2D(impostorAlbedo, bsFrameUv(bsFrame), bsBias);
-vec4 bsN = texture2D(impostorNormal, bsFrameUv(bsFrame), bsBias);
-#else
-vec2 bsBase = clamp(floor(vImpostorGrid), vec2(0.0), vec2(impostorFrames - 2.0));
-vec2 bsF = clamp(vImpostorGrid - bsBase, 0.0, 1.0);
-vec4 bsW = vec4((1.0 - bsF.x) * (1.0 - bsF.y), bsF.x * (1.0 - bsF.y), (1.0 - bsF.x) * bsF.y, bsF.x * bsF.y);
-vec4 bsA = texture2D(impostorAlbedo, bsFrameUv(bsBase), bsBias) * bsW.x
-  + texture2D(impostorAlbedo, bsFrameUv(bsBase + vec2(1.0, 0.0)), bsBias) * bsW.y
-  + texture2D(impostorAlbedo, bsFrameUv(bsBase + vec2(0.0, 1.0)), bsBias) * bsW.z
-  + texture2D(impostorAlbedo, bsFrameUv(bsBase + vec2(1.0, 1.0)), bsBias) * bsW.w;
-vec4 bsN = texture2D(impostorNormal, bsFrameUv(bsBase), bsBias) * bsW.x
-  + texture2D(impostorNormal, bsFrameUv(bsBase + vec2(1.0, 0.0)), bsBias) * bsW.y
-  + texture2D(impostorNormal, bsFrameUv(bsBase + vec2(0.0, 1.0)), bsBias) * bsW.z
-  + texture2D(impostorNormal, bsFrameUv(bsBase + vec2(1.0, 1.0)), bsBias) * bsW.w;
-#endif
-float bsCoverage = bsA.a;
-#ifdef IMPOSTOR_A2C
-float bsAlpha = clamp((bsCoverage - 0.5) / max(fwidth(bsCoverage) * (1.0 + bsSmudge * 2.5), 0.0001) + 0.5, 0.0, 1.0);
-if (bsAlpha < 0.02) discard;
-#else
-float bsAlpha = 1.0;
-if (bsCoverage < 0.5) discard;
-#endif
-float bsDitherValue = bsDither(gl_FragCoord.xy);
-if (bsDitherValue >= min(vImpostorFade.x, vImpostorFade.y)) discard;
-diffuseColor.rgb *= bsA.rgb / max(bsCoverage, 0.001) * impostorTint * mix(vec3(1.0), impostorFarTint, bsSmudge * bsSmudge);
-diffuseColor.a = bsAlpha;
-vec3 bsLocalNormal = normalize(bsN.rgb / max(bsN.a, 0.001) * 2.0 - 1.0);
-vec3 bsBaked = normalize(bsRotY(bsLocalNormal, vImpostorYaw.x, vImpostorYaw.y));
-float bsDepth = sqrt(max(1.0 - dot(vImpostorOffset, vImpostorOffset), 0.0));
-vec3 bsSphere = normalize(vImpostorOffset + vImpostorView * bsDepth);
-float bsRelief = mix(0.55, 0.75, bsSmudge);
-vec3 bsWorldNormal = normalize(mix(bsBaked, bsSphere, bsRelief));
-float bsContact = mix(0.42, 1.0, smoothstep(-0.85, 0.35, vImpostorOffset.y)) * mix(0.78, 1.0, smoothstep(0.0, 0.55, bsDepth));
-diffuseColor.rgb *= mix(1.0, bsContact, impostorContact);
-`
 
 export interface ImpostorMaterialOptions {
   readonly atlas: ImpostorAtlas
@@ -291,41 +124,93 @@ export interface ImpostorMaterialOptions {
   readonly alphaToCoverage?: boolean
   readonly singleFrame?: boolean
   readonly tint?: readonly [number, number, number]
+  readonly tintNode?: Node<'vec3'>
+  readonly coverageNode?: Node<'float'>
   readonly contact?: number
   readonly blur?: number
   readonly farTint?: readonly [number, number, number]
+  readonly lodView?: Node<'float'>
+  readonly instance?: Node<'vec4'>
+  readonly scale?: Node<'float'>
+  readonly distanceOrigin?: Node<'vec3'>
+  readonly orthographic?: boolean
+  readonly previousCamera?: Node<'vec3'>
+  readonly previousWindTime?: Node<'float'>
 }
 
-export function createImpostorMaterial(options: ImpostorMaterialOptions): MeshStandardMaterial {
+export function createImpostorMaterial(options: ImpostorMaterialOptions): MeshStandardNodeMaterial {
   const { atlas } = options
-  const material = new MeshStandardMaterial({ name: 'world-impostor', color: 0xffffff, roughness: 0.92, metalness: 0, side: DoubleSide, alphaToCoverage: options.alphaToCoverage === true })
-  material.defines = {}
-  if (options.alphaToCoverage) material.defines.IMPOSTOR_A2C = ''
-  if (options.singleFrame) material.defines.IMPOSTOR_SINGLE = ''
-  const uniforms = {
-    impostorAlbedo: { value: atlas.albedo },
-    impostorNormal: { value: atlas.normal },
-    impostorFrames: { value: atlas.frames },
-    impostorShape: { value: new Vector4(atlas.centre.x, atlas.centre.y, atlas.centre.z, atlas.radius) },
-    impostorRange: { value: new Vector4(...options.range) },
-    impostorTint: { value: new Vector3(...(options.tint ?? [1, 1, 1])) },
-    impostorContact: { value: options.contact ?? 1 },
-    impostorBlur: { value: options.blur ?? 1.25 },
-    impostorFarTint: { value: new Vector3(...(options.farTint ?? [1, 1, 1])) },
+  const wind = createWindNodes(options.wind)
+  const previousWind = createWindNodes(options.wind, options.previousWindTime)
+  const material = new MeshStandardNodeMaterial({ name: 'world-impostor', roughness: 0.92, metalness: 0, side: DoubleSide, alphaToCoverage: options.alphaToCoverage === true, alphaHash: options.alphaToCoverage !== true })
+  const instance = options.instance ?? attribute('treeInstance', 'vec4')
+  const scale = options.scale ?? attribute('treeScale', 'float')
+  const shape = uniform(new Vector4(atlas.centre.x, atlas.centre.y, atlas.centre.z, atlas.radius))
+  const range = uniform(new Vector4(...options.range))
+  const c = cos(instance.w)
+  const s = sin(instance.w)
+  const rotate = (v: Node<'vec3'>) => vec3(c.mul(v.x).add(s.mul(v.z)), v.y, s.negate().mul(v.x).add(c.mul(v.z)))
+  const centre = instance.xyz.add(rotate(shape.xyz.mul(scale)))
+  const toCamera = cameraPosition.sub(centre)
+  const distance = length(toCamera)
+  const rootDistance = length((options.distanceOrigin ?? cameraPosition).sub(instance.xyz))
+  const fadeIn = smoothstep(range.x, range.y, rootDistance)
+  const fadeOut = float(1).sub(smoothstep(range.z, range.w, rootDistance)).mul(options.coverageNode ?? float(1))
+  const direction = options.orthographic ? normalize(element(cameraWorldMatrix, 2).xyz) : toCamera.div(max(distance, 0.001))
+  const local = normalize(vec3(c.mul(direction.x).sub(s.mul(direction.z)), max(direction.y, 0).add(0.0001), s.mul(direction.x).add(c.mul(direction.z))))
+  const oct = local.div(local.abs().x.add(local.abs().y).add(local.abs().z))
+  const grid = varying(vec2(oct.x.add(oct.z), oct.x.sub(oct.z)).mul(0.5).add(0.5).mul(atlas.frames - 1))
+  const localUp = select(local.y.greaterThan(0.999), vec3(0, 0, -1), vec3(0, 1, 0))
+  const localRight = normalize(cross(localUp, local))
+  const right = rotate(localRight)
+  const up = rotate(cross(local, localRight))
+  const size = shape.w.mul(scale).mul(2).mul(step(0.0001, fadeIn.mul(fadeOut)))
+  const lift = positionGeometry.y.add(0.5)
+  const sway = wind.sample(instance.xz).mul(0.025).mul(shape.w).mul(scale).mul(lift.mul(lift))
+  const position = centre.add(right.mul(positionGeometry.x).add(up.mul(positionGeometry.y)).mul(size)).add(vec3(wind.direction.x, 0, wind.direction.y).mul(sway))
+  const previousCamera = options.previousCamera ?? cameraPosition
+  const previousDirection = normalize(previousCamera.sub(centre))
+  const previousLocal = normalize(vec3(c.mul(previousDirection.x).sub(s.mul(previousDirection.z)), max(previousDirection.y, 0).add(0.0001), s.mul(previousDirection.x).add(c.mul(previousDirection.z))))
+  const previousUp = select(previousLocal.y.greaterThan(0.999), vec3(0, 0, -1), vec3(0, 1, 0))
+  const previousRight = normalize(cross(previousUp, previousLocal))
+  const previousRootDistance = length(previousCamera.sub(instance.xyz))
+  const previousSize = shape.w.mul(scale).mul(2).mul(step(0.0001, smoothstep(range.x, range.y, previousRootDistance).mul(float(1).sub(smoothstep(range.z, range.w, previousRootDistance))).mul(options.coverageNode ?? float(1))))
+  const previousSway = previousWind.sample(instance.xz).mul(0.025).mul(shape.w).mul(scale).mul(lift.mul(lift))
+  const previousPosition = centre.add(rotate(previousRight).mul(positionGeometry.x).add(rotate(cross(previousLocal, previousRight)).mul(positionGeometry.y)).mul(previousSize)).add(vec3(previousWind.direction.x, 0, previousWind.direction.y).mul(previousSway))
+  const fade = varying(vec3(fadeIn, fadeOut, smoothstep(range.y, range.w, rootDistance)))
+  const yaw = varying(vec2(c, s))
+  const offset = varying(position.sub(centre).sub(vec3(0, 0.18, 0).mul(shape.w).mul(scale)).div(max(shape.w.mul(scale).mul(0.78), 0.001)))
+  const view = varying(direction)
+  const atlasUv = (frame: Node<'vec2'>) => frame.add(clamp(uv().flipY(), vec2(0.004), vec2(0.996))).div(atlas.frames)
+  const bias = fade.z.mul(options.blur ?? 1.25)
+  const sample = (image: Texture) => {
+    if (options.singleFrame) return texture(image, atlasUv(clamp(floor(grid.add(0.5)), vec2(0), vec2(atlas.frames - 1)))).bias(bias)
+    const base = clamp(floor(grid), vec2(0), vec2(atlas.frames - 2))
+    const f = clamp(grid.sub(base), 0, 1)
+    const a = texture(image, atlasUv(base)).bias(bias)
+    const b = texture(image, atlasUv(base.add(vec2(1, 0)))).bias(bias)
+    const c = texture(image, atlasUv(base.add(vec2(0, 1)))).bias(bias)
+    const d = texture(image, atlasUv(base.add(vec2(1, 1)))).bias(bias)
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y)
   }
-  material.userData.impostor = uniforms
-  patchMaterial(material, `world-impostor-${options.singleFrame ? 1 : 4}-${options.alphaToCoverage ? 'a2c' : 'cut'}`, shader => {
-    Object.assign(shader.uniforms, options.wind.uniforms, uniforms)
-    shader.vertexShader = `${NOISE_GLSL}\n${WIND_GLSL}\n${IMPOSTOR_GLSL}\n${VERTEX_HEAD}\n${shader.vertexShader}`
-    shader.vertexShader = replaceChunk(shader.vertexShader, 'begin_vertex', VERTEX_BODY)
-    shader.fragmentShader = `${NOISE_GLSL}\n${IMPOSTOR_GLSL}\n${FRAGMENT_HEAD}\n${shader.fragmentShader}`
-    shader.fragmentShader = replaceChunk(shader.fragmentShader, 'map_fragment', FRAGMENT_SAMPLE)
-    shader.fragmentShader = replaceChunk(shader.fragmentShader, 'alphatest_fragment', '')
-    shader.fragmentShader = replaceChunk(shader.fragmentShader, 'normal_fragment_begin', `
-      vec3 normal = normalize((viewMatrix * vec4(normalize(mix(bsWorldNormal, vec3(0.0, 1.0, 0.0), 0.08)), 0.0)).xyz);
-      vec3 nonPerturbedNormal = normal;
-      float faceDirection = 1.0;
-    `)
-  })
+  const albedo = sample(atlas.albedo)
+  const normals = sample(atlas.normal)
+  const coverage = albedo.a
+  const localNormal = normalize(normals.rgb.div(max(normals.a, 0.001)).mul(2).sub(1))
+  const baked = normalize(vec3(yaw.x.mul(localNormal.x).add(yaw.y.mul(localNormal.z)), localNormal.y, yaw.y.negate().mul(localNormal.x).add(yaw.x.mul(localNormal.z))))
+  const depth = sqrt(max(float(1).sub(dot(offset, offset)), 0))
+  const sphere = normalize(offset.add(view.mul(depth)))
+  const worldNormal = normalize(mix(baked, sphere, mix(0.55, 0.75, fade.z)))
+  const contact = mix(0.42, 1, smoothstep(-0.85, 0.35, offset.y)).mul(mix(0.78, 1, smoothstep(0, 0.55, depth)))
+  const albedoColor = albedo.rgb.div(max(coverage, 0.001)).mul(vec3(...(options.tint ?? [1, 1, 1]))).mul(options.tintNode ?? vec3(1)).mul(mix(vec3(1), vec3(...(options.farTint ?? [1, 1, 1])), fade.z.mul(fade.z))).mul(mix(1, contact, options.contact ?? 1))
+  material.positionNode = Fn(() => { positionPrevious.assign(previousPosition); return position })()
+  material.colorNode = albedoColor
+  material.outputNode = vec4(mix(output.rgb, uniform(new Color('#80a6ff')), options.lodView ?? float(0)), output.a)
+  const distanceFade = min(fade.x, fade.y)
+  const threshold = landscapeDither(screenCoordinate.xy)
+  material.opacityNode = coverage
+  material.maskNode = coverage.greaterThan(0).and(threshold.lessThan(distanceFade))
+  material.maskShadowNode = threshold.lessThan(coverage.mul(distanceFade))
+  material.normalNode = normalize(cameraViewMatrix.mul(vec4(normalize(mix(worldNormal, vec3(0, 1, 0), 0.08)), 0)).xyz)
   return material
 }
