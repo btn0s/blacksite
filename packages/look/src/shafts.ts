@@ -14,7 +14,6 @@ export interface SunShaftsOptions {
   readonly direction: Rgb
   readonly fog: UniformNode<'vec4', unknown>
   readonly fogAlbedo: UniformNode<'vec3', unknown>
-  readonly sunTerm: Node<'float'>
   readonly color: Rgb
   readonly radianceScale: number
   readonly reversedShadow: boolean
@@ -23,7 +22,7 @@ export interface SunShaftsOptions {
 }
 
 export function sunShafts(options: SunShaftsOptions) {
-  const { sun, shadowMap, camera, fog, fogAlbedo, sunTerm, reversedShadow } = options
+  const { sun, shadowMap, camera, fog, fogAlbedo, reversedShadow } = options
   const depth = options.depth as unknown as Node<'float'>
   const steps = options.steps ?? 8
   const shadow = sun.shadow as CascadeShadow
@@ -49,14 +48,14 @@ export function sunShafts(options: SunShaftsOptions) {
   const occlusion = Fn(() => {
     const result = vec3(0).toVar()
     If(strength.greaterThan(0), () => {
-      const hit = getViewPosition(screenUV, depth, inverse)
-      const ray = normalize(getViewPosition(screenUV, float(0.5), inverse))
+      const hit = getViewPosition(screenUV, depth, inverse).toVar()
+      const ray = normalize(getViewPosition(screenUV, float(0.5), inverse)).toVar()
       const sky = reversed ? depth.lessThanEqual(1e-6) : depth.greaterThanEqual(0.999999)
       If(sky.not(), () => {
-        const span = min(length(hit), reach)
-        const jitter = interleavedGradientNoise(screenCoordinate.xy.add(frameId.mod(64).toFloat().mul(5.588238)))
+        const span = min(length(hit), reach).toVar()
+        const jitter = interleavedGradientNoise(screenCoordinate.xy.add(frameId.mod(64).toFloat().mul(5.588238))).toVar()
         const optical = float(0).toVar()
-        const blocked = float(0).toVar()
+        const lit = float(0).toVar()
         Loop(steps, ({ i }) => {
           const u = float(i).add(jitter).div(steps)
           const point = ray.mul(u.mul(u).mul(span))
@@ -75,11 +74,11 @@ export function sunShafts(options: SunShaftsOptions) {
               })
             })
           }
-          blocked.addAssign(float(1).sub(visibility).mul(exp(optical.negate())).mul(weight))
+          lit.addAssign(visibility.mul(exp(optical.negate())).mul(weight))
           optical.addAssign(weight)
         })
         const cosine = normalize(cameraWorld.mul(vec4(ray, 0)).xyz).dot(toSun)
-        result.assign(tint.mul(fogAlbedo).mul(phase(cosine)).mul(blocked).mul(scale).mul(sunTerm).mul(strength))
+        result.assign(tint.mul(fogAlbedo).mul(phase(cosine)).mul(lit).mul(scale).mul(strength))
       })
     })
     return result

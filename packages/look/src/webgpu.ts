@@ -23,6 +23,7 @@ import { StaggeredSunShadowNode } from './sun-cascades'
 import { createFilm, type FilmOptions } from './film'
 import { EyeAdaptation } from './exposure'
 import { LookTelemetry, type MotionProbe } from './telemetry'
+import { createGrading } from './grading'
 import { sunShafts } from './shafts'
 import { resolveTuning, withClouds, type LookFeatures, type LookTuning } from './tuning'
 
@@ -230,8 +231,8 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   }
   const beauty = scenePass.getTextureNode('output')
   const fogged: Node<'vec4'> = atmosphereGPU.aerial(beauty, depth, camera, skyScale)
-  const shafts = disabled.has('shafts') ? null : sunShafts({ sun, shadowMap: shadows.depthTexture, direction: atmosphere.sun.direction, camera, depth, fog: atmosphereGPU.fog, fogAlbedo: atmosphereGPU.fogAlbedo, sunTerm: atmosphereGPU.fogSun, color: [atmosphere.sun.color[0] * atmosphere.physical!.illuminance, atmosphere.sun.color[1] * atmosphere.physical!.illuminance, atmosphere.sun.color[2] * atmosphere.physical!.illuminance], radianceScale: skyScale, reversedShadow: renderer.reversedDepthBuffer })
-  const aerial: Node<'vec4'> = shafts ? vec4(max(fogged.rgb.sub(shafts.node), 0), fogged.a) : fogged
+  const shafts = disabled.has('shafts') ? null : sunShafts({ sun, shadowMap: shadows.depthTexture, direction: atmosphere.sun.direction, camera, depth, fog: atmosphereGPU.fog, fogAlbedo: atmosphereGPU.fogAlbedo, color: [atmosphere.sun.color[0] * atmosphere.physical!.illuminance, atmosphere.sun.color[1] * atmosphere.physical!.illuminance, atmosphere.sun.color[2] * atmosphere.physical!.illuminance], radianceScale: skyScale, reversedShadow: renderer.reversedDepthBuffer })
+  const aerial: Node<'vec4'> = shafts ? vec4(fogged.rgb.add(shafts.node), fogged.a) : fogged
   const resolved = disabled.has('traa') ? null : traa(aerial, depth, motion, camera)
   const stable = resolved ? resolved.getTextureNode() : convertToTexture(aerial)
   disposables.push(resolved ?? stable)
@@ -240,61 +241,10 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   const lutImage = atmosphere.grade.lut ? await loadLut(atmosphere.grade.lut) : null
   const adaptation = film ? new EyeAdaptation(film.exposure, 2 ** sunlight.ev100) : null
   const filmScale = uniform(adaptation ? adaptation.scale / exposure : 1).setGroup(renderGroup)
-  const grading = {
-    ev: uniform(2 ** tuning.exposure).setGroup(renderGroup),
-    bloom: uniform(tuning.bloom).setGroup(renderGroup),
-    saturation: uniform(tuning.saturation).setGroup(renderGroup),
-    coolness: uniform(tuning.coolness).setGroup(renderGroup),
-    vignette: uniform(tuning.vignette).setGroup(renderGroup),
-    grain: uniform(tuning.grain).setGroup(renderGroup),
-    aberration: uniform(tuning.aberration).setGroup(renderGroup),
-  }
-  const exposureScale: Node<'float'> = filmScale.mul(grading.ev)
-  const COOL = new Vector3(0.92, 1, 1.1)
-  const mood = (rgb: Node<'vec3'>, saturate: boolean): Node<'vec3'> => {
-    const peak = max(rgb.r, max(rgb.g, rgb.b))
-    const warmth = rgb.r.sub(rgb.b).div(peak.max(0.05)).clamp(0, 1)
-    const accent = smoothstep(0.35, 0.8, warmth).mul(smoothstep(0.55, 0.9, peak))
-    const tone = saturate ? mix(vec3(luminance(rgb)), rgb, mix(grading.saturation, float(1), accent)) : rgb
-    return mix(tone, tone.mul(uniform(COOL).setGroup(renderGroup)), grading.coolness.mul(float(1).sub(accent)))
-  }
-  const grade = (input: Node<'vec4'>, active: { bloom: boolean; lens: boolean; grain: boolean }): Node<'vec4'> => {
-  let color = input
-  if (active.lens) color = chromaticAberration(color, grading.aberration, vec2(0.5, 0.5) as never, float(1.1)) as unknown as Node<'vec4'>
-  if (active.bloom) {
-    const threshold = film ? float(1.4).div(exposureScale) : float(1.35)
-    const glow = bloom(color, grading.bloom as never, 0.6, threshold as never)
-    glow.smoothWidth = (film ? float(1).div(exposureScale) : float(0.5)) as never
-    disposables.push(glow)
-    color = vec4(color.rgb.add(glow.rgb), color.a)
-  }
-  if (quality !== 'low' && (cameraGrade.lensSoftness ?? 0) > 0) {
-    const soft = gaussianBlur(color, null, 3)
-    disposables.push(soft)
-    color = mix(color, soft, float(1).sub(circle(float(1.5), float(0.75), uv())).mul(cameraGrade.lensSoftness ?? 0))
-  }
-  let shaped: Node<'vec3'>
-  if (film) shaped = mood(renderOutput(vec4(film.output(color.rgb, exposureScale), 1), NoToneMapping).rgb, true)
-  else {
-    const temperature = cameraGrade.temperature ?? 0
-    const tint = cameraGrade.tint ?? 0
-    const balance = new Vector3(1 + 0.25 * temperature, 1 + 0.12 * tint, 1 - 0.25 * temperature)
-    balance.multiplyScalar(1 / (0.2126 * balance.x + 0.7152 * balance.y + 0.0722 * balance.z))
-    const balanced = color.rgb.mul(uniform(balance).setGroup(renderGroup)).mul(atmosphere.exposure).mul(grading.ev)
-    const saturated = mix(vec3(luminance(balanced)), balanced, grading.saturation)
-    const display = renderOutput(vec4(saturated, 1)).rgb
-    const rolled = display.sub(display.pow(3).mul(cameraGrade.shoulder ?? 0))
-    const toe = cameraGrade.toe ?? 0
-    const lifted = rolled.mul(1 - toe).add(toe)
-    shaped = mood(lifted.sub(0.5).mul(cameraGrade.contrast ?? 1).add(0.5).clamp(0, 1), false)
-  }
-  let graded: Node<'vec4'> = vec4(shaped, 1)
-  if (lutImage) graded = lut3D(graded, texture3D(lutImage.texture), lutImage.size, 1)
-  const centred = uv().sub(0.5)
-  graded = vec4(graded.rgb.mul(float(1).sub(centred.dot(centred).mul(grading.vignette))), 1)
-  if (active.grain) graded = grainNode(graded, grading.grain) as unknown as Node<'vec4'>
-  return graded
-  }
+  const grading = createGrading({ film, quality, atmosphere, camera: cameraGrade, lut: lutImage, filmScale, tuning })
+  disposables.push(...grading.disposables)
+  const grade = grading.grade
+  const exposureScale = grading.exposureScale
   const temporal = { traa: resolved !== null, gtao: true }
   const stages = () => ({ bloom: quality !== 'low' && features.bloom && tuning.bloom > 0, lens: quality !== 'low' && features.lens && tuning.aberration > 0, grain: tuning.grain > 0 })
   const outputs = new Map<string, Node<'vec4'>>()
@@ -304,7 +254,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     const key = `${mode}|${active.bloom}|${active.lens}|${active.grain}`
     let node = outputs.get(key)
     if (!node) {
-      node = grade(mode === 'plain' ? aerial : resolved ?? stable, active)
+      node = grade(mode === 'plain' ? aerial : stable, active)
       outputs.set(key, node)
     }
     return node
@@ -424,18 +374,19 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   const applyTuning = () => {
     atmosphereGPU.setClouds(features.clouds ? tuning.cloudCoverage : 0, tuning.cloudAltitude, tuning.cloudDensity)
     atmosphereGPU.setFog(tuning.fogDensity, tuning.fogHeight)
-    atmosphereGPU.setFogSun(tuning.sunStrength)
+    const shaftStrength = shafts && features.shafts ? tuning.shafts * tuning.sunStrength : 0
+    atmosphereGPU.setFogSun(shaftStrength > 0 ? 0 : tuning.sunStrength)
     atmosphereGPU.setGroundBounce(tuning.groundBounce)
     sun.intensity = sunIntensity * tuning.sunStrength
     scene.environmentIntensity = skyScale * tuning.ambient
-    if (shafts) shafts.strength.value = features.shafts ? tuning.shafts : 0
-    grading.ev.value = 2 ** tuning.exposure
-    grading.bloom.value = tuning.bloom
-    grading.saturation.value = tuning.saturation
-    grading.coolness.value = tuning.coolness
-    grading.vignette.value = tuning.vignette
-    grading.grain.value = tuning.grain
-    grading.aberration.value = tuning.aberration
+    if (shafts) shafts.strength.value = shaftStrength
+    grading.values.ev.value = 2 ** tuning.exposure
+    grading.values.bloom.value = tuning.bloom
+    grading.values.saturation.value = tuning.saturation
+    grading.values.coolness.value = tuning.coolness
+    grading.values.vignette.value = tuning.vignette
+    grading.values.grain.value = tuning.grain
+    grading.values.aberration.value = tuning.aberration
   }
   applyTuning()
   return {
