@@ -1,7 +1,7 @@
 import { Box3, Matrix4, Vector3 } from 'three'
 import { MeshStandardNodeMaterial, type WebGPURenderer } from 'three/webgpu'
 import { GEOMETRY_ARENA_BYTES, loadGeometryPageSource, MeshletScene, type GeometryPageSource, type MeshletSceneEntry } from '@blacksite/geometry'
-import { loadScanMaterials, scanTextureFeedback, type ScanGroundBlend, type ScanSurface } from '../../shared/scan-material'
+import { loadScanMaterials, scanTextureFeedback, type ScanSurface } from '../../shared/scan-material'
 import { ScanFlames, type ScanFlameGeometry } from '../../shared/scan-flames'
 import { ruinsHome, type RuinsViews } from './views'
 import type { CollisionDirectory } from './collision'
@@ -111,11 +111,11 @@ export async function loadRuins(progress: (detail: string) => void) {
     largestBuffer: GEOMETRY_ARENA_BYTES,
     sourceTriangles: assets.reduce((sum, asset) => sum + asset.metadata.sourceTriangles, 0),
     cappedTriangles: assets.reduce((sum, asset) => sum + asset.metadata.residentTriangles, 0),
-    async createGeometry(renderer: WebGPURenderer, ground: ScanGroundBlend) {
+    async createGeometry(renderer: WebGPURenderer) {
       performance.mark('ruins-materials-start')
       progress('Loading minimum texture tails')
       const surfaceRoot = root + manifest.surfaces.slice(0, manifest.surfaces.lastIndexOf('/') + 1)
-      const materials = await loadScanMaterials(surfaces.surfaces, surfaceRoot, renderer, ground)
+      const materials = await loadScanMaterials(surfaces.surfaces, surfaceRoot, renderer)
       const invisible = new MeshStandardNodeMaterial({ name: 'Non-rendering exported surfaces', visible: false })
       for (const surface of [...manifest.untranslated, ...manifest.excluded]) if (!materials.has(surface.path)) materials.set(surface.path, invisible)
       performance.measure('ruins-materials', 'ruins-materials-start')
