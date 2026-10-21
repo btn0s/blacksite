@@ -5,7 +5,7 @@ export const world = {
   centre: [-1250, 350], seaLevel: -300, padding: 160,
 }
 
-const valley = { west: -3300, south: 1900, floor: -250, shelf: 120, rim: 0, foot: 880 }
+const valley = { west: -3300, south: 1900, floor: -250, shelf: -10, rim: 0, foot: 880 }
 
 const mix = (a, b, t) => a + (b - a) * t
 const bump = (value, centre, width) => Math.exp(-(((value - centre) / width) ** 2))
@@ -76,7 +76,7 @@ export function surfaceMasks(x, z, height, slope, rimDistance) {
 }
 
 
-export const ground = { bury: 1, sinkFloor: 0.25, sinkRock: 1, overlap: [2, 8], fall: 0.8, rise: 0.5, taper: [200, 300], hillRamp: [20, 180], edgeRange: 64 }
+export const ground = { overlap: 1, sinkFloor: 0.25, sinkRock: 1, rim: [2, 8], smoothing: [6, 192], settle: 10, grade: 0.5, falloff: [40, 300], hillRamp: [20, 180], edgeRange: 64 }
 
 const reach = [[-1, 0, 1], [0, -1, 1], [-1, -1, Math.SQRT2], [1, -1, Math.SQRT2], [-2, -1, Math.sqrt(5)], [-1, -2, Math.sqrt(5)], [1, -2, Math.sqrt(5)], [2, -1, Math.sqrt(5)]]
 
@@ -101,36 +101,87 @@ export function propagate(values, width, height, perCell) {
   return values
 }
 
+function nearestSource(source, width, height) {
+  const nearest = Int32Array.from(source, (value, slot) => value ? slot : -1)
+  const distance = (slot, target) => target < 0 ? Infinity : (slot % width - target % width) ** 2 + (Math.floor(slot / width) - Math.floor(target / width)) ** 2
+  for (let pass = 0; pass < 2; pass++) {
+    const sign = pass ? -1 : 1
+    for (let jj = 0; jj < height; jj++) {
+      const j = pass ? height - 1 - jj : jj
+      for (let ii = 0; ii < width; ii++) {
+        const i = pass ? width - 1 - ii : ii, slot = j * width + i
+        let best = nearest[slot], bestDistance = distance(slot, best)
+        for (const [di, dj] of reach) {
+          const ni = i + sign * di, nj = j + sign * dj
+          if (ni < 0 || nj < 0 || ni >= width || nj >= height) continue
+          const candidate = nearest[nj * width + ni], candidateDistance = distance(slot, candidate)
+          if (candidateDistance < bestDistance) { best = candidate; bestDistance = candidateDistance }
+        }
+        nearest[slot] = best
+      }
+    }
+  }
+  return nearest
+}
+
+function boxBlur(values, width, height, radius, passes) {
+  const line = new Float64Array(Math.max(width, height))
+  for (let pass = 0; pass < passes; pass++) for (const [count, lines, stride, step] of [[width, height, width, 1], [height, width, 1, width]]) {
+    for (let l = 0; l < lines; l++) {
+      const start = l * stride
+      for (let k = 0; k < count; k++) line[k] = values[start + k * step]
+      let sum = 0
+      for (let k = -radius; k <= radius; k++) sum += line[Math.min(count - 1, Math.max(0, k))]
+      for (let k = 0; k < count; k++) {
+        values[start + k * step] = sum / (2 * radius + 1)
+        sum += line[Math.min(count - 1, k + radius + 1)] - line[Math.max(0, k - radius)]
+      }
+    }
+  }
+  return values
+}
+
+// The level is stamped into the terrain: inside its footprint the ground follows the level's lowest surface, just under it,
+// and rises over it along the rim so the edge sinks in. Outside, the ground starts at the rim's height and blends to the landform.
 export function levelGround(raster) {
-  const { cell, originX, originZ, nx, nz, low, top, topUp, walkable } = raster
+  const { cell, originX, originZ, nx, nz, low, topUp, walkable } = raster
   const pad = world.padding, width = nx + 2 * pad, height = nz + 2 * pad
   const x0 = originX - pad * cell, z0 = originZ - pad * cell
   const count = width * height
-  const covered = new Uint8Array(count)
-  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) if (Number.isFinite(low[j * nx + i])) covered[(j + pad) * width + i + pad] = 1
-  const distance = propagate(Float32Array.from(covered, value => value ? 0 : Infinity), width, height, cell)
-  const depth = propagate(Float32Array.from(covered, value => value ? Infinity : 0), width, height, cell)
-  // The terrain buries the level's foot and stays under its lowest upward surface, except along the rim, where it rises over that surface too.
-  const base = new Float32Array(count).fill(-Infinity), ceiling = new Float32Array(count).fill(Infinity)
+  const covered = new Uint8Array(count), foot = new Float32Array(count).fill(NaN), up = new Float32Array(count)
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
     const source = j * nx + i
     if (!Number.isFinite(low[source])) continue
     const slot = (j + pad) * width + i + pad
-    const sink = ground.sinkRock + (ground.sinkFloor - ground.sinkRock) * smoothstep(0.3, walkable, topUp[source])
-    if (Number.isFinite(top[source])) ceiling[slot] = top[source] + (ground.bury + sink) * (1 - smoothstep(ground.overlap[0], ground.overlap[1], depth[slot])) - sink
-    base[slot] = Math.min(low[source] + ground.bury, ceiling[slot])
+    covered[slot] = 1; foot[slot] = low[source]; up[slot] = topUp[source]
   }
-  const lower = propagate(base.map(value => -value), width, height, ground.fall * cell).map(value => -value)
-  const upper = propagate(base.map(value => value === -Infinity ? Infinity : value), width, height, ground.rise * cell)
+  const distance = propagate(Float32Array.from(covered, value => value ? 0 : Infinity), width, height, cell)
+  const depth = propagate(Float32Array.from(covered, value => value ? Infinity : 0), width, height, cell)
+  const rim = Uint8Array.from(covered, (value, slot) => value && depth[slot] <= cell ? 1 : 0)
+  const nearest = nearestSource(rim, width, height)
+  const edgeRaw = Float32Array.from(nearest, source => foot[source])
+  const scales = []
+  for (let sigma = ground.smoothing[0]; sigma <= ground.smoothing[1]; sigma *= 2) scales.push(boxBlur(Float64Array.from(edgeRaw), width, height, Math.round(sigma / cell), 3))
+  const smoothed = slot => {
+    const level = Math.min(scales.length - 1, Math.max(0, Math.log2(distance[slot] / ground.smoothing[0]))), step = Math.min(scales.length - 2, Math.floor(level))
+    return scales[step][slot] + (scales[step + 1][slot] - scales[step][slot]) * (level - step)
+  }
   const field = new Float32Array(count)
   for (let j = 0; j < height; j++) for (let i = 0; i < width; i++) {
     const slot = j * width + i
+    if (covered[slot]) {
+      const sink = ground.sinkRock + (ground.sinkFloor - ground.sinkRock) * smoothstep(0.3, walkable, up[slot])
+      field[slot] = foot[slot] - sink + (sink + ground.overlap) * (1 - smoothstep(ground.rim[0], ground.rim[1], depth[slot]))
+      continue
+    }
     const landform = macro(x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell)
-    const held = Math.min(Math.max(landform, lower[slot]), Math.max(lower[slot], upper[slot]))
-    field[slot] = Math.min(ceiling[slot], held + (landform - held) * smoothstep(ground.taper[0], ground.taper[1], distance[slot]))
+    const near = smoothed(slot)
+    const start = near + Math.max(0, edgeRaw[slot] - near) * (1 - smoothstep(0, ground.settle, distance[slot])) + ground.overlap
+    const radius = Math.min(ground.falloff[1], Math.max(ground.falloff[0], 1.5 * Math.abs(landform - start) / ground.grade))
+    field[slot] = start + (landform - start) * smoothstep(0, radius, distance[slot])
   }
-  const edge = new Float32Array(count)
-  for (let slot = 0; slot < count; slot++) edge[slot] = covered[slot] ? -depth[slot] : distance[slot]
+  const signed = new Float32Array(count)
+  for (let slot = 0; slot < count; slot++) signed[slot] = covered[slot] ? -depth[slot] : distance[slot]
   const grid = (array, x, z) => {
     const gx = Math.min(width - 1.0001, Math.max(0, (x - x0) / cell - 0.5)), gz = Math.min(height - 1.0001, Math.max(0, (z - z0) / cell - 0.5))
     const i = Math.floor(gx), j = Math.floor(gz), fx = gx - i, fz = gz - j
@@ -141,7 +192,7 @@ export function levelGround(raster) {
   return {
     covered, width, height, x0, z0, cell,
     rimDistance: (x, z) => covers(x, z) ? grid(distance, x, z) : 1e6,
-    edge: (x, z) => covers(x, z) ? grid(edge, x, z) : ground.edgeRange,
+    edge: (x, z) => covers(x, z) ? grid(signed, x, z) : ground.edgeRange,
     height(x, z, detail) {
       if (!covers(x, z)) return macro(x, z) + hills(x, z, detail)
       return grid(field, x, z) + hills(x, z, detail) * smoothstep(ground.hillRamp[0], ground.hillRamp[1], grid(distance, x, z))
