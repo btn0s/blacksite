@@ -30,11 +30,39 @@ export type Technique = {
 
 export type TechniqueState = Omit<Technique, 'setEnabled'>
 
+export type Parameter = {
+  id: string
+  label: string
+  description?: string
+  /** Controls-panel folder, collapsed by default. */
+  group: string
+  value: number
+  min: number
+  max: number
+  step: number
+  setValue: (value: number) => void
+}
+
+export type ParameterState = Omit<Parameter, 'setValue'>
+
+export type Action = {
+  id: string
+  label: string
+  group: string
+  /** The returned text is shown in the panel for a few seconds. */
+  run: () => string | void | Promise<string | void>
+}
+
+export type ActionState = Omit<Action, 'run'>
+
 export type InspectSnapshot = {
   renderer: string
   tier: string
   view: InspectView
   techniques: readonly TechniqueState[]
+  parameters: readonly ParameterState[]
+  actions: readonly ActionState[]
+  notice: string | null
   metrics: (FrameSample & { cpu: Distribution; gpu: Distribution | null; fps: number }) | null
 }
 
@@ -67,6 +95,9 @@ export function createInspector(options: {
   const gpuTimes = new Float64Array(times.length)
   gpuTimes.fill(Number.NaN)
   const techniques = new Map<string, Technique>()
+  const parameters = new Map<string, Parameter>()
+  const actions = new Map<string, Action>()
+  let noticeTimer: ReturnType<typeof setTimeout> | undefined
   const listeners = new Set<() => void>()
   let cursor = 0
   let count = 0
@@ -78,6 +109,9 @@ export function createInspector(options: {
     tier: options.tier,
     view: 'lit',
     techniques: [],
+    parameters: [],
+    actions: [],
+    notice: null,
     metrics: null,
   }
 
@@ -88,6 +122,25 @@ export function createInspector(options: {
   function publishTechniques() {
     snapshot = { ...snapshot, techniques: [...techniques.values()].map(({ setEnabled: _, ...technique }) => technique) }
     emit()
+  }
+
+  function publishControls() {
+    snapshot = {
+      ...snapshot,
+      parameters: [...parameters.values()].map(({ setValue: _, ...parameter }) => parameter),
+      actions: [...actions.values()].map(({ run: _, ...action }) => action),
+    }
+    emit()
+  }
+
+  function notify(text: string) {
+    clearTimeout(noticeTimer)
+    snapshot = { ...snapshot, notice: text }
+    emit()
+    noticeTimer = setTimeout(() => {
+      snapshot = { ...snapshot, notice: null }
+      emit()
+    }, 5000)
   }
 
   function history() {
@@ -166,6 +219,46 @@ export function createInspector(options: {
       technique.setEnabled(enabled)
       technique.enabled = enabled
       publishTechniques()
+    },
+    setParameter(id: string, value: number) {
+      const parameter = parameters.get(id)
+      if (!parameter) throw new Error(`Unknown inspection parameter: ${id}`)
+      if (parameter.value === value) return
+      parameter.setValue(value)
+      parameter.value = value
+      publishControls()
+    },
+    registerParameter(parameter: Parameter) {
+      if (parameters.has(parameter.id)) throw new Error(`Inspection parameter already registered: ${parameter.id}`)
+      const registered = { ...parameter }
+      parameters.set(parameter.id, registered)
+      publishControls()
+      return () => {
+        if (parameters.get(parameter.id) !== registered) return
+        parameters.delete(parameter.id)
+        publishControls()
+      }
+    },
+    registerAction(action: Action) {
+      if (actions.has(action.id)) throw new Error(`Inspection action already registered: ${action.id}`)
+      const registered = { ...action }
+      actions.set(action.id, registered)
+      publishControls()
+      return () => {
+        if (actions.get(action.id) !== registered) return
+        actions.delete(action.id)
+        publishControls()
+      }
+    },
+    async runAction(id: string) {
+      const action = actions.get(id)
+      if (!action) throw new Error(`Unknown inspection action: ${id}`)
+      try {
+        const text = await action.run()
+        if (text) notify(text)
+      } catch (error) {
+        notify(error instanceof Error ? error.message : String(error))
+      }
     },
     registerTechnique(technique: Technique) {
       if (techniques.has(technique.id)) throw new Error(`Inspection technique already registered: ${technique.id}`)

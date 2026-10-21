@@ -100,7 +100,7 @@ export function scanEnvironment(components: readonly EnvironmentComponent[]) {
       illuminance: 1,
       clouds: null,
       heightFog: {
-        extinction: Number(fog.properties.fog_density) * metres * Math.LN2 ** 2,
+        extinction: Number(fog.properties.fog_density) * metres * Math.LN2,
         base: fog.transform.position[1]!,
         scaleHeight: 1 / (Number(fog.properties.fog_height_falloff) * metres * Math.LN2),
         start: Number(fog.properties.start_distance) * 0.01,

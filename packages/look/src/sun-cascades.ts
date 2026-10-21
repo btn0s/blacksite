@@ -1,4 +1,4 @@
-import { MeshBasicNodeMaterial, NoBlending, QuadMesh, Vector2 } from 'three/webgpu'
+import { DepthTexture, GreaterEqualCompare, LessEqualCompare, MeshBasicNodeMaterial, NoBlending, QuadMesh, RenderTarget, Vector2 } from 'three/webgpu'
 import type { Camera, NodeFrame, Scene, Vector4 } from 'three/webgpu'
 import { If, float, mix, normalWorld, positionView, reference, renderGroup, shadowPositionWorld, smoothstep, uniform, vec4 } from 'three/tsl'
 import type { SunLight } from 'three/addons/lights/SunLight.js'
@@ -17,15 +17,35 @@ export class StaggeredSunShadowNode extends SunShadowNode {
   private frame = 0
   private readonly renderedAt: number[] = []
   private readonly size = new Vector2()
+  private readonly target: { shadowMap: RenderTarget; depthTexture: DepthTexture }
 
-  constructor(light: SunLight, private readonly scene: Scene, private readonly view: Camera) {
+  constructor(light: SunLight, private readonly scene: Scene, private readonly view: Camera, reversedDepth: boolean) {
     super(light)
+    const extents = light.shadow.getFrameExtents()
+    const width = light.shadow.mapSize.width * extents.x
+    const height = light.shadow.mapSize.height * extents.y
+    const depthTexture = new DepthTexture(width, height)
+    depthTexture.name = 'SunShadowDepthTexture'
+    depthTexture.compareFunction = reversedDepth ? GreaterEqualCompare : LessEqualCompare
+    const shadowMap = new RenderTarget(width, height)
+    shadowMap.texture.name = 'SunShadowMap'
+    shadowMap.texture.type = light.shadow.mapType
+    shadowMap.depthTexture = depthTexture
+    this.target = { shadowMap, depthTexture }
     this.fit = new SunLightShadow(light.shadow.cascadeCount) as CascadeShadow
     this.clearMaterial.allowOverride = false
     this.clearMaterial.colorNode = vec4(0)
     this.clearMaterial.depthNode = float(1)
     this.clearTile.name = 'Sun cascade clear'
     this.clearTile.castShadow = true
+  }
+
+  override setupRenderTarget() {
+    return this.target
+  }
+
+  get depthTexture() {
+    return this.target.depthTexture
   }
 
   _setupCascades(builder: { observer: { hasNode: boolean } }, filterFn: unknown) {
