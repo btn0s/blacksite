@@ -16,5 +16,5 @@
   "grain": 0.06,
   "vignette": 0.45,
   "aberration": 0.12,
-  "rim": 1200
+  "rim": 0
 }
