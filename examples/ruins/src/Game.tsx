@@ -188,6 +188,11 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
     return () => { active = false }
   }, [onError, playable])
   useEffect(() => {
+    if (!look || !landscape) return
+    const { origin, extent } = landscape.sources.far
+    look.setGroundExtent(origin, [origin[0] + extent, origin[1] + extent], 2500)
+  }, [look, landscape])
+  useEffect(() => {
     let pending = false
     const interval = setInterval(() => {
       if (pending || shared.warm.current < 10) return

@@ -7,6 +7,12 @@ export interface LookTuning {
   cloudCoverage: number
   cloudAltitude: number
   cloudDensity: number
+  mistCoverage: number
+  mistTop: number
+  mistThickness: number
+  mistDensity: number
+  mistScale: number
+  mistDrift: number
   sunStrength: number
   ambient: number
   groundBounce: number
@@ -43,6 +49,12 @@ export const LOOK_CONTROLS: readonly LookControl[] = [
   { key: 'cloudCoverage', label: 'Cloud coverage', min: 0, max: 1, step: 0.01, hint: 'Fraction of the sky under cloud. Re-lights the level from the new sky after a moment.' },
   { key: 'cloudAltitude', label: 'Cloud altitude (km)', min: 0.4, max: 6, step: 0.05, hint: 'Lower reads as heavier and closer.' },
   { key: 'cloudDensity', label: 'Cloud density', min: 0.2, max: 8, step: 0.1, hint: 'Optical thickness. Higher blocks the sun and darkens the sky.' },
+  { key: 'mistCoverage', label: 'Valley mist coverage', min: 0, max: 1, step: 0.01, hint: 'Fraction of the low ground under mist. Zero turns the layer off and costs nothing.' },
+  { key: 'mistTop', label: 'Valley mist top (m)', min: -400, max: 300, step: 5, hint: 'Mean altitude of the mist tops. Keep it below where you stand to look down on it.' },
+  { key: 'mistThickness', label: 'Valley mist thickness (m)', min: 20, max: 600, step: 5, hint: 'Depth below the tops. Ground higher than the bottom of the layer shows through at its edges.' },
+  { key: 'mistDensity', label: 'Valley mist density', min: 0.1, max: 4, step: 0.05, hint: 'Opacity. Higher hides the valley floor sooner and makes the tops flatter.' },
+  { key: 'mistScale', label: 'Valley mist cell size (m)', min: 100, max: 3000, step: 50, hint: 'Width of the banks and the gaps between them.' },
+  { key: 'mistDrift', label: 'Valley mist drift (m/s)', min: 0, max: 20, step: 0.1, hint: 'Speed the mist slides across the valley.' },
   { key: 'sunStrength', label: 'Direct sun', min: 0, max: 1.5, step: 0.01, hint: 'How much of the sun survives the overcast. Drives shadows and shafts.' },
   { key: 'ambient', label: 'Sky light', min: 0, max: 2, step: 0.01, hint: 'Strength of the light the sky and clouds cast on the level.' },
   { key: 'groundBounce', label: 'Ground bounce', min: 0, max: 1, step: 0.01, hint: 'Light coming back up from the ground. Lower makes undersides darker.' },
@@ -65,6 +77,12 @@ export function resolveTuning(atmosphere: Atmosphere, overrides: Partial<LookTun
     cloudCoverage: physical?.clouds?.coverage ?? 0,
     cloudAltitude: physical?.clouds?.altitude ?? 2.2,
     cloudDensity: physical?.clouds?.density ?? 1,
+    mistCoverage: 0,
+    mistTop: -60,
+    mistThickness: 200,
+    mistDensity: 1,
+    mistScale: 700,
+    mistDrift: 1.5,
     sunStrength: 1,
     ambient: 1,
     groundBounce: 1,

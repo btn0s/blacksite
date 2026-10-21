@@ -260,12 +260,12 @@ fn atmosphereSky(viewIn: vec3f, eye: vec3f, medium: vec4f, sun: vec4f, size: vec
     let edge = cloudEdge(q, footprint, ${octaves}, clouds, cloudTime);
     let aa = fwidth(edge);
     let fade = 1.0 - smoothstep(26.0, 52.0, t);
-    let d = clamp(edge / cloudSoft(footprint, clouds), 0.0, 1.0) * fade;
-    if (d > 0.002) {
+    let d = clamp(edge / cloudSoft(footprint, clouds), 0.0, 1.0);
+    if (d > 0.002 && fade > 0.0) {
       let toward = sun.xz / max(length(sun.xz), 1e-4);
-      let s1 = cloudAmount(q + toward * 0.08, footprint, ${octaves - 1}, clouds, cloudTime) * fade;
-      let s2 = ${shadowSteps > 1 ? `cloudAmount(q + toward * 0.25, footprint, ${octaves - 2}, clouds, cloudTime) * fade` : 's1'};
-      let s3 = ${shadowSteps > 2 ? `cloudAmount(q + toward * 0.6, footprint, ${octaves - 3}, clouds, cloudTime) * fade` : 's2'};
+      let s1 = cloudAmount(q + toward * 0.08, footprint, ${octaves - 1}, clouds, cloudTime);
+      let s2 = ${shadowSteps > 1 ? `cloudAmount(q + toward * 0.25, footprint, ${octaves - 2}, clouds, cloudTime)` : 's1'};
+      let s3 = ${shadowSteps > 2 ? `cloudAmount(q + toward * 0.6, footprint, ${octaves - 3}, clouds, cloudTime)` : 's2'};
       let tau = d * clouds.z / mu;
       let alpha = 1.0 - exp(-tau);
       let shadow = exp(-(d * 0.5 + s1 * 0.6 + s2 + s3 * 0.7) * clouds.z * 0.55);
@@ -276,11 +276,11 @@ fn atmosphereSky(viewIn: vec3f, eye: vec3f, medium: vec4f, sun: vec4f, size: vec
       var single = sunlight * shadow * phase * mix(alpha * 0.55, tau * exp(-tau) * 2.2, forward) * 3.0;
       let rim = smoothstep(0.0, 1.0, clamp((d - s1) * 1.2, 0.0, 1.0));
       let side = 1.0 - smoothstep(0.05, 0.45, mu);
-      let rise = clamp((d - cloudAmount(q + along * 0.12, footprint, ${octaves - 1}, clouds, cloudTime) * fade) * 3.0 + 0.5, 0.0, 1.0);
+      let rise = clamp((d - cloudAmount(q + along * 0.12, footprint, ${octaves - 1}, clouds, cloudTime)) * 3.0 + 0.5, 0.0, 1.0);
       single *= mix(1.0, (0.75 + 0.6 * rim) * mix(0.8, 1.2, rise), side * 0.6);
       let multiple = sunlight * (0.06 + 0.08 * rim + 0.04 * rise * side) * mix(1.0, shadow, 0.5) * alpha * (0.25 + 0.75 * smoothstep(-0.3, 0.9, c));
       let ambient = (atSky(skyView, viewSampler, normalize(vec3f(direction.x, 0.03, direction.z)), medium, sun, size) * 0.26 + atSky(skyView, viewSampler, vec3f(0.0, 1.0, 0.0), medium, sun, size) * 0.42) * skyGain * alpha * (1.0 - 0.35 * d) * mix(1.0, mix(0.9, 1.1, rise), side);
-      let amount = smoothstep(0.0, aa * 1.5 + 1e-6, edge) * exp(-t * 0.02);
+      let amount = smoothstep(0.0, aa * 1.5 + 1e-6, edge) * exp(-t * 0.02) * fade;
       let cloud = vec4f(single + multiple + ambient, alpha) * amount;
       colour = colour * (1.0 - cloud.a) + cloud.rgb;
       visible = 1.0 - cloud.a;
@@ -301,13 +301,14 @@ ${CLOUDS}`)
 }
 
 const aerialNode = wgslFn(`
-fn atmosphereAerial(color: vec4f, uv: vec2f, depth: f32, projectionInverse: mat4x4f, cameraWorld: mat4x4f, reversed: f32, medium: vec4f, terms: vec2f, sun: vec4f, size: vec2f, aerial: f32, clearDistance: vec2f, radianceScale: f32, fog: vec4f, fogAlbedo: vec3f, fogEmissive: vec3f, fogSun: f32, transmittance: texture_2d<f32>, transSampler: sampler, skyView: texture_2d<f32>, viewSampler: sampler) -> vec4f {
+fn atmosphereAerial(color: vec4f, uv: vec2f, depth: f32, projectionInverse: mat4x4f, cameraWorld: mat4x4f, reversed: f32, medium: vec4f, terms: vec2f, sun: vec4f, size: vec2f, aerial: f32, clearDistance: vec2f, radianceScale: f32, fog: vec4f, fogAlbedo: vec3f, fogEmissive: vec3f, fogSun: f32, skyGain: f32, bounds: vec4f, boundsFade: f32, mist: vec4f, mistShape: vec4f, transmittance: texture_2d<f32>, transSampler: sampler, skyView: texture_2d<f32>, viewSampler: sampler) -> vec4f {
   if ((reversed < 0.5 && depth >= 1.0) || (reversed > 0.5 && depth <= 0.0)) { return color; }
   let projected = projectionInverse * vec4f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0);
   let point = projected.xyz / projected.w;
   let span = length(point);
   let direction = normalize((cameraWorld * vec4f(point, 0.0)).xyz);
-  let y0 = cameraWorld[3].y;
+  let eye = cameraWorld[3].xyz;
+  let y0 = eye.y;
   let y1 = y0 + direction.y * span;
   let km = span * 0.001;
   let h0 = max(y0 * 0.001 + medium.w, 0.0);
@@ -319,17 +320,24 @@ fn atmosphereAerial(color: vec4f, uv: vec2f, depth: f32, projectionInverse: mat4
   let airTau = tauAir * cleared.x;
   let fogTau = tauFog * cleared.y;
   let tau = airTau + vec3f(fogTau);
-  let transmission = exp(-tau);
-  let horizon = normalize(vec3f(direction.x, max(direction.y, 0.0), direction.z));
-  let air = atSky(skyView, viewSampler, horizon, medium, sun, size);
+  let keep = boundsKeep(eye + direction * span, bounds, boundsFade);
+  let transmission = exp(-tau) * keep;
+  let horizon = normalize(vec3f(direction.x, max(direction.y, 0.0005), direction.z));
+  let air = atSky(skyView, viewSampler, horizon, medium, sun, size) * skyGain;
+  let zenith = atSky(skyView, viewSampler, vec3f(0.0, 1.0, 0.0), medium, sun, size) * skyGain;
   var fogColor = air;
   if (fog.x > 0.0) {
     let sunlight = atTransmittance(transmittance, transSampler, 6360.0 + medium.w, sun.y) * sun.w * atPhaseHg(dot(direction, sun.xyz), fog.w) * fogSun;
-    fogColor = fogAlbedo * (atSky(skyView, viewSampler, vec3f(0.0, 1.0, 0.0), medium, sun, size) * 0.55 + air * 0.45 + sunlight) + fogEmissive * sun.w;
+    fogColor = fogAlbedo * (zenith * 0.55 + air * 0.45 + sunlight) + fogEmissive * sun.w;
   }
-  let weight = vec3f(fogTau) / max(airTau + vec3f(fogTau), vec3f(1e-6));
+  let weight = vec3f(fogTau) / max(airTau + vec3f(fogTau), vec3f(1e-6)) * keep;
   let inscatter = mix(air, fogColor, weight) * (vec3f(1.0) - transmission) * radianceScale;
-  return vec4f(color.rgb * transmission + inscatter, color.a);
+  var result = color.rgb * transmission + inscatter;
+  if (mist.z > 0.0 && mist.w > 0.0) {
+    let layer = mistLayer(eye, direction, span, mist, mistShape, bounds, boundsFade);
+    result = mix(result, (zenith * 0.55 + air * 0.45) * (0.92 * layer.y * radianceScale), layer.x);
+  }
+  return vec4f(result, color.a);
 }
 fn atLayer(h0: f32, h1: f32, span: f32, scale: f32) -> f32 {
   let a = exp(-h0 / scale);
@@ -338,7 +346,38 @@ fn atLayer(h0: f32, h1: f32, span: f32, scale: f32) -> f32 {
   if (abs(dh) < 1e-3 * scale) { return span * 0.5 * (a + b); }
   return span * scale * (a - b) / dh;
 }
-${CORE}`)
+fn boundsKeep(p: vec3f, bounds: vec4f, fade: f32) -> f32 {
+  let inside = min(min(p.x - bounds.x, bounds.z - p.x), min(p.z - bounds.y, bounds.w - p.z));
+  return smoothstep(0.0, max(fade, 1.0), inside);
+}
+fn mistField(xz: vec2f, shape: vec4f) -> f32 {
+  return cloudFbm((xz + shape.yz) / max(shape.x, 1.0), 0.0, 3) * 1.4 + 0.5;
+}
+fn mistSegment(eye: vec3f, direction: vec3f, span: f32, bottom: f32, top: f32) -> vec2f {
+  if (abs(direction.y) < 1e-4) {
+    if (eye.y >= bottom && eye.y <= top) { return vec2f(0.0, span); }
+    return vec2f(0.0);
+  }
+  let a = (top - eye.y) / direction.y;
+  let b = (bottom - eye.y) / direction.y;
+  return vec2f(max(min(a, b), 0.0), min(max(a, b), span));
+}
+fn mistLayer(eye: vec3f, direction: vec3f, span: f32, mist: vec4f, shape: vec4f, bounds: vec4f, boundsFade: f32) -> vec2f {
+  let bottom = mist.x - mist.y;
+  let threshold = 0.5 + (0.5 - mist.w) * 0.7;
+  var run = mistSegment(eye, direction, span, bottom, mist.x);
+  let first = eye + direction * run.x;
+  let lift = clamp(mistField(first.xz, shape) - threshold, -0.5, 0.5);
+  run = mistSegment(eye, direction, span, bottom, mist.x + mist.y * 0.35 * lift);
+  if (run.y <= run.x) { return vec2f(0.0); }
+  let entry = eye + direction * run.x;
+  let n = mistField(entry.xz, shape);
+  let cover = smoothstep(threshold - 0.1, threshold + 0.1, n);
+  let tau = mist.z * 0.02 * cover * (run.y - run.x) * boundsKeep(entry, bounds, boundsFade);
+  return vec2f(1.0 - exp(-tau), mix(0.8, 1.05, smoothstep(0.0, 0.5, n - threshold)));
+}
+${CORE}
+${CLOUDS}`)
 
 export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmosphere: Atmosphere, quality: QualityTier, groundBounce = 1) {
   const spec = atmosphere.physical
@@ -359,6 +398,11 @@ export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmospher
   const fogAlbedo = uniform(new Vector3(...(heightFog?.albedo ?? [1, 1, 1] as const)))
   const fogSun = uniform(1)
   const aerial = uniform(spec.aerial)
+  const bounds = uniform(new Vector4(-1e9, -1e9, 1e9, 1e9))
+  const boundsFade = uniform(1)
+  const mist = uniform(new Vector4(-60, 200, 0, 0))
+  const mistShape = uniform(new Vector4(700, 0, 0, 0))
+  let mistDrift = 0
   const groundGain = uniform(groundBounce)
   const targets = [[256, 64], [32, 32], settings.view].map(([width, height]) => new RenderTarget(width, height, { type: HalfFloatType, minFilter: LinearFilter, magFilter: LinearFilter, depthBuffer: false, generateMipmaps: false }))
   const [transmittance, multiple, view] = targets
@@ -409,9 +453,13 @@ export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmospher
     fogAlbedo,
     fogSun,
     aerial(color: Node<'vec4'>, depth: Node<'float'>, camera: Camera, radianceScale: number) {
-      return aerialNode({ color, uv: screenUV, depth, projectionInverse: uniform(camera.projectionMatrixInverse), cameraWorld: uniform(camera.matrixWorld), reversed: uniform(camera.reversedDepth ? 1 : 0), ...shared, terms, aerial, clearDistance: uniform(new Vector2(spec.clear ?? 0, heightFog?.start ?? 0)), radianceScale: uniform(radianceScale), fog, fogAlbedo, fogEmissive: uniform(new Vector3(...(heightFog?.emissive ?? [0, 0, 0] as const))), fogSun }) as Node<'vec4'>
+      return aerialNode({ color, uv: screenUV, depth, projectionInverse: uniform(camera.projectionMatrixInverse), cameraWorld: uniform(camera.matrixWorld), reversed: uniform(camera.reversedDepth ? 1 : 0), ...shared, terms, aerial, clearDistance: uniform(new Vector2(spec.clear ?? 0, heightFog?.start ?? 0)), radianceScale: uniform(radianceScale), fog, fogAlbedo, fogEmissive: uniform(new Vector3(...(heightFog?.emissive ?? [0, 0, 0] as const))), fogSun, skyGain, bounds, boundsFade, mist, mistShape }) as Node<'vec4'>
     },
-    tick(dt: number) { cloudTime.value += dt * (spec.clouds?.wind ?? 0) },
+    tick(dt: number) {
+      cloudTime.value += dt * (spec.clouds?.wind ?? 0)
+      mistShape.value.y += dt * mistDrift * 0.8
+      mistShape.value.z += dt * mistDrift * 0.6
+    },
     setFog(density: number, scaleHeight: number) {
       fog.value.x = fogExtinction * density
       fog.value.z = Math.max(scaleHeight, 1)
@@ -422,6 +470,15 @@ export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmospher
       clouds.value.set(coverage, Math.max(altitude, medium.value.w + 0.3), density, spec.clouds?.scale ?? 1)
     },
     setGroundBounce(amount: number) { groundGain.value = amount },
+    setMist(coverage: number, top: number, thickness: number, density: number, scale: number, drift: number) {
+      mist.value.set(top, Math.max(thickness, 1), density, coverage)
+      mistShape.value.x = scale
+      mistDrift = drift
+    },
+    setGroundExtent(min: readonly [number, number], max: readonly [number, number], fade: number) {
+      bounds.value.set(min[0], min[1], max[0], max[1])
+      boundsFade.value = fade
+    },
     rebake() {
       cubeCamera.update(renderer, environmentScene)
       const generator = new PMREMGenerator(renderer)
