@@ -76,7 +76,7 @@ export function surfaceMasks(x, z, height, slope, rimDistance) {
 }
 
 
-export const ground = { reach: 0.6, slack: 3, slope: 0.35, bury: 0.35, sinkFloor: 0.25, sinkRock: 1, rise: 0.5, screening: 32, taper: [200, 300], hillRamp: [20, 180], edgeRange: 64, freeEdge: 6 }
+export const ground = { bury: 1, sinkFloor: 0.25, sinkRock: 1, overlap: [2, 8], fall: 0.8, rise: 0.5, taper: [200, 300], hillRamp: [20, 180], edgeRange: 64 }
 
 const reach = [[-1, 0, 1], [0, -1, 1], [-1, -1, Math.SQRT2], [1, -1, Math.SQRT2], [-2, -1, Math.sqrt(5)], [-1, -2, Math.sqrt(5)], [1, -2, Math.sqrt(5)], [2, -1, Math.sqrt(5)]]
 
@@ -101,59 +101,34 @@ export function propagate(values, width, height, perCell) {
   return values
 }
 
-function relax(field, shape, fixed, ceiling, width, height, cell, screening, sweeps, report) {
-  const stiffness = (cell / screening) ** 2
-  const omega = Math.min(1.7, 2 / (1 + Math.sin(Math.PI / Math.max(width, height))))
-  for (let sweep = 0; sweep < sweeps; sweep++) {
-    let change = 0
-    for (let j = 1; j < height - 1; j++) for (let i = 1; i < width - 1; i++) {
-      const slot = j * width + i
-      if (fixed[slot]) continue
-      const target = (field[slot - 1] + field[slot + 1] + field[slot - width] + field[slot + width] + stiffness * shape[slot]) / (4 + stiffness)
-      const delta = (Math.min(target, ceiling[slot]) - field[slot]) * omega
-      field[slot] += delta
-      if (Math.abs(delta) > change) change = Math.abs(delta)
-    }
-    if (sweep % 100 === 0) report?.(`membrane sweep ${sweep} change ${change.toExponential(2)}`)
-    if (change < 2e-2) break
-  }
-}
-
-export function levelGround(raster, report) {
+export function levelGround(raster) {
   const { cell, originX, originZ, nx, nz, low, top, topUp, walkable } = raster
   const pad = world.padding, width = nx + 2 * pad, height = nz + 2 * pad
   const x0 = originX - pad * cell, z0 = originZ - pad * cell
   const count = width * height
   const covered = new Uint8Array(count)
-  const anchor = new Float32Array(count).fill(Infinity)
-  const cap = new Float32Array(count).fill(Infinity)
-  const floor = new Uint8Array(count)
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) if (Number.isFinite(low[j * nx + i])) covered[(j + pad) * width + i + pad] = 1
+  const distance = propagate(Float32Array.from(covered, value => value ? 0 : Infinity), width, height, cell)
+  const depth = propagate(Float32Array.from(covered, value => value ? Infinity : 0), width, height, cell)
+  // The terrain buries the level's foot and stays under its lowest upward surface, except along the rim, where it rises over that surface too.
+  const base = new Float32Array(count).fill(-Infinity), ceiling = new Float32Array(count).fill(Infinity)
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
     const source = j * nx + i
     if (!Number.isFinite(low[source])) continue
     const slot = (j + pad) * width + i + pad
-    covered[slot] = 1
     const sink = ground.sinkRock + (ground.sinkFloor - ground.sinkRock) * smoothstep(0.3, walkable, topUp[source])
-    if (Number.isFinite(top[source])) cap[slot] = top[source] - sink
-    floor[slot] = topUp[source] >= walkable && top[source] - low[source] < 0.01 ? 1 : 0
-    anchor[slot] = Math.min(low[source] + ground.bury, cap[slot])
+    if (Number.isFinite(top[source])) ceiling[slot] = top[source] + (ground.bury + sink) * (1 - smoothstep(ground.overlap[0], ground.overlap[1], depth[slot])) - sink
+    base[slot] = Math.min(low[source] + ground.bury, ceiling[slot])
   }
-  const lowest = propagate(anchor.slice(), width, height, ground.reach * cell)
-  for (let slot = 0; slot < count; slot++) if (anchor[slot] > lowest[slot] + ground.slack) anchor[slot] = Infinity
-  const inside = propagate(anchor.slice(), width, height, ground.slope * cell)
-  for (let slot = 0; slot < count; slot++) if (covered[slot] && inside[slot] > cap[slot]) inside[slot] = cap[slot]
-  const distance = propagate(Float32Array.from(covered, value => value ? 0 : Infinity), width, height, cell)
-  const depth = propagate(Float32Array.from(covered, value => value ? Infinity : 0), width, height, cell)
-  const rising = propagate(Float32Array.from(inside, (value, slot) => covered[slot] ? value : Infinity), width, height, ground.rise * cell)
-  const shape = new Float32Array(count), field = new Float32Array(count), fixed = new Uint8Array(count)
+  const lower = propagate(base.map(value => -value), width, height, ground.fall * cell).map(value => -value)
+  const upper = propagate(base.map(value => value === -Infinity ? Infinity : value), width, height, ground.rise * cell)
+  const field = new Float32Array(count)
   for (let j = 0; j < height; j++) for (let i = 0; i < width; i++) {
     const slot = j * width + i
     const landform = macro(x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell)
-    shape[slot] = field[slot] = landform + (Math.min(landform, rising[slot]) - landform) * (1 - smoothstep(ground.taper[0], ground.taper[1], distance[slot]))
-    if (covered[slot]) { fixed[slot] = floor[slot] || depth[slot] >= ground.freeEdge ? 1 : 0; field[slot] = inside[slot] }
-    if (i === 0 || j === 0 || i === width - 1 || j === height - 1) fixed[slot] = 1
+    const held = Math.min(Math.max(landform, lower[slot]), Math.max(lower[slot], upper[slot]))
+    field[slot] = Math.min(ceiling[slot], held + (landform - held) * smoothstep(ground.taper[0], ground.taper[1], distance[slot]))
   }
-  relax(field, shape, fixed, cap, width, height, cell, ground.screening, 4000, report)
   const edge = new Float32Array(count)
   for (let slot = 0; slot < count; slot++) edge[slot] = covered[slot] ? -depth[slot] : distance[slot]
   const grid = (array, x, z) => {

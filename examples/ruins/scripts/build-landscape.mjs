@@ -11,9 +11,8 @@ const [collisionDirectory, materialsDirectory, output] = process.argv.slice(2).m
 if (!collisionDirectory || !materialsDirectory || !output) throw new Error('Usage: build-landscape.mjs <collision directory> <materials directory> <output directory>')
 await mkdir(join(output, 'layers'), { recursive: true })
 
-const report = message => console.log(message)
 const raster = await rasterizeLevelGround(collisionDirectory)
-const level = levelGround(raster, report)
+const level = levelGround(raster)
 const height = (x, z, detail) => level.height(x, z, detail)
 
 function bake(name, size, extent, centre, detail) {
