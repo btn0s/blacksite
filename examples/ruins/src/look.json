@@ -1,6 +1,6 @@
 {
-  "fogDensity": 1.5,
-  "fogHeight": 90,
+  "fogDensity": 0.12,
+  "fogHeight": 600,
   "cloudCoverage": 0.88,
   "cloudAltitude": 1.2,
   "cloudDensity": 3.5,

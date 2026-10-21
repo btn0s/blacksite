@@ -22,7 +22,7 @@ export const ruinsHome = {
   id: 1,
   name: 'Spawn',
   position: [25.8, 25.8, 4.6] as [number, number, number],
-  target: [35.8, 27, 4.6] as [number, number, number],
+  target: [15.8, 27, 4.6] as [number, number, number],
   note: '',
 }
 
