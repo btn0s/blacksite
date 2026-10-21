@@ -19,7 +19,9 @@ import { wearSurvivor } from './survivor'
 import { SceneInspection, type InspectionContent, type TelemetryAction } from '../../shared/Inspection'
 import { createScanMaterialStreaming, residentScanTextures } from '../../shared/scan-material'
 import { loadRuins, type RuinsAsset } from './asset'
-import { RuinsCollision, type RegionalCollision } from './collision'
+import { RuinsCollision, TerrainCollision, type RegionalCollision } from './collision'
+import { Landscape } from './Landscape'
+import { loadLandscape, type LandscapeAsset } from './landscape-asset'
 import type { Contact } from './contacts'
 import { scanEnvironment } from '../../shared/scan-environment'
 import type { ScanFlames } from '../../shared/scan-flames'
@@ -55,6 +57,8 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
   const [look, setLook] = useState<Look | null>(null)
   const [collisionReady, setCollisionReady] = useState(false)
   const onCollisionReady = useCallback(() => setCollisionReady(true), [])
+  const [playable, setPlayable] = useState(false)
+  const [landscape, setLandscape] = useState<LandscapeAsset | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const { atmosphere, sunlight, film } = useMemo(() => scanEnvironment(owned.environment.components), [owned])
   const home = owned.home
@@ -143,9 +147,16 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
       performance.mark('ruins-first-playable')
       shared.warm.current = 10
       onReady()
+      setPlayable(true)
     })().catch(error => { if (active) onError(error) })
     return () => { active = false }
   }, [collisionReady, geometry, look, onError, onReady, renderer, shared, walker])
+  useEffect(() => {
+    if (!playable) return
+    let active = true
+    void loadLandscape().then(asset => { if (active) setLandscape(asset) }).catch(onError)
+    return () => { active = false }
+  }, [onError, playable])
   useEffect(() => {
     let pending = false
     const interval = setInterval(() => {
@@ -161,10 +172,12 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
   if (error) throw error
   return <>
     <WebGPULook atmosphere={atmosphere} sunlight={sunlight} film={film} quality="high" shadowDistance={400} shadowMap={2048} shadowCascades={4} shadowLayers={shadowLayers} disable={disabledStages} onReady={onLook} onError={onError} />
+    {landscape && look && <Landscape asset={landscape} look={look} onError={onError} />}
     <Physics gravity={[0, -9.8, 0]} paused timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <AlsPhysicsStepper />
       {collisionReady && createPortal(<CharacterController controller={walker} events={events} />, scene, { camera: gameplayCamera })}
       <RuinsCollision directory={owned.collision} describe={owned.describe} root={owned.collisionRoot} walker={walker} onReady={onCollisionReady} onError={onError} handle={shared.collision} />
+      {landscape && <TerrainCollision asset={landscape} />}
     </Physics>
     <SceneInspection name="ruins" look={shared.look} warm={shared.warm} walker={walker} inspector={inspector} telemetry={telemetry} content={content} />
   </>
