@@ -66,7 +66,6 @@ export interface WebGPULook {
   setCamera(camera: Camera): void
   compile(compiler: WebGPUCompiler, ownedRoots?: readonly Object3D[]): Promise<void>
   render(dt?: number): void
-  setSize(width: number, height: number): void
   setDebug(enabled: boolean): void
   setTemporal(options: { traa?: boolean; gtao?: boolean }): void
   probeMotion(): Promise<MotionProbe>
@@ -295,6 +294,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   const beforeLitListeners = new Set<WebGPUBeforeDepthListener>()
   const afterDepthListeners = new Set<WebGPUAfterDepthListener>()
   const depthSize = new Vector2()
+  const bufferSize = new Vector2()
   let preparingCompile = false
   const captureState = (camera: Camera, pass: 'depth' | 'lit' | 'shadow') => ({
     camera, pass, target: renderer.getRenderTarget(), mrt: renderer.getMRT(), lighting: renderer.lighting,
@@ -376,7 +376,6 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     atmosphereGPU.setClouds(features.clouds ? tuning.cloudCoverage : 0, tuning.cloudAltitude, tuning.cloudDensity)
     atmosphereGPU.setFog(tuning.fogDensity, tuning.fogHeight)
     atmosphereGPU.setHaze(tuning.haze)
-    atmosphereGPU.setMist(tuning.mistCoverage, tuning.mistTop, tuning.mistThickness, tuning.mistDensity, tuning.mistScale, tuning.mistDrift)
     const shaftStrength = shafts && features.shafts ? tuning.shafts * tuning.sunStrength : 0
     atmosphereGPU.setFogSun(shaftStrength > 0 ? 0 : tuning.sunStrength)
     atmosphereGPU.setGroundBounce(tuning.groundBounce)
@@ -421,6 +420,11 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     },
     beginFrame() {
       if (disposed) return
+      const buffer = renderer.getDrawingBufferSize(bufferSize)
+      if ((buffer.x | buffer.y) & 1) {
+        const ratio = renderer.getPixelRatio()
+        renderer.setSize((buffer.x - (buffer.x & 1) + 0.5) / ratio, (buffer.y - (buffer.y & 1) + 0.5) / ratio, false)
+      }
       renderer.info.reset()
       timings.startFrame()
     },
@@ -493,12 +497,6 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
         }).catch(() => {}).finally(() => { metering = false })
       }
       timings.resolve(renderer)
-    },
-    setSize(width, height) {
-      const ratio = renderer.getPixelRatio()
-      const even = (extent: number) => { const pixels = Math.floor(extent * ratio); return (pixels - (pixels & 1) + 0.5) / ratio }
-      const current = renderer.getSize(new Vector2())
-      if (current.x !== even(width) || current.y !== even(height)) renderer.setSize(even(width), even(height), false)
     },
     setDebug(enabled) {
       debugging = enabled
