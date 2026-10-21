@@ -358,6 +358,7 @@ export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmospher
   const fog = uniform(new Vector4(fogExtinction, heightFog?.base ?? 0, Math.max(heightFog?.scaleHeight ?? 1, 1), heightFog?.phase ?? 0))
   const fogAlbedo = uniform(new Vector3(...(heightFog?.albedo ?? [1, 1, 1] as const)))
   const fogSun = uniform(1)
+  const aerial = uniform(spec.aerial)
   const groundGain = uniform(groundBounce)
   const targets = [[256, 64], [32, 32], settings.view].map(([width, height]) => new RenderTarget(width, height, { type: HalfFloatType, minFilter: LinearFilter, magFilter: LinearFilter, depthBuffer: false, generateMipmaps: false }))
   const [transmittance, multiple, view] = targets
@@ -408,7 +409,7 @@ export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmospher
     fogAlbedo,
     fogSun,
     aerial(color: Node<'vec4'>, depth: Node<'float'>, camera: Camera, radianceScale: number) {
-      return aerialNode({ color, uv: screenUV, depth, projectionInverse: uniform(camera.projectionMatrixInverse), cameraWorld: uniform(camera.matrixWorld), reversed: uniform(camera.reversedDepth ? 1 : 0), ...shared, terms, aerial: uniform(spec.aerial), clearDistance: uniform(new Vector2(spec.clear ?? 0, heightFog?.start ?? 0)), radianceScale: uniform(radianceScale), fog, fogAlbedo, fogEmissive: uniform(new Vector3(...(heightFog?.emissive ?? [0, 0, 0] as const))), fogSun }) as Node<'vec4'>
+      return aerialNode({ color, uv: screenUV, depth, projectionInverse: uniform(camera.projectionMatrixInverse), cameraWorld: uniform(camera.matrixWorld), reversed: uniform(camera.reversedDepth ? 1 : 0), ...shared, terms, aerial, clearDistance: uniform(new Vector2(spec.clear ?? 0, heightFog?.start ?? 0)), radianceScale: uniform(radianceScale), fog, fogAlbedo, fogEmissive: uniform(new Vector3(...(heightFog?.emissive ?? [0, 0, 0] as const))), fogSun }) as Node<'vec4'>
     },
     tick(dt: number) { cloudTime.value += dt * (spec.clouds?.wind ?? 0) },
     setFog(density: number, scaleHeight: number) {
@@ -416,6 +417,7 @@ export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmospher
       fog.value.z = Math.max(scaleHeight, 1)
     },
     setFogSun(amount: number) { fogSun.value = amount },
+    setHaze(amount: number) { aerial.value = spec.aerial * amount },
     setClouds(coverage: number, altitude: number, density: number) {
       clouds.value.set(coverage, Math.max(altitude, medium.value.w + 0.3), density, spec.clouds?.scale ?? 1)
     },

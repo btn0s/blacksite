@@ -3,6 +3,7 @@ import type { Atmosphere, CloudSpec } from './atmosphere'
 export interface LookTuning {
   fogDensity: number
   fogHeight: number
+  haze: number
   cloudCoverage: number
   cloudAltitude: number
   cloudDensity: number
@@ -38,6 +39,7 @@ export interface LookControl {
 export const LOOK_CONTROLS: readonly LookControl[] = [
   { key: 'fogDensity', label: 'Fog density', min: 0, max: 6, step: 0.05, hint: 'Multiple of the authored fog. Higher builds haze sooner with distance.' },
   { key: 'fogHeight', label: 'Fog height falloff (m)', min: 5, max: 800, step: 5, hint: 'Scale height of the fog. Lower hugs low ground; higher fills the whole level.' },
+  { key: 'haze', label: 'Distance haze', min: 0, max: 1.5, step: 0.01, hint: 'Multiple of the authored air haze. Lower keeps far mountains and the valley readable.' },
   { key: 'cloudCoverage', label: 'Cloud coverage', min: 0, max: 1, step: 0.01, hint: 'Fraction of the sky under cloud. Re-lights the level from the new sky after a moment.' },
   { key: 'cloudAltitude', label: 'Cloud altitude (km)', min: 0.4, max: 6, step: 0.05, hint: 'Lower reads as heavier and closer.' },
   { key: 'cloudDensity', label: 'Cloud density', min: 0.2, max: 8, step: 0.1, hint: 'Optical thickness. Higher blocks the sun and darkens the sky.' },
@@ -59,6 +61,7 @@ export function resolveTuning(atmosphere: Atmosphere, overrides: Partial<LookTun
   return {
     fogDensity: 1,
     fogHeight: physical?.heightFog?.scaleHeight ?? 100,
+    haze: 1,
     cloudCoverage: physical?.clouds?.coverage ?? 0,
     cloudAltitude: physical?.clouds?.altitude ?? 2.2,
     cloudDensity: physical?.clouds?.density ?? 1,

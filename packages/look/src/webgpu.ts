@@ -374,6 +374,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   const applyTuning = () => {
     atmosphereGPU.setClouds(features.clouds ? tuning.cloudCoverage : 0, tuning.cloudAltitude, tuning.cloudDensity)
     atmosphereGPU.setFog(tuning.fogDensity, tuning.fogHeight)
+    atmosphereGPU.setHaze(tuning.haze)
     const shaftStrength = shafts && features.shafts ? tuning.shafts * tuning.sunStrength : 0
     atmosphereGPU.setFogSun(shaftStrength > 0 ? 0 : tuning.sunStrength)
     atmosphereGPU.setGroundBounce(tuning.groundBounce)
