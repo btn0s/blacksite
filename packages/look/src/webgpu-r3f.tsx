@@ -10,7 +10,7 @@ export type WebGPULookProps = WebGPULookOptions & {
 }
 
 export function WebGPULook({ onReady, onError, debug = false, ...options }: WebGPULookProps) {
-  const { gl, scene, camera, size } = useThree()
+  const { gl, scene, camera } = useThree()
   const look = useRef<WebGPULookHandle | null>(null)
   const callbacks = useRef({ onReady, onError })
   const activeCamera = useRef(camera)
@@ -35,7 +35,6 @@ export function WebGPULook({ onReady, onError, debug = false, ...options }: WebG
     }
   }, [gl, scene, options.atmosphere, options.quality, options.shadowDistance, options.shadowMap, options.shadowLayers, options.shadowCascades, options.sunlight, options.camera, options.film, options.tuning, options.disable])
   useEffect(() => { look.current?.setCamera(camera) }, [camera])
-  useEffect(() => { look.current?.setSize(size.width, size.height) }, [size.width, size.height])
   useEffect(() => { look.current?.setDebug(debug) }, [debug])
   useFrame(() => { look.current?.beginFrame() }, -1000)
   useFrame((_, dt) => { look.current?.render(dt) }, 1)
