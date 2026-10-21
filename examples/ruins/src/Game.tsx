@@ -6,6 +6,7 @@ import { WebGPURenderer } from 'three/webgpu'
 import { InputProvider, makeInputDevices } from '@blacksite/input'
 import { BODY_LAYER, CharacterController, CharacterOverlay, CharacterPause, useCharacterStatus, useLocalSession, useTouchActive, type CharacterEvents, type CharacterHandle } from '@blacksite/subject'
 import { MeshletScene, type MeshletStats } from '@blacksite/geometry'
+import { createGroundBlend, type GroundBlend } from '@blacksite/landscape'
 import { createInspector } from '@blacksite/inspect'
 import { DebugBlock, InspectHud } from '@blacksite/inspect/react'
 import { WebGPULook } from '@blacksite/look/webgpu-r3f'
@@ -25,7 +26,7 @@ import { createScanMaterialStreaming, residentScanTextures } from '../../shared/
 import { loadRuins, type RuinsAsset } from './asset'
 import { RuinsCollision, TerrainCollision, type RegionalCollision } from './collision'
 import { Landscape } from './Landscape'
-import { loadLandscape, type LandscapeAsset } from './landscape-asset'
+import { landscapeFootprint, landscapeLayerSpecs, loadLandscape, type LandscapeAsset } from './landscape-asset'
 import type { Contact } from './contacts'
 import { scanEnvironment } from '../../shared/scan-environment'
 import type { ScanFlames } from '../../shared/scan-flames'
@@ -56,12 +57,14 @@ const loadingUploadBytes = 32 * 1048576
 const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
 const lodLegend = [{ color: '#ffc1aa', label: 'Source · 0' }, { color: '#adc4ef', label: 'Level 1' }, { color: '#e3ffa3', label: 'Level 2' }]
 
-function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, telemetry, shared, gizmoBottom, onStats, onReady, onSaved }: {
+function Scene({ owned, landscape, ground, geometry, flames, walker, gameplayCamera, inspector, telemetry, shared, gizmoBottom, onStats, onReady, onSaved }: {
   onStats(value: MeshletStats): void
   onReady(): void
   onSaved(file: string): void
   gizmoBottom: number
   owned: RuinsAsset
+  landscape: LandscapeAsset
+  ground: GroundBlend
   geometry: MeshletScene
   flames: ScanFlames
   walker: CharacterHandle
@@ -78,7 +81,6 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
   const [collisionReady, setCollisionReady] = useState(false)
   const onCollisionReady = useCallback(() => setCollisionReady(true), [])
   const [playable, setPlayable] = useState(false)
-  const [landscape, setLandscape] = useState<LandscapeAsset | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const { atmosphere, sunlight, film } = useMemo(() => scanEnvironment(owned.environment.components), [owned])
   const home = owned.home
@@ -97,11 +99,15 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
         value: shared.look.current?.tuning[control.key] ?? 0,
         setValue: value => shared.look.current?.tune({ [control.key]: value }),
       })),
+      { id: 'ground-band', group: 'Look', label: 'Ground blend band', description: 'Height above the terrain, in metres, over which the level fades into the terrain ground colour and normal.', min: 0.3, max: 1.5, step: 0.05, value: ground.tuning.band, setValue: value => ground.tune({ band: value }) },
+      { id: 'ground-noise', group: 'Look', label: 'Ground blend break-up', description: 'How much noise breaks up the top of the ground blend band.', min: 0, max: 1, step: 0.05, value: ground.tuning.noise, setValue: value => ground.tune({ noise: value }) },
+      { id: 'ground-reach', group: 'Look', label: 'Ground blend reach', description: 'How far in from the level edge, in metres, the ground blend applies.', min: 0, max: 120, step: 5, value: ground.tuning.reach, setValue: value => ground.tune({ reach: value }) },
       { id: 'look-rim', group: 'Look', label: 'Character rim', description: 'Cool edge light on the survivor so it reads against the fog.', min: 0, max: 6000, step: 50, value: survivorRim.value, setValue: value => { survivorRim.value = value } },
     ],
     actions: [{ id: 'look-save', group: 'Look', label: 'Save look', run: () => saveLook(shared.look.current) }],
     techniques: [
       ...FEATURES.map(feature => ({ id: `look-${feature.id}`, group: 'Rendering', label: feature.label, description: feature.description, enabled: true, setEnabled: (enabled: boolean) => shared.look.current?.setFeature(feature.id, enabled) })),
+      { id: 'ground-blend', group: 'Rendering', label: 'Ground blend', description: 'Fades level surfaces into the terrain ground colour and normal within the blend band above the terrain. One height tap and two filtered reads per fragment, only below the band.', enabled: true, setEnabled: enabled => ground.tune({ enabled }) },
       { id: 'meshlet-debug', group: 'Overlays', label: 'Colour by meshlet', enabled: false, setEnabled: enabled => geometry.setDebugView(enabled ? 'meshlets' : inspector.getSnapshot().view === 'lod' ? 'lod' : 'normal') },
       { id: 'collision-overlay', group: 'Overlays', label: 'Show collision', description: 'Resident collision: green walkable, red steep, blue overhang.', enabled: false, setEnabled: enabled => shared.collision.current?.setOverlay(enabled ? 0 : null) },
       { id: 'collision-hidden', group: 'Overlays', label: 'Show invisible collision', description: 'Only collision standing 0.5 m or more in front of the drawn surface.', enabled: false, setEnabled: enabled => shared.collision.current?.setOverlay(enabled ? 0.5 : null) },
@@ -116,7 +122,7 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
     textures: () => residentScanTextures(renderer),
     probe: async () => ({ motion: await Promise.race([shared.look.current?.probeMotion(), new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 2000))]), look: shared.look.current?.telemetry.snapshot(), frames: shared.look.current?.telemetry.recent(240) }),
     details: () => ({ look: shared.look.current?.telemetry.snapshot(), collisionContacts: shared.collision.current?.contactReport(), placements: owned.placements.length, minimumWorldError: owned.manifest.minimumWorldError, sourceTriangles: owned.sourceTriangles, cappedTriangles: owned.cappedTriangles, bounds: { min: owned.bounds.min.toArray(), max: owned.bounds.max.toArray() }, untranslated: owned.manifest.untranslated, excluded: owned.manifest.excluded, geometryPaging: geometry.pagingStats(), textureStreaming: textures.snapshot(), regionalCollision: shared.collision.current?.stats(), ...stats }),
-  }), [geometry, inspector, owned, renderer, shared, stats, textures])
+  }), [geometry, ground, inspector, owned, renderer, shared, stats, textures])
   useEffect(() => {
     shared.geometry.current = geometry
     geometry.object.visible = false
@@ -182,16 +188,10 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
     return () => { active = false }
   }, [collisionReady, geometry, look, onError, onReady, renderer, shared, walker])
   useEffect(() => {
-    if (!playable) return
-    let active = true
-    void loadLandscape().then(asset => { if (active) setLandscape(asset) }).catch(onError)
-    return () => { active = false }
-  }, [onError, playable])
-  useEffect(() => {
-    if (!look || !landscape) return
+    if (!look || !playable) return
     const { origin, extent } = landscape.sources.far
     look.setGroundExtent(origin, [origin[0] + extent, origin[1] + extent], 2500)
-  }, [look, landscape])
+  }, [look, landscape, playable])
   useEffect(() => {
     let pending = false
     const interval = setInterval(() => {
@@ -207,12 +207,12 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
   if (error) throw error
   return <>
     <WebGPULook atmosphere={atmosphere} sunlight={sunlight} film={film} tuning={defaultLook} quality="high" shadowDistance={400} shadowMap={2048} shadowCascades={4} shadowLayers={shadowLayers} disable={disabledStages} onReady={onLook} onError={onError} />
-    {landscape && look && <Landscape asset={landscape} look={look} onError={onError} />}
+    {playable && look && <Landscape asset={landscape} look={look} onError={onError} />}
     <Physics gravity={[0, -9.8, 0]} paused timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <AlsPhysicsStepper />
       {collisionReady && createPortal(<CharacterController controller={walker} events={events} />, scene, { camera: gameplayCamera })}
       <RuinsCollision directory={owned.collision} describe={owned.describe} root={owned.collisionRoot} walker={walker} onReady={onCollisionReady} onError={onError} handle={shared.collision} />
-      {landscape && <TerrainCollision asset={landscape} />}
+      {playable && <TerrainCollision asset={landscape} />}
     </Physics>
     <SceneInspection name="ruins" look={shared.look} warm={shared.warm} walker={walker} inspector={inspector} telemetry={telemetry} content={content} />
     <Screenshot name="ruins" look={shared.look} warm={shared.warm} walker={walker} onSaved={onSaved} />
@@ -244,7 +244,8 @@ function ContactDisplay({ shared }: { shared: { collision: { current: RegionalCo
   </DebugBlock>
 }
 
-function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: ReturnType<typeof makeInputDevices>; onReady(): void }) {
+function Ruins({ owned, landscape, runtime, onReady }: { owned: RuinsAsset; landscape: LandscapeAsset; runtime: ReturnType<typeof makeInputDevices>; onReady(): void }) {
+  const ground = useMemo(() => createGroundBlend({ uniforms: landscape.uniforms, averages: landscape.averages, layerSpecs: landscapeLayerSpecs, footprint: landscapeFootprint }), [landscape])
   const [geometry, setGeometry] = useState<MeshletScene | null>(null)
   const [flames, setFlames] = useState<ScanFlames | null>(null)
   const [selection, setSelection] = useState<MeshletStats | null>(null)
@@ -285,17 +286,17 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
     await gl.init()
     if (!gl.backend.isWebGPUBackend) throw new Error('A WebGPU adapter is required')
     try {
-      const created = await owned.createGeometry(gl)
+      const created = await owned.createGeometry(gl, ground)
       setGeometry(created.geometry)
       setFlames(created.flames)
     }
     catch (error) { gl.dispose(); throw error }
     gl.info.autoReset = false
     return gl
-  }, [owned])
+  }, [ground, owned])
   return <>
     <Canvas frameloop="always" shadows dpr={1} camera={cameras[view]} gl={renderer}>
-      {geometry && flames && <Scene owned={owned} geometry={geometry} flames={flames} walker={walker} gameplayCamera={cameras.spawn} inspector={inspector} telemetry={telemetry} shared={shared} gizmoBottom={touch ? touchGizmoBottom : 16} onStats={setSelection} onReady={onReady} onSaved={onSaved} />}
+      {geometry && flames && <Scene owned={owned} landscape={landscape} ground={ground} geometry={geometry} flames={flames} walker={walker} gameplayCamera={cameras.spawn} inspector={inspector} telemetry={telemetry} shared={shared} gizmoBottom={touch ? touchGizmoBottom : 16} onStats={setSelection} onReady={onReady} onSaved={onSaved} />}
     </Canvas>
     <InspectHud inspector={inspector} lodLegend={lodLegend} dump={{ onDump: () => { void telemetry.current?.() }, status: dumpStatus, message: `${owned.placements.length.toLocaleString()} placements | ${(owned.manifest.minimumWorldError * 1000).toFixed(0)} mm geometry cap` }}>
       <SelectionDisplay selection={selection} sourceTriangles={owned.sourceTriangles} cappedTriangles={owned.cappedTriangles} />
@@ -313,17 +314,18 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
 export function Game() {
   const runtime = useMemo(makeInputDevices, [])
   const [owned, setOwned] = useState<RuinsAsset | null>(null)
+  const [landscape, setLandscape] = useState<LandscapeAsset | null>(null)
   const [detail, setDetail] = useState('Loading the level directories')
   const [error, setError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
   const onReady = useCallback(() => setReady(true), [])
   useEffect(() => {
-    void Promise.all([loadRuins(setDetail), preloadAlsCharacterGltf().then(gltf => wearSurvivor(gltf))]).then(([asset]) => setOwned(asset)).catch(error => setError(String(error)))
+    void Promise.all([loadRuins(setDetail), preloadAlsCharacterGltf().then(gltf => wearSurvivor(gltf)), loadLandscape()]).then(([asset, , land]) => { setOwned(asset); setLandscape(land) }).catch(error => setError(String(error)))
   }, [])
   return <InputProvider runtime={runtime}><div className="hud-screen">
-    <RenderBoundary>{owned && <Ruins owned={owned} runtime={runtime} onReady={onReady} />}</RenderBoundary>
+    <RenderBoundary>{owned && landscape && <Ruins owned={owned} landscape={landscape} runtime={runtime} onReady={onReady} />}</RenderBoundary>
     {error && <div className="hud-menu" role="alert"><strong>Dark Ruins could not load</strong><span>{error}</span></div>}
-    <Loading title="Dark Ruins" detail={detail} progress={ready ? 1 : owned ? 0.7 : 0.35} done={ready || error !== null} />
+    <Loading title="Dark Ruins" detail={detail} progress={ready ? 1 : owned && landscape ? 0.7 : 0.35} done={ready || error !== null} />
   </div></InputProvider>
 }
 

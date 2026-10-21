@@ -125,6 +125,17 @@ export function surfaceTextureFromData(data: Uint8Array, size: number): DataText
   return texture
 }
 
+export function edgeTextureFromData(data: Uint8Array, size: number): DataTexture {
+  const texture = new DataTexture(data, size, size, RedFormat, UnsignedByteType)
+  texture.minFilter = LinearFilter
+  texture.magFilter = LinearFilter
+  texture.wrapS = texture.wrapT = ClampToEdgeWrapping
+  texture.colorSpace = NoColorSpace
+  texture.generateMipmaps = false
+  texture.needsUpdate = true
+  return texture
+}
+
 async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
   const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate'))
   return new Uint8Array(await new Response(stream).arrayBuffer())

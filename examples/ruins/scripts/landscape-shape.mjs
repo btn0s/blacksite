@@ -2,7 +2,7 @@ import { fbm, ridged, smoothstep, valueNoise } from '../../../packages/landscape
 
 export const world = {
   nearExtent: 4096, nearSize: 2049, farExtent: 16384, farSize: 2049, band: 256,
-  centre: [-1250, 350], seaLevel: -300, underLevel: 0.75, rimLip: 0.06, screening: 140, envelope: 250, padding: 160,
+  centre: [-1250, 350], seaLevel: -300, padding: 160,
 }
 
 const valley = { west: -3300, south: 1900, floor: -250, shelf: 120, rim: 0, foot: 880 }
@@ -75,154 +75,101 @@ export function surfaceMasks(x, z, height, slope, rimDistance) {
   return [soil * (1 - sand), sand]
 }
 
-export function distanceTransform(blocked, nx, nz) {
-  const distance = new Float32Array(nx * nz)
-  for (let index = 0; index < distance.length; index++) distance[index] = blocked[index] ? 0 : 1e9
-  const root2 = Math.SQRT2
-  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
-    const slot = j * nx + i
-    let value = distance[slot]
-    if (i > 0) value = Math.min(value, distance[slot - 1] + 1)
-    if (j > 0) {
-      value = Math.min(value, distance[slot - nx] + 1)
-      if (i > 0) value = Math.min(value, distance[slot - nx - 1] + root2)
-      if (i < nx - 1) value = Math.min(value, distance[slot - nx + 1] + root2)
-    }
-    distance[slot] = value
-  }
-  for (let j = nz - 1; j >= 0; j--) for (let i = nx - 1; i >= 0; i--) {
-    const slot = j * nx + i
-    let value = distance[slot]
-    if (i < nx - 1) value = Math.min(value, distance[slot + 1] + 1)
-    if (j < nz - 1) {
-      value = Math.min(value, distance[slot + nx] + 1)
-      if (i < nx - 1) value = Math.min(value, distance[slot + nx + 1] + root2)
-      if (i > 0) value = Math.min(value, distance[slot + nx - 1] + root2)
-    }
-    distance[slot] = value
-  }
-  return distance
-}
 
-export function levelSurface(raster) {
-  const { cell, originX, originZ, nx, nz, covered, ground, low } = raster
-  const pad = world.padding, width = nx + 2 * pad, height = nz + 2 * pad
-  const x0 = originX - pad * cell, z0 = originZ - pad * cell
-  const solid = new Uint8Array(width * height)
-  const base = new Float32Array(width * height).fill(NaN)
-  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
-    const source = j * nx + i
-    if (!covered[source]) continue
-    const slot = (j + pad) * width + i + pad
-    solid[slot] = 1
-    const lowest = Math.min(ground[source], low[source])
-    base[slot] = Number.isFinite(lowest) ? lowest : NaN
-  }
-  for (let pass = 0; pass < 3; pass++) {
-    const next = base.slice()
-    for (let j = 1; j < height - 1; j++) for (let i = 1; i < width - 1; i++) {
-      const slot = j * width + i
-      if (!solid[slot] || !Number.isNaN(base[slot])) continue
-      let sum = 0, count = 0
-      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
-        const value = base[slot + dj * width + di]
-        if (!Number.isNaN(value)) { sum += value; count++ }
+export const ground = { reach: 0.6, slack: 3, slope: 0.35, bury: 0.35, sinkFloor: 0.25, sinkRock: 1, rise: 0.5, screening: 32, taper: [200, 300], hillRamp: [20, 180], edgeRange: 64, freeEdge: 6 }
+
+const reach = [[-1, 0, 1], [0, -1, 1], [-1, -1, Math.SQRT2], [1, -1, Math.SQRT2], [-2, -1, Math.sqrt(5)], [-1, -2, Math.sqrt(5)], [1, -2, Math.sqrt(5)], [2, -1, Math.sqrt(5)]]
+
+export function propagate(values, width, height, perCell) {
+  for (let pass = 0; pass < 2; pass++) {
+    const sign = pass ? -1 : 1
+    for (let jj = 0; jj < height; jj++) {
+      const j = pass ? height - 1 - jj : jj
+      for (let ii = 0; ii < width; ii++) {
+        const i = pass ? width - 1 - ii : ii
+        let value = values[j * width + i]
+        for (const [di, dj, length] of reach) {
+          const ni = i + sign * di, nj = j + sign * dj
+          if (ni < 0 || nj < 0 || ni >= width || nj >= height) continue
+          const candidate = values[nj * width + ni] + perCell * length
+          if (candidate < value) value = candidate
+        }
+        values[j * width + i] = value
       }
-      if (count) next[slot] = sum / count
     }
-    base.set(next)
   }
-  const under = new Float32Array(width * height).fill(NaN)
-  for (let j = 0; j < height; j++) for (let i = 0; i < width; i++) {
-    const slot = j * width + i
-    if (!solid[slot]) continue
-    let lowest = Infinity
-    for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
-      const jj = j + dj, ii = i + di
-      if (jj < 0 || ii < 0 || jj >= height || ii >= width) continue
-      const value = base[jj * width + ii]
-      if (!Number.isNaN(value) && value < lowest) lowest = value
-    }
-    under[slot] = Number.isFinite(lowest) ? lowest - world.underLevel : NaN
-  }
-  const floor = new Float32Array(width * height).fill(NaN)
-  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
-    const source = j * nx + i
-    if (covered[source] && Number.isFinite(ground[source])) floor[(j + pad) * width + i + pad] = ground[source]
-  }
-  const rim = new Uint8Array(width * height)
-  const rimValue = new Float32Array(width * height)
-  for (let j = 4; j < height - 4; j++) for (let i = 4; i < width - 4; i++) {
-    const slot = j * width + i
-    if (solid[slot]) continue
-    let touching = false
-    for (let dj = -1; dj <= 1 && !touching; dj++) for (let di = -1; di <= 1; di++) if (solid[slot + dj * width + di]) { touching = true; break }
-    if (!touching) continue
-    const values = []
-    for (let dj = -4; dj <= 4; dj++) for (let di = -4; di <= 4; di++) {
-      const value = floor[slot + dj * width + di]
-      if (!Number.isNaN(value)) values.push(value)
-    }
-    if (values.length) { values.sort((a, b) => a - b); rim[slot] = 1; rimValue[slot] = values[values.length >> 1] - world.rimLip }
-  }
-  return { width, height, x0, z0, cell, solid, under, rim, rimValue, rimDistance: distanceTransform(solid, width, height) }
+  return values
 }
 
-function relax(field, shape, fixed, width, height, cell, screening, sweeps, report, label) {
+function relax(field, shape, fixed, ceiling, width, height, cell, screening, sweeps, report) {
   const stiffness = (cell / screening) ** 2
-  const omega = 2 / (1 + Math.sin(Math.PI / Math.max(width, height)))
+  const omega = Math.min(1.7, 2 / (1 + Math.sin(Math.PI / Math.max(width, height))))
   for (let sweep = 0; sweep < sweeps; sweep++) {
     let change = 0
     for (let j = 1; j < height - 1; j++) for (let i = 1; i < width - 1; i++) {
       const slot = j * width + i
       if (fixed[slot]) continue
       const target = (field[slot - 1] + field[slot + 1] + field[slot - width] + field[slot + width] + stiffness * shape[slot]) / (4 + stiffness)
-      const delta = (target - field[slot]) * omega
+      const delta = (Math.min(target, ceiling[slot]) - field[slot]) * omega
       field[slot] += delta
       if (Math.abs(delta) > change) change = Math.abs(delta)
     }
-    if (sweep % 100 === 0) report?.(`${label} sweep ${sweep} change ${change.toExponential(2)}`)
+    if (sweep % 100 === 0) report?.(`membrane sweep ${sweep} change ${change.toExponential(2)}`)
     if (change < 2e-2) break
   }
 }
 
-function envelope(surface, report) {
-  const { width, height, x0, z0, cell, rim, rimValue } = surface
-  const scale = 4, w = width / scale, h = height / scale
-  const field = new Float32Array(w * h), shape = new Float32Array(w * h), fixed = new Uint8Array(w * h)
-  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-    const slot = j * w + i
-    shape[slot] = field[slot] = macro(x0 + (i * scale + scale / 2) * cell, z0 + (j * scale + scale / 2) * cell)
-    let sum = 0, count = 0
-    for (let dj = 0; dj < scale; dj++) for (let di = 0; di < scale; di++) {
-      const fine = (j * scale + dj) * width + i * scale + di
-      if (rim[fine]) { sum += rimValue[fine]; count++ }
-    }
-    if (count) { fixed[slot] = 1; field[slot] = sum / count }
-    if (i === 0 || j === 0 || i === w - 1 || j === h - 1) fixed[slot] = 1
+export function levelGround(raster, report) {
+  const { cell, originX, originZ, nx, nz, low, top, topUp, walkable } = raster
+  const pad = world.padding, width = nx + 2 * pad, height = nz + 2 * pad
+  const x0 = originX - pad * cell, z0 = originZ - pad * cell
+  const count = width * height
+  const covered = new Uint8Array(count)
+  const anchor = new Float32Array(count).fill(Infinity)
+  const cap = new Float32Array(count).fill(Infinity)
+  const floor = new Uint8Array(count)
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const source = j * nx + i
+    if (!Number.isFinite(low[source])) continue
+    const slot = (j + pad) * width + i + pad
+    covered[slot] = 1
+    const sink = ground.sinkRock + (ground.sinkFloor - ground.sinkRock) * smoothstep(0.3, walkable, topUp[source])
+    if (Number.isFinite(top[source])) cap[slot] = top[source] - sink
+    floor[slot] = topUp[source] >= walkable && top[source] - low[source] < 0.01 ? 1 : 0
+    anchor[slot] = Math.min(low[source] + ground.bury, cap[slot])
   }
-  relax(field, shape, fixed, w, h, cell * scale, world.envelope, 4000, report, 'envelope')
-  const out = new Float32Array(width * height)
+  const lowest = propagate(anchor.slice(), width, height, ground.reach * cell)
+  for (let slot = 0; slot < count; slot++) if (anchor[slot] > lowest[slot] + ground.slack) anchor[slot] = Infinity
+  const inside = propagate(anchor.slice(), width, height, ground.slope * cell)
+  for (let slot = 0; slot < count; slot++) if (covered[slot] && inside[slot] > cap[slot]) inside[slot] = cap[slot]
+  const distance = propagate(Float32Array.from(covered, value => value ? 0 : Infinity), width, height, cell)
+  const depth = propagate(Float32Array.from(covered, value => value ? Infinity : 0), width, height, cell)
+  const rising = propagate(Float32Array.from(inside, (value, slot) => covered[slot] ? value : Infinity), width, height, ground.rise * cell)
+  const shape = new Float32Array(count), field = new Float32Array(count), fixed = new Uint8Array(count)
   for (let j = 0; j < height; j++) for (let i = 0; i < width; i++) {
-    const gx = Math.min(w - 1.0001, Math.max(0, (i + 0.5) / scale - 0.5)), gz = Math.min(h - 1.0001, Math.max(0, (j + 0.5) / scale - 0.5))
-    const ix = Math.floor(gx), iz = Math.floor(gz), fx = gx - ix, fz = gz - iz
-    const a = field[iz * w + ix], b = field[iz * w + ix + 1], c = field[(iz + 1) * w + ix], d = field[(iz + 1) * w + ix + 1]
-    out[j * width + i] = a + (b - a) * fx + (c - a) * fz + (a - b - c + d) * fx * fz
+    const slot = j * width + i
+    const landform = macro(x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell)
+    shape[slot] = field[slot] = landform + (Math.min(landform, rising[slot]) - landform) * (1 - smoothstep(ground.taper[0], ground.taper[1], distance[slot]))
+    if (covered[slot]) { fixed[slot] = floor[slot] || depth[slot] >= ground.freeEdge ? 1 : 0; field[slot] = inside[slot] }
+    if (i === 0 || j === 0 || i === width - 1 || j === height - 1) fixed[slot] = 1
   }
-  return out
-}
-
-export function relaxMembrane(surface, report) {
-  const { width, height, solid, rim, rimValue } = surface
-  const shape = envelope(surface, report)
-  const field = shape.slice()
-  const fixed = new Uint8Array(width * height)
-  for (let slot = 0; slot < fixed.length; slot++) {
-    if (rim[slot]) { fixed[slot] = 1; field[slot] = rimValue[slot] }
-    else if (solid[slot]) fixed[slot] = 1
+  relax(field, shape, fixed, cap, width, height, cell, ground.screening, 4000, report)
+  const edge = new Float32Array(count)
+  for (let slot = 0; slot < count; slot++) edge[slot] = covered[slot] ? -depth[slot] : distance[slot]
+  const grid = (array, x, z) => {
+    const gx = Math.min(width - 1.0001, Math.max(0, (x - x0) / cell - 0.5)), gz = Math.min(height - 1.0001, Math.max(0, (z - z0) / cell - 0.5))
+    const i = Math.floor(gx), j = Math.floor(gz), fx = gx - i, fz = gz - j
+    const a = array[j * width + i], b = array[j * width + i + 1], c = array[(j + 1) * width + i], d = array[(j + 1) * width + i + 1]
+    return a + (b - a) * fx + (c - a) * fz + (a - b - c + d) * fx * fz
   }
-  for (let i = 0; i < width; i++) { fixed[i] = 1; fixed[(height - 1) * width + i] = 1 }
-  for (let j = 0; j < height; j++) { fixed[j * width] = 1; fixed[j * width + width - 1] = 1 }
-  relax(field, shape, fixed, width, height, surface.cell, world.screening, 1200, report, 'membrane')
-  return { field, shape }
+  const covers = (x, z) => x >= x0 + cell && z >= z0 + cell && x <= x0 + (width - 1) * cell && z <= z0 + (height - 1) * cell
+  return {
+    covered, width, height, x0, z0, cell,
+    rimDistance: (x, z) => covers(x, z) ? grid(distance, x, z) : 1e6,
+    edge: (x, z) => covers(x, z) ? grid(edge, x, z) : ground.edgeRange,
+    height(x, z, detail) {
+      if (!covers(x, z)) return macro(x, z) + hills(x, z, detail)
+      return grid(field, x, z) + hills(x, z, detail) * smoothstep(ground.hillRamp[0], ground.hillRamp[1], grid(distance, x, z))
+    },
+  }
 }

@@ -1,5 +1,5 @@
 import { LoadingManager } from 'three'
-import { type MeshStandardNodeMaterial, type Node, type WebGPURenderer } from 'three/webgpu'
+import { MeshPhysicalNodeMaterial, type MeshStandardNodeMaterial, type Node, type WebGPURenderer } from 'three/webgpu'
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import transcoderScript from 'three/examples/jsm/libs/basis/basis_transcoder.js?url'
 import transcoderWasm from 'three/examples/jsm/libs/basis/basis_transcoder.wasm?url'
@@ -52,7 +52,10 @@ function textureBinding(surface: ScanSurface, name: string, image: number): Text
   return { image, uv: 0, scale: 1, placementScale: false }
 }
 
-export async function loadScanMaterials(surfaces: readonly ScanSurface[], root: string, renderer: WebGPURenderer) {
+export type ScanGroundBlend = { apply(material: MeshStandardNodeMaterial): void }
+const groundBlendFamilies = new Set<ScanSurface['family']>(['custom-general', 'smart-layers'])
+
+export async function loadScanMaterials(surfaces: readonly ScanSurface[], root: string, renderer: WebGPURenderer, ground?: ScanGroundBlend) {
   const manager = new LoadingManager()
   manager.setURLModifier(url => url.endsWith('basis_transcoder.js') ? transcoderScript : url.endsWith('basis_transcoder.wasm') ? transcoderWasm : url)
   const loader = new KTX2Loader(manager).setTranscoderPath('/').setWorkerLimit(8).detectSupport(renderer)
@@ -94,6 +97,7 @@ export async function loadScanMaterials(surfaces: readonly ScanSurface[], root: 
           : surface.family === 'custom-general' || surface.family === 'foliage' ? createGeneralMaterial(graph, sample, primaryUV)
           : surface.family === 'flame' ? createFlameMaterial(graph, sample, primaryUV)
           : createSurfaceMaterial(graph, sample, primaryUV)
+        if (ground && groundBlendFamilies.has(surface.family) && template instanceof MeshPhysicalNodeMaterial) ground.apply(template)
         families.set(surface.family, template)
       }
       const material = families.get(surface.family)!.clone()
