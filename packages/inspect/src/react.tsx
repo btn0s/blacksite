@@ -1,5 +1,5 @@
-import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
-import { button, buttonGroup, folder, LevaPanel, useControls, useCreateStore } from 'leva'
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { button, folder, LevaPanel, useControls, useCreateStore } from 'leva'
 import type { Schema } from 'leva/dist/declarations/src/types'
 import type { Inspector } from './index'
 import './style.css'
@@ -9,8 +9,6 @@ export type DumpControl = {
   status?: 'idle' | 'sending' | 'saved' | 'error'
   message?: string
 }
-
-export type InspectAction = { label: string; onPress: () => void }
 
 const count = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })
 const ms = (value: number) => value.toFixed(1)
@@ -35,28 +33,27 @@ export function DebugBlock({ children }: { children: ReactNode }) {
   return <div className="bs-debug-block">{children}</div>
 }
 
-function InspectControls({ inspector, dump, actions }: { inspector: Inspector; dump?: DumpControl; actions: Record<string, readonly InspectAction[]> }) {
+function InspectControls({ inspector, dump, logs, onLogs }: { inspector: Inspector; dump?: DumpControl; logs: boolean; onLogs: (on: boolean) => void }) {
   const snapshot = useSyncExternalStore(inspector.subscribe, inspector.getSnapshot, inspector.getSnapshot)
   const store = useCreateStore()
-  const latest = useRef({ dump, actions })
-  latest.current = { dump, actions }
+  const latest = useRef({ dump, onLogs })
+  latest.current = { dump, onLogs }
   const { techniques, view } = snapshot
-  const layout = JSON.stringify([Object.entries(actions).map(([group, items]) => [group, items.map(item => item.label)]), Boolean(dump), techniques.map(technique => [technique.id, technique.label, technique.description])])
+  const layout = JSON.stringify([Boolean(dump), techniques.map(technique => [technique.id, technique.label, technique.description, technique.group])])
   const [, set] = useControls(() => {
     const schema: Schema = {}
-    for (const [group, items] of Object.entries(actions)) {
-      schema[group] = buttonGroup({ label: group, opts: Object.fromEntries(items.map((item, index) => [item.label, () => latest.current.actions[group]?.[index]?.onPress()])) })
-    }
-    schema.lod = { label: 'LOD colours', value: view === 'lod', onChange: (on: boolean) => inspector.setView(on ? 'lod' : 'lit') }
+    schema.logs = { label: 'Debug logs', value: logs, onChange: (on: boolean) => latest.current.onLogs(on) }
     if (dump) schema['Dump stats · T'] = button(() => latest.current.dump?.onDump())
-    if (techniques.length) {
-      schema.Techniques = folder(Object.fromEntries(techniques.map(technique => [technique.id, {
+    const groups: Record<string, Schema> = { Views: { lod: { label: 'LOD colours', value: view === 'lod', onChange: (on: boolean) => inspector.setView(on ? 'lod' : 'lit') } } }
+    for (const technique of techniques) {
+      (groups[technique.group ?? 'Techniques'] ??= {})[technique.id] = {
         label: technique.label,
         hint: technique.description,
         value: technique.enabled,
         onChange: (enabled: boolean) => { if (inspector.getSnapshot().techniques.some(({ id }) => id === technique.id)) inspector.setTechnique(technique.id, enabled) },
-      }])), { collapsed: true })
+      }
     }
+    for (const [name, entries] of Object.entries(groups)) schema[name] = folder(entries)
     return schema
   }, { store }, [layout])
   useEffect(() => {
@@ -71,14 +68,14 @@ function InspectControls({ inspector, dump, actions }: { inspector: Inspector; d
   </div>
 }
 
-export function InspectHud({ inspector, dump, actions = {}, lodLegend = distanceLegend, children }: {
+export function InspectHud({ inspector, dump, lodLegend = distanceLegend, children }: {
   inspector: Inspector
   dump?: DumpControl
-  actions?: Record<string, readonly InspectAction[]>
   lodLegend?: readonly { color: string; label: string }[]
   children?: ReactNode
 }) {
   const snapshot = useSyncExternalStore(inspector.subscribe, inspector.getSnapshot, inspector.getSnapshot)
+  const [logs, setLogs] = useState(true)
   const metrics = snapshot.metrics
   const gpu = Object.entries(metrics?.gpuMs ?? {})
   const rows: Array<[string, string]> = [
@@ -91,7 +88,7 @@ export function InspectHud({ inspector, dump, actions = {}, lodLegend = distance
     ['FPS', metrics ? `${Math.round(metrics.fps)}` : '—'],
   ]
   return <>
-    <div className="bs-debug" aria-label="Debug readout" role="log">
+    {logs && <div className="bs-debug" aria-label="Debug readout" role="log">
       <DebugBlock>
         <div>{snapshot.renderer} · {snapshot.tier} tier</div>
         <dl>{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
@@ -103,7 +100,7 @@ export function InspectHud({ inspector, dump, actions = {}, lodLegend = distance
       </DebugBlock>
       {gpu.length > 0 && <DebugBlock><dl>{gpu.map(([pass, time]) => <div key={pass}><dt>{pass}</dt><dd>{ms(time)} ms</dd></div>)}</dl></DebugBlock>}
       {children}
-    </div>
-    <InspectControls inspector={inspector} dump={dump} actions={actions} />
+    </div>}
+    <InspectControls inspector={inspector} dump={dump} logs={logs} onLogs={setLogs} />
   </>
 }

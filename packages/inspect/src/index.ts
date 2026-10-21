@@ -22,6 +22,8 @@ export type Technique = {
   id: string
   label: string
   description?: string
+  /** Controls-panel folder; techniques without one go under Techniques. */
+  group?: string
   enabled: boolean
   setEnabled: (enabled: boolean) => void
 }

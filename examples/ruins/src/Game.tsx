@@ -68,15 +68,15 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
     roots: [geometry.object],
     sources: [stats],
     techniques: [
-      { id: 'meshlet-lod', label: 'Meshlet LOD', description: 'Select the finest resident cut within 120 m when disabled.', enabled: true, setEnabled: enabled => geometry.setLodEnabled(enabled) },
-      { id: 'meshlet-occlusion', label: 'HiZ occlusion', description: 'GPU cluster visibility and recovery.', enabled: true, setEnabled: enabled => { geometry.occlusionEnabled = enabled; geometry.resetHistory() } },
-      { id: 'meshlet-shadows', label: 'Cascade shadows', description: 'Independent light-view cluster selection.', enabled: true, setEnabled: enabled => geometry.setShadowEnabled(enabled) },
-      { id: 'collision-overlay', label: 'Collision', description: 'Resident collision: green walkable, red steep, blue overhang.', enabled: false, setEnabled: enabled => shared.collision.current?.setOverlay(enabled ? 0 : null) },
-      { id: 'collision-hidden', label: 'Invisible collision', description: 'Only collision standing 0.5 m or more in front of the drawn surface.', enabled: false, setEnabled: enabled => shared.collision.current?.setOverlay(enabled ? 0.5 : null) },
-      { id: 'temporal-aa', label: 'Temporal AA', description: 'TRAA resolve with camera jitter. Off bypasses the resolve and the jitter.', enabled: true, setEnabled: enabled => shared.look.current?.setTemporal({ traa: enabled }) },
-      { id: 'gtao-temporal', label: 'Temporal ambient occlusion', description: 'Per-frame rotation of the occlusion sampling pattern.', enabled: true, setEnabled: enabled => shared.look.current?.setTemporal({ gtao: enabled }) },
-      { id: 'bundle-refresh', label: 'Refresh bundles every frame', description: 'Re-records every lit material bundle each frame instead of on binding changes.', enabled: false, setEnabled: enabled => geometry.setBundleRefresh(enabled) },
-      { id: 'meshlet-debug', label: 'Meshlet colours', enabled: false, setEnabled: enabled => geometry.setDebugView(enabled ? 'meshlets' : inspector.getSnapshot().view === 'lod' ? 'lod' : 'normal') },
+      { id: 'meshlet-debug', group: 'Views', label: 'Meshlet colours', enabled: false, setEnabled: enabled => geometry.setDebugView(enabled ? 'meshlets' : inspector.getSnapshot().view === 'lod' ? 'lod' : 'normal') },
+      { id: 'collision-overlay', group: 'Collision', label: 'Collision', description: 'Resident collision: green walkable, red steep, blue overhang.', enabled: false, setEnabled: enabled => shared.collision.current?.setOverlay(enabled ? 0 : null) },
+      { id: 'collision-hidden', group: 'Collision', label: 'Invisible collision', description: 'Only collision standing 0.5 m or more in front of the drawn surface.', enabled: false, setEnabled: enabled => shared.collision.current?.setOverlay(enabled ? 0.5 : null) },
+      { id: 'temporal-aa', group: 'Rendering', label: 'Temporal AA', description: 'TRAA resolve with camera jitter. Off bypasses the resolve and the jitter.', enabled: true, setEnabled: enabled => shared.look.current?.setTemporal({ traa: enabled }) },
+      { id: 'gtao-temporal', group: 'Rendering', label: 'Temporal ambient occlusion', description: 'Per-frame rotation of the occlusion sampling pattern.', enabled: true, setEnabled: enabled => shared.look.current?.setTemporal({ gtao: enabled }) },
+      { id: 'meshlet-lod', group: 'Geometry', label: 'Meshlet LOD', description: 'Select the finest resident cut within 120 m when disabled.', enabled: true, setEnabled: enabled => geometry.setLodEnabled(enabled) },
+      { id: 'meshlet-occlusion', group: 'Geometry', label: 'HiZ occlusion', description: 'GPU cluster visibility and recovery.', enabled: true, setEnabled: enabled => { geometry.occlusionEnabled = enabled; geometry.resetHistory() } },
+      { id: 'meshlet-shadows', group: 'Geometry', label: 'Cascade shadows', description: 'Independent light-view cluster selection.', enabled: true, setEnabled: enabled => geometry.setShadowEnabled(enabled) },
+      { id: 'bundle-refresh', group: 'Geometry', label: 'Refresh bundles every frame', description: 'Re-records every lit material bundle each frame instead of on binding changes.', enabled: false, setEnabled: enabled => geometry.setBundleRefresh(enabled) },
     ],
     setView: view => { geometry.setDebugView(view === 'lod' ? 'lod' : 'normal'); shared.look.current?.setDebug(view === 'lod') },
     textures: () => residentScanTextures(renderer),
@@ -196,7 +196,7 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
   const home = owned.home
   const walker = useMemo(() => createWalker(home, runtime), [home, runtime])
   const cameras = useMemo(() => createRuinsCameras(owned.views), [owned])
-  const [view, setView] = useState<RuinsView>(() => {
+  const [view] = useState<RuinsView>(() => {
     const requested = new URLSearchParams(location.search).get('view')
     return requested && Object.hasOwn(ruinsViews, requested) ? requested as RuinsView : 'spawn'
   })
@@ -204,23 +204,6 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
     walker.active = view === 'spawn'
     for (const camera of Object.values(cameras)) camera.layers.enable(BODY_LAYER)
   }, [cameras, view, walker])
-  const [viewError, setViewError] = useState<Error | null>(null)
-  const selectView = (next: RuinsView) => {
-    const activate = () => {
-      walker.setPaused(false)
-      setView(next)
-      const url = new URL(location.href)
-      url.searchParams.set('view', next)
-      history.replaceState(null, '', url)
-    }
-    if (next !== 'spawn') { activate(); return }
-    void shared.collision.current?.prepare(new Vector3(...home.position)).then(() => {
-      walker.respawn(undefined, [...home.position])
-      walker.face(new Vector3(...home.target))
-      geometry?.resetHistory()
-      activate()
-    }).catch(error => setViewError(error instanceof Error ? error : new Error(String(error))))
-  }
   const status = useCharacterStatus(walker)
   const session = useLocalSession(walker)
   const shared = useMemo(() => ({ look: { current: null as Look | null }, warm: { current: 0 }, geometry: { current: null as MeshletScene | null }, collision: { current: null as RegionalCollision | null } }), [])
@@ -242,12 +225,11 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
     gl.info.autoReset = false
     return gl
   }, [owned])
-  if (viewError) throw viewError
   return <>
     <Canvas frameloop="always" shadows dpr={1} camera={cameras[view]} gl={renderer}>
       {geometry && flames && <Scene owned={owned} geometry={geometry} flames={flames} walker={walker} gameplayCamera={cameras.spawn} inspector={inspector} telemetry={telemetry} shared={shared} onStats={setSelection} onReady={onReady} />}
     </Canvas>
-    <InspectHud inspector={inspector} lodLegend={lodLegend} actions={{ View: (Object.keys(ruinsViews) as RuinsView[]).map(id => ({ label: ruinsViews[id], onPress: () => selectView(id) })) }} dump={{ onDump: () => { void telemetry.current?.() }, status: dumpStatus, message: `${owned.placements.length.toLocaleString()} placements | ${(owned.manifest.minimumWorldError * 1000).toFixed(0)} mm geometry cap` }}>
+    <InspectHud inspector={inspector} lodLegend={lodLegend} dump={{ onDump: () => { void telemetry.current?.() }, status: dumpStatus, message: `${owned.placements.length.toLocaleString()} placements | ${(owned.manifest.minimumWorldError * 1000).toFixed(0)} mm geometry cap` }}>
       <SelectionDisplay selection={selection} sourceTriangles={owned.sourceTriangles} cappedTriangles={owned.cappedTriangles} />
       <TelemetryReadout look={shared.look} geometry={geometry} selection={selection} />
       <ContactDisplay shared={shared} />

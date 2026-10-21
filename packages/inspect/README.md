@@ -22,12 +22,12 @@ const unregister = inspector.registerTechnique({
 
 inspector.sample(frame)
 
-<InspectHud inspector={inspector} dump={{ onDump, status: 'idle' }} actions={{ View: [{ label: 'Overview', onPress: overview }] }}>
+<InspectHud inspector={inspector} dump={{ onDump, status: 'idle' }}>
   <DebugBlock>Host readout lines</DebugBlock>
 </InspectHud>
 ```
 
-The React export imports its stylesheet. `InspectHud` draws the timings as unboxed monospace text in the top-left corner and puts every control (host `actions` button groups, LOD colours, Dump stats and a collapsed Techniques folder) in a Leva panel at the top right; `leva` is an optional peer dependency. Children render below the timings as further `DebugBlock` groups, separated by a blank line. There are exactly two view values: `lit` and `lod`. LOD colours are near green (`#62d995`), mid amber (`#f2c45a`), and far blue (`#80a6ff`); the host applies those colours to its own representations. A later cluster technique can use the same LOD view. Technique registration returns cleanup, and toggles call the registered implementation before publishing their state.
+The React export imports its stylesheet. `InspectHud` draws the timings as unboxed monospace text in the top-left corner and puts every control in a Leva panel at the top right: a Debug logs toggle that hides the text, Dump stats, then one folder per technique `group` (a Views folder holds LOD colours; techniques without a group go under Techniques); `leva` is an optional peer dependency. Children render below the timings as further `DebugBlock` groups, separated by a blank line. There are exactly two view values: `lit` and `lod`. LOD colours are near green (`#62d995`), mid amber (`#f2c45a`), and far blue (`#80a6ff`); the host applies those colours to its own representations. A later cluster technique can use the same LOD view. Technique registration returns cleanup, and toggles call the registered implementation before publishing their state.
 
 Call `sample` once per presented animation frame after render submission. `frameMs` is elapsed animation-frame time, including stalls; `cpuMs` is main-thread time from the first frame callback through render submission. Do not clamp either to simulation delta. Keep loading and hidden-tab frames out of sampling. The HUD retains up to 1,200 samples spanning approximately ten seconds, publishing at most once per 250 ms by default. `windowFrames`, `windowMs` and `publishIntervalMs` configure those bounds. `flush()` publishes immediately. React subscribes to immutable snapshots, so it does not render at the scene's frame rate.
 
