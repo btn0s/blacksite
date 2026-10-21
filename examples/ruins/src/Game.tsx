@@ -106,7 +106,7 @@ function Scene({ owned, landscape, ground, geometry, flames, walker, gameplayCam
     ],
     actions: [{ id: 'look-save', group: 'Look', label: 'Save look', run: () => saveLook(shared.look.current) }],
     techniques: [
-      ...FEATURES.map(feature => ({ id: `look-${feature.id}`, group: 'Rendering', label: feature.label, description: feature.description, enabled: true, setEnabled: (enabled: boolean) => shared.look.current?.setFeature(feature.id, enabled) })),
+      ...FEATURES.map(feature => ({ id: `feature-${feature.id}`, group: 'Rendering', label: feature.label, description: feature.description, enabled: true, setEnabled: (enabled: boolean) => shared.look.current?.setFeature(feature.id, enabled) })),
       { id: 'ground-blend', group: 'Rendering', label: 'Ground blend', description: 'Fades level surfaces into the terrain ground colour and normal within the blend band above the terrain. One height tap and two filtered reads per fragment, only below the band.', enabled: true, setEnabled: enabled => ground.tune({ enabled }) },
       { id: 'meshlet-debug', group: 'Overlays', label: 'Colour by meshlet', enabled: false, setEnabled: enabled => geometry.setDebugView(enabled ? 'meshlets' : inspector.getSnapshot().view === 'lod' ? 'lod' : 'normal') },
       { id: 'collision-overlay', group: 'Overlays', label: 'Show collision', description: 'Resident collision: green walkable, red steep, blue overhang.', enabled: false, setEnabled: enabled => shared.collision.current?.setOverlay(enabled ? 0 : null) },
@@ -282,7 +282,10 @@ function Ruins({ owned, landscape, runtime, onReady }: { owned: RuinsAsset; land
   const renderer = useCallback(async (props: object) => {
     if (!navigator.gpu) throw new Error('WebGPU is required for Dark Ruins')
     const storageSize = owned.largestBuffer
-    const gl = new WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', trackTimestamp: true, requiredLimits: { maxStorageBufferBindingSize: storageSize, maxBufferSize: storageSize, maxStorageBuffersPerShaderStage: 12 } })
+    // The ground blend adds the terrain's maps to the level materials, which takes some of them past the default 16 sampled textures.
+    const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' })
+    const sampledTextures = adapter?.limits.maxSampledTexturesPerShaderStage ?? 16
+    const gl = new WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', trackTimestamp: true, requiredLimits: { maxStorageBufferBindingSize: storageSize, maxBufferSize: storageSize, maxStorageBuffersPerShaderStage: 12, maxSampledTexturesPerShaderStage: sampledTextures } })
     await gl.init()
     if (!gl.backend.isWebGPUBackend) throw new Error('A WebGPU adapter is required')
     try {

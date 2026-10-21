@@ -69,7 +69,9 @@ export function createGroundBlend(options: GroundBlendOptions): GroundBlend {
       reach.value = tuning.reach
     },
     apply(material) {
-      const colour = vec4(material.colorNode ?? materialColor)
+      // Level colours come as vec3 or vec4; widening at build time keeps the alpha read valid for both.
+      const source = (material.colorNode ?? materialColor) as Node
+      const colour = Fn(builder => source.getNodeType(builder) === 'vec4' ? source : vec4(source as Node<'vec3'>, 1))() as unknown as Node<'vec4'>
       const metal = material.metalnessNode ? float(material.metalnessNode).clamp(0, 1) : float(0)
       const weight = ground.element(2).y.mul(float(1).sub(metal))
       material.colorNode = vec4(mix(colour.rgb, ground.element(0), weight), colour.a)
