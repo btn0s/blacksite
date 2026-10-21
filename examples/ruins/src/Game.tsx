@@ -24,7 +24,7 @@ import { SceneInspection, type InspectionContent, type TelemetryAction } from '.
 import { createScanMaterialStreaming, residentScanTextures } from '../../shared/scan-material'
 import { loadRuins, type RuinsAsset } from './asset'
 import { RuinsCollision, TerrainCollision, type RegionalCollision } from './collision'
-import { Landscape } from './Landscape'
+import { Landscape, useTerrain } from './Landscape'
 import { loadLandscape, type LandscapeAsset } from './landscape-asset'
 import type { Contact } from './contacts'
 import { scanEnvironment } from '../../shared/scan-environment'
@@ -80,6 +80,7 @@ function Scene({ owned, landscape, geometry, flames, walker, gameplayCamera, ins
   const onCollisionReady = useCallback(() => setCollisionReady(true), [])
   const [playable, setPlayable] = useState(false)
   const [error, setError] = useState<Error | null>(null)
+  const terrain = useTerrain(landscape)
   const { atmosphere, sunlight, film } = useMemo(() => scanEnvironment(owned.environment.components), [owned])
   const home = owned.home
   const stats = useMemo(() => ({ sceneTriangles: 0, drawnTriangles: 0 }), [])
@@ -167,9 +168,10 @@ function Scene({ owned, landscape, geometry, flames, walker, gameplayCamera, ins
       if (!active) return
       performance.mark('ruins-warmup-start')
       compiling.current = true
-      try { await look.compile(passes => geometry.compile(passes), [geometry.object]) } finally { compiling.current = false }
+      try { await look.compile(passes => Promise.all([geometry.compile(passes), ...passes.map(pass => pass.compile(terrain.object))]).then(() => undefined), [geometry.object, terrain.object]) } finally { compiling.current = false }
       if (!active) return
       geometry.object.visible = true
+      terrain.object.visible = true
       look.render()
       await geometry.completeFrame(renderer)
       if (!active) return
@@ -180,7 +182,7 @@ function Scene({ owned, landscape, geometry, flames, walker, gameplayCamera, ins
       setPlayable(true)
     })().catch(error => { if (active) onError(error) })
     return () => { active = false }
-  }, [collisionReady, geometry, look, onError, onReady, renderer, shared, walker])
+  }, [collisionReady, geometry, look, onError, onReady, renderer, shared, terrain, walker])
   useEffect(() => {
     if (!look || !playable) return
     const { origin, extent } = landscape.sources.far
@@ -201,7 +203,7 @@ function Scene({ owned, landscape, geometry, flames, walker, gameplayCamera, ins
   if (error) throw error
   return <>
     <WebGPULook atmosphere={atmosphere} sunlight={sunlight} film={film} tuning={defaultLook} quality="high" shadowDistance={400} shadowMap={2048} shadowCascades={4} shadowLayers={shadowLayers} disable={disabledStages} onReady={onLook} onError={onError} />
-    {playable && look && <Landscape asset={landscape} look={look} onError={onError} />}
+    <Landscape terrain={terrain} />
     <Physics gravity={[0, -9.8, 0]} paused timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <AlsPhysicsStepper />
       {collisionReady && createPortal(<CharacterController controller={walker} events={events} />, scene, { camera: gameplayCamera })}

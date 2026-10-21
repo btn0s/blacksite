@@ -48,16 +48,12 @@ async function loadEdge(manifest: Manifest) {
 export async function loadLandscape() {
   const manifest: Manifest = await (await fetchBytes('landscape.json')).json()
   if (manifest.version !== 2) throw new Error('Landscape manifest is incompatible')
-  const [near, far, edge] = await Promise.all([loadField(manifest.near), loadField(manifest.far), loadEdge(manifest)])
+  const [near, far, edge, images] = await Promise.all([loadField(manifest.near), loadField(manifest.far), loadEdge(manifest), loadLayerImages([
+    { color: kitUrl('grass_c'), normal: kitUrl('grass_n') },
+    ...manifest.layers.map(layer => ({ color: `${root}layers/${layer.name}_c.webp`, normal: `${root}layers/${layer.name}_n.webp` })),
+  ], 1024)])
   const sources: TerrainSources = { near: near.field, far: far.field, nearSurface: near.surface, farSurface: far.surface, band: manifest.band, nearEdge: edge, edgeRange: manifest.edge.range }
-  const loadLayers = async () => {
-    const images = await loadLayerImages([
-      { color: kitUrl('grass_c'), normal: kitUrl('grass_n') },
-      ...manifest.layers.map(layer => ({ color: `${root}layers/${layer.name}_c.webp`, normal: `${root}layers/${layer.name}_n.webp` })),
-    ], 1024)
-    return { ...images, averages: manifest.averages }
-  }
-  return { manifest, sources, uniforms: terrainUniforms(sources), averages: manifest.averages, loadLayers }
+  return { manifest, sources, uniforms: terrainUniforms(sources), averages: manifest.averages, layers: { ...images, averages: manifest.averages } }
 }
 
 export type LandscapeAsset = Awaited<ReturnType<typeof loadLandscape>>
