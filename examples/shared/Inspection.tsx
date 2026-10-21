@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { addAfterEffect, useFrame, useThree } from '@react-three/fiber'
 import { Frustum, Matrix4, Mesh, type Object3D, type Texture } from 'three'
 import { sampleView } from '@blacksite/check'
-import type { FrameSample, Inspector, Technique, InspectView } from '@blacksite/inspect'
+import type { Action, FrameSample, Inspector, Parameter, Technique, InspectView } from '@blacksite/inspect'
 import type { WebGPULook } from '@blacksite/look/webgpu'
 import type { CharacterHandle } from '@blacksite/subject'
 import type { WebGPURenderer } from 'three/webgpu'
@@ -17,6 +17,8 @@ export type InspectionContent = {
   roots: readonly Object3D[]
   sources: readonly { sceneTriangles: number; drawnTriangles: number }[]
   techniques: Technique[]
+  parameters?: Parameter[]
+  actions?: Action[]
   setView(view: InspectView): void
   details(): unknown
   probe?(): Promise<unknown>
@@ -74,7 +76,11 @@ export function SceneInspection({ name, look, warm, walker, inspector, telemetry
         if (roots.has(child)) continue
         child.traverse(object => { if (object instanceof Mesh) otherMeshes.current.push(object) })
       }
-      cleanup.current = current.techniques.map(technique => inspector.registerTechnique(technique))
+      cleanup.current = [
+        ...current.techniques.map(technique => inspector.registerTechnique(technique)),
+        ...(current.parameters ?? []).map(parameter => inspector.registerParameter(parameter)),
+        ...(current.actions ?? []).map(action => inspector.registerAction(action)),
+      ]
     }
     const stats = current.sources
     let sceneTriangles = stats.reduce((sum, entry) => sum + entry.sceneTriangles, 0)

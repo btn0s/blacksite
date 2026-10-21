@@ -1,9 +1,25 @@
 import { Bone, Box3, BufferGeometry, Float32BufferAttribute, Matrix4, Quaternion, SkinnedMesh, Uint16BufferAttribute, Vector3, type Object3D } from 'three'
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js'
+import { MeshStandardNodeMaterial, type Material } from 'three/webgpu'
+import { Fn, float, materialEmissive, normalView, normalWorld, positionView, uniform, vec3 } from 'three/tsl'
 
 export const SURVIVOR_URL = '/owned/last-light-characters/drifters-light-jacketed-tripo-rigged.glb'
 
 const worn = new WeakMap<GLTF, Promise<GLTF>>()
+
+export const survivorRim = uniform(0)
+
+function rimLit(source: Material) {
+  const material = new MeshStandardNodeMaterial().copy(source as never)
+  const rim = Fn(builder => {
+    const facing = normalView.dot(positionView.negate().normalize()).clamp(0, 1)
+    const edge = float(1).sub(facing).pow(3)
+    const sky = normalWorld.y.mul(0.4).add(0.6)
+    return materialEmissive.add(vec3(0.55, 0.68, 0.85).mul(edge).mul(sky).mul(survivorRim).mul((builder.context as { radianceScale?: number }).radianceScale ?? 1))
+  })()
+  material.emissiveNode = rim
+  return material
+}
 
 export function wearSurvivor(host: GLTF, url = SURVIVOR_URL) {
   let result = worn.get(host)
@@ -130,7 +146,7 @@ async function dress(host: GLTF, url: string) {
   const guestMesh = guestMeshes[0]!
   host.scene.updateMatrixWorld(true)
   const groundY = new Box3().setFromObject(host.scene, true).min.y
-  const mesh = new SkinnedMesh(poseGeometry(hostMesh, guestMesh, groundY), guestMesh.material)
+  const mesh = new SkinnedMesh(poseGeometry(hostMesh, guestMesh, groundY), rimLit(guestMesh.material as Material))
   mesh.name = 'Survivor'
   mesh.castShadow = true
   mesh.receiveShadow = true

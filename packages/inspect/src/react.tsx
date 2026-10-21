@@ -38,8 +38,8 @@ function InspectControls({ inspector, dump, logs, onLogs }: { inspector: Inspect
   const store = useCreateStore()
   const latest = useRef({ dump, onLogs })
   latest.current = { dump, onLogs }
-  const { techniques, view } = snapshot
-  const layout = JSON.stringify([Boolean(dump), techniques.map(technique => [technique.id, technique.label, technique.description, technique.group])])
+  const { techniques, parameters, actions, view } = snapshot
+  const layout = JSON.stringify([Boolean(dump), techniques.map(technique => [technique.id, technique.label, technique.description, technique.group]), parameters.map(parameter => [parameter.id, parameter.label, parameter.description, parameter.group, parameter.min, parameter.max, parameter.step]), actions.map(action => [action.id, action.label, action.group])])
   const [, set] = useControls(() => {
     const schema: Schema = {}
     schema.logs = { label: 'Debug logs', value: logs, onChange: (on: boolean) => latest.current.onLogs(on) }
@@ -53,18 +53,36 @@ function InspectControls({ inspector, dump, logs, onLogs }: { inspector: Inspect
         onChange: (enabled: boolean) => { if (inspector.getSnapshot().techniques.some(({ id }) => id === technique.id)) inspector.setTechnique(technique.id, enabled) },
       }
     }
-    for (const [name, entries] of Object.entries(groups)) schema[name] = folder(entries)
+    const collapsed = new Set<string>()
+    for (const parameter of parameters) {
+      collapsed.add(parameter.group)
+      ;(groups[parameter.group] ??= {})[parameter.id] = {
+        label: parameter.label,
+        hint: parameter.description,
+        value: parameter.value,
+        min: parameter.min,
+        max: parameter.max,
+        step: parameter.step,
+        onChange: (value: number) => { if (inspector.getSnapshot().parameters.some(({ id }) => id === parameter.id)) inspector.setParameter(parameter.id, value) },
+      }
+    }
+    for (const action of actions) {
+      collapsed.add(action.group)
+      ;(groups[action.group] ??= {})[action.id] = button(() => { void inspector.runAction(action.id) })
+    }
+    for (const [name, entries] of Object.entries(groups)) schema[name] = folder(entries, { collapsed: collapsed.has(name) })
     return schema
   }, { store }, [layout])
   useEffect(() => {
-    set({ lod: view === 'lod', ...Object.fromEntries(techniques.map(technique => [technique.id, technique.enabled])) })
-  }, [layout, set, techniques, view])
+    set({ lod: view === 'lod', ...Object.fromEntries(techniques.map(technique => [technique.id, technique.enabled])), ...Object.fromEntries(parameters.map(parameter => [parameter.id, parameter.value])) })
+  }, [layout, set, techniques, parameters, view])
   const release = () => {
     const focused = document.activeElement
     if (focused instanceof HTMLInputElement && focused.type === 'checkbox') focused.blur()
   }
   return <div className="bs-inspect-controls" onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onChange={release}>
     <LevaPanel store={store} fill collapsed hideCopyButton titleBar={{ title: 'Debug', drag: false, filter: false }} theme={theme} />
+    {snapshot.notice && <div className="bs-inspect-notice" role="status">{snapshot.notice}</div>}
   </div>
 }
 

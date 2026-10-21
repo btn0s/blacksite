@@ -1,0 +1,19 @@
+{
+  "fogDensity": 1.8,
+  "fogHeight": 140,
+  "cloudCoverage": 0.88,
+  "cloudAltitude": 1.2,
+  "cloudDensity": 3.5,
+  "sunStrength": 0.55,
+  "ambient": 1,
+  "groundBounce": 0.5,
+  "shafts": 1.6,
+  "exposure": -0.3,
+  "saturation": 0.7,
+  "coolness": 0.5,
+  "bloom": 0.45,
+  "grain": 0.06,
+  "vignette": 0.45,
+  "aberration": 0.12,
+  "rim": 1200
+}

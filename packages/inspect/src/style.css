@@ -30,3 +30,12 @@
   overflow: auto;
   pointer-events: auto;
 }
+.bs-inspect-notice {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  background: #142124;
+  color: #edf0e5;
+  font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}

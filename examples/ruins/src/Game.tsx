@@ -9,13 +9,15 @@ import { MeshletScene, type MeshletStats } from '@blacksite/geometry'
 import { createInspector } from '@blacksite/inspect'
 import { DebugBlock, InspectHud } from '@blacksite/inspect/react'
 import { WebGPULook } from '@blacksite/look/webgpu-r3f'
-import type { WebGPULook as Look, WebGPULookStage } from '@blacksite/look/webgpu'
+import { LOOK_CONTROLS, type LookFeatures, type LookTuning, type WebGPULook as Look, type WebGPULookStage } from '@blacksite/look/webgpu'
+import type { Parameter } from '@blacksite/inspect'
 import { Compass, Loading, Notice } from '@blacksite/ui/hud'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import { AlsPhysicsStepper } from 'als-ue5-r3f/app/AlsPhysicsStepper'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { createWalker } from '../../valley/src/walker'
-import { wearSurvivor } from './survivor'
+import { survivorRim, wearSurvivor } from './survivor'
+import savedLook from './look.json'
 import { AxesGizmo } from '../../shared/AxesGizmo'
 import { Screenshot } from '../../shared/Screenshot'
 import { SceneInspection, type InspectionContent, type TelemetryAction } from '../../shared/Inspection'
@@ -31,6 +33,15 @@ import { TelemetryReadout } from './TelemetryReadout'
 import { ruinsViews, ruinsNearRadius, createRuinsCameras, type RuinsView } from './views'
 
 const shadowLayers = [2]
+const { rim: defaultRim, ...defaultTuning } = savedLook
+const defaultLook: Partial<LookTuning> = defaultTuning
+survivorRim.value = defaultRim
+const FEATURES: ReadonlyArray<{ id: keyof LookFeatures; label: string; description: string }> = [
+  { id: 'shafts', label: 'Sun shafts', description: 'Half a millisecond or less: eight shadow-map taps per pixel through the fog, jittered and resolved by the temporal pass.' },
+  { id: 'bloom', label: 'Bloom', description: 'About 0.3 to 0.6 ms: a high-pass and a five-level blur chain at half resolution.' },
+  { id: 'lens', label: 'Chromatic aberration', description: 'About 0.1 to 0.2 ms: one extra full-screen copy and three taps.' },
+  { id: 'clouds', label: 'Clouds', description: 'Sky pixels only, and the sky light is re-baked when this changes.' },
+]
 const disabledStages = (new URLSearchParams(location.search).get('off') ?? '').split(',').filter(Boolean) as WebGPULookStage[]
 const glyphs = {
   home: { label: 'Spawn', keyboard: 'R', touch: 'Home', gamepad: { xbox: 'View', playstation: 'Create', generic: 'Back' } },
@@ -80,7 +91,17 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
     identity: geometry,
     roots: [geometry.object],
     sources: [stats],
+    parameters: [
+      ...LOOK_CONTROLS.map<Parameter>(control => ({
+        id: `look-${control.key}`, group: 'Look', label: control.label, description: control.hint, min: control.min, max: control.max, step: control.step,
+        value: shared.look.current?.tuning[control.key] ?? 0,
+        setValue: value => shared.look.current?.tune({ [control.key]: value }),
+      })),
+      { id: 'look-rim', group: 'Look', label: 'Character rim', description: 'Cool edge light on the survivor so it reads against the fog.', min: 0, max: 6000, step: 50, value: survivorRim.value, setValue: value => { survivorRim.value = value } },
+    ],
+    actions: [{ id: 'look-save', group: 'Look', label: 'Save look', run: () => saveLook(shared.look.current) }],
     techniques: [
+      ...FEATURES.map(feature => ({ id: `look-${feature.id}`, group: 'Rendering', label: feature.label, description: feature.description, enabled: true, setEnabled: (enabled: boolean) => shared.look.current?.setFeature(feature.id, enabled) })),
       { id: 'meshlet-debug', group: 'Overlays', label: 'Colour by meshlet', enabled: false, setEnabled: enabled => geometry.setDebugView(enabled ? 'meshlets' : inspector.getSnapshot().view === 'lod' ? 'lod' : 'normal') },
       { id: 'collision-overlay', group: 'Overlays', label: 'Show collision', description: 'Resident collision: green walkable, red steep, blue overhang.', enabled: false, setEnabled: enabled => shared.collision.current?.setOverlay(enabled ? 0 : null) },
       { id: 'collision-hidden', group: 'Overlays', label: 'Show invisible collision', description: 'Only collision standing 0.5 m or more in front of the drawn surface.', enabled: false, setEnabled: enabled => shared.collision.current?.setOverlay(enabled ? 0.5 : null) },
@@ -180,7 +201,7 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
   } }), [geometry, home, onError, shared, walker])
   if (error) throw error
   return <>
-    <WebGPULook atmosphere={atmosphere} sunlight={sunlight} film={film} quality="high" shadowDistance={400} shadowMap={2048} shadowCascades={4} shadowLayers={shadowLayers} disable={disabledStages} onReady={onLook} onError={onError} />
+    <WebGPULook atmosphere={atmosphere} sunlight={sunlight} film={film} tuning={defaultLook} quality="high" shadowDistance={400} shadowMap={2048} shadowCascades={4} shadowLayers={shadowLayers} disable={disabledStages} onReady={onLook} onError={onError} />
     {landscape && look && <Landscape asset={landscape} look={look} onError={onError} />}
     <Physics gravity={[0, -9.8, 0]} paused timeStep={1 / 60} updatePriority={ALS_FRAME_PRIORITY.Physics}>
       <AlsPhysicsStepper />
@@ -299,6 +320,20 @@ export function Game() {
     {error && <div className="hud-menu" role="alert"><strong>Dark Ruins could not load</strong><span>{error}</span></div>}
     <Loading title="Dark Ruins" detail={detail} progress={ready ? 1 : owned ? 0.7 : 0.35} done={ready || error !== null} />
   </div></InputProvider>
+}
+
+async function saveLook(look: Look | null) {
+  if (!look) return 'The look is not ready yet.'
+  const values = { ...look.tuning, rim: survivorRim.value }
+  console.info('[look]', JSON.stringify(values))
+  try {
+    const response = await fetch('/__inspect/look', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values), signal: AbortSignal.timeout(10000) })
+    if (!response.ok) throw new Error(`Look upload returned ${response.status}`)
+    const { saved } = await response.json() as { saved: string }
+    return `Saved ${saved}. Copy it to examples/ruins/src/look.json to make it the default.`
+  } catch {
+    return 'The dev server could not save the look; the values are in the browser console.'
+  }
 }
 
 class RenderBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
