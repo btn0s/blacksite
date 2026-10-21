@@ -8,7 +8,7 @@ const keyboard: Control[] = [
   { action: 'Jump', keys: ['Space'] },
   { action: 'Crouch', keys: ['Ctrl'] },
   { action: 'Walk', keys: ['Alt'] },
-  { action: 'Back to the meadow', keys: ['R'] },
+  { action: 'Back to the tarn', keys: ['R'] },
 ]
 
 const touch: Control[] = [
@@ -17,7 +17,7 @@ const touch: Control[] = [
   { action: 'Jump', keys: ['Jump'] },
   { action: 'Sprint', keys: ['Full stick'] },
   { action: 'Crouch', keys: ['Crouch'] },
-  { action: 'Back to the meadow', keys: ['Home'] },
+  { action: 'Back to the tarn', keys: ['Home'] },
 ]
 
 export const showcase: Showcase = { tool: 'world', title: 'Valley',

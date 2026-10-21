@@ -1,0 +1,36 @@
+{
+  "id": "rock-cliff",
+  "category": "material",
+  "ship": [
+    "1k/c.webp",
+    "1k/n.webp",
+    "1k/orm.webp"
+  ],
+  "files": {
+    "1k/c.webp": 210128,
+    "1k/n.webp": 464888,
+    "1k/orm.webp": 107040,
+    "1k/c.ktx2": 204415,
+    "1k/n.ktx2": 1369921,
+    "1k/orm.ktx2": 687799,
+    "512/c.webp": 53554,
+    "512/n.webp": 124856,
+    "512/orm.webp": 39634,
+    "512/c.ktx2": 61639,
+    "512/n.ktx2": 342479,
+    "512/orm.ktx2": 188020
+  },
+  "bytes": 782056,
+  "ktx2Bytes": 2262135,
+  "budget": 900000,
+  "withinBudget": true,
+  "over": [],
+  "maps": {
+    "color": "Rock030_2K-JPG_Color.jpg",
+    "normal": "Rock030_2K-JPG_NormalGL.jpg",
+    "normalDX": "Rock030_2K-JPG_NormalDX.jpg",
+    "roughness": "Rock030_2K-JPG_Roughness.jpg",
+    "ao": "Rock030_2K-JPG_AmbientOcclusion.jpg"
+  },
+  "packed": "orm"
+}

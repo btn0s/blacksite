@@ -48,6 +48,60 @@
       ]
     },
     {
+      "id": "grass-meadow",
+      "title": "Grass 004",
+      "category": "material",
+      "author": "Lennart Demes (ambientCG)",
+      "licence": "CC0-1.0",
+      "source": {
+        "url": "https://ambientcg.com/a/Grass004"
+      },
+      "attribution": "\"Grass 004\" by ambientCG (https://ambientcg.com/a/Grass004), CC0 1.0",
+      "files": [
+        {
+          "name": "Grass004_2K-JPG.zip",
+          "sha256": "d7d3f08e8bb1e59aed0c3dbb85ea0b46d5308481f89b6a3fd62c0ec9e862245b",
+          "size": 39900302
+        }
+      ]
+    },
+    {
+      "id": "rock-cliff",
+      "title": "Rock 030",
+      "category": "material",
+      "author": "Lennart Demes (ambientCG)",
+      "licence": "CC0-1.0",
+      "source": {
+        "url": "https://ambientcg.com/a/Rock030"
+      },
+      "attribution": "\"Rock 030\" by ambientCG (https://ambientcg.com/a/Rock030), CC0 1.0",
+      "files": [
+        {
+          "name": "Rock030_2K-JPG.zip",
+          "sha256": "18992ddc09f8f0cc60eceb875243c0c2449666c662ab7fedbd8bdea4b3d15a99",
+          "size": 33491328
+        }
+      ]
+    },
+    {
+      "id": "sand-beach",
+      "title": "Ground 097",
+      "category": "material",
+      "author": "Lennart Demes (ambientCG)",
+      "licence": "CC0-1.0",
+      "source": {
+        "url": "https://ambientcg.com/a/Ground097"
+      },
+      "attribution": "\"Ground 097\" by ambientCG (https://ambientcg.com/a/Ground097), CC0 1.0",
+      "files": [
+        {
+          "name": "Ground097_2K-JPG.zip",
+          "sha256": "edf4edcc95ef82b23930f92736e6e99f0b93af0885fc6f955c25ce47aad749d6",
+          "size": 17697184
+        }
+      ]
+    },
+    {
       "id": "soil-mud-scanned",
       "title": "Ground 054",
       "category": "material",

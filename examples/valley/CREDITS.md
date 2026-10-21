@@ -9,6 +9,9 @@ Licence: https://creativecommons.org/publicdomain/zero/1.0/
 | Asset | Category | Author | Source |
 | --- | --- | --- | --- |
 | `bark-pine` Pine Bark | material | Dimitrios Savva (Poly Haven) | [polyhaven.com](https://polyhaven.com/a/pine_bark) |
+| `grass-meadow` Grass 004 | material | Lennart Demes (ambientCG) | [ambientcg.com](https://ambientcg.com/a/Grass004) |
+| `rock-cliff` Rock 030 | material | Lennart Demes (ambientCG) | [ambientcg.com](https://ambientcg.com/a/Rock030) |
+| `sand-beach` Ground 097 | material | Lennart Demes (ambientCG) | [ambientcg.com](https://ambientcg.com/a/Ground097) |
 | `soil-mud-scanned` Ground 054 | material | Lennart Demes (ambientCG) | [ambientcg.com](https://ambientcg.com/a/Ground054) |
 
 ## CC BY 3.0
@@ -26,4 +29,3 @@ Licence: https://www.usgs.gov/information-policies-and-instructions/copyrights-a
 | Asset | Category | Author | Source |
 | --- | --- | --- | --- |
 | `bed-wind-alpine` Wind Soundscape from Gem Lake | ambience | J. Job, Rocky Mountain National Park (National Park Service) | [www.nps.gov](https://www.nps.gov/romo/learn/photosmultimedia/sounds-ambient-soundscapes.htm) |
-| `terrain-ridge-valley` USGS 3DEP 1/3 arc-second n41w079 | terrain | U.S. Geological Survey | [www.usgs.gov](https://www.usgs.gov/3d-elevation-program) |

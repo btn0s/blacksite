@@ -11,7 +11,7 @@ export const VALLEY_BINDINGS: ReadonlyArray<Binding> = [
 ]
 
 export const VALLEY_GLYPHS = {
-  home: { label: 'Meadow', keyboard: 'R', touch: 'Home', gamepad: { xbox: 'View', playstation: 'Create', generic: 'Back' } },
+  home: { label: 'Tarn', keyboard: 'R', touch: 'Home', gamepad: { xbox: 'View', playstation: 'Create', generic: 'Back' } },
 }
 
 export const yawOf = (heading: number) => -heading - Math.PI / 2

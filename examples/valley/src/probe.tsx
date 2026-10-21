@@ -124,7 +124,7 @@ export function Probe({ shared, walker, world, api }: { shared: Shared; walker: 
         unfreeze: async () => freeze(false),
         perf: () => scripted(async () => {
           await place(model.site.spawn[0], model.site.spawn[1], model.site.spawnYaw)
-          const path = world.path.slice(0, 7).map(([x, z]) => [x, z] as [number, number])
+          const path = model.route.map(([x, z]) => [x, z] as [number, number])
           await follow(path, true)
           setCamera(null)
           for (let index = 0; index < flyover.length - 1; index++) {

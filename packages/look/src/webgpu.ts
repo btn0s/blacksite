@@ -297,6 +297,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
   const shadowListeners = new Set<WebGPUShadowListener>()
   const bufferSize = new Vector2()
   let preparingCompile = false
+  let compiling = false
   const captureState = (camera: Camera, pass: 'depth' | 'lit' | 'shadow') => ({
     camera, pass, target: renderer.getRenderTarget(), mrt: renderer.getMRT(), lighting: renderer.lighting,
     context: renderer.contextNode, override: scene.overrideMaterial, toneMapping: renderer.toneMapping, outputColorSpace: renderer.outputColorSpace,
@@ -412,7 +413,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
       if (name === 'bloom' || name === 'lens') reselect()
     },
     beginFrame() {
-      if (disposed) return
+      if (disposed || compiling) return
       const buffer = renderer.getDrawingBufferSize(bufferSize)
       if ((buffer.x | buffer.y) & 1) {
         const ratio = renderer.getPixelRatio()
@@ -432,28 +433,26 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
       if (disposed) return
       updateCamera()
       pipeline.render()
-      const work: Promise<void>[] = []
-      for (const state of states.values()) {
-        for (const root of roots) {
-          const previous = captureState(camera, 'lit')
-          const visible = root.visible
-          root.visible = true
-          preparingCompile = true
-          try {
-            applyState(state)
-            work.push(renderer.compileAsync(root, state.camera, scene))
-          } finally {
-            root.visible = visible
-            applyState(previous)
-            preparingCompile = false
-          }
+      const previous = captureState(camera, 'lit')
+      const visibility = roots.map(root => root.visible)
+      for (const root of roots) root.visible = true
+      compiling = true
+      preparingCompile = true
+      try {
+        for (const state of states.values()) {
+          applyState(state)
+          for (const root of roots) await renderer.compileAsync(root, state.camera, scene)
         }
+      } finally {
+        preparingCompile = false
+        compiling = false
+        applyState(previous)
+        roots.forEach((root, index) => { root.visible = visibility[index]! })
       }
-      await Promise.all(work)
       shadows.reset()
     },
     render(dt = 0) {
-      if (disposed) return
+      if (disposed || compiling) return
       if (rebakeAt && performance.now() >= rebakeAt) { rebakeAt = 0; atmosphereGPU.rebake() }
       updateCamera()
       trace.beginFrame(dt)

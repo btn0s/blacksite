@@ -6,6 +6,7 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 import { resolve } from 'node:path'
 import { readdirSync, readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { blacksiteAssets } from '../cli/serve-assets.mjs'
+import { blacksiteLandscape } from '../packages/landscape/vite.mjs'
 import { defaultSiteUrl, pages, renderPage, robots, sitemap } from './src/seo'
 
 const base = process.env.SITE_BASE || '/'
@@ -49,6 +50,7 @@ export default defineConfig({
     react(),
     tsconfigPaths({ root: resolve(import.meta.dirname, '..') }),
     blacksiteAssets({ blacksiteRoot: resolve(import.meta.dirname, '..') }),
+    blacksiteLandscape(),
     {
       name: 'blacksite-route-pages',
       apply: 'build',

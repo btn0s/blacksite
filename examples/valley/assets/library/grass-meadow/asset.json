@@ -1,0 +1,36 @@
+{
+  "id": "grass-meadow",
+  "category": "material",
+  "ship": [
+    "1k/c.webp",
+    "1k/n.webp",
+    "1k/orm.webp"
+  ],
+  "files": {
+    "1k/c.webp": 242336,
+    "1k/n.webp": 342216,
+    "1k/orm.webp": 293830,
+    "1k/c.ktx2": 233496,
+    "1k/n.ktx2": 1355494,
+    "1k/orm.ktx2": 978749,
+    "512/c.webp": 81592,
+    "512/n.webp": 103000,
+    "512/orm.webp": 84718,
+    "512/c.ktx2": 65679,
+    "512/n.ktx2": 335697,
+    "512/orm.ktx2": 236619
+  },
+  "bytes": 878382,
+  "ktx2Bytes": 2567739,
+  "budget": 900000,
+  "withinBudget": true,
+  "over": [],
+  "maps": {
+    "color": "Grass004_2K-JPG_Color.jpg",
+    "normal": "Grass004_2K-JPG_NormalGL.jpg",
+    "normalDX": "Grass004_2K-JPG_NormalDX.jpg",
+    "roughness": "Grass004_2K-JPG_Roughness.jpg",
+    "ao": "Grass004_2K-JPG_AmbientOcclusion.jpg"
+  },
+  "packed": "orm"
+}

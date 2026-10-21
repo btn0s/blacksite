@@ -652,6 +652,102 @@
       ]
     },
     {
+      "id": "grass-meadow",
+      "title": "Grass 004",
+      "category": "material",
+      "tags": [
+        "grass",
+        "meadow",
+        "ground",
+        "green"
+      ],
+      "source": {
+        "site": "ambientcg",
+        "id": "Grass004",
+        "url": "https://ambientcg.com/a/Grass004"
+      },
+      "author": "Lennart Demes (ambientCG)",
+      "licence": "CC0-1.0",
+      "attribution": "\"Grass 004\" by ambientCG (https://ambientcg.com/a/Grass004), CC0 1.0",
+      "use": "Short meadow grass; first terrain layer.",
+      "scale": {
+        "tile": 3.2
+      },
+      "files": [
+        {
+          "name": "Grass004_2K-JPG.zip",
+          "url": "https://ambientcg.com/get?file=Grass004_2K-JPG.zip",
+          "sha256": "d7d3f08e8bb1e59aed0c3dbb85ea0b46d5308481f89b6a3fd62c0ec9e862245b",
+          "size": 39900302,
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "sand-beach",
+      "title": "Ground 097",
+      "category": "material",
+      "tags": [
+        "sand",
+        "beach",
+        "ground",
+        "dry"
+      ],
+      "source": {
+        "site": "ambientcg",
+        "id": "Ground097",
+        "url": "https://ambientcg.com/a/Ground097"
+      },
+      "author": "Lennart Demes (ambientCG)",
+      "licence": "CC0-1.0",
+      "attribution": "\"Ground 097\" by ambientCG (https://ambientcg.com/a/Ground097), CC0 1.0",
+      "use": "Dry beach sand; shore terrain layer.",
+      "scale": {
+        "tile": 2.8
+      },
+      "files": [
+        {
+          "name": "Ground097_2K-JPG.zip",
+          "url": "https://ambientcg.com/get?file=Ground097_2K-JPG.zip",
+          "sha256": "edf4edcc95ef82b23930f92736e6e99f0b93af0885fc6f955c25ce47aad749d6",
+          "size": 17697184,
+          "extract": true
+        }
+      ]
+    },
+    {
+      "id": "rock-cliff",
+      "title": "Rock 030",
+      "category": "material",
+      "tags": [
+        "rock",
+        "cliff",
+        "stone",
+        "grey"
+      ],
+      "source": {
+        "site": "ambientcg",
+        "id": "Rock030",
+        "url": "https://ambientcg.com/a/Rock030"
+      },
+      "author": "Lennart Demes (ambientCG)",
+      "licence": "CC0-1.0",
+      "attribution": "\"Rock 030\" by ambientCG (https://ambientcg.com/a/Rock030), CC0 1.0",
+      "use": "Grey cliff rock; steep terrain layer.",
+      "scale": {
+        "tile": 3.6
+      },
+      "files": [
+        {
+          "name": "Rock030_2K-JPG.zip",
+          "url": "https://ambientcg.com/get?file=Rock030_2K-JPG.zip",
+          "sha256": "18992ddc09f8f0cc60eceb875243c0c2449666c662ab7fedbd8bdea4b3d15a99",
+          "size": 33491328,
+          "extract": true
+        }
+      ]
+    },
+    {
       "id": "forest-floor-leaves",
       "title": "Forest Leaves 02",
       "category": "material",

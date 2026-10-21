@@ -2,7 +2,7 @@
   "name": "@blacksite/example-valley",
   "version": "0.3.0",
   "private": true,
-  "description": "A walkable meadow above a forested valley: far field, foliage, wind and atmosphere",
+  "description": "A walkable valley from a mountain tarn to the sea: baked landscape, water, foliage, wind and atmosphere",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

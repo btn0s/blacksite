@@ -25,6 +25,16 @@ const heightAt = (x: number, z: number) => terrainHeightAt(sources, x, z)
 - `cover` takes the `Cover` from `createCover`. Wherever a cover family's mask grows blades, the terrain draws the ground the way those blades look: their root colour under the near blades, brightening to their average colour seen from afar on the same distance curve the blades thin on, and kept at every distance past the blades. When the last blade goes, nothing changes colour. Create the cover first on shared uniforms: `const uniforms = terrainUniforms(sources)`, `createCover({ terrain: uniforms, … })`, then `createTerrain({ uniforms, cover, … })`.
 - `terrain.update(camera)` selects nodes each frame; `terrain.uniforms` is the `TerrainUniforms` other systems (cover) share. `createTerrainNodes(terrain.uniforms)` exposes `height(root)`, `surface(root, mip)` and `normal(surface)` for node materials.
 
+## Building a world
+
+`bakeLandscape(shape)` turns a `LandscapeShape` into the files a game loads: `near.bin` and `far.bin` (16-bit heights plus the packed surface texture, deflated), `water.json` and `landscape.json`. A shape is a name, a centre, near and far extents and sizes, the blend `band`, the sea level and extent, water specs, and three functions: `macro(x, z)` for the landform, `hills(x, z, detail)` for the detail laid over it, and `masks(x, z, height, slope, bank)` for the two surface masks (`.b` and `.a`). The bake carves rivers and tarns through `createWaterField` after the macro form, so the dug channel and the drawn surface come from one layout. `valleyShape` is the reference: a valley floor under a mountain horseshoe, a north sea and a river with a spilling tarn and creek, whose masks are soil and sand.
+
+```sh
+node --experimental-strip-types packages/landscape/scripts/build.mjs out/landscape [shape module]
+```
+
+A shape module's default export is a `LandscapeShape`. At runtime `loadLandscape(url)` returns `{ sources, water, manifest }` ready for `createTerrain` and `createWater`. In a Vite game, `blacksiteLandscape()` from `packages/landscape/vite.mjs` bakes on first start into the cache, serves `/landscape/` in dev and emits it into the build; baking takes about 15 s and the output is a generated artifact that is never committed.
+
 ## Water
 
 Rivers, tarns and a sea share one plan, one carve and one draw.
@@ -60,7 +70,7 @@ Cover is drawn in world-stable patches (`patch`, default 8 m) out to `distance` 
 
 ### Authored ground cover
 
-`createOwnedCover({ renderer, wind, heightAt, bounds, distance, families })` accepts loaded `FoliageModel` objects. Each family defines `{ name, model, density, scale, mask? }`: density is instances per square metre, scale is a `[min, max]` range, and `mask(x, z)` is the deterministic placement probability. Optional `lod`, `lodRange`, `range`, `meshRange`, `windStrength`, `shadowDistance` and `yOffset` control each family. Models retain their source UVs, normals, material maps and alpha coverage. Each family bakes its own source model into an impostor atlas (default 4 × 4 views at 64 pixels), with the mesh-to-impostor transition at `meshRange` (default 18–28 m).
+`createAuthoredCover({ renderer, wind, heightAt, bounds, distance, families })` accepts loaded `FoliageModel` objects. Each family defines `{ name, model, density, scale, mask? }`: density is instances per square metre, scale is a `[min, max]` range, and `mask(x, z)` is the deterministic placement probability. Optional `lod`, `lodRange`, `range`, `meshRange`, `windStrength`, `shadowDistance` and `yOffset` control each family. Models retain their source UVs, normals, material maps and alpha coverage. Each family bakes its own source model into an impostor atlas (default 4 × 4 views at 64 pixels), with the mesh-to-impostor transition at `meshRange` (default 18–28 m).
 
 Candidates occupy a bounded ring of world-anchored tiles (`tileSize`, default 32 m). Placement and terrain sampling run at initialization and when the walking camera crosses a tile edge; retained tiles keep their exact candidates. Every frame, the shared GPU foliage core culls candidates and builds indirect draws. Shadows use the authored mesh, with their reach bounded by the family's visible range. The returned `ground` contributes no tint unless the host supplies one, so the terrain keeps its authored surface layers.
 
@@ -71,8 +81,8 @@ Call `cover.update(camera)` each frame. `setCullingEnabled`, `setLodEnabled` and
 ```ts
 import { createForest, loadFoliageModel } from '@blacksite/landscape'
 
-const pine = await loadFoliageModel('/owned/scots-pine.glb')
-const pineLod = await loadFoliageModel('/owned/scots-pine-lod.glb', { materialsFrom: pine })
+const pine = await loadFoliageModel('/models/scots-pine.glb')
+const pineLod = await loadFoliageModel('/models/scots-pine-lod.glb', { materialsFrom: pine })
 const forest = createForest({
   renderer, wind, heightAt,
   species: [{ model: pine, lod: pineLod, scale: [0.75, 1.3] }],
@@ -95,6 +105,8 @@ Species and authored cover families accept `tint: { low, high, patchSize?, indiv
 Meshes transition to impostors over `near` and impostors disappear over `far`. An optional `lodRange` controls the original-to-authored-LOD transition before the impostor transition. `bakeImpostor(renderer, model, { frames?, frameSize?, samples? })` renders albedo and normal atlases from that same loaded model. Each view is baked at four times the tile resolution in a reusable temporary target, then copied from its area-filtered mip level into the atlas. Source alpha cutoffs are applied once before downsampling; accepted fragments write full coverage and both attachments clear to zero coverage. `createImpostorMaterial` interpolates premultiplied atlas directions and preserves their fractional coverage through native alpha hashing with temporal antialiasing, or raw alpha-to-coverage when the host uses MSAA. Shadow masks convert the same blended coverage into ordered light-pixel coverage. Optional distance blur, contact shading and far tint affect appearance without imposing a fixed cutoff on blended leaf coverage.
 
 Call `forest.update(camera)` before the main render and `forest.prepareShadow(renderer, camera)` from each light-view callback. Shadow draws use independent GPU frustum selection against the current cascade, original meshes and authored LODs nearby, and same-model atlas silhouettes farther away. Shadow billboards face the active orthographic light view. Their distance fade uses the walking camera and `shadowDistance`; it is independent of the main-view mesh fade. Enable `proxyLayer` (default 2) on shadow cameras. `stats.proxies` retains the last light view's submitted shadow representations.
+
+`treeFoliage(generateTree(PINE), { bark, barkNormal, leaf })` wraps the procedural trees as a `FoliageModel`, so a game without model files can still use `createForest`, impostors and GPU culling.
 
 ### Shared GPU foliage
 

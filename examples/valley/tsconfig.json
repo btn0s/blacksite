@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": { "baseUrl": "../..", "types": ["vite/client", "node"] },
-  "include": ["src", "vite.config.ts", "../../vendor/als-web/src/app/globals.d.ts", "../../packages/look/src/n8ao.d.ts"]
+  "include": ["src", "vite.config.ts", "../../vendor/als-web/src/app/globals.d.ts", "../../packages/look/src/n8ao.d.ts", "../../packages/look/src/webgpu-addons.d.ts"]
 }

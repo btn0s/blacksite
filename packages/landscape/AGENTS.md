@@ -7,7 +7,7 @@
 | Term | Meaning |
 |---|---|
 | Near and far field | Two `Heightfield`s: fine spacing over the walkable area, coarse spacing to the horizon, blended over `band` metres. `terrainHeightAt` is the CPU truth for physics and placement. |
-| Surface texture | Per-field RGBA from `surfaceTexture`: normal in `.rg`, two game masks in `.b` and `.a`. Valley: `.b` forest, `.a` path. |
+| Surface texture | Per-field RGBA from `surfaceTexture`: normal in `.rg`, two game masks in `.b` and `.a`. Valley: `.b` soil, `.a` sand, which the ground layers read as their second and third layers. |
 | Node | One CDLOD quadtree cell at a fixed world position. Vertices morph to the parent grid before the node hands over. |
 | Family | One authored cover model with density, scale, terrain placement mask and distance ranges; procedural cover also accepts blade shape and a shared TSL mask. |
 | Cover ground | The terrain's colour wherever cover grows: the blades' root colour near, their far average past the fade, from the same masks and the same reach curve, so the edge of the blades never changes colour. |
@@ -38,9 +38,13 @@ Authored cover uses `mask(x, z)` during deterministic world-tile placement and s
 
 Procedural cover uses a shared TSL mask. A mask is a function from `CoverSample` to a TSL float node. The context supplies `surface` (forest mask in `.b`, path or rock mask in `.a`), `slope` (1 − normal.y), `root` (world xz), `ground` (height) and `distance`. Import `landscapeNoise(root, seed)` for the same integer noise as CPU placement. Optional `height` uses the same signature. Return 0–1 for masks; the result multiplies density. Terrain and cover evaluate the same function, so their density and ground colour remain in step.
 
+## Building a world
+
+`bakeLandscape` (`src/bake.ts`) and a `LandscapeShape` produce the heightfields, surface masks and water layout offline; `valleyShape` in `src/valley.ts` is the reference. `scripts/build.mjs` is the CLI and `vite.mjs` the Vite plugin that bakes, serves and emits them. Game code loads the result with `loadLandscape`. Keep shapes deterministic functions of world position; the CPU `terrainHeightAt` must read the baked fields, never the shape, so physics matches what is drawn.
+
 ## Tiers
 
-Keep one object per tier in the game's model, as Valley's `tiers` does: tree count, near and far fade ranges, impostor frame size, cover distance, near radius and density, cascades, shadow distance and map size, `alphaToCoverage` and `singleFrame`. Low turns `alphaToCoverage` off (no MSAA) and `singleFrame` on. Same seeds on every tier; only counts and distances change.
+Keep one object per tier in the game's model, as Valley's `tiers` does: tree count, near and far fade ranges, impostor frame size, cover distance, near radius and density, shadow distance and map size, `alphaToCoverage` and `singleFrame`. Low turns `alphaToCoverage` off (no MSAA) and `singleFrame` on. Same seeds on every tier; only counts and distances change.
 
 ## Gotchas by symptom
 

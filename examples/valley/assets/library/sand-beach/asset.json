@@ -1,0 +1,36 @@
+{
+  "id": "sand-beach",
+  "category": "material",
+  "ship": [
+    "1k/c.webp",
+    "1k/n.webp",
+    "1k/orm.webp"
+  ],
+  "files": {
+    "1k/c.webp": 9484,
+    "1k/n.webp": 96406,
+    "1k/orm.webp": 48020,
+    "1k/c.ktx2": 58783,
+    "1k/n.ktx2": 708865,
+    "1k/orm.ktx2": 399887,
+    "512/c.webp": 3276,
+    "512/n.webp": 34518,
+    "512/orm.webp": 12722,
+    "512/c.ktx2": 18079,
+    "512/n.ktx2": 194765,
+    "512/orm.ktx2": 98256
+  },
+  "bytes": 153910,
+  "ktx2Bytes": 1167535,
+  "budget": 900000,
+  "withinBudget": true,
+  "over": [],
+  "maps": {
+    "color": "Ground097_2K-JPG_Color.jpg",
+    "normal": "Ground097_2K-JPG_NormalGL.jpg",
+    "normalDX": "Ground097_2K-JPG_NormalDX.jpg",
+    "roughness": "Ground097_2K-JPG_Roughness.jpg",
+    "ao": "Ground097_2K-JPG_AmbientOcclusion.jpg"
+  },
+  "packed": "orm"
+}
