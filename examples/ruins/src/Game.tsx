@@ -15,7 +15,7 @@ import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import { AlsPhysicsStepper } from 'als-ue5-r3f/app/AlsPhysicsStepper'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import { createWalker } from '../../valley/src/walker'
-import { outfit } from '../../valley/src/outfit'
+import { wearSurvivor } from './survivor'
 import { SceneInspection, type InspectionContent, type TelemetryAction } from '../../shared/Inspection'
 import { createScanMaterialStreaming, residentScanTextures } from '../../shared/scan-material'
 import { loadRuins, type RuinsAsset } from './asset'
@@ -247,7 +247,7 @@ export function Game() {
   const [ready, setReady] = useState(false)
   const onReady = useCallback(() => setReady(true), [])
   useEffect(() => {
-    void Promise.all([loadRuins(setDetail), preloadAlsCharacterGltf().then(outfit)]).then(([asset]) => setOwned(asset)).catch(error => setError(String(error)))
+    void Promise.all([loadRuins(setDetail), preloadAlsCharacterGltf().then(gltf => wearSurvivor(gltf))]).then(([asset]) => setOwned(asset)).catch(error => setError(String(error)))
   }, [])
   return <InputProvider runtime={runtime}><div className="hud-screen">
     <RenderBoundary>{owned && <Ruins owned={owned} runtime={runtime} onReady={onReady} />}</RenderBoundary>
