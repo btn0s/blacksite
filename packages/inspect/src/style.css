@@ -4,7 +4,7 @@
   left: max(14px, env(safe-area-inset-left));
   z-index: 30;
   max-width: calc(100vw - 340px);
-  opacity: 0.75;
+  opacity: 0.5;
   color: #eef4ec;
   font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums;
