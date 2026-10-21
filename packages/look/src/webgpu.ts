@@ -61,6 +61,7 @@ export interface WebGPULook {
   readonly features: Readonly<LookFeatures>
   tune(next: Partial<LookTuning>): void
   setFeature(name: keyof LookFeatures, enabled: boolean): void
+  setGroundExtent(min: readonly [number, number], max: readonly [number, number], fade: number): void
   beginFrame(): void
   setCamera(camera: Camera): void
   compile(compiler: WebGPUCompiler, ownedRoots?: readonly Object3D[]): Promise<void>
@@ -375,6 +376,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
     atmosphereGPU.setClouds(features.clouds ? tuning.cloudCoverage : 0, tuning.cloudAltitude, tuning.cloudDensity)
     atmosphereGPU.setFog(tuning.fogDensity, tuning.fogHeight)
     atmosphereGPU.setHaze(tuning.haze)
+    atmosphereGPU.setMist(tuning.mistCoverage, tuning.mistTop, tuning.mistThickness, tuning.mistDensity, tuning.mistScale, tuning.mistDrift)
     const shaftStrength = shafts && features.shafts ? tuning.shafts * tuning.sunStrength : 0
     atmosphereGPU.setFogSun(shaftStrength > 0 ? 0 : tuning.sunStrength)
     atmosphereGPU.setGroundBounce(tuning.groundBounce)
@@ -409,6 +411,7 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
       if (environment) rebakeAt = performance.now() + 200
       if (compose() !== graded) reselect()
     },
+    setGroundExtent(min, max, fade) { atmosphereGPU.setGroundExtent(min, max, fade) },
     setFeature(name, enabled) {
       if (features[name] === enabled) return
       features[name] = enabled
@@ -492,8 +495,10 @@ export async function createWebGPULook(renderer: WebGPURenderer, scene: Scene, v
       timings.resolve(renderer)
     },
     setSize(width, height) {
+      const ratio = renderer.getPixelRatio()
+      const even = (extent: number) => { const pixels = Math.floor(extent * ratio); return (pixels - (pixels & 1) + 0.5) / ratio }
       const current = renderer.getSize(new Vector2())
-      if (current.x !== width || current.y !== height) renderer.setSize(width, height, false)
+      if (current.x !== even(width) || current.y !== even(height)) renderer.setSize(even(width), even(height), false)
     },
     setDebug(enabled) {
       debugging = enabled
