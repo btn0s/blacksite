@@ -1,4 +1,6 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
+import { button, buttonGroup, folder, LevaPanel, useControls, useCreateStore } from 'leva'
+import type { Schema } from 'leva/dist/declarations/src/types'
 import type { Inspector } from './index'
 import './style.css'
 
@@ -8,43 +10,100 @@ export type DumpControl = {
   message?: string
 }
 
+export type InspectAction = { label: string; onPress: () => void }
+
 const count = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })
 const ms = (value: number) => value.toFixed(1)
 
 const distanceLegend = [{ color: '#62d995', label: 'Near' }, { color: '#f2c45a', label: 'Mid' }, { color: '#80a6ff', label: 'Far' }]
 
-export function InspectHud({ inspector, dump, lodLegend = distanceLegend, className = '' }: { inspector: Inspector; dump?: DumpControl; lodLegend?: readonly { color: string; label: string }[]; className?: string }) {
+const theme = {
+  colors: {
+    elevation1: '#142124', elevation2: '#1b2b2e', elevation3: '#283b3e',
+    accent1: '#869d83', accent2: '#a6b89b', accent3: '#d4dec0',
+    highlight1: '#6e8586', highlight2: '#b1c0bb', highlight3: '#edf0e5',
+    folderWidgetColor: '#b1c0bb', folderTextColor: '#d4ded4', rootText: '#edf0e5',
+  },
+  fonts: { sans: 'Inter, ui-sans-serif, system-ui, sans-serif', mono: 'ui-monospace, SFMono-Regular, monospace' },
+  fontSizes: { root: '11px' },
+  sizes: { rootWidth: '300px', controlWidth: '150px', rowHeight: '30px', folderTitleHeight: '30px', titleBarHeight: '34px', checkboxSize: '20px' },
+  space: { rowGap: '4px', colGap: '8px', md: '10px', lg: '12px' },
+  radii: { xs: '3px', sm: '5px', lg: '10px' },
+}
+
+export function DebugBlock({ children }: { children: ReactNode }) {
+  return <div className="bs-debug-block">{children}</div>
+}
+
+function InspectControls({ inspector, dump, actions }: { inspector: Inspector; dump?: DumpControl; actions: Record<string, readonly InspectAction[]> }) {
+  const snapshot = useSyncExternalStore(inspector.subscribe, inspector.getSnapshot, inspector.getSnapshot)
+  const store = useCreateStore()
+  const latest = useRef({ dump, actions })
+  latest.current = { dump, actions }
+  const { techniques, view } = snapshot
+  const layout = JSON.stringify([Object.entries(actions).map(([group, items]) => [group, items.map(item => item.label)]), Boolean(dump), techniques.map(technique => [technique.id, technique.label, technique.description])])
+  const [, set] = useControls(() => {
+    const schema: Schema = {}
+    for (const [group, items] of Object.entries(actions)) {
+      schema[group] = buttonGroup({ label: group, opts: Object.fromEntries(items.map((item, index) => [item.label, () => latest.current.actions[group]?.[index]?.onPress()])) })
+    }
+    schema.lod = { label: 'LOD colours', value: view === 'lod', onChange: (on: boolean) => inspector.setView(on ? 'lod' : 'lit') }
+    if (dump) schema['Dump stats · T'] = button(() => latest.current.dump?.onDump())
+    if (techniques.length) {
+      schema.Techniques = folder(Object.fromEntries(techniques.map(technique => [technique.id, {
+        label: technique.label,
+        hint: technique.description,
+        value: technique.enabled,
+        onChange: (enabled: boolean) => { if (inspector.getSnapshot().techniques.some(({ id }) => id === technique.id)) inspector.setTechnique(technique.id, enabled) },
+      }])), { collapsed: true })
+    }
+    return schema
+  }, { store }, [layout])
+  useEffect(() => {
+    set({ lod: view === 'lod', ...Object.fromEntries(techniques.map(technique => [technique.id, technique.enabled])) })
+  }, [layout, set, techniques, view])
+  const release = () => {
+    const focused = document.activeElement
+    if (focused instanceof HTMLInputElement && focused.type === 'checkbox') focused.blur()
+  }
+  return <div className="bs-inspect-controls" onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onChange={release}>
+    <LevaPanel store={store} fill hideCopyButton titleBar={{ title: 'Debug', drag: false, filter: false }} theme={theme} />
+  </div>
+}
+
+export function InspectHud({ inspector, dump, actions = {}, lodLegend = distanceLegend, children }: {
+  inspector: Inspector
+  dump?: DumpControl
+  actions?: Record<string, readonly InspectAction[]>
+  lodLegend?: readonly { color: string; label: string }[]
+  children?: ReactNode
+}) {
   const snapshot = useSyncExternalStore(inspector.subscribe, inspector.getSnapshot, inspector.getSnapshot)
   const metrics = snapshot.metrics
   const gpu = Object.entries(metrics?.gpuMs ?? {})
-  return <section className={`bs-inspect ${className}`} aria-label="Performance inspector" onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
-    <header className="bs-inspect-heading"><strong>{snapshot.renderer}</strong><span>{snapshot.tier} tier</span></header>
-    <dl className="bs-inspect-metrics">
-      <div><dt>CPU p50 / p95</dt><dd>{metrics ? `${ms(metrics.cpu.p50)} / ${ms(metrics.cpu.p95)} ms` : '—'}</dd></div>
-      <div><dt>GPU p50 / p95</dt><dd>{metrics?.gpu ? `${ms(metrics.gpu.p50)} / ${ms(metrics.gpu.p95)} ms` : 'Unavailable'}</dd></div>
-      <div><dt>Triangles <small>drawn / scene</small></dt><dd>{metrics ? `${count.format(metrics.drawnTriangles)} / ${count.format(metrics.sceneTriangles)}` : '—'}</dd></div>
-      <div><dt>Draw calls</dt><dd>{metrics ? count.format(metrics.drawCalls) : '—'}</dd></div>
-      <div><dt>Geometry culled</dt><dd>{metrics ? `${ms(metrics.culledPercent)}%` : '—'}</dd></div>
-      <div><dt>GPU longest pass</dt><dd>{gpu.length ? `${ms(Math.max(...gpu.map(([, time]) => time)))} ms` : 'Unavailable'}</dd></div>
-    </dl>
-    <div className="bs-inspect-fps">{metrics && <><strong>{Math.round(metrics.fps)} FPS</strong><span>display-capped</span></>}</div>
-    <div className="bs-inspect-view" role="group" aria-label="Inspection controls">
-      <button type="button" aria-pressed={snapshot.view === 'lod'} onClick={() => inspector.setView(snapshot.view === 'lod' ? 'lit' : 'lod')}>LOD colours</button>
-      {dump && <button type="button" disabled={dump.status === 'sending'} onClick={dump.onDump}>{dump.status === 'sending' ? 'Saving…' : 'Dump stats · T'}</button>}
+  const rows: Array<[string, string]> = [
+    ['CPU p50 / p95', metrics ? `${ms(metrics.cpu.p50)} / ${ms(metrics.cpu.p95)} ms` : '—'],
+    ['GPU p50 / p95', metrics?.gpu ? `${ms(metrics.gpu.p50)} / ${ms(metrics.gpu.p95)} ms` : 'n/a'],
+    ['GPU longest pass', gpu.length ? `${ms(Math.max(...gpu.map(([, time]) => time)))} ms` : 'n/a'],
+    ['Triangles', metrics ? `${count.format(metrics.drawnTriangles)} / ${count.format(metrics.sceneTriangles)}` : '—'],
+    ['Draw calls', metrics ? count.format(metrics.drawCalls) : '—'],
+    ['Geometry culled', metrics ? `${ms(metrics.culledPercent)}%` : '—'],
+    ['FPS', metrics ? `${Math.round(metrics.fps)}` : '—'],
+  ]
+  return <>
+    <div className="bs-debug" aria-label="Debug readout" role="log">
+      <DebugBlock>
+        <div>{snapshot.renderer} · {snapshot.tier} tier</div>
+        <dl>{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+        {dump?.message && <div>{dump.message}</div>}
+        {snapshot.view === 'lod' && <div>{lodLegend.map(entry => <span key={entry.label} style={{ color: entry.color, marginRight: '1.5ch' }}>{entry.label}</span>)}</div>}
+        {dump?.status === 'sending' && <div>Saving stats…</div>}
+        {dump?.status === 'saved' && <div>Stats saved to the dev server.</div>}
+        {dump?.status === 'error' && <div>Stats could not be saved. Press T to retry.</div>}
+      </DebugBlock>
+      {gpu.length > 0 && <DebugBlock><dl>{gpu.map(([pass, time]) => <div key={pass}><dt>{pass}</dt><dd>{ms(time)} ms</dd></div>)}</dl></DebugBlock>}
+      {children}
     </div>
-    {snapshot.view === 'lod' && <p className="bs-inspect-legend">{lodLegend.map(entry => <span key={entry.label} style={{ color: entry.color }}>{entry.label}</span>)}</p>}
-    {(snapshot.techniques.length > 0 || gpu.length > 0) && <details className="bs-inspect-techniques">
-      <summary>Techniques{gpu.length > 0 && ' · GPU passes'}</summary>
-      {snapshot.techniques.map(technique => <label key={technique.id} title={technique.description}>
-        <input type="checkbox" checked={technique.enabled} onChange={event => inspector.setTechnique(technique.id, event.currentTarget.checked)} />
-        <span>{technique.label}{technique.description && <small>{technique.description}</small>}</span>
-      </label>)}
-      {gpu.length > 0 && <dl className="bs-inspect-metrics bs-inspect-pass-list">{gpu.map(([pass, time]) => <div key={pass}><dt>{pass}</dt><dd>{ms(time)} ms</dd></div>)}</dl>}
-    </details>}
-    {dump && <div className="bs-inspect-status" role="status">
-      {dump.status === 'saved' && <p>Stats saved to the dev server.</p>}
-      {dump.status === 'error' && <p>Stats could not be saved. Tap to retry.</p>}
-      {dump.message && <p>{dump.message}</p>}
-    </div>}
-  </section>
+    <InspectControls inspector={inspector} dump={dump} actions={actions} />
+  </>
 }

@@ -7,7 +7,7 @@ import { InputProvider, makeInputDevices } from '@blacksite/input'
 import { BODY_LAYER, CharacterController, CharacterOverlay, CharacterPause, useCharacterStatus, useLocalSession, type CharacterEvents, type CharacterHandle } from '@blacksite/subject'
 import { MeshletScene, type MeshletStats } from '@blacksite/geometry'
 import { createInspector } from '@blacksite/inspect'
-import { InspectHud } from '@blacksite/inspect/react'
+import { DebugBlock, InspectHud } from '@blacksite/inspect/react'
 import { WebGPULook } from '@blacksite/look/webgpu-r3f'
 import type { WebGPULook as Look, WebGPULookStage } from '@blacksite/look/webgpu'
 import { Loading, TitleCard } from '@blacksite/ui/hud'
@@ -178,7 +178,7 @@ function ContactDisplay({ shared }: { shared: { collision: { current: RegionalCo
   }, [shared])
   if (!contacts.length) return null
   const shown = [...contacts].sort((a, b) => Number(b.blocking) - Number(a.blocking)).slice(0, 3)
-  return <aside className="bs-inspect" style={{ left: 16, bottom: 16, top: 'auto', right: 'auto', width: 460, fontFamily: 'monospace', fontSize: 11 }} aria-label="Collision contacts">
+  return <DebugBlock>
     <div>Contacts {contacts.length} · T saves them</div>
     {shown.map((contact, index) => {
       const owner = contact.owners?.[0]
@@ -186,7 +186,7 @@ function ContactDisplay({ shared }: { shared: { collision: { current: RegionalCo
       const what = contact.kind === 'residency-guard' ? 'residency guard (not level geometry)' : owner ? `#${owner.placement} ${surface?.mesh?.split('/').at(-2)?.slice(0, 34)} · ${surface?.drawn ? 'drawn' : 'NOT DRAWN'}` : contact.note ?? 'resolving'
       return <div key={index}>{contact.blocking ? 'WALL ' : 'floor'} {contact.directions.join(' ')} n({contact.normal.join(', ')}) · {what}</div>
     })}
-  </aside>
+  </DebugBlock>
 }
 
 function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: ReturnType<typeof makeInputDevices>; onReady(): void }) {
@@ -247,15 +247,11 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
     <Canvas frameloop="always" shadows dpr={1} camera={cameras[view]} gl={renderer}>
       {geometry && flames && <Scene owned={owned} geometry={geometry} flames={flames} walker={walker} gameplayCamera={cameras.spawn} inspector={inspector} telemetry={telemetry} shared={shared} onStats={setSelection} onReady={onReady} />}
     </Canvas>
-    <ContactDisplay shared={shared} />
-    <TelemetryReadout look={shared.look} geometry={geometry} selection={selection} />
-    <SelectionDisplay selection={selection} sourceTriangles={owned.sourceTriangles} cappedTriangles={owned.cappedTriangles} />
-    <section className="bs-inspect" aria-label="Camera views" style={{ top: 44, right: 'auto', left: 16, width: 360, maxWidth: 'calc(100vw - 32px)' }}>
-      <div className="bs-inspect-view" role="group" aria-label="View bookmarks" style={{ marginTop: 0 }}>
-        {(Object.keys(ruinsViews) as Array<keyof typeof ruinsViews>).map(id => <button key={id} type="button" aria-pressed={view === id} onClick={() => selectView(id)}>{ruinsViews[id]}</button>)}
-      </div>
-    </section>
-    <InspectHud inspector={inspector} lodLegend={lodLegend} dump={{ onDump: () => { void telemetry.current?.() }, status: dumpStatus, message: `${owned.placements.length.toLocaleString()} placements | ${(owned.manifest.minimumWorldError * 1000).toFixed(0)} mm geometry cap` }} />
+    <InspectHud inspector={inspector} lodLegend={lodLegend} actions={{ View: (Object.keys(ruinsViews) as RuinsView[]).map(id => ({ label: ruinsViews[id], onPress: () => selectView(id) })) }} dump={{ onDump: () => { void telemetry.current?.() }, status: dumpStatus, message: `${owned.placements.length.toLocaleString()} placements | ${(owned.manifest.minimumWorldError * 1000).toFixed(0)} mm geometry cap` }}>
+      <SelectionDisplay selection={selection} sourceTriangles={owned.sourceTriangles} cappedTriangles={owned.cappedTriangles} />
+      <TelemetryReadout look={shared.look} geometry={geometry} selection={selection} />
+      <ContactDisplay shared={shared} />
+    </InspectHud>
     <CharacterOverlay controller={walker} visible={view === 'spawn'} glyphs={glyphs} hints={['move', 'sprint', 'jump', 'roll', 'home']} prompt="Click to look around · T saves telemetry" buttons={[{ id: 'jump', label: 'Jump' }, { id: 'roll', label: 'Roll' }, { id: 'crouch', label: 'Crouch' }, { id: 'home', label: 'Home' }]} />
     {status.paused && view === 'spawn' && <CharacterPause controller={walker} items={[{ id: 'home', label: 'Return to spawn', onPress: () => { walker.setPaused(false); void shared.collision.current?.prepare(new Vector3(...home.position)).then(() => { walker.respawn(undefined, [...home.position]); walker.face(new Vector3(...home.target)) }) } }]} />}
   </>
@@ -288,7 +284,7 @@ class RenderBoundary extends Component<{ children: ReactNode }, { error: string 
 function SelectionDisplay({ selection, sourceTriangles, cappedTriangles }: { selection: MeshletStats | null; sourceTriangles: number; cappedTriangles: number }) {
   if (!selection) return null
   const n = (value: number) => value.toLocaleString()
-  return <aside className="bs-inspect" style={{ left: 16, top: 96, right: 'auto', width: 280, fontFamily: 'monospace', fontSize: 12 }} aria-label="Selection telemetry">
+  return <DebugBlock>
     <div>Source unique {n(sourceTriangles)}</div>
     <div>Retained unique {n(cappedTriangles)}</div>
     <div>Instances tested {n(selection.instancesTested)}</div>
@@ -300,5 +296,5 @@ function SelectionDisplay({ selection, sourceTriangles, cappedTriangles }: { sel
     <div>Selection GPU {selection.selectionMs?.toFixed(2) ?? 'n/a'} ms</div>
     <div>Drawn triangles {n(selection.drawnTriangles)}</div>
     <div>Geometry buffers {(selection.residentBytes / 1073741824).toFixed(2)} GiB</div>
-  </aside>
+  </DebugBlock>
 }
