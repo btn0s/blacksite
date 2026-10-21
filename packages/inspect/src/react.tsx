@@ -64,7 +64,7 @@ function InspectControls({ inspector, dump, logs, onLogs }: { inspector: Inspect
     if (focused instanceof HTMLInputElement && focused.type === 'checkbox') focused.blur()
   }
   return <div className="bs-inspect-controls" onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onChange={release}>
-    <LevaPanel store={store} fill hideCopyButton titleBar={{ title: 'Debug', drag: false, filter: false }} theme={theme} />
+    <LevaPanel store={store} fill collapsed hideCopyButton titleBar={{ title: 'Debug', drag: false, filter: false }} theme={theme} />
   </div>
 }
 
@@ -75,7 +75,7 @@ export function InspectHud({ inspector, dump, lodLegend = distanceLegend, childr
   children?: ReactNode
 }) {
   const snapshot = useSyncExternalStore(inspector.subscribe, inspector.getSnapshot, inspector.getSnapshot)
-  const [logs, setLogs] = useState(true)
+  const [logs, setLogs] = useState(false)
   const metrics = snapshot.metrics
   const gpu = Object.entries(metrics?.gpuMs ?? {})
   const rows: Array<[string, string]> = [
