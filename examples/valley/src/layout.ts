@@ -1,6 +1,7 @@
-export type XZ = readonly [number, number]
+import { sampleCurves, type CubicPath, type XZ } from '@blacksite/landscape'
+
+export { sampleCurves, type CubicPath, type XZ }
 export type XYZ = readonly [number, number, number]
-export type CubicPath = readonly [XZ, XZ, XZ, XZ]
 
 export const layout = {
   watchtower: { at: [-1500, 150] as XZ, ground: 276, clearing: [52, 90] as XZ, pad: [10, 30] as XZ },
@@ -43,42 +44,6 @@ export const aqueductTrailCurves: readonly CubicPath[] = [
   [[-500, -150], [-450, -450], [-260, -650], [-170, -960]],
   [[-170, -960], [-260, -1260], [-340, -1530], [-400, -1880]],
 ]
-
-export function sampleCurves(curves: readonly CubicPath[], spacing = 12): XZ[] {
-  const points: XZ[] = []
-  for (const [a, b, c, d] of curves) {
-    const length = Math.hypot(b[0] - a[0], b[1] - a[1]) + Math.hypot(c[0] - b[0], c[1] - b[1]) + Math.hypot(d[0] - c[0], d[1] - c[1])
-    const steps = Math.max(1, Math.ceil(length / Math.min(4, spacing / 4)))
-    for (let index = points.length ? 1 : 0; index <= steps; index++) {
-      const t = index / steps
-      const u = 1 - t
-      points.push([u ** 3 * a[0] + 3 * u * u * t * b[0] + 3 * u * t * t * c[0] + t ** 3 * d[0], u ** 3 * a[1] + 3 * u * u * t * b[1] + 3 * u * t * t * c[1] + t ** 3 * d[1]])
-    }
-  }
-  if (!points.length) return points
-  const samples: XZ[] = [points[0]!]
-  let total = 0
-  for (let index = 1; index < points.length; index++) total += Math.hypot(points[index]![0] - points[index - 1]![0], points[index]![1] - points[index - 1]![1])
-  if (total === 0) return samples
-  const interval = total / Math.max(1, Math.round(total / spacing))
-  let distance = 0
-  let next = interval
-  for (let index = 1; index < points.length; index++) {
-    const a = points[index - 1]!
-    const b = points[index]!
-    const length = Math.hypot(b[0] - a[0], b[1] - a[1])
-    while (next <= distance + length) {
-      const t = (next - distance) / length
-      samples.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t])
-      next += interval
-    }
-    distance += length
-  }
-  const end = points[points.length - 1]!
-  const last = samples[samples.length - 1]!
-  if (Math.hypot(end[0] - last[0], end[1] - last[1]) > 1e-6) samples.push(end)
-  return samples
-}
 
 export const riverPath = sampleCurves(riverCurves)
 export const aqueductPath = sampleCurves(aqueductCurves)

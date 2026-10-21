@@ -34,7 +34,7 @@ function bake(name, size, extent, centre, detail) {
     const length = Math.hypot(dx, 2 * spacing, dz)
     const x = origin[0] + column * spacing, z = origin[1] + row * spacing
     const rimDistance = name === 'far' ? 1e6 : level.rimDistance(x, z)
-    const [soil, sand] = surfaceMasks(x, z, value, Math.hypot(dx, dz) / (2 * spacing), rimDistance)
+    const [soil, sand] = surfaceMasks(x, z, value, Math.hypot(dx, dz) / (2 * spacing), rimDistance, level.bank(x, z))
     colours[index * 4] = Math.round((-dx / length * 0.5 + 0.5) * 255)
     colours[index * 4 + 1] = Math.round((-dz / length * 0.5 + 0.5) * 255)
     colours[index * 4 + 2] = Math.round(soil * 255)
@@ -55,6 +55,7 @@ for (let row = 0; row < near.size; row++) for (let column = 0; column < near.siz
   edge[row * near.size + column] = Math.round((signed / ground.edgeRange * 0.5 + 0.5) * 255)
 }
 await writeFile(join(output, 'edge.bin'), deflateSync(edge, { level: 9 }))
+await writeFile(join(output, 'water.json'), JSON.stringify(level.water))
 
 const basisDirectory = join(dirname(fileURLToPath(import.meta.resolve('three'))), '../examples/jsm/libs/basis/')
 const transcoder = new Function('require', 'module', '__dirname', `${await readFile(join(basisDirectory, 'basis_transcoder.js'), 'utf8')}\nreturn BASIS`)(createRequire(pathToFileURL(basisDirectory)), {}, basisDirectory)
@@ -100,5 +101,5 @@ const layers = [
   await layer('rock', 'MI_Massive_Nordic_Coastal_Cliff'),
 ]
 const fields = Object.fromEntries([['near', near], ['far', far]].map(([name, value]) => [name, { file: value.file, size: value.size, extent: value.extent, origin: value.origin, min: value.min, max: value.max, bytes: value.packed.length }]))
-await writeFile(join(output, 'landscape.json'), JSON.stringify({ version: 2, band: world.band, seaLevel: world.seaLevel, ...fields, edge: { file: 'edge.bin', range: ground.edgeRange }, averages: [average(grass), ...layers.map(entry => entry.average)], layers: layers.map(({ name, material }) => ({ name, material })) }, null, 1))
+await writeFile(join(output, 'landscape.json'), JSON.stringify({ version: 3, band: world.band, seaLevel: world.seaLevel, ...fields, edge: { file: 'edge.bin', range: ground.edgeRange }, water: 'water.json', averages: [average(grass), ...layers.map(entry => entry.average)], layers: layers.map(({ name, material }) => ({ name, material })) }, null, 1))
 console.log(`landscape written to ${output}`)

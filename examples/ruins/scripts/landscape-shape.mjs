@@ -1,8 +1,10 @@
 import { fbm, ridged, smoothstep, valueNoise } from '../../../packages/landscape/src/random.ts'
+import { createWaterField, planWater, smoothCurve } from '../../../packages/landscape/src/river.ts'
 
 export const world = {
   nearExtent: 4096, nearSize: 2049, farExtent: 16384, farSize: 2049, band: 256,
   centre: [-1250, 350], seaLevel: -300, padding: 160,
+  sea: { min: [-40000, -40000], max: [40000, -1300] },
 }
 
 const valley = { west: -3300, south: 1900, floor: -250, shelf: -10, rim: 0, foot: 880 }
@@ -64,10 +66,10 @@ export function hills(x, z, detail = true) {
   return mix(floorHills, mountainHills, mountain) * land + (detail ? ripple : 0) * (1 - land)
 }
 
-export function surfaceMasks(x, z, height, slope, rimDistance) {
+export function surfaceMasks(x, z, height, slope, rimDistance, bank = 0) {
   const above = height - world.seaLevel
   const shore = 1 - smoothstep(2, 9 + 5 * (valueNoise(x / 40, z / 40, 347) - 0.5), above)
-  const sand = Math.min(1, shore + (1 - smoothstep(1, 16, above)) * 0.4)
+  const sand = Math.min(1, Math.max(shore + (1 - smoothstep(1, 16, above)) * 0.4, bank * (0.75 + 0.25 * valueNoise(x / 6, z / 6, 361))))
   const patches = smoothstep(0.52, 0.78, fbm(x / 85, z / 85, 3, 353))
   const apron = (1 - smoothstep(10, 60, rimDistance)) * (0.55 + 0.45 * valueNoise(x / 14, z / 14, 359))
   const altitude = smoothstep(240, 430, height + (fbm(x / 160, z / 160, 3, 431) - 0.5) * 90)
@@ -75,6 +77,19 @@ export function surfaceMasks(x, z, height, slope, rimDistance) {
   return [soil * (1 - sand), sand]
 }
 
+
+const riverWaypoints = [
+  [-1700, 2700], [-1760, 2480], [-1850, 2300], [-1800, 2100], [-1700, 1900], [-1650, 1700], [-1800, 1480], [-1900, 1250], [-1850, 1000], [-1700, 800],
+  [-1600, 600], [-1700, 380], [-1850, 200], [-1800, 0], [-1650, -200], [-1600, -420], [-1750, -640], [-1900, -860], [-1850, -1080], [-1700, -1260], [-1650, -1420], [-1680, -1560], [-1720, -1700],
+]
+
+const creekWaypoints = [[-223, -50], [-300, -60], [-420, -90], [-560, -140], [-700, -190], [-900, -260], [-1150, -300], [-1400, -280], [-1600, -230]]
+
+export const waterSpecs = [
+  { kind: 'river', name: 'valley', curves: smoothCurve(riverWaypoints), halfWidth: [5, 24], depth: [1.2, 3], dig: 1.5, smoothing: 180 },
+  { kind: 'tarn', name: 'tarn', at: [-185, -50], radius: 46, depth: 4.5, lift: 0.4 },
+  { kind: 'river', name: 'creek', curves: smoothCurve(creekWaypoints), halfWidth: [2.5, 4.5], depth: [0.7, 1.1], dig: 1, smoothing: 60, spill: 'tarn', join: 'valley' },
+]
 
 export const ground = { overlap: 1, sinkFloor: 0.25, sinkRock: 1, rim: [2, 8], smoothing: [6, 192], settle: 10, grade: 0.5, falloff: [40, 300], hillRamp: [20, 180], edgeRange: 64 }
 
@@ -189,13 +204,21 @@ export function levelGround(raster) {
     return a + (b - a) * fx + (c - a) * fz + (a - b - c + d) * fx * fz
   }
   const covers = (x, z) => x >= x0 + cell && z >= z0 + cell && x <= x0 + (width - 1) * cell && z <= z0 + (height - 1) * cell
+  const parts = (x, z, detail) => covers(x, z)
+    ? [grid(field, x, z), hills(x, z, detail) * smoothstep(ground.hillRamp[0], ground.hillRamp[1], grid(distance, x, z))]
+    : [macro(x, z), hills(x, z, detail)]
+  const layout = planWater(waterSpecs, (x, z) => parts(x, z, false)[0], world.seaLevel, world.sea)
+  const channel = createWaterField(layout)
+  const carved = { height: 0, shore: 0 }
   return {
-    covered, width, height, x0, z0, cell,
+    covered, width, height, x0, z0, cell, water: layout,
     rimDistance: (x, z) => covers(x, z) ? grid(distance, x, z) : 1e6,
     edge: (x, z) => covers(x, z) ? grid(signed, x, z) : ground.edgeRange,
+    surface: channel.surface,
+    bank(x, z) { const [base, rough] = parts(x, z, false); return channel.sample(x, z, base, rough, carved).shore },
     height(x, z, detail) {
-      if (!covers(x, z)) return macro(x, z) + hills(x, z, detail)
-      return grid(field, x, z) + hills(x, z, detail) * smoothstep(ground.hillRamp[0], ground.hillRamp[1], grid(distance, x, z))
+      const [base, rough] = parts(x, z, detail)
+      return channel.sample(x, z, base, rough, carved).height
     },
   }
 }

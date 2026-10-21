@@ -1,6 +1,6 @@
-import { createHeightfield, edgeTextureFromData, loadLayerImages, surfaceTextureFromData, terrainUniforms, type TerrainLayerSpec, type TerrainSources } from '@blacksite/landscape'
+import { createHeightfield, edgeTextureFromData, loadLayerImages, surfaceTextureFromData, terrainUniforms, type TerrainLayerSpec, type TerrainSources, type WaterLayout } from '@blacksite/landscape'
 
-const root = '/owned/dark-ruins/build-landscape-20261020-06/'
+const root = '/owned/dark-ruins/build-landscape-20261020-07/'
 const kit = import.meta.glob<string>('../../../packages/look/assets/world/grass_{c,n}.webp', { eager: true, query: '?url&no-inline', import: 'default' })
 const kitUrl = (name: string) => {
   const url = kit[`../../../packages/look/assets/world/${name}.webp`]
@@ -9,7 +9,7 @@ const kitUrl = (name: string) => {
 }
 
 type FieldRecord = { file: string; size: number; extent: number; origin: [number, number]; min: number; max: number; bytes: number }
-type Manifest = { version: number; band: number; seaLevel: number; near: FieldRecord; far: FieldRecord; edge: { file: string; range: number }; averages: [number, number, number][]; layers: { name: string }[] }
+type Manifest = { version: number; band: number; seaLevel: number; near: FieldRecord; far: FieldRecord; edge: { file: string; range: number }; water: string; averages: [number, number, number][]; layers: { name: string }[] }
 
 export const landscapeLayerSpecs: [TerrainLayerSpec, TerrainLayerSpec, TerrainLayerSpec, TerrainLayerSpec] = [
   { tile: 3.2, tint: [0.58, 0.64, 0.5], roughness: 0.95, normalScale: 0.8 },
@@ -47,13 +47,13 @@ async function loadEdge(manifest: Manifest) {
 
 export async function loadLandscape() {
   const manifest: Manifest = await (await fetchBytes('landscape.json')).json()
-  if (manifest.version !== 2) throw new Error('Landscape manifest is incompatible')
-  const [near, far, edge, images] = await Promise.all([loadField(manifest.near), loadField(manifest.far), loadEdge(manifest), loadLayerImages([
+  if (manifest.version !== 3) throw new Error('Landscape manifest is incompatible')
+  const [near, far, edge, water, images] = await Promise.all([loadField(manifest.near), loadField(manifest.far), loadEdge(manifest), fetchBytes(manifest.water).then(response => response.json() as Promise<WaterLayout>), loadLayerImages([
     { color: kitUrl('grass_c'), normal: kitUrl('grass_n') },
     ...manifest.layers.map(layer => ({ color: `${root}layers/${layer.name}_c.webp`, normal: `${root}layers/${layer.name}_n.webp` })),
   ], 1024)])
   const sources: TerrainSources = { near: near.field, far: far.field, nearSurface: near.surface, farSurface: far.surface, band: manifest.band, nearEdge: edge, edgeRange: manifest.edge.range }
-  return { manifest, sources, uniforms: terrainUniforms(sources), averages: manifest.averages, layers: { ...images, averages: manifest.averages } }
+  return { manifest, sources, water, uniforms: terrainUniforms(sources), averages: manifest.averages, layers: { ...images, averages: manifest.averages } }
 }
 
 export type LandscapeAsset = Awaited<ReturnType<typeof loadLandscape>>

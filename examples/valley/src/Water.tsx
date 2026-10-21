@@ -2,32 +2,16 @@ import { useEffect, useMemo } from 'react'
 import { BufferGeometry, Float32BufferAttribute, Group, Mesh } from 'three'
 import { MeshPhysicalNodeMaterial } from 'three/webgpu'
 import { Fn, clamp, cos, dot, float, mix, normalLocal, normalize, positionLocal, positionWorld, sin, smoothstep, transformNormalToView, vec2, vec3 } from 'three/tsl'
-import { createTerrainNodes, createWindNodes, landscapeNoise, terrainUniforms, type Wind } from '@blacksite/landscape'
+import { createTerrainNodes, createWindNodes, landscapeNoise, ribbonStrip, terrainUniforms, type RibbonPoint, type Wind } from '@blacksite/landscape'
 import { layout, riverCurves, riverLevel, sampleCurves } from './layout'
 import type { ValleyWorld } from './world'
 
 function ribbon() {
-  const points = sampleCurves(riverCurves, 6)
+  const width = layout.river.halfWidth + layout.river.bankWidth
+  const points = sampleCurves(riverCurves, 6).map((p): RibbonPoint => [p[0], riverLevel(p[1]), p[1], width])
   const positions: number[] = []
   const indices: number[] = []
-  const width = layout.river.halfWidth + layout.river.bankWidth
-  for (let index = 0; index < points.length; index++) {
-    const p = points[index]!
-    const before = points[Math.max(0, index - 1)]!
-    const after = points[Math.min(points.length - 1, index + 1)]!
-    const length = Math.hypot(after[0] - before[0], after[1] - before[1])
-    const nx = -(after[1] - before[1]) / length
-    const nz = (after[0] - before[0]) / length
-    for (const side of [-1, 1]) {
-      const x = p[0] + nx * width * side
-      const z = p[1] + nz * width * side
-      positions.push(x, riverLevel(p[1]), z)
-    }
-    if (index > 0) {
-      const a = (index - 1) * 2
-      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2)
-    }
-  }
+  ribbonStrip(points, positions, indices)
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
   geometry.setIndex(indices)

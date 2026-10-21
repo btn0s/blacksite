@@ -25,6 +25,24 @@ const heightAt = (x: number, z: number) => terrainHeightAt(sources, x, z)
 - `cover` takes the `Cover` from `createCover`. Wherever a cover family's mask grows blades, the terrain draws the ground the way those blades look: their root colour under the near blades, brightening to their average colour seen from afar on the same distance curve the blades thin on, and kept at every distance past the blades. When the last blade goes, nothing changes colour. Create the cover first on shared uniforms: `const uniforms = terrainUniforms(sources)`, `createCover({ terrain: uniforms, … })`, then `createTerrain({ uniforms, cover, … })`.
 - `terrain.update(camera)` selects nodes each frame; `terrain.uniforms` is the `TerrainUniforms` other systems (cover) share. `createTerrainNodes(terrain.uniforms)` exposes `height(root)`, `surface(root, mip)` and `normal(surface)` for node materials.
 
+## Water
+
+Rivers, tarns and a sea share one plan, one carve and one draw.
+
+```ts
+import { createWaterField, createWater, planWater, smoothCurve } from '@blacksite/landscape'
+
+const layout = planWater(specs, (x, z) => groundHeight(x, z), seaLevel, sea)
+const channel = createWaterField(layout)
+const water = createWater({ layout, uniforms: terrain.uniforms })
+scene.add(water.object)
+```
+
+- `planWater(specs, ground, seaLevel, sea?)` turns river curves (`smoothCurve` fits cubic segments through waypoints; `sampleCurves` spaces them) and tarns into a serialisable `WaterLayout`. A river's level follows the ground smoothed over `smoothing` metres, dug `dig` metres under it and never rising downstream; it stops where it reaches the sea. A river with `spill` starts at a tarn's level and is kept out of the tarn bowl, and one with `join` ends on another river's level.
+- `createWaterField(layout).sample(x, z, base, rough, out)` returns the carved height for the offline bake: a channel and banks blended into the ground, with the hills faded out around it, and `shore` for the bank sand mask. `surface(x, z)` is the water level over a channel or tarn. The bake and the draw read the same layout, so the carved bed and the surface agree.
+- `createWater({ layout, uniforms })` builds one mesh: the sea quad, a ribbon per river and a disc per tarn. The material is opaque so the look's aerial perspective and fog treat water as ground. Its colour fades from shallow to deep by the depth to the terrain heightfield (`createTerrainNodes`), foam follows the shoreline and the river's fall, ripples scroll along each river's flow with a two-phase blend, and they flatten with distance so the far sea is a mirror of the sky. It binds only the two height textures beside the lights, never a sampler of its own.
+- `ribbonStrip(points, positions, indices)` is the shared strip builder behind the rivers.
+
 ## Ground cover
 
 ```ts

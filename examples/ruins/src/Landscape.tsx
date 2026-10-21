@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { createTerrain, type Terrain } from '@blacksite/landscape'
+import { createTerrain, createWater, type Terrain, type Water } from '@blacksite/landscape'
 import { landscapeFootprint, landscapeLayerSpecs, type LandscapeAsset } from './landscape-asset'
 
 const shadowDistance = 400
@@ -14,13 +14,21 @@ export function useTerrain(asset: LandscapeAsset) {
   }, [asset])
 }
 
-export function Landscape({ terrain }: { terrain: Terrain }) {
+export function useWater(asset: LandscapeAsset) {
+  return useMemo(() => {
+    const water = createWater({ layout: asset.water, uniforms: asset.uniforms })
+    water.object.visible = false
+    return water
+  }, [asset])
+}
+
+export function Landscape({ terrain, water }: { terrain: Terrain; water: Water }) {
   const scene = useThree(state => state.scene)
   const camera = useThree(state => state.camera)
   useEffect(() => {
-    scene.add(terrain.object)
-    return () => { scene.remove(terrain.object); terrain.dispose() }
-  }, [scene, terrain])
+    scene.add(terrain.object, water.object)
+    return () => { scene.remove(terrain.object, water.object); terrain.dispose(); water.dispose() }
+  }, [scene, terrain, water])
   useFrame(() => {
     camera.updateMatrixWorld()
     terrain.update(camera)
