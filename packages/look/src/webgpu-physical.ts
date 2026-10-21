@@ -1,6 +1,6 @@
 import { CubeCamera, CubeRenderTarget, HalfFloatType, LinearFilter, NodeMaterial, PMREMGenerator, QuadMesh, RenderTarget, Scene, Vector2, Vector3, Vector4 } from 'three/webgpu'
 import type { Camera, Node, WebGPURenderer } from 'three/webgpu'
-import { cameraPosition, positionWorldDirection, sampler, screenUV, texture, uniform, wgslFn } from 'three/tsl'
+import { cameraPosition, float, mix, positionWorldDirection, sampler, screenUV, smoothstep, texture, uniform, vec4, wgslFn } from 'three/tsl'
 import { LightProbeGenerator } from 'three/addons/lights/LightProbeGenerator.js'
 import type { Atmosphere } from './atmosphere'
 import { QUALITY, type QualityTier } from './quality'
@@ -301,7 +301,7 @@ ${CLOUDS}`)
 }
 
 const aerialNode = wgslFn(`
-fn atmosphereAerial(color: vec4f, uv: vec2f, depth: f32, projectionInverse: mat4x4f, cameraWorld: mat4x4f, reversed: f32, medium: vec4f, terms: vec2f, sun: vec4f, size: vec2f, aerial: f32, clearDistance: vec2f, radianceScale: f32, fog: vec4f, fogAlbedo: vec3f, fogEmissive: vec3f, transmittance: texture_2d<f32>, transSampler: sampler, skyView: texture_2d<f32>, viewSampler: sampler) -> vec4f {
+fn atmosphereAerial(color: vec4f, uv: vec2f, depth: f32, projectionInverse: mat4x4f, cameraWorld: mat4x4f, reversed: f32, medium: vec4f, terms: vec2f, sun: vec4f, size: vec2f, aerial: f32, clearDistance: vec2f, radianceScale: f32, fog: vec4f, fogAlbedo: vec3f, fogEmissive: vec3f, fogSun: f32, transmittance: texture_2d<f32>, transSampler: sampler, skyView: texture_2d<f32>, viewSampler: sampler) -> vec4f {
   if ((reversed < 0.5 && depth >= 1.0) || (reversed > 0.5 && depth <= 0.0)) { return color; }
   let projected = projectionInverse * vec4f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0);
   let point = projected.xyz / projected.w;
@@ -324,7 +324,7 @@ fn atmosphereAerial(color: vec4f, uv: vec2f, depth: f32, projectionInverse: mat4
   let air = atSky(skyView, viewSampler, horizon, medium, sun, size);
   var fogColor = air;
   if (fog.x > 0.0) {
-    let sunlight = atTransmittance(transmittance, transSampler, 6360.0 + medium.w, sun.y) * sun.w * atPhaseHg(dot(direction, sun.xyz), fog.w);
+    let sunlight = atTransmittance(transmittance, transSampler, 6360.0 + medium.w, sun.y) * sun.w * atPhaseHg(dot(direction, sun.xyz), fog.w) * fogSun;
     fogColor = fogAlbedo * (atSky(skyView, viewSampler, vec3f(0.0, 1.0, 0.0), medium, sun, size) * 0.55 + air * 0.45 + sunlight) + fogEmissive * sun.w;
   }
   let weight = vec3f(fogTau) / max(airTau + vec3f(fogTau), vec3f(1e-6));
@@ -340,7 +340,7 @@ fn atLayer(h0: f32, h1: f32, span: f32, scale: f32) -> f32 {
 }
 ${CORE}`)
 
-export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmosphere: Atmosphere, quality: QualityTier) {
+export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmosphere: Atmosphere, quality: QualityTier, groundBounce = 1) {
   const spec = atmosphere.physical
   if (!spec) throw new Error('The WebGPU atmosphere requires a physical sky definition')
   const settings = QUALITY[quality].atmosphere
@@ -353,6 +353,12 @@ export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmospher
   const disk = uniform(spec.disk)
   const clouds = uniform(new Vector4(spec.clouds?.coverage ?? 0, spec.clouds?.altitude ?? 2.2, spec.clouds?.density ?? 1, spec.clouds?.scale ?? 1))
   const cloudTime = uniform(0)
+  const heightFog = spec.heightFog
+  const fogExtinction = heightFog?.extinction ?? 0
+  const fog = uniform(new Vector4(fogExtinction, heightFog?.base ?? 0, Math.max(heightFog?.scaleHeight ?? 1, 1), heightFog?.phase ?? 0))
+  const fogAlbedo = uniform(new Vector3(...(heightFog?.albedo ?? [1, 1, 1] as const)))
+  const fogSun = uniform(1)
+  const groundGain = uniform(groundBounce)
   const targets = [[256, 64], [32, 32], settings.view].map(([width, height]) => new RenderTarget(width, height, { type: HalfFloatType, minFilter: LinearFilter, magFilter: LinearFilter, depthBuffer: false, generateMipmaps: false }))
   const [transmittance, multiple, view] = targets
   transmittance.texture.name = 'Atmosphere.transmittance'
@@ -382,7 +388,9 @@ export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmospher
   const makeBackground = (includeDisk: boolean) => makeSky(settings.octaves, settings.shadow)({ viewIn: positionWorldDirection, eye: cameraPosition, ...shared, skyGain: includeDisk ? skyGain : uniform(1), disk: includeDisk ? disk : uniform(0), clouds, cloudTime })
   const backgroundNode = makeBackground(true)
   const environmentScene = new Scene()
-  environmentScene.backgroundNode = makeBackground(false)
+  const environmentSky = makeBackground(false) as unknown as Node<'vec4'>
+  const lift = smoothstep(-0.08, 0.1, positionWorldDirection.y)
+  environmentScene.backgroundNode = vec4(environmentSky.rgb.mul(mix(groundGain, float(1), lift)), 1)
   const cube = new CubeRenderTarget(quality === 'low' ? 128 : 256, { type: HalfFloatType })
   const cubeCamera = new CubeCamera(1, 2000, cube)
   cubeCamera.update(renderer, environmentScene)
@@ -391,17 +399,33 @@ export async function createWebGPUAtmosphere(renderer: WebGPURenderer, atmospher
   const probe = await LightProbeGenerator.fromCubeRenderTarget(renderer, cube)
   const up = probe.sh.getIrradianceAt(new Vector3(0, 1, 0), new Vector3())
   const irradiance = Math.max(1e-6, up.x * 0.2126 + up.y * 0.7152 + up.z * 0.0722)
-  cube.dispose()
   pmrem.dispose()
   return {
     backgroundNode,
     environment,
     irradiance,
+    fog,
+    fogAlbedo,
+    fogSun,
     aerial(color: Node<'vec4'>, depth: Node<'float'>, camera: Camera, radianceScale: number) {
-      const fog = spec.heightFog
-      return aerialNode({ color, uv: screenUV, depth, projectionInverse: uniform(camera.projectionMatrixInverse), cameraWorld: uniform(camera.matrixWorld), reversed: uniform(camera.reversedDepth ? 1 : 0), ...shared, terms, aerial: uniform(spec.aerial), clearDistance: uniform(new Vector2(spec.clear ?? 0, fog?.start ?? 0)), radianceScale: uniform(radianceScale), fog: uniform(new Vector4(fog?.extinction ?? 0, fog?.base ?? 0, Math.max(fog?.scaleHeight ?? 1, 1), fog?.phase ?? 0)), fogAlbedo: uniform(new Vector3(...(fog?.albedo ?? [1, 1, 1] as const))), fogEmissive: uniform(new Vector3(...(fog?.emissive ?? [0, 0, 0] as const))) }) as Node<'vec4'>
+      return aerialNode({ color, uv: screenUV, depth, projectionInverse: uniform(camera.projectionMatrixInverse), cameraWorld: uniform(camera.matrixWorld), reversed: uniform(camera.reversedDepth ? 1 : 0), ...shared, terms, aerial: uniform(spec.aerial), clearDistance: uniform(new Vector2(spec.clear ?? 0, heightFog?.start ?? 0)), radianceScale: uniform(radianceScale), fog, fogAlbedo, fogEmissive: uniform(new Vector3(...(heightFog?.emissive ?? [0, 0, 0] as const))), fogSun }) as Node<'vec4'>
     },
     tick(dt: number) { cloudTime.value += dt * (spec.clouds?.wind ?? 0) },
-    dispose() { for (const target of targets) target.dispose(); environment.dispose() },
+    setFog(density: number, scaleHeight: number) {
+      fog.value.x = fogExtinction * density
+      fog.value.z = Math.max(scaleHeight, 1)
+    },
+    setFogSun(amount: number) { fogSun.value = amount },
+    setClouds(coverage: number, altitude: number, density: number) {
+      clouds.value.set(coverage, Math.max(altitude, medium.value.w + 0.3), density, spec.clouds?.scale ?? 1)
+    },
+    setGroundBounce(amount: number) { groundGain.value = amount },
+    rebake() {
+      cubeCamera.update(renderer, environmentScene)
+      const generator = new PMREMGenerator(renderer)
+      generator.fromCubemap(cube.texture, environment)
+      generator.dispose()
+    },
+    dispose() { for (const target of targets) target.dispose(); environment.dispose(); cube.dispose() },
   }
 }
