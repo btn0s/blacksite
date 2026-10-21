@@ -1,6 +1,6 @@
 import { createHeightfield, edgeTextureFromData, loadLayerImages, surfaceTextureFromData, terrainUniforms, type TerrainLayerSpec, type TerrainSources } from '@blacksite/landscape'
 
-const root = '/owned/dark-ruins/build-landscape-20261020-06/'
+const root = '/owned/dark-ruins/build-landscape-20261020-08/'
 const kit = import.meta.glob<string>('../../../packages/look/assets/world/grass_{c,n}.webp', { eager: true, query: '?url&no-inline', import: 'default' })
 const kitUrl = (name: string) => {
   const url = kit[`../../../packages/look/assets/world/${name}.webp`]

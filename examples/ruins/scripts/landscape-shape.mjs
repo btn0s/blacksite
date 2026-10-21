@@ -76,7 +76,7 @@ export function surfaceMasks(x, z, height, slope, rimDistance) {
 }
 
 
-export const ground = { overlap: 1, sinkFloor: 0.25, sinkRock: 1, rim: [2, 8], smoothing: [6, 192], settle: 10, grade: 0.5, falloff: [40, 300], hillRamp: [20, 180], edgeRange: 64 }
+export const ground = { overlap: 1, sinkFloor: 0.25, sinkRock: 1, rim: [2, 8], sheetEdge: [2, 4], sheet: 0.01, fillPasses: 1000, fillTolerance: 0.002, smoothing: [6, 192], settle: 10, grade: 0.5, falloff: [40, 300], hillRamp: [20, 180], edgeRange: 64 }
 
 const reach = [[-1, 0, 1], [0, -1, 1], [-1, -1, Math.SQRT2], [1, -1, Math.SQRT2], [-2, -1, Math.sqrt(5)], [-1, -2, Math.sqrt(5)], [1, -2, Math.sqrt(5)], [2, -1, Math.sqrt(5)]]
 
@@ -141,22 +141,53 @@ function boxBlur(values, width, height, radius, passes) {
   return values
 }
 
-// The level is stamped into the terrain: inside its footprint the ground follows the level's lowest surface, just under it,
-// and rises over it along the rim so the edge sinks in. Outside, the ground starts at the rim's height and blends to the landform.
+function fillGround(known, cap, covered, width, source) {
+  const value = Float32Array.from(source, slot => known[slot])
+  const free = []
+  for (let slot = 0; slot < covered.length; slot++) if (covered[slot] && Number.isNaN(known[slot])) free.push(slot)
+  const sweep = parity => {
+    let change = 0
+    for (const slot of free) {
+      const i = slot % width, j = (slot - i) / width
+      if ((i + j & 1) !== parity) continue
+      let sum = 0, count = 0
+      for (const [di, dj] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const next = slot + dj * width + di
+        if (covered[next]) { sum += value[next]; count++ }
+      }
+      if (!count) continue
+      const target = Math.min(cap[slot], value[slot] + 1.85 * (sum / count - value[slot]))
+      change = Math.max(change, Math.abs(target - value[slot]))
+      value[slot] = target
+    }
+    return change
+  }
+  for (let pass = 0; pass < ground.fillPasses && Math.max(sweep(0), sweep(1)) > ground.fillTolerance; pass++);
+  return value
+}
+
+// The level's ground is rebuilt from its ground sheets: cells whose lowest surface faces up keep the ground just under it, and
+// cells under rocks and walls take a smooth fill between the surrounding ground, capped under walkable floors. The ground rises
+// over each sheet's edge and over the rim so edges sink in; outside, it starts at the rim and blends to the landform.
 export function levelGround(raster) {
-  const { cell, originX, originZ, nx, nz, low, topUp, walkable } = raster
+  const { cell, originX, originZ, nx, nz, low, top, topUp, walkable } = raster
   const pad = world.padding, width = nx + 2 * pad, height = nz + 2 * pad
   const x0 = originX - pad * cell, z0 = originZ - pad * cell
   const count = width * height
-  const covered = new Uint8Array(count), foot = new Float32Array(count).fill(NaN), up = new Float32Array(count)
+  const covered = new Uint8Array(count), known = new Float32Array(count).fill(NaN), cap = new Float32Array(count).fill(Infinity), sink = new Float32Array(count)
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
     const source = j * nx + i
     if (!Number.isFinite(low[source])) continue
     const slot = (j + pad) * width + i + pad
-    covered[slot] = 1; foot[slot] = low[source]; up[slot] = topUp[source]
+    covered[slot] = 1
+    if (top[source] - low[source] < ground.sheet) { known[slot] = low[source]; sink[slot] = ground.sinkRock + (ground.sinkFloor - ground.sinkRock) * smoothstep(0.3, walkable, topUp[source]) }
+    else if (topUp[source] >= walkable) cap[slot] = top[source] - ground.sinkFloor
   }
+  const sheet = Uint8Array.from(known, value => Number.isNaN(value) ? 0 : 1)
+  const foot = fillGround(known, cap, covered, width, nearestSource(sheet, width, height))
   const distance = propagate(Float32Array.from(covered, value => value ? 0 : Infinity), width, height, cell)
   const depth = propagate(Float32Array.from(covered, value => value ? Infinity : 0), width, height, cell)
+  const bare = propagate(Float32Array.from(sheet, value => value ? Infinity : 0), width, height, cell)
   const rim = Uint8Array.from(covered, (value, slot) => value && depth[slot] <= cell ? 1 : 0)
   const nearest = nearestSource(rim, width, height)
   const edgeRaw = Float32Array.from(nearest, source => foot[source])
@@ -170,8 +201,8 @@ export function levelGround(raster) {
   for (let j = 0; j < height; j++) for (let i = 0; i < width; i++) {
     const slot = j * width + i
     if (covered[slot]) {
-      const sink = ground.sinkRock + (ground.sinkFloor - ground.sinkRock) * smoothstep(0.3, walkable, up[slot])
-      field[slot] = foot[slot] - sink + (sink + ground.overlap) * (1 - smoothstep(ground.rim[0], ground.rim[1], depth[slot]))
+      const bury = Math.max(1 - smoothstep(ground.rim[0], ground.rim[1], depth[slot]), sheet[slot] ? 1 - smoothstep(ground.sheetEdge[0], ground.sheetEdge[1], bare[slot]) : 0)
+      field[slot] = foot[slot] - sink[slot] + (sink[slot] + ground.overlap) * bury
       continue
     }
     const landform = macro(x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell)
