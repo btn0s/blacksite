@@ -31,4 +31,18 @@ Bootstrap awaits directories, minimum texture tails, pinned coarse geometry, spa
 
 Merge the loader before publishing its owned manifest. Only then atomically copy the new build's `full.json` to the owned root and verify the real preview. Never overwrite an existing immutable build or repoint a published manifest ahead of its reader. Persistent servers and offline builds on this host run as interactive scheduled tasks. Leave other preview ports untouched.
 
+## Landscape
+
+The level stands in rolling terrain from `@blacksite/landscape`: a 4 km near field at 2 m and a 16 km far field at 8 m, drawn by the CDLOD terrain with the level's sun, sky, fog and exposure. The terrain loads after first playable (`ruins-first-playable`): it is fetched, built and its pipelines compiled while the player already stands in the level, then added to the scene. Physics gets a heightfield collider from the same near field in `TerrainCollision`, next to the regional collision and independent of its residency.
+
+The shape is baked offline. `scripts/build-landscape.mjs` rasterizes the cooked collision into a 2 m ground map and treats every cell the level touches as its footprint. Inside the footprint the terrain lies 0.75 m under the lowest level surface, so the authored geometry stays in charge and nothing pokes through. Outside it, the ground meets the flat ground at the footprint edge (median of the lowest flat surfaces around each edge cell, 6 cm under them) and relaxes through a screened-Poisson membrane toward a coarse macro shape: sea level at y = 0 to the west and south, where the beach and the offshore islands are, and plateau and hills inland to the east and north. Fine hills fade in with distance from the footprint. Ocean water is not translated, so the sea side is a sand-covered seabed from about -3 m down to -28 m with no water plane.
+
+Ground layers are the level's own Rocky Soil Ground, Dry Sandy Mud and Massive Nordic Coastal Cliff surfaces (transcoded to 1024 px WebP) plus the world kit's CC0 grass. Soil and sand masks are baked into the surface texture; rock follows slope.
+
+```powershell
+node examples/ruins/scripts/build-landscape.mjs D:/dev/owned-assets/dark-ruins/build-collision-provenance-20261020-01 D:/dev/owned-assets/dark-ruins/build-materials-flames-20261020-01 D:/dev/owned-assets/dark-ruins/build-landscape-NEW
+```
+
+Point `root` in `src/landscape-asset.ts` at the new directory. The script needs Node 22.18 or newer to read the package's noise from TypeScript.
+
 The inspector exposes paging epochs, requests, fallbacks, retirement safety, texture residency, collision insertions and byte reservations. T saves telemetry. See [the streaming design](../../../docs/streaming.md) and [the original resident-limit investigation](REPORT.md) for historical context.

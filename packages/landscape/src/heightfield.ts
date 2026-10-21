@@ -111,6 +111,10 @@ export function surfaceTexture(field: Heightfield, masks?: MaskSampler): DataTex
       data[index + 3] = Math.round(Math.min(1, Math.max(0, mask[1])) * 255)
     }
   }
+  return surfaceTextureFromData(data, size)
+}
+
+export function surfaceTextureFromData(data: Uint8Array, size: number): DataTexture {
   const texture = new DataTexture(data, size, size, RGBAFormat, UnsignedByteType)
   texture.minFilter = LinearMipmapLinearFilter
   texture.magFilter = LinearFilter

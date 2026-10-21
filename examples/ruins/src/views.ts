@@ -16,6 +16,7 @@ export type RuinsViewGeometry = {
 export type RuinsViews = Record<Exclude<RuinsView, 'spawn'>, RuinsViewGeometry>
 
 export const ruinsNearRadius = 12
+export const ruinsHorizon = 16000
 
 export const ruinsHome = {
   id: 1,
@@ -60,14 +61,14 @@ export function createRuinsCameras(views: RuinsViews) {
     target.addScaledVector(right, (left + rightLimit) / 2).addScaledVector(up, (bottom + top) / 2)
     camera.position.copy(target).addScaledVector(back, distance)
     camera.near = Math.max(0.1, bounds.distanceToPoint(camera.position) / 1000)
-    camera.far = Math.max(diameter, camera.position.distanceTo(centre) + diameter / 2) * 1.1
+    camera.far = Math.max(Math.max(diameter, camera.position.distanceTo(centre) + diameter / 2) * 1.1, ruinsHorizon)
     camera.lookAt(target)
     camera.updateProjectionMatrix()
     camera.updateMatrixWorld()
     return camera
   }
   const coastDirection = views.archway.bounds.getCenter(new Vector3()).sub(views.cliffs.bounds.getCenter(new Vector3())).setY(0).normalize().setY(0.35)
-  const spawn = new PerspectiveCamera(55, aspect, 0.1, diameter * 1.1)
+  const spawn = new PerspectiveCamera(55, aspect, 0.1, Math.max(diameter * 1.1, ruinsHorizon))
   spawn.position.set(...home.position).add(new Vector3(0, 1.6, 0))
   spawn.lookAt(new Vector3(...home.target))
   spawn.updateMatrixWorld()

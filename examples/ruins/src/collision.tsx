@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useRapier, type RapierContext } from '@react-three/rapier'
+import { CuboidCollider, HeightfieldCollider, RigidBody, useRapier, type HeightfieldArgs, type RapierContext } from '@react-three/rapier'
 import { BufferAttribute, BufferGeometry, Box3, DoubleSide, Group, Mesh, Vector3 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { cameraPosition, positionLocal, uniform } from 'three/tsl'
@@ -8,6 +8,7 @@ import { ResidencyLedger } from '@blacksite/geometry'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
 import type { CharacterHandle } from '@blacksite/subject'
 import { ContactProbe, type ContactBody, type ContactDescriber } from './contacts'
+import type { LandscapeAsset } from './landscape-asset'
 
 type Chunk = { file: string; source?: string; bytes: number; triangles: number; sha256: string; bounds: { min: number[]; max: number[] } }
 export type CollisionDirectory = { version: number; cellSize: number; chunks: Chunk[]; cells: Record<string, number[]>; bounds: { min: number[]; max: number[] } }
@@ -341,4 +342,26 @@ export function RuinsCollision({ directory, root, describe, walker, onReady, onE
   useFrame(() => { residency.update(walker.position); residency.step() }, ALS_FRAME_PRIORITY.Physics - 0.1)
   useFrame(({ clock }) => { residency.probeContacts(walker.als.pose.current.ownerRigidBody as ContactBody | null, clock.elapsedTime) }, ALS_FRAME_PRIORITY.MeshBase)
   return null
+}
+
+const boundaryInset = 6
+const boundaryHeight = 400
+
+export function TerrainCollision({ asset }: { asset: LandscapeAsset }) {
+  const field = asset.sources.near
+  const { size, extent, heights } = field
+  const args = useMemo<HeightfieldArgs>(() => {
+    const columns = new Float32Array(size * size)
+    for (let row = 0; row < size; row++) for (let column = 0; column < size; column++) columns[column * size + row] = heights[row * size + column]!
+    return [size - 1, size - 1, columns as unknown as number[], { x: extent, y: 1, z: extent }]
+  }, [size, extent, heights])
+  const half = extent / 2
+  const wallY = (field.max + field.min) / 2, wallHalf = (field.max - field.min) / 2 + boundaryHeight
+  return <RigidBody type="fixed" colliders={false} position={[field.origin[0] + half, 0, field.origin[1] + half]}>
+    <HeightfieldCollider args={args} />
+    <CuboidCollider args={[half, wallHalf, 1]} position={[0, wallY, -half + boundaryInset]} />
+    <CuboidCollider args={[half, wallHalf, 1]} position={[0, wallY, half - boundaryInset]} />
+    <CuboidCollider args={[1, wallHalf, half]} position={[-half + boundaryInset, wallY, 0]} />
+    <CuboidCollider args={[1, wallHalf, half]} position={[half - boundaryInset, wallY, 0]} />
+  </RigidBody>
 }
