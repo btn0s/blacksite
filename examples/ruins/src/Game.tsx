@@ -23,6 +23,7 @@ import { RuinsCollision, type RegionalCollision } from './collision'
 import type { Contact } from './contacts'
 import { scanEnvironment } from '../../shared/scan-environment'
 import type { ScanFlames } from '../../shared/scan-flames'
+import { TelemetryReadout } from './TelemetryReadout'
 import { ruinsViews, ruinsNearRadius, createRuinsCameras, type RuinsView } from './views'
 
 const shadowLayers = [2]
@@ -72,11 +73,15 @@ function Scene({ owned, geometry, flames, walker, gameplayCamera, inspector, tel
       { id: 'meshlet-shadows', label: 'Cascade shadows', description: 'Independent light-view cluster selection.', enabled: true, setEnabled: enabled => geometry.setShadowEnabled(enabled) },
       { id: 'collision-overlay', label: 'Collision', description: 'Resident collision: green walkable, red steep, blue overhang.', enabled: false, setEnabled: enabled => shared.collision.current?.setOverlay(enabled ? 0 : null) },
       { id: 'collision-hidden', label: 'Invisible collision', description: 'Only collision standing 0.5 m or more in front of the drawn surface.', enabled: false, setEnabled: enabled => shared.collision.current?.setOverlay(enabled ? 0.5 : null) },
+      { id: 'temporal-aa', label: 'Temporal AA', description: 'TRAA resolve with camera jitter. Off bypasses the resolve and the jitter.', enabled: true, setEnabled: enabled => shared.look.current?.setTemporal({ traa: enabled }) },
+      { id: 'gtao-temporal', label: 'Temporal ambient occlusion', description: 'Per-frame rotation of the occlusion sampling pattern.', enabled: true, setEnabled: enabled => shared.look.current?.setTemporal({ gtao: enabled }) },
+      { id: 'bundle-refresh', label: 'Refresh bundles every frame', description: 'Re-records every lit material bundle each frame instead of on binding changes.', enabled: false, setEnabled: enabled => geometry.setBundleRefresh(enabled) },
       { id: 'meshlet-debug', label: 'Meshlet colours', enabled: false, setEnabled: enabled => geometry.setDebugView(enabled ? 'meshlets' : inspector.getSnapshot().view === 'lod' ? 'lod' : 'normal') },
     ],
     setView: view => { geometry.setDebugView(view === 'lod' ? 'lod' : 'normal'); shared.look.current?.setDebug(view === 'lod') },
     textures: () => residentScanTextures(renderer),
-    details: () => ({ collisionContacts: shared.collision.current?.contactReport(), placements: owned.placements.length, minimumWorldError: owned.manifest.minimumWorldError, sourceTriangles: owned.sourceTriangles, cappedTriangles: owned.cappedTriangles, bounds: { min: owned.bounds.min.toArray(), max: owned.bounds.max.toArray() }, untranslated: owned.manifest.untranslated, excluded: owned.manifest.excluded, geometryPaging: geometry.pagingStats(), textureStreaming: textures.snapshot(), regionalCollision: shared.collision.current?.stats(), ...stats }),
+    probe: async () => ({ motion: await Promise.race([shared.look.current?.probeMotion(), new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 2000))]), look: shared.look.current?.telemetry.snapshot(), frames: shared.look.current?.telemetry.recent(240) }),
+    details: () => ({ look: shared.look.current?.telemetry.snapshot(), collisionContacts: shared.collision.current?.contactReport(), placements: owned.placements.length, minimumWorldError: owned.manifest.minimumWorldError, sourceTriangles: owned.sourceTriangles, cappedTriangles: owned.cappedTriangles, bounds: { min: owned.bounds.min.toArray(), max: owned.bounds.max.toArray() }, untranslated: owned.manifest.untranslated, excluded: owned.manifest.excluded, geometryPaging: geometry.pagingStats(), textureStreaming: textures.snapshot(), regionalCollision: shared.collision.current?.stats(), ...stats }),
   }), [geometry, inspector, owned, renderer, shared, stats, textures])
   useEffect(() => {
     shared.geometry.current = geometry
@@ -243,6 +248,7 @@ function Ruins({ owned, runtime, onReady }: { owned: RuinsAsset; runtime: Return
       {geometry && flames && <Scene owned={owned} geometry={geometry} flames={flames} walker={walker} gameplayCamera={cameras.spawn} inspector={inspector} telemetry={telemetry} shared={shared} onStats={setSelection} onReady={onReady} />}
     </Canvas>
     <ContactDisplay shared={shared} />
+    <TelemetryReadout look={shared.look} geometry={geometry} selection={selection} />
     <SelectionDisplay selection={selection} sourceTriangles={owned.sourceTriangles} cappedTriangles={owned.cappedTriangles} />
     <section className="bs-inspect" aria-label="Camera views" style={{ top: 44, right: 'auto', left: 16, width: 360, maxWidth: 'calc(100vw - 32px)' }}>
       <div className="bs-inspect-view" role="group" aria-label="View bookmarks" style={{ marginTop: 0 }}>

@@ -101,6 +101,7 @@ export class MaterialSubmission {
   private compiled = 0
   private total = 0
   private required = 0
+  refreshEveryFrame = false
 
   constructor(private readonly coverage: MaterialCoverage) {
     this.masks = Array.from({ length: 2 }, () => new Uint32Array(coverage.words).fill(0xffffffff))
@@ -177,7 +178,7 @@ export class MaterialSubmission {
     this.viewport.copy(viewport)
     for (const record of this.records) {
       const version = record.material ? versions?.get(record.material) ?? 0 : 0
-      if (resized || record.bindingVersion !== version) record.bundle.needsUpdate = true
+      if (resized || this.refreshEveryFrame || record.bindingVersion !== version) record.bundle.needsUpdate = true
       record.bindingVersion = version
     }
   }

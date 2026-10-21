@@ -19,6 +19,7 @@ export type InspectionContent = {
   techniques: Technique[]
   setView(view: InspectView): void
   details(): unknown
+  probe?(): Promise<unknown>
   textures?(): readonly { texture: Texture; reportedBytes: number; residentBytes: number }[]
 }
 
@@ -140,6 +141,7 @@ export function SceneInspection({ name, look, warm, walker, inspector, telemetry
         view: stats.view,
         techniques: stats.techniques,
         content: current?.details(),
+        probe: await current?.probe?.().catch(error => ({ error: String(error) })),
         memory,
         submissions: { triangles: renderer.info.render.triangles, drawCalls: renderer.info.render.drawCalls, passes: renderer.info.render.frameCalls },
       }
@@ -176,7 +178,7 @@ export function SceneInspection({ name, look, warm, walker, inspector, telemetry
     let paused = walker.status().paused
     const unsubscribe = walker.subscribe(() => {
       const next = walker.status().paused
-      if (next !== paused) { resumed.current = true; previousFrame.current = null; paused = next }
+      if (next !== paused) { resumed.current = true; previousFrame.current = null; paused = next; look.current?.telemetry.mark(next ? 'pause' : 'resume') }
     })
     addEventListener('visibilitychange', visibility)
     return () => { unsubscribe(); removeEventListener('visibilitychange', visibility); cleanup.current.forEach(dispose => dispose()) }
