@@ -10,7 +10,7 @@ import { createInspector } from '@blacksite/inspect'
 import { DebugBlock, InspectHud } from '@blacksite/inspect/react'
 import { WebGPULook } from '@blacksite/look/webgpu-r3f'
 import type { WebGPULook as Look, WebGPULookStage } from '@blacksite/look/webgpu'
-import { Loading, TitleCard } from '@blacksite/ui/hud'
+import { Loading } from '@blacksite/ui/hud'
 import { preloadAlsCharacterGltf } from 'als-ue5-r3f/app/AlsCharacterGltf'
 import { AlsPhysicsStepper } from 'als-ue5-r3f/app/AlsPhysicsStepper'
 import { ALS_FRAME_PRIORITY } from 'als-ue5-r3f/engine/alsFramePipeline'
@@ -270,7 +270,6 @@ export function Game() {
   return <InputProvider runtime={runtime}><div className="hud-screen">
     <RenderBoundary>{owned && <Ruins owned={owned} runtime={runtime} onReady={onReady} />}</RenderBoundary>
     {error && <div className="hud-menu" role="alert"><strong>Dark Ruins could not load</strong><span>{error}</span></div>}
-    <TitleCard title="Dark Ruins" />
     <Loading title="Dark Ruins" detail={detail} progress={ready ? 1 : owned ? 0.7 : 0.35} done={ready || error !== null} />
   </div></InputProvider>
 }
