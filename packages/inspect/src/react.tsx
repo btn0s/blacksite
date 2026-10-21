@@ -43,8 +43,8 @@ function InspectControls({ inspector, dump, logs, onLogs }: { inspector: Inspect
   const [, set] = useControls(() => {
     const schema: Schema = {}
     schema.logs = { label: 'Debug logs', value: logs, onChange: (on: boolean) => latest.current.onLogs(on) }
-    if (dump) schema['Dump stats · T'] = button(() => latest.current.dump?.onDump())
-    const groups: Record<string, Schema> = { Views: { lod: { label: 'LOD colours', value: view === 'lod', onChange: (on: boolean) => inspector.setView(on ? 'lod' : 'lit') } } }
+    if (dump) schema['Save telemetry (T)'] = button(() => latest.current.dump?.onDump())
+    const groups: Record<string, Schema> = { Overlays: { lod: { label: 'Colour by LOD', value: view === 'lod', onChange: (on: boolean) => inspector.setView(on ? 'lod' : 'lit') } } }
     for (const technique of techniques) {
       (groups[technique.group ?? 'Techniques'] ??= {})[technique.id] = {
         label: technique.label,

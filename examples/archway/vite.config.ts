@@ -21,7 +21,8 @@ export default defineConfig({
     },
     dedupe: ['react', 'react-dom', 'three', '@react-three/fiber', '@react-three/rapier', '@dimforge/rapier3d-compat'],
   },
-  plugins: [react(), tsconfigPaths({ root }), blacksiteAssets({ blacksiteRoot: root }), ownedAssets(process.env.BLACKSITE_OWNED_ASSETS ?? resolve(root, '../owned-assets')), sceneTelemetry(resolve(root, 'artifacts/archway'))],
+  // The level holds GPU and physics state that can't survive a hot module swap, so any code change reloads the page.
+  plugins: [{ name: 'ruins-full-reload', handleHotUpdate({ server }) { server.ws.send({ type: 'full-reload' }); return [] } }, react(), tsconfigPaths({ root }), blacksiteAssets({ blacksiteRoot: root }), ownedAssets(process.env.BLACKSITE_OWNED_ASSETS ?? resolve(root, '../owned-assets')), sceneTelemetry(resolve(root, 'artifacts/archway'))],
   server: { host: '0.0.0.0', allowedHosts: true, fs: { allow: [root, realpathSync(resolve(root, 'node_modules')), realpathSync(resolve(root, 'vendor/als-web'))] } },
   optimizeDeps: { entries: ['index.html'], include: ['@react-three/rapier > @dimforge/rapier3d-compat'] },
 })
